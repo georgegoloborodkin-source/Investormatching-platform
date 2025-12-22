@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Professional Matchmaking Platform Design System */
+
+@layer base {
+  :root {
+    /* Core Background & Text */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    /* Popover & Dropdowns */
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Primary Brand Colors */
+    --primary: 214 84% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 214 84% 52%;
+
+    /* Secondary Actions */
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 215 25% 25%;
+    
+    /* Muted Elements */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent Colors */
+    --accent: 210 40% 94%;
+    --accent-foreground: 215 25% 25%;
+
+    /* Status Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Interactive Elements */
+    --border: 214 32% 91%;
+    --input: 0 0% 100%;
+    --input-border: 214 32% 88%;
+    --ring: 214 84% 56%;
+
+    /* Table & Grid Elements */
+    --table-header: 210 40% 96%;
+    --table-row-hover: 214 95% 97%;
+    --table-border: 214 32% 91%;
+
+    /* Status Indicators */
+    --status-active: 142 76% 36%;
+    --status-pending: 38 92% 50%;
+    --status-inactive: 215 16% 47%;
+    --status-completed: 214 84% 56%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(214 84% 56%), hsl(214 84% 52%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 32%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(210 20% 98%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 25% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 25% 15% / 0.1), 0 2px 4px -1px hsl(215 25% 15% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(215 25% 15% / 0.1), 0 4px 6px -2px hsl(215 25% 15% / 0.05);
+    --shadow-table: 0 1px 3px 0 hsl(215 25% 15% / 0.1);
+
+    /* Spacing & Sizing */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Core Background & Text */
+    --background: 215 28% 17%;
+    --foreground: 210 20% 98%;
+
+    /* Cards & Surfaces */
+    --card: 215 28% 17%;
+    --card-foreground: 210 20% 98%;
+
+    /* Popover & Dropdowns */
+    --popover: 215 28% 17%;
+    --popover-foreground: 210 20% 98%;
+
+    /* Primary Brand Colors */
+    --primary: 214 84% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 214 84% 52%;
+
+    /* Secondary Actions */
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 20% 98%;
+    
+    /* Muted Elements */
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    /* Accent Colors */
+    --accent: 217 32% 17%;
+    --accent-foreground: 210 20% 98%;
+
+    /* Status Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 20% 98%;
+
+    /* Interactive Elements */
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --input-border: 217 32% 25%;
+    --ring: 214 84% 56%;
+
+    /* Table & Grid Elements */
+    --table-header: 217 32% 17%;
+    --table-row-hover: 217 32% 22%;
+    --table-border: 217 32% 25%;
+
+    /* Status Indicators */
+    --status-active: 142 76% 36%;
+    --status-pending: 38 92% 50%;
+    --status-inactive: 215 20% 65%;
+    --status-completed: 214 84% 56%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(214 84% 56%), hsl(214 84% 52%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 32%));
+    --gradient-card: linear-gradient(145deg, hsl(215 28% 17%), hsl(217 32% 17%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.15);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.25), 0 2px 4px -1px hsl(0 0% 0% / 0.15);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.25), 0 4px 6px -2px hsl(0 0% 0% / 0.15);
+    --shadow-table: 0 1px 3px 0 hsl(0 0% 0% / 0.2);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Table Styles */
+  .data-table {
+    @apply border border-table-border rounded-lg overflow-hidden shadow-table;
+  }
+  
+  .data-table th {
+    @apply bg-table-header text-foreground font-semibold text-sm border-b border-table-border px-4 py-3 text-left;
+  }
+  
+  .data-table td {
+    @apply border-b border-table-border px-4 py-3 text-sm;
+  }
+  
+  .data-table tr:hover {
+    @apply bg-table-row-hover;
+  }
+
+  /* Status Badge Styles */
+  .status-active {
+    @apply bg-status-active text-white;
+  }
+  
+  .status-pending {
+    @apply bg-status-pending text-white;
+  }
+  
+  .status-inactive {
+    @apply bg-status-inactive text-white;
+  }
+  
+  .status-completed {
+    @apply bg-status-completed text-white;
+  }
+
+  /* Custom Gradient Backgrounds */
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+}
