@@ -12,6 +12,7 @@ export interface Startup {
 export interface Investor {
   id: string;
   firmName: string;
+  memberName: string; // REQUIRED person/VC team member name
   geoFocus: string[];
   industryPreferences: string[];
   stagePreferences: string[];
@@ -32,6 +33,7 @@ export interface Match {
   timeSlot: string;
   slotTime: string;
   compatibilityScore: number;
+  scoreBreakdown?: string[]; // MVP: human-readable scoring explanation lines
   status: 'upcoming' | 'completed' | 'cancelled';
   completed: boolean;
   locked?: boolean;

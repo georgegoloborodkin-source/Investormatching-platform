@@ -8,7 +8,7 @@ interface CompatibilityScore {
   totalScore: number;
 }
 
-// Time slots configuration
+// Time slots configuration - Extended from 9:00 to 18:00 (20-minute slots)
 const TIME_SLOTS = [
   '09:00 - 09:20',
   '09:20 - 09:40', 
@@ -21,8 +21,27 @@ const TIME_SLOTS = [
   '11:40 - 12:00',
   '12:00 - 12:20',
   '12:20 - 12:40',
-  '12:40 - 13:00'
+  '12:40 - 13:00',
+  '13:00 - 13:20',
+  '13:20 - 13:40',
+  '13:40 - 14:00',
+  '14:00 - 14:20',
+  '14:20 - 14:40',
+  '14:40 - 15:00',
+  '15:00 - 15:20',
+  '15:20 - 15:40',
+  '15:40 - 16:00',
+  '16:00 - 16:20',
+  '16:20 - 16:40',
+  '16:40 - 17:00',
+  '17:00 - 17:20',
+  '17:20 - 17:40',
+  '17:40 - 18:00'
 ];
+
+function investorDisplayName(investor: Investor): string {
+  return `${investor.firmName} (${investor.memberName})`;
+}
 
 export function calculateCompatibilityScore(startup: Startup, investor: Investor): CompatibilityScore {
   // Geographic Match (40% weight) - Calculate overlap percentage
@@ -118,7 +137,7 @@ export function generateMatches(
           startupId: startup.id,
           investorId: investor.id,
           startupName: startup.companyName,
-          investorName: investor.firmName,
+          investorName: investorDisplayName(investor),
           timeSlot: '',
           slotTime: '',
           compatibilityScore: score.totalScore,
@@ -240,7 +259,7 @@ export function generateMatches(
       startupId: startup.id,
       investorId: investor.id,
       startupName: startup.companyName,
-      investorName: investor.firmName,
+      investorName: investorDisplayName(investor),
       timeSlot: assignedTimeSlot,
       slotTime: assignedSlotTime,
       compatibilityScore: score.totalScore,
@@ -339,7 +358,7 @@ export function generateMatches(
           startupId: startup.id,
           investorId: investor.id,
           startupName: startup.companyName,
-          investorName: investor.firmName,
+          investorName: investorDisplayName(investor),
           timeSlot: assignedTimeSlot,
           slotTime: assignedSlotTime,
           compatibilityScore: cand.compatibilityScore,
@@ -414,7 +433,7 @@ export function generateMatches(
       startupId: startup.id,
       investorId: investor.id,
       startupName: startup.companyName,
-      investorName: investor.firmName,
+      investorName: investorDisplayName(investor),
       timeSlot: assignedTimeSlot,
       slotTime: assignedSlotTime,
       compatibilityScore: potentialMatch.compatibilityScore,
@@ -460,7 +479,7 @@ export function generateMatches(
             startupId: startup.id,
             investorId: investor.id,
             startupName: startup.companyName,
-            investorName: investor.firmName,
+            investorName: investorDisplayName(investor),
             timeSlot: slotLabel,
             slotTime: slotsToUse[i],
             compatibilityScore: cand.compatibilityScore,

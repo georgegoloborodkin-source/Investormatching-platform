@@ -120,6 +120,9 @@ export function ParticipantManagement({
               <div key={investor.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-accent/50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium truncate">{investor.firmName}</h4>
+                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                    Investment member: {investor.memberName}
+                  </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {investor.industryPreferences.map((industry) => (
                       <Badge key={industry} variant="outline" className="text-xs">{industry}</Badge>

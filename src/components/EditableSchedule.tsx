@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Match, Startup, Investor, TimeSlotConfig } from "@/types";
-import { Edit2, Save, X, Users, AlertCircle, CheckCircle, Lock, Unlock } from "lucide-react";
+import { Edit2, Save, X, Users, AlertCircle, CheckCircle, Lock, Unlock, Clock, Phone, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface EditableScheduleProps {
@@ -78,7 +78,7 @@ export function EditableSchedule({
       startupId: editForm.startupId,
       investorId: editForm.investorId,
       startupName: startup.companyName,
-      investorName: investor.firmName,
+      investorName: `${investor.firmName} (${investor.memberName})`,
       timeSlot: editForm.timeSlot,
       slotTime: `${timeSlot.startTime} - ${timeSlot.endTime}`
     });
@@ -131,12 +131,31 @@ export function EditableSchedule({
     }
   };
 
+  // Group matches by investor member for call list view
+  const matchesByMember = matches.reduce((acc, match) => {
+    const investor = investors.find(i => i.id === match.investorId);
+    if (!investor) return acc;
+    
+    const memberKey = `${investor.firmName}::${investor.memberName}`;
+    if (!acc[memberKey]) {
+      acc[memberKey] = {
+        firmName: investor.firmName,
+        memberName: investor.memberName,
+        matches: []
+      };
+    }
+    acc[memberKey].matches.push(match);
+    return acc;
+  }, {} as Record<string, { firmName: string; memberName: string; matches: Match[] }>);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Editable Schedule</h2>
-        <div className="text-sm text-muted-foreground">
-          Click edit to modify meetings manually
+        <div>
+          <h2 className="text-2xl font-bold">Investment Team Call Schedule</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            View meetings by time slot. Each card shows which team member needs to call which startup.
+          </p>
         </div>
       </div>
 
@@ -145,11 +164,14 @@ export function EditableSchedule({
           const slotMatches = groupedMatches[timeSlot.label] || [];
           
           return (
-            <Card key={timeSlot.id} className="overflow-hidden">
-              <CardHeader className="pb-3 bg-muted/50">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  {timeSlot.label} ({timeSlot.startTime} - {timeSlot.endTime})
+            <Card key={timeSlot.id} className="overflow-hidden border-2">
+              <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2">
+                <CardTitle className="text-lg flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow-sm">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    <span className="font-bold text-blue-900">{timeSlot.startTime} - {timeSlot.endTime}</span>
+                  </div>
+                  <span className="text-muted-foreground font-normal">({timeSlot.label})</span>
                   <div className="ml-auto flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <Label className="text-sm font-medium">Slot Done</Label>
@@ -159,10 +181,10 @@ export function EditableSchedule({
                       />
                     </div>
                     <Badge 
-                      variant={timeSlot.isDone ? "destructive" : "secondary"}
-                      className={timeSlot.isDone ? "bg-red-100 text-red-800" : ""}
+                      variant={timeSlot.isDone ? "destructive" : "default"}
+                      className={timeSlot.isDone ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
                     >
-                      {timeSlot.isDone ? "Completed" : `${slotMatches.length} meetings`}
+                      {timeSlot.isDone ? "Completed" : `${slotMatches.length} call${slotMatches.length !== 1 ? 's' : ''}`}
                     </Badge>
                   </div>
                 </CardTitle>
@@ -224,7 +246,7 @@ export function EditableSchedule({
                                 <SelectContent>
                                   {investors.map(i => (
                                     <SelectItem key={i.id} value={i.id}>
-                                      {i.firmName}
+                                      {i.firmName} ({i.memberName})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -263,37 +285,72 @@ export function EditableSchedule({
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            <div className="flex items-start justify-between">
+                            {/* Investment Team Member Call Info - Prominent */}
+                            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Phone className="h-4 w-4 text-indigo-600" />
+                                <span className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">Call Assignment</span>
+                              </div>
                               <div className="space-y-1">
-                                <div className="font-medium text-primary">
-                                  {match.startupName}
+                                <div className="flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-semibold text-base">{investor?.memberName || 'Unknown Member'}</span>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  vs {match.investorName}
+                                <div className="text-sm text-muted-foreground pl-6">
+                                  from <span className="font-medium">{investor?.firmName || 'Unknown Firm'}</span>
                                   {investor?.tableNumber && (
-                                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
+                                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded font-medium">
                                       Table {investor.tableNumber}
                                     </span>
                                   )}
-                                  {/* Debug: Show if investor exists and table number value */}
-                                  {process.env.NODE_ENV === 'development' && (
-                                    <span className="text-xs text-gray-400 ml-2">
-                                      [Debug: investor={investor ? 'found' : 'not found'}, table={investor?.tableNumber || 'none'}]
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex gap-2">
-                                  <Badge className={`text-xs ${attendanceStatus.color}`}>
-                                    Score: {match.compatibilityScore}%
-                                  </Badge>
-                                  {match.locked && (
-                                    <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
-                                      <Lock className="h-3 w-3 mr-1" />
-                                      Locked
-                                    </Badge>
-                                  )}
                                 </div>
                               </div>
+                            </div>
+
+                            {/* Startup to Call */}
+                            <div className="bg-white p-3 rounded-lg border-2 border-primary/20">
+                              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Startup to Call</div>
+                              <div className="font-bold text-lg text-primary">
+                                {match.startupName}
+                              </div>
+                              {startup && (
+                                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                                  <div>Industry: <span className="font-medium">{startup.industry}</span></div>
+                                  <div>Stage: <span className="font-medium">{startup.fundingStage}</span> • Target: <span className="font-medium">${(startup.fundingTarget / 1000000).toFixed(1)}M</span></div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-start justify-between pt-2 border-t">
+                              <div className="flex gap-2 flex-wrap">
+                                <Badge className={`text-xs ${attendanceStatus.color}`}>
+                                  Match Score: {match.compatibilityScore}%
+                                </Badge>
+                                {match.locked && (
+                                  <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
+                                    <Lock className="h-3 w-3 mr-1" />
+                                    Locked
+                                  </Badge>
+                                )}
+                                {match.completed && (
+                                  <Badge variant="outline" className="text-xs bg-green-100 text-green-800 border-green-200">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Completed
+                                  </Badge>
+                                )}
+                              </div>
+                              {match.scoreBreakdown && match.scoreBreakdown.length > 0 && (
+                                <div className="mt-2 text-xs text-muted-foreground space-y-1 w-full">
+                                  <div className="font-semibold">{match.scoreBreakdown[0]}</div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                    {match.scoreBreakdown.slice(1).map((line, idx) => (
+                                      <div key={idx} className="truncate">
+                                        {line}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               <div className="flex gap-1">
                                 <Button
                                   size="sm"

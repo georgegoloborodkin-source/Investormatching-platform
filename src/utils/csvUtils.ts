@@ -1,4 +1,4 @@
-import { Startup, Investor, Match } from "@/types";
+import { Startup, Investor, Match, FUNDING_STAGES } from "@/types";
 
 export function parseStartupCSV(csvContent: string): Startup[] {
   const lines = csvContent.split('\n').filter(line => line.trim());
@@ -49,6 +49,18 @@ export function parseInvestorCSV(csvContent: string): Investor[] {
       const investor: Investor = {
         id: `investor-${Date.now()}-${i}`,
         firmName: values[headers.indexOf('firm_name')] || values[headers.indexOf('firmname')] || '',
+        memberName:
+          values[headers.indexOf('investor_member_name')] ||
+          values[headers.indexOf('investment_member')] ||
+          values[headers.indexOf('investmentmember')] ||
+          values[headers.indexOf('investormembername')] ||
+          values[headers.indexOf('member_name')] ||
+          values[headers.indexOf('membername')] ||
+          values[headers.indexOf('contact_name')] ||
+          values[headers.indexOf('contactname')] ||
+          values[headers.indexOf('partner_name')] ||
+          values[headers.indexOf('partnername')] ||
+          '',
         geoFocus: (values[headers.indexOf('geo_focus')] || values[headers.indexOf('geofocus')] || '')
           .split(';').map(g => g.trim()).filter(g => g),
         industryPreferences: (values[headers.indexOf('industry_preferences')] || values[headers.indexOf('industrypreferences')] || '')
@@ -61,8 +73,13 @@ export function parseInvestorCSV(csvContent: string): Investor[] {
         tableNumber: values[headers.indexOf('table_number')] || values[headers.indexOf('tablenumber')] || '',
         availabilityStatus: 'present'
       };
+
+      // If stage preferences not provided, default to all stages
+      if (!investor.stagePreferences || investor.stagePreferences.length === 0) {
+        investor.stagePreferences = [...FUNDING_STAGES];
+      }
       
-      if (investor.firmName) {
+      if (investor.firmName && investor.memberName) {
         investors.push(investor);
       }
     } catch (error) {
@@ -81,6 +98,7 @@ export function exportMatchesToCSV(matches: Match[], startups: Startup[], invest
     'Time Slot',
     'Slot Time',
     'Compatibility Score',
+    'Score Breakdown',
     'Status',
     'Completed',
     'Startup Industry',
@@ -102,6 +120,7 @@ export function exportMatchesToCSV(matches: Match[], startups: Startup[], invest
       match.timeSlot,
       match.slotTime || '',
       match.compatibilityScore + '%',
+      (match.scoreBreakdown || []).join(' | '),
       match.status,
       match.completed ? 'Yes' : 'No',
       startup?.industry || '',
@@ -154,9 +173,9 @@ export function generateStartupCSVTemplate(): string {
 export function generateInvestorCSVTemplate(): string {
   const headers = [
     'firm_name',
+    'investment_member',
     'geo_focus', // semicolon separated: "North America;Europe"
     'industry_preferences', // semicolon separated: "AI/ML;SaaS"
-    'stage_preferences', // semicolon separated: "Seed;Series A"
     'min_ticket_size', // number
     'max_ticket_size', // number
     'total_slots', // number
@@ -165,9 +184,9 @@ export function generateInvestorCSVTemplate(): string {
   
   const sampleData = [
     'Venture Capital Partners',
+    'Jane Doe',
     'North America;Europe',
     'AI/ML;SaaS',
-    'Seed;Series A',
     '1000000',
     '5000000',
     '4',

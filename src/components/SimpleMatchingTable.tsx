@@ -84,7 +84,7 @@ export function SimpleMatchingTable({
     if (investor) {
       onUpdateMatch(matchId, {
         investorId: investor.id,
-        investorName: investor.firmName
+        investorName: `${investor.firmName} (${investor.memberName})`
       });
     }
   };
@@ -154,6 +154,7 @@ export function SimpleMatchingTable({
                   <ArrowUpDown className="h-3 w-3" />
                 </div>
               </th>
+              <th className="text-left p-3">Why (score)</th>
               <th className="text-left p-3">Lock</th>
             </tr>
           </thead>
@@ -212,7 +213,7 @@ export function SimpleMatchingTable({
                             .filter(i => i.availabilityStatus === 'present')
                             .map((investor) => (
                               <SelectItem key={investor.id} value={investor.id}>
-                                {investor.firmName}
+                                {investor.firmName} ({investor.memberName})
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -225,9 +226,23 @@ export function SimpleMatchingTable({
                     </div>
                   </td>
                   <td className="p-3">
-                    <Badge className={getScoreColor(match.compatibilityScore)}>
-                      {match.compatibilityScore}%
-                    </Badge>
+                    <div className="space-y-1">
+                      <Badge className={getScoreColor(match.compatibilityScore)}>
+                        {match.compatibilityScore}%
+                      </Badge>
+                      {match.scoreBreakdown && match.scoreBreakdown.length > 0 && (
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <div className="font-semibold">
+                            {match.scoreBreakdown[0]}
+                          </div>
+                          <div className="text-[11px] leading-tight">
+                            {match.scoreBreakdown.slice(1).map((line, idx) => (
+                              <div key={idx}>{line}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3">
                     <Button

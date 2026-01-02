@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Header } from "@/components/Header";
 import { SimpleMatchingTable } from "@/components/SimpleMatchingTable";
 import { ParticipantManagement } from "@/components/ParticipantManagement";
@@ -13,13 +14,29 @@ import { InvestorForm } from "@/components/InvestorForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Startup, Investor, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
-import { generateMatches } from "@/utils/matchingAlgorithm";
+import { generateMatches } from "@/utils/matchingAlgorithmMVP";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
 import { Save } from "lucide-react";
 
 const Index = () => {
   const { toast } = useToast();
   const [isRematching, setIsRematching] = useState(false);
+
+  const dedupeMatchesOnLoad = useCallback((raw: Match[]) => {
+    const seen = new Set<string>();
+    const seenFirm = new Set<string>();
+    return raw.filter((m) => {
+      const key = `${m.startupId}::${m.investorId}`;
+      if (seen.has(key)) return false;
+      const firm = m.investorName ? m.investorName.split('(')[0].trim().toLowerCase() : "";
+      const startupName = (m.startupName || "").trim().toLowerCase();
+      const firmKey = `${startupName}::${firm}`;
+      if (seenFirm.has(firmKey)) return false;
+      seen.add(key);
+      seenFirm.add(firmKey);
+      return true;
+    });
+  }, []);
   
   // Modal states
   const [showStartupForm, setShowStartupForm] = useState(false);
@@ -63,6 +80,7 @@ const Index = () => {
     {
       id: '1',
       firmName: 'Venture Capital Partners',
+      memberName: 'Jane Doe',
       geoFocus: ['North America', 'Europe'],
       industryPreferences: ['AI/ML', 'SaaS'],
       stagePreferences: ['Series A', 'Series B+'],
@@ -74,6 +92,7 @@ const Index = () => {
     {
       id: '2',
       firmName: 'Health Innovations Fund',
+      memberName: 'John Smith',
       geoFocus: ['North America'],
       industryPreferences: ['Healthtech'],
       stagePreferences: ['Seed', 'Series A'],
@@ -85,6 +104,7 @@ const Index = () => {
     {
       id: '3',
       firmName: 'Global Tech Ventures',
+      memberName: 'Amina Khan',
       geoFocus: ['Europe', 'Asia-Pacific'],
       industryPreferences: ['EdTech', 'E-commerce'],
       stagePreferences: ['Pre-seed', 'Seed'],
@@ -95,17 +115,50 @@ const Index = () => {
     }
   ]);
 
+  // Helper function to generate time slots from 9:00 to 18:00 (20-minute intervals)
+  const generateDefaultTimeSlots = (): TimeSlotConfig[] => {
+    const slots: TimeSlotConfig[] = [];
+    let hour = 9;
+    let minute = 0;
+    let slotNumber = 1;
+
+    while (hour < 18 || (hour === 18 && minute === 0)) {
+      const startTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      
+      // Calculate end time (20 minutes later)
+      let endHour = hour;
+      let endMinute = minute + 20;
+      if (endMinute >= 60) {
+        endHour += 1;
+        endMinute -= 60;
+      }
+      const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+
+      slots.push({
+        id: `slot-${slotNumber}`,
+        label: `Slot ${slotNumber}`,
+        startTime,
+        endTime,
+        isDone: false,
+      });
+
+      // Move to next slot
+      minute += 20;
+      if (minute >= 60) {
+        hour += 1;
+        minute -= 60;
+      }
+      slotNumber++;
+    }
+
+    return slots;
+  };
+
   const [matches, setMatches] = useState<Match[]>([]);
-  const [timeSlots, setTimeSlots] = useState<TimeSlotConfig[]>([
-    { id: 'slot-1', label: 'Slot 1', startTime: '09:00', endTime: '09:20', isDone: false },
-    { id: 'slot-2', label: 'Slot 2', startTime: '09:20', endTime: '09:40', isDone: false },
-    { id: 'slot-3', label: 'Slot 3', startTime: '09:40', endTime: '10:00', isDone: false },
-    { id: 'slot-4', label: 'Slot 4', startTime: '10:00', endTime: '10:20', isDone: false },
-    { id: 'slot-5', label: 'Slot 5', startTime: '10:20', endTime: '10:40', isDone: false },
-    { id: 'slot-6', label: 'Slot 6', startTime: '10:40', endTime: '11:00', isDone: false },
-  ]);
+  const [timeSlots, setTimeSlots] = useState<TimeSlotConfig[]>(generateDefaultTimeSlots());
 
   const [customIndustries, setCustomIndustries] = useState<string[]>([]);
+  const [memberFilter, setMemberFilter] = useState<string[]>([]);
 
   const allIndustries = [...INDUSTRIES, ...customIndustries];
 
@@ -136,7 +189,9 @@ const Index = () => {
 
     if (savedMatches) {
       try {
-        setMatches(JSON.parse(savedMatches));
+        const parsed = JSON.parse(savedMatches);
+        const deduped = Array.isArray(parsed) ? dedupeMatchesOnLoad(parsed) : [];
+        setMatches(deduped);
       } catch (e) {
         console.error('Failed to load saved matches');
       }
@@ -228,16 +283,107 @@ const Index = () => {
   }, [toast]);
 
   const handleGenerateMatches = useCallback(() => {
-    if (!hasData) return;
-    
-    const newMatches = generateMatches(startups, investors, [], timeSlots);
-    setMatches(newMatches);
-    
-    toast({
-      title: "Matches Generated",
-      description: `Created ${newMatches.length} optimal matches based on compatibility scores.`,
-    });
-  }, [startups, investors, hasData, timeSlots, toast]);
+    // Check if we have data
+    if (!hasData) {
+      toast({
+        title: "Cannot Generate Matches",
+        description: "Please add at least one startup and one investor before generating matches.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check for available participants
+    const availableStartups = startups.filter(s => s.availabilityStatus === 'present');
+    const availableInvestors = investors.filter(i => i.availabilityStatus === 'present');
+
+    if (availableStartups.length === 0) {
+      toast({
+        title: "No Available Startups",
+        description: "All startups are marked as 'not attending'. Please update their availability status.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (availableInvestors.length === 0) {
+      toast({
+        title: "No Available Investors",
+        description: "All investors are marked as 'not attending'. Please update their availability status.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if investors have slots configured
+    const investorsWithSlots = availableInvestors.filter(inv => inv.totalSlots > 0);
+    if (investorsWithSlots.length === 0) {
+      toast({
+        title: "No Investor Slots Available",
+        description: "All investors have 0 total slots. Please set total slots for investors.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      console.log('Generating matches with:', {
+        startups: availableStartups.length,
+        investors: availableInvestors.length,
+        timeSlots: timeSlots.length
+      });
+
+      const rawMatches = generateMatches(startups, investors, [], timeSlots, {
+        maxMeetingsPerStartup: 1,
+        memberNameFilter: memberFilter
+      });
+      // Safety net: ensure no duplicates by IDs and also by visible names (prevents duplicate-looking rows
+      // when the same startup is imported twice with different IDs).
+      const seen = new Set<string>();
+      const seenFirm = new Set<string>();
+      const seenNamePair = new Set<string>();
+      const newMatches = rawMatches.filter(m => {
+        const key = `${m.startupId}::${m.investorId}`;
+        if (seen.has(key)) return false;
+        const inv = investors.find(i => i.id === m.investorId);
+        const firmKey = inv
+          ? `${m.startupId}::${inv.firmName.toLowerCase().trim()}`
+          : `${m.startupId}::${m.investorName.toLowerCase().trim()}`;
+        if (seenFirm.has(firmKey)) return false;
+        const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(m.investorName || '').toLowerCase().trim()}`;
+        if (seenNamePair.has(nameKey)) return false;
+        seen.add(key);
+        seenFirm.add(firmKey);
+        seenNamePair.add(nameKey);
+        return true;
+      });
+      
+      console.log('Generated matches:', newMatches.length);
+
+      if (newMatches.length === 0) {
+        toast({
+          title: "No Matches Generated",
+          description: "Could not generate matches. Check that investors have available slots and time slots are configured.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setMatches(newMatches);
+      
+      toast({
+        title: "Matches Generated Successfully",
+        description: `Created ${newMatches.length} optimal matches based on compatibility scores.`,
+      });
+    } catch (error) {
+      console.error('Error generating matches:', error);
+      toast({
+        title: "Error Generating Matches",
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please check the console for details.",
+        variant: "destructive"
+      });
+    }
+  }, [startups, investors, hasData, timeSlots, toast, memberFilter]);
 
   const handleRematch = useCallback(async () => {
     if (!hasData) return;
@@ -247,7 +393,28 @@ const Index = () => {
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    const newMatches = generateMatches(startups, investors, matches, timeSlots);
+    const rawMatches = generateMatches(startups, investors, matches, timeSlots, {
+      maxMeetingsPerStartup: 1,
+      memberNameFilter: memberFilter
+    });
+    const seen = new Set<string>();
+    const seenFirm = new Set<string>();
+    const seenNamePair = new Set<string>();
+    const newMatches = rawMatches.filter(m => {
+      const key = `${m.startupId}::${m.investorId}`;
+      if (seen.has(key)) return false;
+      const inv = investors.find(i => i.id === m.investorId);
+      const firmKey = inv
+        ? `${m.startupId}::${inv.firmName.toLowerCase().trim()}`
+        : `${m.startupId}::${m.investorName.toLowerCase().trim()}`;
+      if (seenFirm.has(firmKey)) return false;
+      const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(m.investorName || '').toLowerCase().trim()}`;
+      if (seenNamePair.has(nameKey)) return false;
+      seen.add(key);
+      seenFirm.add(firmKey);
+      seenNamePair.add(nameKey);
+      return true;
+    });
     setMatches(newMatches);
     
     toast({
@@ -256,7 +423,12 @@ const Index = () => {
     });
     
     setIsRematching(false);
-  }, [startups, investors, matches, hasData, timeSlots, toast]);
+  }, [startups, investors, matches, hasData, timeSlots, toast, memberFilter]);
+
+  const handleApplyMemberFilter = useCallback(() => {
+    // Regenerate with current filter state
+    handleGenerateMatches();
+  }, [handleGenerateMatches]);
 
   const handleExport = useCallback(() => {
     if (matches.length === 0) {
@@ -431,10 +603,40 @@ const Index = () => {
               {startups.length} startups • {investors.length} investors • {matches.length} matches generated
             </p>
           </div>
-          <Button onClick={handleSaveData} variant="outline">
-            <Save className="h-4 w-4 mr-2" />
-            Save Data
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Filter by investor member</label>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(new Set(investors.map(i => i.memberName).filter(Boolean))).map((member) => {
+                  const checked = memberFilter.includes(member);
+                  return (
+                    <label key={member} className="flex items-center gap-2 border px-2 py-1 rounded-md cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(val) => {
+                          setMemberFilter(prev => {
+                            if (val === true) return [...prev, member];
+                            return prev.filter(m => m !== member);
+                          });
+                        }}
+                      />
+                      <span className="text-sm">{member}</span>
+                    </label>
+                  );
+                })}
+                {investors.length === 0 && (
+                  <span className="text-xs text-muted-foreground">Add investors to filter by member.</span>
+                )}
+              </div>
+            </div>
+            <Button onClick={handleApplyMemberFilter} variant="secondary">
+              Apply Member Filter
+            </Button>
+            <Button onClick={handleSaveData} variant="outline">
+              <Save className="h-4 w-4 mr-2" />
+              Save Data
+            </Button>
+          </div>
         </div>
         
         <Tabs defaultValue="table" className="space-y-6">

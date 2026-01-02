@@ -19,6 +19,7 @@ interface InvestorFormProps {
 export function InvestorForm({ investor, timeSlots, industries, onSave, onAddIndustry, onCancel }: InvestorFormProps) {
   const [formData, setFormData] = useState({
     firmName: investor?.firmName || '',
+    memberName: investor?.memberName || '',
     geoFocus: investor?.geoFocus || [],
     industryPreferences: investor?.industryPreferences || [],
     stagePreferences: investor?.stagePreferences || [],
@@ -91,6 +92,11 @@ export function InvestorForm({ investor, timeSlots, industries, onSave, onAddInd
       alert('Please enter firm name');
       return;
     }
+
+    if (!formData.memberName.trim()) {
+      alert('Please enter investor member name');
+      return;
+    }
     
     if (formData.geoFocus.length === 0) {
       alert('Please select at least one geographic focus');
@@ -127,6 +133,17 @@ export function InvestorForm({ investor, timeSlots, industries, onSave, onAddInd
               value={formData.firmName}
               onChange={(e) => setFormData(prev => ({ ...prev, firmName: e.target.value }))}
               placeholder="Enter firm name"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="member-name">Investor Member Name *</Label>
+            <Input
+              id="member-name"
+              value={formData.memberName}
+              onChange={(e) => setFormData(prev => ({ ...prev, memberName: e.target.value }))}
+              placeholder="e.g., Jane Doe"
               required
             />
           </div>

@@ -110,6 +110,9 @@ export function MeetingVisibilityTable({ startups, investors, matches }: Meeting
                       <div>
                         <div className="font-medium">{investor.firmName}</div>
                         <div className="text-sm text-muted-foreground">
+                          Investment member: {investor.memberName}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
                           {investor.totalSlots} total slots
                           {investor.tableNumber && (
                             <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
