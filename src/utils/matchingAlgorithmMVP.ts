@@ -6,6 +6,7 @@ interface GenerateOptions {
   minMeetingsPerInvestor?: number; // default 0
   memberNameFilter?: string[]; // if provided, only these memberNames (case-insensitive) are eligible
   maxMeetingsPerStartup?: number; // default 1 (coverage-first)
+  onlyAttending?: boolean; // default true
 }
 
 interface ScoredCandidate {
@@ -187,11 +188,12 @@ export function generateMatches(
   const memberNameFilter = (options.memberNameFilter || []).map(norm);
   const filterByMember = memberNameFilter.length > 0;
   const maxMeetingsPerStartup = options.maxMeetingsPerStartup ?? 1; // coverage-first cap
+  const onlyAttending = options.onlyAttending !== false;
 
   // Keep only attending
-  const availableStartupsRaw = startups.filter((s) => s.availabilityStatus === "present");
+  const availableStartupsRaw = onlyAttending ? startups.filter((s) => s.availabilityStatus === "present") : startups;
   const availableInvestors = investors.filter((i) => {
-    if (i.availabilityStatus !== "present") return false;
+    if (onlyAttending && i.availabilityStatus !== "present") return false;
     if (filterByMember) {
       return memberNameFilter.includes(norm(i.memberName));
     }

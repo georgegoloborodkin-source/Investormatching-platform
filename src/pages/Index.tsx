@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { SimpleMatchingTable } from "@/components/SimpleMatchingTable";
 import { ParticipantManagement } from "@/components/ParticipantManagement";
@@ -16,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Startup, Investor, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
 import { generateMatches } from "@/utils/matchingAlgorithmMVP";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
+import { CoverageReport } from "@/components/CoverageReport";
 import { Save } from "lucide-react";
 
 const Index = () => {
@@ -154,11 +156,32 @@ const Index = () => {
     return slots;
   };
 
+  const normalizeTimeSlots = (value: unknown): TimeSlotConfig[] => {
+    if (!Array.isArray(value)) return generateDefaultTimeSlots();
+    const cleaned = value
+      .map((slot, idx) => {
+        if (!slot) return null;
+        const id = typeof slot.id === "string" ? slot.id : `slot-${idx + 1}`;
+        const label = typeof slot.label === "string" ? slot.label : `Slot ${idx + 1}`;
+        const startTime = typeof slot.startTime === "string" ? slot.startTime : undefined;
+        const endTime = typeof slot.endTime === "string" ? slot.endTime : undefined;
+        const isDone = !!(slot as any).isDone;
+        if (!startTime || !endTime) return null;
+        return { id, label, startTime, endTime, isDone };
+      })
+      .filter(Boolean) as TimeSlotConfig[];
+    return cleaned.length > 0 ? cleaned : generateDefaultTimeSlots();
+  };
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlotConfig[]>(generateDefaultTimeSlots());
 
   const [customIndustries, setCustomIndustries] = useState<string[]>([]);
-  const [memberFilter, setMemberFilter] = useState<string[]>([]);
+  // Filters removed: always include attending participants only; member filter handled inside Edit Schedule.
+  const [activeTab, setActiveTab] = useState<string>("table");
+  const safeActiveTab = ["manage", "timeslots", "visibility", "table", "editable"].includes(activeTab)
+    ? activeTab
+    : "table";
 
   const allIndustries = [...INDUSTRIES, ...customIndustries];
 
@@ -199,7 +222,8 @@ const Index = () => {
 
     if (savedTimeSlots) {
       try {
-        setTimeSlots(JSON.parse(savedTimeSlots));
+        const parsed = JSON.parse(savedTimeSlots);
+        setTimeSlots(normalizeTimeSlots(parsed));
       } catch (e) {
         console.error('Failed to load saved time slots');
       }
@@ -335,7 +359,8 @@ const Index = () => {
 
       const rawMatches = generateMatches(startups, investors, [], timeSlots, {
         maxMeetingsPerStartup: 1,
-        memberNameFilter: memberFilter
+        memberNameFilter: [],
+        onlyAttending: true
       });
       // Safety net: ensure no duplicates by IDs and also by visible names (prevents duplicate-looking rows
       // when the same startup is imported twice with different IDs).
@@ -383,7 +408,7 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  }, [startups, investors, hasData, timeSlots, toast, memberFilter]);
+  }, [startups, investors, hasData, timeSlots, toast]);
 
   const handleRematch = useCallback(async () => {
     if (!hasData) return;
@@ -395,7 +420,8 @@ const Index = () => {
     
     const rawMatches = generateMatches(startups, investors, matches, timeSlots, {
       maxMeetingsPerStartup: 1,
-      memberNameFilter: memberFilter
+      memberNameFilter: [],
+      onlyAttending: true
     });
     const seen = new Set<string>();
     const seenFirm = new Set<string>();
@@ -423,12 +449,7 @@ const Index = () => {
     });
     
     setIsRematching(false);
-  }, [startups, investors, matches, hasData, timeSlots, toast, memberFilter]);
-
-  const handleApplyMemberFilter = useCallback(() => {
-    // Regenerate with current filter state
-    handleGenerateMatches();
-  }, [handleGenerateMatches]);
+  }, [startups, investors, matches, hasData, timeSlots, toast]);
 
   const handleExport = useCallback(() => {
     if (matches.length === 0) {
@@ -604,34 +625,9 @@ const Index = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Filter by investor member</label>
-              <div className="flex flex-wrap gap-2">
-                {Array.from(new Set(investors.map(i => i.memberName).filter(Boolean))).map((member) => {
-                  const checked = memberFilter.includes(member);
-                  return (
-                    <label key={member} className="flex items-center gap-2 border px-2 py-1 rounded-md cursor-pointer">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(val) => {
-                          setMemberFilter(prev => {
-                            if (val === true) return [...prev, member];
-                            return prev.filter(m => m !== member);
-                          });
-                        }}
-                      />
-                      <span className="text-sm">{member}</span>
-                    </label>
-                  );
-                })}
-                {investors.length === 0 && (
-                  <span className="text-xs text-muted-foreground">Add investors to filter by member.</span>
-                )}
-              </div>
-            </div>
-            <Button onClick={handleApplyMemberFilter} variant="secondary">
-              Apply Member Filter
-            </Button>
+            <Link to="/cis">
+              <Button variant="outline">Switch to CIS prototype</Button>
+            </Link>
             <Button onClick={handleSaveData} variant="outline">
               <Save className="h-4 w-4 mr-2" />
               Save Data
@@ -639,7 +635,7 @@ const Index = () => {
           </div>
         </div>
         
-        <Tabs defaultValue="table" className="space-y-6">
+        <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="manage">Manage</TabsTrigger>
             <TabsTrigger value="timeslots">Time Slots</TabsTrigger>
@@ -675,11 +671,14 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="visibility">
+            <div className="space-y-6">
+              <CoverageReport startups={startups} investors={investors} matches={matches} />
             <MeetingVisibilityTable
               startups={startups}
               investors={investors}
               matches={matches}
             />
+            </div>
           </TabsContent>
           
           <TabsContent value="table">

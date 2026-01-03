@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Match, Startup, Investor, TimeSlotConfig } from "@/types";
 import { Edit2, Save, X, Users, AlertCircle, CheckCircle, Lock, Unlock, Clock, Phone, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadCSV } from "@/utils/csvUtils";
+import { downloadTextFile } from "@/utils/downloadUtils";
+import { buildMemberCallSheetIcs } from "@/utils/icsUtils";
 
 interface EditableScheduleProps {
   matches: Match[];
@@ -20,6 +23,8 @@ interface EditableScheduleProps {
   onToggleCompleted: (matchId: string) => void;
   onToggleLocked: (matchId: string) => void;
 }
+
+const MEMBER_ALL = "__all__";
 
 export function EditableSchedule({ 
   matches, 
@@ -34,14 +39,41 @@ export function EditableSchedule({
 }: EditableScheduleProps) {
   const { toast } = useToast();
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
+  const [memberFocus, setMemberFocus] = useState<string>(MEMBER_ALL); // investor member name
   const [editForm, setEditForm] = useState<{
     startupId: string;
     investorId: string;
     timeSlot: string;
   }>({ startupId: '', investorId: '', timeSlot: '' });
 
+  try {
+  // Defensively normalize inputs to avoid runtime crashes from malformed stored data
+  const safeMatches = Array.isArray(matches) ? matches : [];
+  const safeStartups = Array.isArray(startups) ? startups : [];
+  const safeInvestors = Array.isArray(investors) ? investors : [];
+  const safeTimeSlots = Array.isArray(timeSlots) ? timeSlots : [];
+  const normalizedTimeSlots = safeTimeSlots
+    .filter((ts) => ts && typeof ts.label === "string" && typeof ts.startTime === "string" && typeof ts.endTime === "string")
+    .map((ts, idx) => ({
+      id: ts.id || `slot-${idx + 1}`,
+      label: ts.label || `Slot ${idx + 1}`,
+      startTime: ts.startTime,
+      endTime: ts.endTime,
+      isDone: !!ts.isDone,
+      breakAfter: ts.breakAfter,
+    }));
+
   // Group matches by time slots
-  const groupedMatches = matches.reduce((acc, match) => {
+  const isAllMembers = memberFocus === MEMBER_ALL;
+
+  const visibleMatches = !isAllMembers
+    ? safeMatches.filter((m) => {
+        const inv = safeInvestors.find((i) => i.id === m.investorId);
+        return inv?.memberName === memberFocus;
+      })
+    : safeMatches;
+
+  const groupedMatches = visibleMatches.reduce((acc, match) => {
     if (!acc[match.timeSlot]) {
       acc[match.timeSlot] = [];
     }
@@ -61,9 +93,9 @@ export function EditableSchedule({
   const handleSaveEdit = () => {
     if (!editingMatch) return;
 
-    const startup = startups.find(s => s.id === editForm.startupId);
-    const investor = investors.find(i => i.id === editForm.investorId);
-    const timeSlot = timeSlots.find(ts => ts.label === editForm.timeSlot);
+    const startup = safeStartups.find(s => s.id === editForm.startupId);
+    const investor = safeInvestors.find(i => i.id === editForm.investorId);
+    const timeSlot = normalizedTimeSlots.find(ts => ts.label === editForm.timeSlot);
 
     if (!startup || !investor || !timeSlot) {
       toast({
@@ -105,7 +137,7 @@ export function EditableSchedule({
   };
 
   const handleToggleSlotDone = (slotId: string, isDone: boolean) => {
-    const updatedSlots = timeSlots.map(slot => 
+    const updatedSlots = normalizedTimeSlots.map(slot => 
       slot.id === slotId ? { ...slot, isDone } : slot
     );
     onUpdateTimeSlots(updatedSlots);
@@ -131,22 +163,114 @@ export function EditableSchedule({
     }
   };
 
-  // Group matches by investor member for call list view
-  const matchesByMember = matches.reduce((acc, match) => {
-    const investor = investors.find(i => i.id === match.investorId);
-    if (!investor) return acc;
-    
-    const memberKey = `${investor.firmName}::${investor.memberName}`;
-    if (!acc[memberKey]) {
-      acc[memberKey] = {
-        firmName: investor.firmName,
-        memberName: investor.memberName,
-        matches: []
-      };
+  // Conflict detection (manual edits can introduce these)
+  const conflictBySlot = normalizedTimeSlots.reduce((acc, slot) => {
+    const slotMatches = groupedMatches[slot.label] || [];
+    const startupIds = new Map<string, number>();
+    const investorIds = new Map<string, number>();
+    const memberNames = new Map<string, number>();
+    for (const m of slotMatches) {
+      startupIds.set(m.startupId, (startupIds.get(m.startupId) || 0) + 1);
+      investorIds.set(m.investorId, (investorIds.get(m.investorId) || 0) + 1);
+      const inv = safeInvestors.find((i) => i.id === m.investorId);
+      const name = inv?.memberName || "";
+      if (name) memberNames.set(name, (memberNames.get(name) || 0) + 1);
     }
-    acc[memberKey].matches.push(match);
+    const startupConflicts = Array.from(startupIds.entries()).filter(([, c]) => c > 1).length;
+    const investorConflicts = Array.from(investorIds.entries()).filter(([, c]) => c > 1).length;
+    const memberConflicts = Array.from(memberNames.entries()).filter(([, c]) => c > 1).length;
+    acc[slot.label] = startupConflicts + investorConflicts + memberConflicts;
     return acc;
-  }, {} as Record<string, { firmName: string; memberName: string; matches: Match[] }>);
+  }, {} as Record<string, number>);
+
+  const autoFixConflicts = () => {
+    // Best-effort: move non-locked/non-completed conflicting meetings to nearest free slot.
+    const slotOrder = normalizedTimeSlots.map((t) => t.label);
+    const takenBySlot: Record<string, { startups: Set<string>; investors: Set<string> }> = {};
+    for (const label of slotOrder) takenBySlot[label] = { startups: new Set(), investors: new Set() };
+    for (const m of safeMatches) {
+      if (!takenBySlot[m.timeSlot]) continue;
+      takenBySlot[m.timeSlot].startups.add(m.startupId);
+      takenBySlot[m.timeSlot].investors.add(m.investorId);
+    }
+
+    for (const slotLabel of slotOrder) {
+      const slotMatches = safeMatches.filter((m) => m.timeSlot === slotLabel);
+      const seenStartup = new Set<string>();
+      const seenInvestor = new Set<string>();
+
+      for (const m of slotMatches) {
+        const isConflict = seenStartup.has(m.startupId) || seenInvestor.has(m.investorId);
+        seenStartup.add(m.startupId);
+        seenInvestor.add(m.investorId);
+        if (!isConflict) continue;
+        if (m.locked || m.completed) continue;
+
+        // find next slot that doesn't already contain this startup/investor
+        const startIdx = slotOrder.indexOf(slotLabel);
+        for (let i = startIdx + 1; i < slotOrder.length; i++) {
+          const next = slotOrder[i];
+          if (normalizedTimeSlots[i]?.isDone) continue;
+          if (takenBySlot[next].startups.has(m.startupId)) continue;
+          if (takenBySlot[next].investors.has(m.investorId)) continue;
+          const ts = normalizedTimeSlots.find((t) => t.label === next);
+          onUpdateMatch(m.id, {
+            timeSlot: next,
+            slotTime: ts ? `${ts.startTime} - ${ts.endTime}` : m.slotTime,
+          });
+          takenBySlot[slotLabel].startups.delete(m.startupId);
+          takenBySlot[slotLabel].investors.delete(m.investorId);
+          takenBySlot[next].startups.add(m.startupId);
+          takenBySlot[next].investors.add(m.investorId);
+          break;
+        }
+      }
+    }
+
+    toast({
+      title: "Auto-fix applied",
+      description: "We moved conflicting meetings to the nearest available slots (skipping locked/completed).",
+    });
+  };
+
+  const memberOptions = Array.from(
+    new Set(
+      safeInvestors
+        .map((i) => (typeof i.memberName === "string" ? i.memberName : ""))
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const callSheetMatches = !isAllMembers ? visibleMatches : [];
+  const callSheetSorted = [...callSheetMatches].sort((a, b) => {
+    const ai = normalizedTimeSlots.findIndex((t) => t.label === a.timeSlot);
+    const bi = normalizedTimeSlots.findIndex((t) => t.label === b.timeSlot);
+    return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+  });
+
+  const exportCallSheetCsv = () => {
+    if (!memberFocus) return;
+    const headers = ["Time", "Slot", "Startup", "Firm", "Member", "Table"];
+    const rows = callSheetSorted.map((m) => {
+      const inv = safeInvestors.find((i) => i.id === m.investorId);
+      const slot = normalizedTimeSlots.find((t) => t.label === m.timeSlot);
+      return [
+        slot ? `${slot.startTime}-${slot.endTime}` : m.slotTime || "",
+        m.timeSlot,
+        m.startupName,
+        inv?.firmName || "",
+        inv?.memberName || "",
+        inv?.tableNumber || "",
+      ];
+    });
+    downloadCSV([headers, ...rows].map((r) => r.join(",")).join("\n"), `call_sheet_${memberFocus}.csv`);
+  };
+
+  const exportCallSheetIcs = () => {
+    if (!memberFocus) return;
+    const ics = buildMemberCallSheetIcs(memberFocus, safeMatches, safeStartups, safeInvestors, normalizedTimeSlots);
+    downloadTextFile(ics, `call_sheet_${memberFocus}.ics`, "text/calendar;charset=utf-8");
+  };
 
   return (
     <div className="space-y-6">
@@ -157,10 +281,77 @@ export function EditableSchedule({
             View meetings by time slot. Each card shows which team member needs to call which startup.
           </p>
         </div>
+        <Button variant="outline" onClick={autoFixConflicts}>
+          Auto-fix conflicts
+        </Button>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Call Sheet (by investment member)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex-1">
+              <Label>Investment team member</Label>
+                <Select value={memberFocus} onValueChange={setMemberFocus}>
+                <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select member to focus" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={MEMBER_ALL}>All members</SelectItem>
+                  {memberOptions.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus}>
+                Export CSV
+              </Button>
+              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus}>
+                Export .ics
+              </Button>
+            </div>
+          </div>
+
+            {!isAllMembers && (
+            <div className="space-y-2">
+              {callSheetSorted.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No calls for this member.</div>
+              ) : (
+                <div className="space-y-1">
+                  {callSheetSorted.map((m) => {
+                    const slot = timeSlots.find((t) => t.label === m.timeSlot);
+                    const inv = investors.find((i) => i.id === m.investorId);
+                    return (
+                      <div key={m.id} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
+                        <div className="text-muted-foreground">
+                          {slot ? `${slot.startTime}-${slot.endTime}` : m.slotTime} • {m.timeSlot}
+                        </div>
+                        <div className="font-medium">{m.startupName}</div>
+                        <div className="text-muted-foreground">
+                          {inv?.firmName}
+                          {inv?.tableNumber ? ` (Table ${inv.tableNumber})` : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6">
-        {timeSlots.map((timeSlot) => {
+        {normalizedTimeSlots.map((timeSlot) => {
           const slotMatches = groupedMatches[timeSlot.label] || [];
           
           return (
@@ -173,6 +364,11 @@ export function EditableSchedule({
                   </div>
                   <span className="text-muted-foreground font-normal">({timeSlot.label})</span>
                   <div className="ml-auto flex items-center gap-3">
+                    {conflictBySlot[timeSlot.label] > 0 && (
+                      <Badge variant="destructive">
+                        {conflictBySlot[timeSlot.label]} conflict{conflictBySlot[timeSlot.label] !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
                     <div className="flex items-center gap-2">
                       <Label className="text-sm font-medium">Slot Done</Label>
                       <Switch
@@ -339,18 +535,6 @@ export function EditableSchedule({
                                   </Badge>
                                 )}
                               </div>
-                              {match.scoreBreakdown && match.scoreBreakdown.length > 0 && (
-                                <div className="mt-2 text-xs text-muted-foreground space-y-1 w-full">
-                                  <div className="font-semibold">{match.scoreBreakdown[0]}</div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                                    {match.scoreBreakdown.slice(1).map((line, idx) => (
-                                      <div key={idx} className="truncate">
-                                        {line}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                               <div className="flex gap-1">
                                 <Button
                                   size="sm"
@@ -426,4 +610,13 @@ export function EditableSchedule({
       </div>
     </div>
   );
+  } catch (err) {
+    console.error("EditableSchedule render error", err);
+    return (
+      <div className="p-4 text-red-700 bg-red-50 border border-red-200 rounded-md">
+        Edit Schedule failed to render. Please clear saved data and try again. Error:{" "}
+        {err instanceof Error ? err.message : String(err)}
+      </div>
+    );
+  }
 }
