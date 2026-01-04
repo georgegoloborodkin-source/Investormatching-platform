@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Download, FileText, AlertCircle, CheckCircle, Eye, X, Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -41,101 +40,6 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
       setOllamaAvailable(health.available);
     });
   }, []);
-
-  const handleFileUpload = useCallback(async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    type: 'startups' | 'investors'
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Allow CSV, XLSX, XLS for manual upload tabs
-    const fileName = file.name.toLowerCase();
-    const isCsv = fileName.endsWith('.csv');
-    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-    
-    if (!isCsv && !isExcel) {
-      setError(`Only CSV, XLSX, or XLS files are allowed for ${type} upload. Please select a supported file.`);
-      event.target.value = ''; // Clear the input
-      return;
-    }
-
-    setError('');
-    setIsProcessing(true);
-    setPreviewData(null);
-
-    try {
-      // For Excel files, use Ollama AI converter
-      if (isExcel) {
-        if (!ollamaAvailable) {
-          setError(`Excel files (${fileName.split('.').pop()?.toUpperCase()}) require Ollama AI converter. Please start Ollama (see OLLAMA_SETUP_GUIDE.md) or export to CSV first.`);
-          event.target.value = '';
-          return;
-        }
-
-        const result = await convertFileWithOllama(file, type === 'startups' ? 'startup' : 'investor');
-        if (result.errors.length > 0) {
-          setError(result.errors.join('; '));
-          return;
-        }
-
-        const data = type === 'startups' ? result.startups : result.investors;
-        setPreviewData({
-          type: type,
-          data: data as any,
-          mappings: [],
-          warnings: [...result.warnings, `Used AI converter (Ollama) to convert Excel file`],
-          errors: result.errors,
-          stats: {
-            totalRows: data.length,
-            validRows: data.length,
-            skippedRows: 0
-          },
-          confidence: result.confidence
-        });
-        return;
-      }
-
-      // For CSV files, use rule-based converter
-      const content = await file.text();
-      
-      if (type === 'startups') {
-        const result = smartConvertStartupCSV(content);
-
-        setPreviewData({
-          type: 'startups',
-          data: result.data,
-          mappings: result.mappings,
-          warnings: result.warnings,
-          errors: result.errors,
-          stats: {
-            totalRows: result.totalRows,
-            validRows: result.validRows,
-            skippedRows: result.skippedRows
-          }
-        });
-      } else {
-        const result = smartConvertInvestorCSV(content);
-
-        setPreviewData({
-          type: 'investors',
-          data: result.data,
-          mappings: result.mappings,
-          warnings: result.warnings,
-          errors: result.errors,
-          stats: {
-            totalRows: result.totalRows,
-            validRows: result.validRows,
-            skippedRows: result.skippedRows
-          }
-        });
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process file');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [ollamaAvailable]);
 
   const handleAutoDetect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -492,66 +396,6 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                 </Alert>
               )}
             </div>
-
-            {/* Manual upload tabs (only 2) */}
-            <Tabs defaultValue="startups" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="startups">Startups</TabsTrigger>
-                <TabsTrigger value="investors">Investors</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="startups" className="space-y-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium">Upload Startups (CSV, XLSX, XLS)</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Use this when you know it's a Startups table. Excel files will be converted using AI.
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => downloadTemplate('startups')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Startups Template
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="startups-csv">Select Startups File (CSV, XLSX, XLS)</Label>
-                  <Input
-                    id="startups-csv"
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(e) => handleFileUpload(e, 'startups')}
-                    disabled={isProcessing}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="investors" className="space-y-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium">Upload Investors (CSV, XLSX, XLS)</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Use this when you know it's an Investors table. Excel files will be converted using AI.
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => downloadTemplate('investors')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Investors Template
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="investors-csv">Select Investors File (CSV, XLSX, XLS)</Label>
-                  <Input
-                    id="investors-csv"
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(e) => handleFileUpload(e, 'investors')}
-                    disabled={isProcessing}
-                  />
-                </div>
-              </TabsContent>
-            </Tabs>
           </div>
         ) : (
           <div className="space-y-4">
