@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Plus, Upload, RotateCcw, Download } from "lucide-react";
+import { Plus, Upload, RotateCcw, Download, User, LogIn } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface HeaderProps {
   onImportData: () => void;
@@ -18,6 +20,8 @@ export function Header({
   isRematching = false,
   hasData
 }: HeaderProps) {
+  const { user, profile } = useAuth();
+
   return (
     <header className="bg-card border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -34,43 +38,61 @@ export function Header({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={onImportData}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Import CSV
-            </Button>
-            
-            <Button 
-              size="sm" 
-              onClick={onGenerateMatches}
-              disabled={!hasData}
-              className="gradient-primary"
-            >
-              Generate Matches
-            </Button>
-            
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              onClick={onRematch}
-              disabled={isRematching || !hasData}
-            >
-              <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
-              {isRematching ? 'Rematching...' : 'Rematch'}
-            </Button>
-            
-            <Button 
-              variant="outline"
-              size="sm" 
-              onClick={onExport}
-              disabled={!hasData}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
+            {user ? (
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={onImportData}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import CSV
+                </Button>
+                
+                <Button 
+                  size="sm" 
+                  onClick={onGenerateMatches}
+                  disabled={!hasData}
+                  className="gradient-primary"
+                >
+                  Generate Matches
+                </Button>
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={onRematch}
+                  disabled={isRematching || !hasData}
+                >
+                  <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
+                  {isRematching ? 'Rematching...' : 'Rematch'}
+                </Button>
+                
+                <Button 
+                  variant="outline"
+                  size="sm" 
+                  onClick={onExport}
+                  disabled={!hasData}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+
+                <Link to="/profile">
+                  <Button variant="ghost" size="sm">
+                    <User className="h-4 w-4 mr-2" />
+                    {profile?.full_name || user.email?.split('@')[0] || 'Profile'}
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <Link to="/login">
+                <Button variant="outline" size="sm">
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>

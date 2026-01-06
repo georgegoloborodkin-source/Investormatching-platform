@@ -82,3 +82,36 @@ export const FUNDING_STAGES = [
   'Series A',
   'Series B+'
 ];
+
+// User & Organization Types
+// Simplified 2-role system: organizer (admin) and investor (participant)
+export type UserRole = 'organizer' | 'investor';
+
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: UserRole;
+  organization_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  subscription_tier: 'free' | 'starter' | 'professional' | 'enterprise';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Event {
+  id: string;
+  organization_id: string;
+  name: string;
+  date: string | null;
+  status: 'draft' | 'active' | 'completed';
+  created_at: string;
+  updated_at: string;
+}

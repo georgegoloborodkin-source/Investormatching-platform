@@ -2,7 +2,7 @@
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/05dff18e-91e3-4f36-8170-0b9b116c49e8
+**URL**: —
 
 ## How can I edit this code?
 
@@ -10,7 +10,7 @@ There are several ways of editing your application.
 
 **Use Lovable**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/05dff18e-91e3-4f36-8170-0b9b116c49e8) and start prompting.
+Open the app locally with `npm run dev` or deploy to Vercel.
 
 Changes made via Lovable will be committed automatically to this repo.
 
@@ -62,7 +62,7 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/05dff18e-91e3-4f36-8170-0b9b116c49e8) and click on Share -> Publish.
+Deploy via Vercel (recommended).
 
 ## Can I connect a custom domain to my Lovable project?
 
@@ -70,4 +70,4 @@ Yes, you can!
 
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+For custom domains, configure in Vercel project settings.
