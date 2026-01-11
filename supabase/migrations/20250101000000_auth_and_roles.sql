@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT,
   full_name TEXT,
-  role TEXT NOT NULL CHECK (role IN ('organizer', 'investor')),
+  role TEXT NOT NULL DEFAULT 'investor' CHECK (role IN ('organizer', 'investor')),
   organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -116,11 +116,12 @@ CREATE INDEX IF NOT EXISTS idx_time_slots_event_id ON time_slots(event_id);
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, email, full_name)
+  INSERT INTO public.user_profiles (id, email, full_name, role)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', '')
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'role', 'investor')
   );
   RETURN NEW;
 END;
@@ -169,6 +170,11 @@ ALTER TABLE time_slots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own profile"
   ON user_profiles FOR SELECT
   USING (auth.uid() = id);
+
+-- Users can insert their own profile (fallback if trigger fails / legacy users)
+CREATE POLICY "Users can insert own profile"
+  ON user_profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
 
 -- Users can update their own profile
 CREATE POLICY "Users can update own profile"
