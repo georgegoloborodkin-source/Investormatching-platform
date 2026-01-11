@@ -316,6 +316,13 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
     file_ext = file.filename.split('.')[-1].lower() if file.filename else ""
     text_content = None  # Initialize to None
 
+    # Guard: empty upload (common when the browser upload failed or the file is zero bytes)
+    if not content or len(content) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty (0 bytes). Re-upload the file. If this keeps happening, the file may be corrupt or blocked by the browser."
+        )
+
     # Normalize extension and detect by magic bytes only if we don't already recognize a handled type.
     handled_exts = {'pdf', 'xlsx', 'xls', 'csv', 'txt', 'json', 'doc', 'docx'}
     # Fallback detection by magic bytes (override when extension is missing or wrong)
@@ -471,6 +478,36 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
 
     # Handle PDF files
     elif file_ext == 'pdf':
+        # Quick sanity-check: real PDFs should contain a %PDF header near the beginning.
+        # Some PDFs may have leading bytes, so search the first chunk instead of only prefix.
+        if b"%PDF" not in content[:8192]:
+            head_hex = content[:32].hex()
+            raise HTTPException(
+                status_code=400,
+                detail=f'File has ".pdf" extension but does not look like a valid PDF (missing %PDF header). First bytes (hex): {head_hex}'
+            )
+
+        # 1) Try PyMuPDF first (often more robust than PyPDF2/pdfplumber on quirky PDFs)
+        pymupdf_error = None
+        try:
+            import fitz  # PyMuPDF
+            from io import BytesIO
+
+            doc = fitz.open(stream=BytesIO(content).getvalue(), filetype="pdf")
+            parts = []
+            for i in range(doc.page_count):
+                page = doc.load_page(i)
+                page_text = page.get_text("text") or ""
+                parts.append(f"\n--- Page {i + 1} ---\n{page_text}")
+            text_content = "\n".join(parts).strip()
+        except Exception as e:
+            pymupdf_error = e
+            text_content = None
+
+        # If PyMuPDF extracted real text, we're done.
+        if text_content and text_content.strip():
+            return file_ext, text_content
+
         # Try PyPDF2 first, but fall back to pdfplumber on ANY failure (PyPDF2 can throw UnicodeDecodeError on some PDFs)
         py_pdf2_error = None
         try:
@@ -517,7 +554,12 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                 # If both libraries fail, surface a helpful error
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Could not extract text from PDF. This may be a scanned/image PDF. PyPDF2 error: {str(py_pdf2_error)}; pdfplumber error: {str(plumber_error)}"
+                    detail=(
+                        "Could not extract text from PDF. This is usually because the PDF is scanned/image-only "
+                        "(no selectable text) or the file is corrupted.\n"
+                        f"PyMuPDF error: {str(pymupdf_error)}; PyPDF2 error: {str(py_pdf2_error)}; pdfplumber error: {str(plumber_error)}\n"
+                        "Fix: export a text-based PDF (OCR it) or upload the original XLSX/CSV instead."
+                    )
                 )
     elif file_ext in ['csv', 'txt', 'json']:
         # Regular text files (CSV, TXT, JSON)
