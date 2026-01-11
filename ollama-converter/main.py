@@ -378,7 +378,17 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
     Shared helper to read an uploaded file and extract text_content with best-effort parsing.
     Returns (file_ext, text_content).
     """
+    # Read the uploaded file bytes.
+    # On some setups, UploadFile may be at EOF (e.g. if something already read the stream),
+    # so we retry once after seeking back to the start.
     content = await file.read()
+    if not content or len(content) == 0:
+        try:
+            await file.seek(0)
+            content = await file.read()
+        except Exception:
+            # If seek/read fails, we fall through to the empty-upload guard below.
+            pass
     file_ext = file.filename.split('.')[-1].lower() if file.filename else ""
     text_content = None  # Initialize to None
 
@@ -386,7 +396,11 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
     if not content or len(content) == 0:
         raise HTTPException(
             status_code=400,
-            detail="Uploaded file is empty (0 bytes). Re-upload the file. If this keeps happening, the file may be corrupt or blocked by the browser."
+            detail=(
+                "Uploaded file is empty (0 bytes). Re-upload the file. "
+                "If this keeps happening, the browser may be sending an empty payload or the file may be corrupt. "
+                f"filename={file.filename!r}, content_type={getattr(file, 'content_type', None)!r}"
+            )
         )
 
     # Normalize extension and detect by magic bytes only if we don't already recognize a handled type.
