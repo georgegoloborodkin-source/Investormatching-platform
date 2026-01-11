@@ -21,6 +21,56 @@ app = FastAPI(title="Ollama Data Converter API")
 # This keeps responses short enough to remain valid JSON.
 MAX_MODEL_INPUT_CHARS = int(os.environ.get("MAX_MODEL_INPUT_CHARS", "24000"))
 
+# OCR settings (for scanned/image PDFs)
+OCR_MAX_PAGES = int(os.environ.get("OCR_MAX_PAGES", "5"))
+OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
+
+
+def try_ocr_pdf_bytes(content: bytes) -> str:
+    """
+    Best-effort OCR for scanned/image-only PDFs.
+    Requires:
+      - pytesseract (python)
+      - pdf2image (python)
+      - Tesseract installed on the OS
+      - Poppler installed on the OS (Windows: poppler-utils)
+    """
+    try:
+        from pdf2image import convert_from_bytes  # type: ignore
+        import pytesseract  # type: ignore
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Scanned/image PDF detected but OCR dependencies are missing. "
+                "Install: pip install pytesseract pdf2image, then install Tesseract + Poppler on Windows. "
+                f"Error: {str(e)}"
+            ),
+        )
+
+    try:
+        images = convert_from_bytes(content, dpi=OCR_DPI, first_page=1, last_page=max(1, OCR_MAX_PAGES))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to render PDF pages for OCR. On Windows you usually need Poppler installed and on PATH. "
+                f"Error: {str(e)}"
+            ),
+        )
+
+    parts: List[str] = []
+    for idx, img in enumerate(images, start=1):
+        try:
+            txt = pytesseract.image_to_string(img) or ""
+            txt = re.sub(r"\s+\n", "\n", txt)
+            txt = re.sub(r"\n{3,}", "\n\n", txt).strip()
+            parts.append(f"\n--- OCR Page {idx} ---\n{txt}")
+        except Exception as e:
+            parts.append(f"\n--- OCR Page {idx} ---\n[OCR_FAILED: {str(e)}]")
+
+    return "\n".join(parts).strip()
+
 # Ollama connection settings
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
@@ -283,8 +333,8 @@ def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
         except Exception:
             return default
 
-    # Handle geoMarkets (accept snake_case too)
-    geo_markets = data.get('geoMarkets', data.get('geo_markets', []))
+    # Handle geoMarkets (accept snake_case + common synonyms like region)
+    geo_markets = data.get('geoMarkets', data.get('geo_markets', data.get('region', data.get('regions', data.get('geography', [])))))
     if isinstance(geo_markets, str):
         geo_markets = [g.strip() for g in re.split(r'[,;|]', geo_markets)]
     
@@ -352,7 +402,12 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         # Fallback for any other type
         return safe_int(value, 0)
     
-    geo_focus = parse_list(data.get('geoFocus', data.get('geo_focus', data.get('geoMarkets', []))))
+    geo_focus = parse_list(
+        data.get(
+            'geoFocus',
+            data.get('geo_focus', data.get('geoMarkets', data.get('region', data.get('regions', data.get('geography', [])))))
+        )
+    )
     industry_prefs = parse_list(data.get('industryPreferences', data.get('industry_preferences', data.get('industries', []))))
     stage_prefs = parse_list(data.get('stagePreferences', data.get('stage_preferences', data.get('stages', []))))
     
@@ -585,7 +640,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
             text_content = None
 
         # If PyMuPDF extracted real text, we're done.
-        if text_content and text_content.strip():
+        if text_content and len(text_content.strip()) >= 50:
             return file_ext, text_content
 
         # Try PyPDF2 first, but fall back to pdfplumber on ANY failure (PyPDF2 can throw UnicodeDecodeError on some PDFs)
@@ -631,14 +686,18 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                     detail="PDF support requires PyPDF2 or pdfplumber. Install with: pip install PyPDF2 pdfplumber"
                 )
             except Exception as plumber_error:
-                # If both libraries fail, surface a helpful error
+                # If text extraction failed, try OCR (scanned/image PDFs)
+                ocr_text = try_ocr_pdf_bytes(content)
+                if ocr_text and len(ocr_text.strip()) >= 50:
+                    return file_ext, ocr_text
+
+                # If OCR didn't help, surface a helpful error
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        "Could not extract text from PDF. This is usually because the PDF is scanned/image-only "
-                        "(no selectable text) or the file is corrupted.\n"
+                        "Could not extract text from PDF (likely scanned/image-only or corrupted), and OCR also failed or returned empty.\n"
                         f"PyMuPDF error: {str(pymupdf_error)}; PyPDF2 error: {str(py_pdf2_error)}; pdfplumber error: {str(plumber_error)}\n"
-                        "Fix: export a text-based PDF (OCR it) or upload the original XLSX/CSV instead."
+                        "Fix: upload the original XLSX/CSV, or OCR/export a searchable PDF."
                     )
                 )
     elif file_ext in ['csv', 'txt', 'json']:
