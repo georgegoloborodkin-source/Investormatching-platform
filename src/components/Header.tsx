@@ -38,53 +38,51 @@ export function Header({
           </div>
 
           <div className="flex items-center space-x-2">
-            {user ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={onImportData}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import CSV
-                </Button>
-                
-                <Button 
-                  size="sm" 
-                  onClick={onGenerateMatches}
-                  disabled={!hasData}
-                  className="gradient-primary"
-                >
-                  Generate Matches
-                </Button>
-                
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={onRematch}
-                  disabled={isRematching || !hasData}
-                >
-                  <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
-                  {isRematching ? 'Rematching...' : 'Rematch'}
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  size="sm" 
-                  onClick={onExport}
-                  disabled={!hasData}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onImportData}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
+            
+            <Button 
+              size="sm" 
+              onClick={onGenerateMatches}
+              disabled={!hasData}
+              className="gradient-primary"
+            >
+              Generate Matches
+            </Button>
+            
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={onRematch}
+              disabled={isRematching || !hasData}
+            >
+              <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
+              {isRematching ? 'Rematching...' : 'Rematch'}
+            </Button>
+            
+            <Button 
+              variant="outline"
+              size="sm" 
+              onClick={onExport}
+              disabled={!hasData}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
 
-                <Link to="/profile">
-                  <Button variant="ghost" size="sm">
-                    <User className="h-4 w-4 mr-2" />
-                    {profile?.full_name || user.email?.split('@')[0] || 'Profile'}
-                  </Button>
-                </Link>
-              </>
+            {user ? (
+              <Link to="/profile">
+                <Button variant="ghost" size="sm">
+                  <User className="h-4 w-4 mr-2" />
+                  {profile?.full_name || user.email?.split('@')[0] || 'Profile'}
+                </Button>
+              </Link>
             ) : (
               <Link to="/login">
                 <Button variant="outline" size="sm">
