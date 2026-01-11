@@ -17,6 +17,10 @@ import csv
 
 app = FastAPI(title="Ollama Data Converter API")
 
+# Limit how much extracted text we send to the model (large PDFs often cause truncated JSON output).
+# This keeps responses short enough to remain valid JSON.
+MAX_MODEL_INPUT_CHARS = int(os.environ.get("MAX_MODEL_INPUT_CHARS", "24000"))
+
 # Ollama connection settings
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
@@ -172,10 +176,21 @@ Return ONLY the JSON object or array, nothing else."""
 
 def create_conversion_prompt(data: str, data_type: Optional[str] = None) -> str:
     """Create a prompt for Ollama to convert unstructured data"""
+    # Keep prompt/model input bounded to reduce truncation.
+    trimmed = data if len(data) <= MAX_MODEL_INPUT_CHARS else data[:MAX_MODEL_INPUT_CHARS]
+    if len(trimmed) != len(data):
+        trimmed = trimmed + "\n\n[TRUNCATED INPUT: content was longer than MAX_MODEL_INPUT_CHARS]"
     if data_type:
-        prompt = f"Extract {data_type} information from the following data and convert to JSON format:\n\n{data}\n\nReturn the JSON object(s) only."
+        prompt = (
+            f"Extract {data_type} information from the following data and convert to JSON format.\n"
+            f"Return ONLY valid JSON (no commentary). Keep it minimal: only the required fields.\n\n{trimmed}\n"
+        )
     else:
-        prompt = f"Extract startup or investor information from the following data. Auto-detect the type and convert to JSON format:\n\n{data}\n\nReturn the JSON object(s) only."
+        prompt = (
+            "Extract startup or investor information from the following data. Auto-detect the type and convert to JSON.\n"
+            "Return ONLY valid JSON (no commentary). Keep it minimal: only the required fields.\n\n"
+            f"{trimmed}\n"
+        )
     return prompt
 
 def parse_ollama_response(response: str) -> Dict[str, Any]:
@@ -748,8 +763,35 @@ async def convert_data(request: ConversionRequest):
         if not isinstance(response_text, str):
             raise HTTPException(status_code=502, detail="Ollama returned empty content. Ensure the model is available and retry.")
         
-        # Parse JSON from response
-        parsed_data = parse_ollama_response(response_text)
+        # Parse JSON from response (retry once if model output is truncated/non-JSON)
+        try:
+            parsed_data = parse_ollama_response(response_text)
+        except Exception:
+            # Retry with a stricter prompt and higher output budget
+            retry_prompt = (
+                "Return ONLY valid JSON. Do not include markdown or explanations. "
+                "Restart the JSON from scratch and ensure all brackets are closed.\n\n"
+                + create_conversion_prompt(request.data, request.dataType)
+            )
+            retry_kwargs = dict(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": retry_prompt},
+                ],
+                options={
+                    "temperature": 0.0,
+                    "num_predict": 8192,
+                },
+            )
+            try:
+                retry_res = client.chat(**retry_kwargs, format="json")
+            except TypeError:
+                retry_res = client.chat(**retry_kwargs)
+            retry_text = retry_res.get("message", {}).get("content")
+            if not isinstance(retry_text, str):
+                raise HTTPException(status_code=502, detail="Ollama returned empty content on retry.")
+            parsed_data = parse_ollama_response(retry_text)
         
         # Normalize to list if single object
         if isinstance(parsed_data, dict):
