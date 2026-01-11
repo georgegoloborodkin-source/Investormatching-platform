@@ -31,7 +31,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // PGRST116 = "Results contain 0 rows" when using .single()
+        // This can happen for existing auth users created before profile triggers/policies were in place.
+        if ((error as any).code === "PGRST116") {
+          const { error: insertError } = await supabase
+            .from("user_profiles")
+            .insert({
+              id: user.id,
+              email: user.email,
+              full_name: (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "",
+              role: "investor",
+            });
+
+          if (insertError) throw insertError;
+
+          const { data: created, error: createdError } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          if (createdError) throw createdError;
+          setProfile(created);
+          return;
+        }
+
+        throw error;
+      }
+
       setProfile(data);
     } catch (error) {
       console.error("Error fetching profile:", error);
