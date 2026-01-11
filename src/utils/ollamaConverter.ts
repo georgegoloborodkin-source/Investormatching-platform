@@ -150,8 +150,22 @@ export async function convertFileWithOllama(
   file: File,
   dataType?: "startup" | "investor"
 ): Promise<OllamaConversionResponse> {
+  // Re-pack the file from bytes before uploading.
+  // We’ve seen intermittent 0-byte multipart uploads in some browsers/setups even when the File looks valid.
+  // Building a fresh File from `arrayBuffer()` ensures we actually send the bytes.
+  const buf = await file.arrayBuffer();
+  if (buf.byteLength === 0) {
+    throw new Error(
+      `Selected file is empty in the browser (0 bytes). filename="${file.name}", type="${file.type}". Re-select the file from disk.`
+    );
+  }
+
+  const uploadFile = new File([buf], file.name, {
+    type: file.type || "application/octet-stream",
+  });
+
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", uploadFile);
   if (dataType) {
     formData.append("dataType", dataType);
   }
