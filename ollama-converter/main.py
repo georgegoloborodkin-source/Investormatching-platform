@@ -283,13 +283,13 @@ def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
         except Exception:
             return default
 
-    # Handle geoMarkets
-    geo_markets = data.get('geoMarkets', [])
+    # Handle geoMarkets (accept snake_case too)
+    geo_markets = data.get('geoMarkets', data.get('geo_markets', []))
     if isinstance(geo_markets, str):
         geo_markets = [g.strip() for g in re.split(r'[,;|]', geo_markets)]
     
     # Handle fundingTarget
-    funding_target = data.get('fundingTarget', 0)
+    funding_target = data.get('fundingTarget', data.get('funding_target', 0))
     if isinstance(funding_target, str):
         # Extract number from string
         funding_target = re.sub(r'[^\d.]', '', funding_target)
@@ -297,11 +297,11 @@ def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     funding_target = safe_int(funding_target, 0)
     
     return StartupData(
-        companyName=safe_str(data.get('companyName', data.get('name', ''))),
+        companyName=safe_str(data.get('companyName', data.get('company_name', data.get('name', '')))),
         geoMarkets=geo_markets if isinstance(geo_markets, list) else [],
-        industry=safe_str(data.get('industry', data.get('sector', ''))),
+        industry=safe_str(data.get('industry', data.get('sector', data.get('startup_industry', '')))),
         fundingTarget=safe_int(funding_target, 0),
-        fundingStage=safe_str(data.get('fundingStage', data.get('stage', ''))),
+        fundingStage=safe_str(data.get('fundingStage', data.get('funding_stage', data.get('stage', '')))),
         availabilityStatus='present'
     )
 
@@ -352,24 +352,24 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         # Fallback for any other type
         return safe_int(value, 0)
     
-    geo_focus = parse_list(data.get('geoFocus', data.get('geoMarkets', [])))
-    industry_prefs = parse_list(data.get('industryPreferences', data.get('industries', [])))
-    stage_prefs = parse_list(data.get('stagePreferences', data.get('stages', [])))
+    geo_focus = parse_list(data.get('geoFocus', data.get('geo_focus', data.get('geoMarkets', []))))
+    industry_prefs = parse_list(data.get('industryPreferences', data.get('industry_preferences', data.get('industries', []))))
+    stage_prefs = parse_list(data.get('stagePreferences', data.get('stage_preferences', data.get('stages', []))))
     
-    min_ticket = parse_number(data.get('minTicketSize', data.get('minInvestment', 0)))
-    max_ticket = parse_number(data.get('maxTicketSize', data.get('maxInvestment', 10000000)))
-    total_slots = safe_int(data.get('totalSlots', data.get('slots', 3)), 3)
+    min_ticket = parse_number(data.get('minTicketSize', data.get('min_ticket_size', data.get('minInvestment', 0))))
+    max_ticket = parse_number(data.get('maxTicketSize', data.get('max_ticket_size', data.get('maxInvestment', 10000000))))
+    total_slots = safe_int(data.get('totalSlots', data.get('total_slots', data.get('slots', 3))), 3)
 
     return InvestorData(
-        firmName=safe_str(data.get('firmName', data.get('name', data.get('firm', '')))),
-        memberName=safe_str(data.get('memberName', data.get('investorMemberName', data.get('contactName', data.get('partnerName', data.get('personName', '')))))),
+        firmName=safe_str(data.get('firmName', data.get('firm_name', data.get('name', data.get('firm', ''))))),
+        memberName=safe_str(data.get('memberName', data.get('member_name', data.get('investment_member', data.get('investorMemberName', data.get('contactName', data.get('partnerName', data.get('personName', '')))))))),
         geoFocus=geo_focus,
         industryPreferences=industry_prefs,
         stagePreferences=stage_prefs,
         minTicketSize=min_ticket,
         maxTicketSize=max_ticket,
         totalSlots=total_slots,
-        tableNumber=data.get('tableNumber', data.get('table', None)),
+        tableNumber=data.get('tableNumber', data.get('table_number', data.get('table', None))),
         availabilityStatus='present'
     )
 
@@ -1015,7 +1015,12 @@ async def convert_file(file: UploadFile = File(...), dataType: Optional[str] = N
 
         # Block only if nothing was extracted
         if (not conversion_result.startups and not conversion_result.investors):
-            raise HTTPException(status_code=400, detail="No valid data extracted.")
+            # Return a 200 with errors so the frontend can show a meaningful message
+            # (instead of a generic HTTP failure that hides conversion_result.errors).
+            conversion_result.errors = (conversion_result.errors or []) + [
+                "No valid data extracted. If this PDF is scanned/image-only, OCR it (make it searchable) or upload the original XLSX/CSV."
+            ]
+            return conversion_result
 
         # Surface missing critical fields as warnings so users can import and edit in the UI.
         if row_errors:
