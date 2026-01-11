@@ -833,7 +833,14 @@ async def convert_data(request: ConversionRequest):
                         startups.append(startup)
                 elif detected_type == "investor" or (not request.dataType and 'firmName' in item):
                     investor = normalize_investor_data(item)
-                    if investor.firmName and investor.memberName:
+                    if investor.firmName:
+                        # Some sources (esp. PDFs) list only firm names without a specific person.
+                        # Don't hard-fail the whole conversion; fill a placeholder and warn.
+                        if not investor.memberName:
+                            investor.memberName = "UNKNOWN"
+                            warnings.append(
+                                f"Investor missing memberName; using placeholder 'UNKNOWN' for firm '{investor.firmName}'."
+                            )
                         investors.append(investor)
                 else:
                     warnings.append(f"Could not determine type for item: {item}")
@@ -867,14 +874,9 @@ def validate_structured_rows(startups: List[StartupData], investors: List[Invest
         missing = []
         if not s.companyName:
             missing.append("companyName")
-        if not s.geoMarkets:
-            missing.append("geoMarkets")
-        if not s.industry:
-            missing.append("industry")
-        if not s.fundingTarget:
-            missing.append("fundingTarget")
-        if not s.fundingStage:
-            missing.append("fundingStage")
+        # NOTE: We intentionally do NOT hard-require every field here.
+        # Many PDFs / unstructured sources omit fields like stage/geo/ticket size.
+        # The UI supports editing later; blocking imports is worse UX.
         if missing:
             errors.append(f"Startup row {idx}: missing {', '.join(missing)}")
 
@@ -884,18 +886,7 @@ def validate_structured_rows(startups: List[StartupData], investors: List[Invest
             missing.append("firmName")
         if not inv.memberName:
             missing.append("memberName")
-        if not inv.geoFocus:
-            missing.append("geoFocus")
-        if not inv.industryPreferences:
-            missing.append("industryPreferences")
-        if not inv.stagePreferences:
-            missing.append("stagePreferences")
-        if not inv.minTicketSize:
-            missing.append("minTicketSize")
-        if not inv.maxTicketSize:
-            missing.append("maxTicketSize")
-        if not inv.totalSlots:
-            missing.append("totalSlots")
+        # Do not require geoFocus/industryPreferences/stagePreferences/ticket sizes here.
         if missing:
             errors.append(f"Investor row {idx}: missing {', '.join(missing)}")
 
@@ -955,23 +946,16 @@ async def convert_file(file: UploadFile = File(...), dataType: Optional[str] = N
         )
         conversion_result = await convert_data(request)
 
-        # Enforce required fields for uploads: block if missing
+        # Validate critical identifiers, but don't hard-fail if optional fields are missing.
         row_errors = validate_structured_rows(conversion_result.startups, conversion_result.investors)
 
-        # Also block if nothing was extracted
-        if (not conversion_result.startups and not conversion_result.investors) or row_errors:
-            startup_csv = build_startup_csv(conversion_result.startups)
-            investor_csv = build_investor_csv(conversion_result.investors)
-            row_list = row_errors if row_errors else ["No valid data extracted."]
-            detail_text = "Required fields missing. " + "; ".join(row_list)
-            detail = {
-                "message": detail_text,
-                "rowErrors": row_list,
-                "startupCsvTemplate": startup_csv,
-                "investorCsvTemplate": investor_csv,
-            }
-            # Return both structured and text-friendly detail to avoid [object Object] in clients
-            raise HTTPException(status_code=400, detail=detail_text)
+        # Block only if nothing was extracted
+        if (not conversion_result.startups and not conversion_result.investors):
+            raise HTTPException(status_code=400, detail="No valid data extracted.")
+
+        # Surface missing critical fields as warnings so users can import and edit in the UI.
+        if row_errors:
+            conversion_result.warnings = (conversion_result.warnings or []) + row_errors
 
         return conversion_result
     except HTTPException:
