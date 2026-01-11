@@ -793,8 +793,72 @@ async def convert_data(request: ConversionRequest):
                 raise HTTPException(status_code=502, detail="Ollama returned empty content on retry.")
             parsed_data = parse_ollama_response(retry_text)
         
-        # Normalize to list if single object
+        # If the model returns a wrapper object (common), unwrap it.
+        # Supported shapes:
+        # - { startups: [...], investors: [...] }
+        # - { data: [...] }
+        # - { detectedType: "...", investors: [...] } etc.
         if isinstance(parsed_data, dict):
+            wrapper = parsed_data
+
+            # Direct "data" wrapper
+            if isinstance(wrapper.get("data"), list):
+                parsed_data = wrapper["data"]
+            # Direct "startups"/"investors" wrapper: bypass generic detection loop
+            elif isinstance(wrapper.get("startups"), (list, dict)) or isinstance(wrapper.get("investors"), (list, dict)):
+                startups = []
+                investors = []
+                warnings = []
+                errors = []
+
+                def ensure_list(v: Any) -> List[Any]:
+                    if v is None:
+                        return []
+                    if isinstance(v, list):
+                        return v
+                    return [v]
+
+                for item in ensure_list(wrapper.get("startups")):
+                    if isinstance(item, dict):
+                        try:
+                            s = normalize_startup_data(item)
+                            if s.companyName:
+                                startups.append(s)
+                        except Exception as e:
+                            errors.append(f"Error processing startup item: {str(e)}")
+
+                for item in ensure_list(wrapper.get("investors")):
+                    if isinstance(item, dict):
+                        try:
+                            inv = normalize_investor_data(item)
+                            if inv.firmName:
+                                if not inv.memberName:
+                                    inv.memberName = "UNKNOWN"
+                                    warnings.append(
+                                        f"Investor missing memberName; using placeholder 'UNKNOWN' for firm '{inv.firmName}'."
+                                    )
+                                investors.append(inv)
+                        except Exception as e:
+                            errors.append(f"Error processing investor item: {str(e)}")
+
+                detected_type = "mixed" if (startups and investors) else ("startup" if startups else "investor")
+                if not startups and not investors:
+                    errors.append("No valid data extracted. Please check the input format.")
+
+                return ConversionResponse(
+                    startups=startups,
+                    investors=investors,
+                    detectedType=detected_type,
+                    confidence=0.8 if (startups or investors) else 0.0,
+                    warnings=warnings,
+                    errors=errors,
+                )
+
+            # Fallback: treat wrapper as a single item
+            else:
+                parsed_data = [wrapper]
+        # Normalize to list if single object
+        elif isinstance(parsed_data, dict):
             parsed_data = [parsed_data]
         
         # Convert to structured format
