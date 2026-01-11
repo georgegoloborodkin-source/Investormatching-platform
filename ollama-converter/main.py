@@ -180,25 +180,76 @@ def create_conversion_prompt(data: str, data_type: Optional[str] = None) -> str:
 
 def parse_ollama_response(response: str) -> Dict[str, Any]:
     """Parse Ollama response and extract JSON"""
-    # Try to extract JSON from response
     # Remove markdown code blocks if present
     response = re.sub(r'```json\n?', '', response)
     response = re.sub(r'```\n?', '', response)
     response = response.strip()
-    
-    # Try to find JSON object or array
-    json_match = re.search(r'(\[.*\]|\{.*\})', response, re.DOTALL)
-    if json_match:
+
+    def extract_first_json_block(text: str) -> Optional[str]:
+        """
+        Extract the first complete JSON object/array from text using bracket balancing.
+        This is robust against extra prose before/after JSON and avoids greedy regex traps.
+        """
+        start_idx = None
+        stack: List[str] = []
+        in_string = False
+        escape = False
+
+        for i, ch in enumerate(text):
+            if start_idx is None:
+                if ch == '{':
+                    start_idx = i
+                    stack = ['}']
+                elif ch == '[':
+                    start_idx = i
+                    stack = [']']
+                continue
+
+            # We are inside a candidate JSON block
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+                continue
+
+            if ch == '{':
+                stack.append('}')
+            elif ch == '[':
+                stack.append(']')
+            elif ch in ('}', ']'):
+                if stack and ch == stack[-1]:
+                    stack.pop()
+                    if not stack and start_idx is not None:
+                        return text[start_idx:i + 1]
+                else:
+                    # Mismatched closing bracket; keep scanning but this block is likely invalid.
+                    pass
+
+        return None
+
+    # First try: extract a complete JSON block from within the response
+    block = extract_first_json_block(response)
+    if block:
         try:
-            return json.loads(json_match.group(1))
+            return json.loads(block)
         except json.JSONDecodeError:
             pass
-    
-    # Try parsing the whole response
+
+    # Fallback: try parsing the whole response as JSON
     try:
         return json.loads(response)
     except json.JSONDecodeError:
-        raise ValueError(f"Could not parse JSON from response: {response[:200]}")
+        raise ValueError(
+            "Could not parse JSON from model response (likely truncated / non-JSON). "
+            f"Response starts with: {response[:200]}"
+        )
 
 def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     """Normalize extracted startup data to match schema"""
@@ -675,17 +726,22 @@ async def convert_data(request: ConversionRequest):
         
         # Call Ollama
         client = get_ollama_client()
-        response = client.chat(
+        # Prefer JSON mode if supported by the client/version, otherwise fall back.
+        chat_kwargs = dict(
             model=model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             options={
                 "temperature": 0.1,  # Low temperature for consistent extraction
-                "num_predict": 2000  # Allow longer responses
-            }
+                "num_predict": 4096,  # More headroom to avoid truncated JSON
+            },
         )
+        try:
+            response = client.chat(**chat_kwargs, format="json")
+        except TypeError:
+            response = client.chat(**chat_kwargs)
         
         # Extract response content
         response_text = response.get('message', {}).get('content')
