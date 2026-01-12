@@ -24,12 +24,40 @@ export interface Investor {
   slotAvailability?: Record<string, boolean>; // Track availability per time slot
 }
 
+export interface Mentor {
+  id: string;
+  fullName: string;
+  email: string;
+  linkedinUrl?: string;
+  geoFocus: string[];
+  industryPreferences: string[];
+  expertiseAreas: string[];
+  totalSlots: number;
+  availabilityStatus: 'present' | 'not-attending';
+  slotAvailability?: Record<string, boolean>;
+}
+
+export interface CorporatePartner {
+  id: string;
+  firmName: string;
+  contactName: string;
+  email?: string;
+  geoFocus: string[];
+  industryPreferences: string[];
+  partnershipTypes: string[]; // e.g., "Pilot", "Distribution", "Investment"
+  stages: string[];
+  totalSlots: number;
+  availabilityStatus: 'present' | 'not-attending';
+  slotAvailability?: Record<string, boolean>;
+}
+
 export interface Match {
   id: string;
   startupId: string;
-  investorId: string;
+  targetId: string; // investorId, mentorId, or corporateId
+  targetType: 'investor' | 'mentor' | 'corporate';
   startupName: string;
-  investorName: string;
+  targetName: string; // investor/mentor/corporate name
   timeSlot: string;
   slotTime: string;
   compatibilityScore: number;
@@ -38,6 +66,10 @@ export interface Match {
   completed: boolean;
   locked?: boolean;
   startupAttending?: boolean;
+  targetAttending?: boolean;
+  // Legacy fields for backward compatibility
+  investorId?: string;
+  investorName?: string;
   investorAttending?: boolean;
 }
 
@@ -81,6 +113,26 @@ export const FUNDING_STAGES = [
   'Seed',
   'Series A',
   'Series B+'
+];
+
+export const PARTNERSHIP_TYPES = [
+  'Pilot Program',
+  'Distribution',
+  'Strategic Investment',
+  'Co-Development',
+  'Technology Integration',
+  'Market Access'
+];
+
+export const EXPERTISE_AREAS = [
+  'Product Development',
+  'Go-to-Market Strategy',
+  'Fundraising',
+  'Operations',
+  'Technology Architecture',
+  'Team Building',
+  'Marketing & Sales',
+  'Legal & Compliance'
 ];
 
 // User & Organization Types

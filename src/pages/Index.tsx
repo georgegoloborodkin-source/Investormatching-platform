@@ -14,7 +14,7 @@ import { StartupForm } from "@/components/StartupForm";
 import { InvestorForm } from "@/components/InvestorForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
-import { Startup, Investor, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
+import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
 import { generateMatches } from "@/utils/matchingAlgorithmMVP";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
 import { CoverageReport } from "@/components/CoverageReport";
@@ -117,6 +117,9 @@ const Index = () => {
     }
   ]);
 
+  const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [corporates, setCorporates] = useState<CorporatePartner[]>([]);
+
   // Helper function to generate time slots from 9:00 to 18:00 (20-minute intervals)
   const generateDefaultTimeSlots = (): TimeSlotConfig[] => {
     const slots: TimeSlotConfig[] = [];
@@ -191,6 +194,8 @@ const Index = () => {
   useEffect(() => {
     const savedStartups = localStorage.getItem('matchmaking-startups');
     const savedInvestors = localStorage.getItem('matchmaking-investors');
+    const savedMentors = localStorage.getItem('matchmaking-mentors');
+    const savedCorporates = localStorage.getItem('matchmaking-corporates');
     const savedMatches = localStorage.getItem('matchmaking-matches');
     const savedTimeSlots = localStorage.getItem('matchmaking-timeslots');
 
@@ -207,6 +212,22 @@ const Index = () => {
         setInvestors(JSON.parse(savedInvestors));
       } catch (e) {
         console.error('Failed to load saved investors');
+      }
+    }
+
+    if (savedMentors) {
+      try {
+        setMentors(JSON.parse(savedMentors));
+      } catch (e) {
+        console.error('Failed to load saved mentors');
+      }
+    }
+
+    if (savedCorporates) {
+      try {
+        setCorporates(JSON.parse(savedCorporates));
+      } catch (e) {
+        console.error('Failed to load saved corporates');
       }
     }
 
@@ -358,9 +379,8 @@ const Index = () => {
       });
 
       const rawMatches = generateMatches(startups, investors, [], timeSlots, {
-        maxMeetingsPerStartup: 1,
-        memberNameFilter: [],
-        onlyAttending: true
+        mentors,
+        corporates
       });
       // Safety net: ensure no duplicates by IDs and also by visible names (prevents duplicate-looking rows
       // when the same startup is imported twice with different IDs).
@@ -419,9 +439,8 @@ const Index = () => {
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     const rawMatches = generateMatches(startups, investors, matches, timeSlots, {
-      maxMeetingsPerStartup: 1,
-      memberNameFilter: [],
-      onlyAttending: true
+      mentors,
+      corporates
     });
     const seen = new Set<string>();
     const seenFirm = new Set<string>();
@@ -541,12 +560,14 @@ const Index = () => {
     try {
       localStorage.setItem('matchmaking-startups', JSON.stringify(startups));
       localStorage.setItem('matchmaking-investors', JSON.stringify(investors));
+      localStorage.setItem('matchmaking-mentors', JSON.stringify(mentors));
+      localStorage.setItem('matchmaking-corporates', JSON.stringify(corporates));
       localStorage.setItem('matchmaking-matches', JSON.stringify(matches));
       localStorage.setItem('matchmaking-timeslots', JSON.stringify(timeSlots));
       
       toast({
         title: "Data Saved",
-        description: "All startups, investors, and matches have been saved locally.",
+        description: "All participants and matches have been saved locally.",
       });
     } catch (error) {
       toast({
@@ -555,7 +576,7 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  }, [startups, investors, matches, timeSlots, toast]);
+  }, [startups, investors, mentors, corporates, matches, timeSlots, toast]);
 
   const handleUpdateMatch = useCallback((matchId: string, updates: Partial<Match>) => {
     setMatches(prev => prev.map(match => 
@@ -621,7 +642,7 @@ const Index = () => {
               Matchmaking Dashboard
             </h2>
             <p className="text-muted-foreground">
-              {startups.length} startups • {investors.length} investors • {matches.length} matches generated
+              {startups.length} startups • {investors.length} investors • {mentors.length} mentors • {corporates.length} corporates • {matches.length} matches
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -686,6 +707,8 @@ const Index = () => {
               matches={matches}
               startups={startups}
               investors={investors}
+              mentors={mentors}
+              corporates={corporates}
               onToggleCompleted={handleToggleCompleted}
               onToggleLocked={handleToggleLocked}
               onUpdateMatch={handleUpdateMatch}

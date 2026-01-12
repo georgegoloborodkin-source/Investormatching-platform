@@ -3,7 +3,7 @@
  * Converts unstructured data to structured Startup/Investor format
  */
 
-import { Startup, Investor } from "@/types";
+import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 
 const ENV_OLLAMA_API_URL = import.meta.env.VITE_OLLAMA_API_URL as string | undefined;
 
@@ -67,13 +67,15 @@ async function resolveOllamaApiBaseUrl(): Promise<string> {
 
 export interface OllamaConversionRequest {
   data: string;
-  dataType?: "startup" | "investor";
+  dataType?: "startup" | "investor" | "mentor" | "corporate";
   format?: string;
 }
 
 export interface OllamaConversionResponse {
   startups: Startup[];
   investors: Investor[];
+  mentors: Mentor[];
+  corporates: CorporatePartner[];
   detectedType: string;
   confidence: number;
   warnings: string[];
@@ -109,7 +111,7 @@ export async function convertWithOllama(
 
     // Convert to our internal types
     return {
-      startups: result.startups.map((s) => ({
+      startups: (result.startups || []).map((s) => ({
         id: `startup-${Date.now()}-${Math.random()}`,
         companyName: s.companyName,
         geoMarkets: s.geoMarkets,
@@ -118,7 +120,7 @@ export async function convertWithOllama(
         fundingStage: s.fundingStage,
         availabilityStatus: s.availabilityStatus as "present" | "not-attending",
       })),
-      investors: result.investors.map((i) => ({
+      investors: (result.investors || []).map((i) => ({
         id: `investor-${Date.now()}-${Math.random()}`,
         firmName: i.firmName,
         memberName: (i as any).memberName || "UNKNOWN",
@@ -130,6 +132,29 @@ export async function convertWithOllama(
         totalSlots: i.totalSlots,
         tableNumber: i.tableNumber,
         availabilityStatus: i.availabilityStatus as "present" | "not-attending",
+      })),
+      mentors: (result.mentors || []).map((m: any) => ({
+        id: `mentor-${Date.now()}-${Math.random()}`,
+        fullName: m.fullName,
+        email: m.email,
+        linkedinUrl: m.linkedinUrl,
+        geoFocus: m.geoFocus || [],
+        industryPreferences: m.industryPreferences || [],
+        expertiseAreas: m.expertiseAreas || [],
+        totalSlots: m.totalSlots || 3,
+        availabilityStatus: (m.availabilityStatus as "present" | "not-attending") || "present",
+      })),
+      corporates: (result.corporates || []).map((c: any) => ({
+        id: `corporate-${Date.now()}-${Math.random()}`,
+        firmName: c.firmName,
+        contactName: c.contactName,
+        email: c.email,
+        geoFocus: c.geoFocus || [],
+        industryPreferences: c.industryPreferences || [],
+        partnershipTypes: c.partnershipTypes || [],
+        stages: c.stages || [],
+        totalSlots: c.totalSlots || 3,
+        availabilityStatus: (c.availabilityStatus as "present" | "not-attending") || "present",
       })),
       detectedType: result.detectedType,
       confidence: result.confidence,
@@ -186,7 +211,7 @@ export async function convertFileWithOllama(
 
     // Convert to our internal types
     return {
-      startups: result.startups.map((s) => ({
+      startups: (result.startups || []).map((s) => ({
         id: `startup-${Date.now()}-${Math.random()}`,
         companyName: s.companyName,
         geoMarkets: s.geoMarkets,
@@ -195,7 +220,7 @@ export async function convertFileWithOllama(
         fundingStage: s.fundingStage,
         availabilityStatus: s.availabilityStatus as "present" | "not-attending",
       })),
-      investors: result.investors.map((i) => ({
+      investors: (result.investors || []).map((i) => ({
         id: `investor-${Date.now()}-${Math.random()}`,
         firmName: i.firmName,
         memberName: (i as any).memberName || "UNKNOWN",
@@ -207,6 +232,29 @@ export async function convertFileWithOllama(
         totalSlots: i.totalSlots,
         tableNumber: i.tableNumber,
         availabilityStatus: i.availabilityStatus as "present" | "not-attending",
+      })),
+      mentors: (result.mentors || []).map((m: any) => ({
+        id: `mentor-${Date.now()}-${Math.random()}`,
+        fullName: m.fullName,
+        email: m.email,
+        linkedinUrl: m.linkedinUrl,
+        geoFocus: m.geoFocus || [],
+        industryPreferences: m.industryPreferences || [],
+        expertiseAreas: m.expertiseAreas || [],
+        totalSlots: m.totalSlots || 3,
+        availabilityStatus: (m.availabilityStatus as "present" | "not-attending") || "present",
+      })),
+      corporates: (result.corporates || []).map((c: any) => ({
+        id: `corporate-${Date.now()}-${Math.random()}`,
+        firmName: c.firmName,
+        contactName: c.contactName,
+        email: c.email,
+        geoFocus: c.geoFocus || [],
+        industryPreferences: c.industryPreferences || [],
+        partnershipTypes: c.partnershipTypes || [],
+        stages: c.stages || [],
+        totalSlots: c.totalSlots || 3,
+        availabilityStatus: (c.availabilityStatus as "present" | "not-attending") || "present",
       })),
       detectedType: result.detectedType,
       confidence: result.confidence,

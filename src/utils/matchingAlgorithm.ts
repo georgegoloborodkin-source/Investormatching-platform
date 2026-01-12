@@ -1,4 +1,4 @@
-import { Startup, Investor, Match, TimeSlotConfig } from "@/types";
+import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig } from "@/types";
 
 interface CompatibilityScore {
   geoMatch: number;
@@ -6,6 +6,19 @@ interface CompatibilityScore {
   fundingMatch: number;
   stageMatch: number;
   totalScore: number;
+}
+
+type MatchTarget = Investor | Mentor | CorporatePartner;
+
+interface TargetInfo {
+  id: string;
+  type: 'investor' | 'mentor' | 'corporate';
+  name: string;
+  geoFocus: string[];
+  industryPreferences: string[];
+  totalSlots: number;
+  availabilityStatus: 'present' | 'not-attending';
+  slotAvailability?: Record<string, boolean>;
 }
 
 // Time slots configuration - Extended from 9:00 to 18:00 (20-minute slots)
@@ -41,6 +54,54 @@ const TIME_SLOTS = [
 
 function investorDisplayName(investor: Investor): string {
   return `${investor.firmName} (${investor.memberName})`;
+}
+
+function mentorDisplayName(mentor: Mentor): string {
+  return mentor.fullName;
+}
+
+function corporateDisplayName(corporate: CorporatePartner): string {
+  return `${corporate.firmName} (${corporate.contactName})`;
+}
+
+function toTargetInfo(target: MatchTarget, type: 'investor' | 'mentor' | 'corporate'): TargetInfo {
+  if (type === 'investor') {
+    const inv = target as Investor;
+    return {
+      id: inv.id,
+      type: 'investor',
+      name: investorDisplayName(inv),
+      geoFocus: inv.geoFocus,
+      industryPreferences: inv.industryPreferences,
+      totalSlots: inv.totalSlots,
+      availabilityStatus: inv.availabilityStatus,
+      slotAvailability: inv.slotAvailability
+    };
+  } else if (type === 'mentor') {
+    const men = target as Mentor;
+    return {
+      id: men.id,
+      type: 'mentor',
+      name: mentorDisplayName(men),
+      geoFocus: men.geoFocus,
+      industryPreferences: men.industryPreferences,
+      totalSlots: men.totalSlots,
+      availabilityStatus: men.availabilityStatus,
+      slotAvailability: men.slotAvailability
+    };
+  } else {
+    const corp = target as CorporatePartner;
+    return {
+      id: corp.id,
+      type: 'corporate',
+      name: corporateDisplayName(corp),
+      geoFocus: corp.geoFocus,
+      industryPreferences: corp.industryPreferences,
+      totalSlots: corp.totalSlots,
+      availabilityStatus: corp.availabilityStatus,
+      slotAvailability: corp.slotAvailability
+    };
+  }
 }
 
 export function calculateCompatibilityScore(startup: Startup, investor: Investor): CompatibilityScore {
@@ -103,11 +164,24 @@ export function generateMatches(
   startups: Startup[], 
   investors: Investor[], 
   existingMatches: Match[] = [],
-  timeSlots: TimeSlotConfig[] = []
+  timeSlots: TimeSlotConfig[] = [],
+  options?: {
+    mentors?: Mentor[];
+    corporates?: CorporatePartner[];
+  }
 ): Match[] {
   // Filter out unavailable participants
   const availableStartups = startups.filter(s => s.availabilityStatus === 'present');
   const availableInvestors = investors.filter(i => i.availabilityStatus === 'present');
+  const availableMentors = (options?.mentors || []).filter(m => m.availabilityStatus === 'present');
+  const availableCorporates = (options?.corporates || []).filter(c => c.availabilityStatus === 'present');
+  
+  // Convert all targets to a unified format
+  const allTargets: TargetInfo[] = [
+    ...availableInvestors.map(i => toTargetInfo(i, 'investor')),
+    ...availableMentors.map(m => toTargetInfo(m, 'mentor')),
+    ...availableCorporates.map(c => toTargetInfo(c, 'corporate'))
+  ];
 
   // Get completed matches to preserve
   const completedMatches = existingMatches.filter(match => match.completed);
@@ -118,32 +192,66 @@ export function generateMatches(
   
   // Track pairs that have already met (completed or newly scheduled in this run)
   const hasMet = new Set<string>();
-  preservedMatches.forEach(m => hasMet.add(`${m.startupId}::${m.investorId}`));
+  preservedMatches.forEach(m => {
+    const targetId = m.targetId || m.investorId || '';
+    hasMet.add(`${m.startupId}::${targetId}`);
+  });
 
   // Calculate all possible compatibility scores
   const allPossibleMatches: (Match & { score: CompatibilityScore })[] = [];
 
   availableStartups.forEach(startup => {
-    availableInvestors.forEach(investor => {
+    allTargets.forEach(target => {
       // Skip if already have a completed or locked match
       const hasPreservedMatch = preservedMatches.some(
-        match => match.startupId === startup.id && match.investorId === investor.id
+        match => {
+          const matchTargetId = match.targetId || match.investorId || '';
+          return match.startupId === startup.id && matchTargetId === target.id;
+        }
       );
       
       if (!hasPreservedMatch) {
-        const score = calculateCompatibilityScore(startup, investor);
+        // Calculate compatibility based on target type
+        let score: CompatibilityScore;
+        if (target.type === 'investor') {
+          const investor = availableInvestors.find(i => i.id === target.id)!;
+          score = calculateCompatibilityScore(startup, investor);
+        } else {
+          // For mentors and corporates, use simplified scoring (geo + industry)
+          const geoOverlap = startup.geoMarkets.filter(market => 
+            target.geoFocus.some(focus => focus.toLowerCase() === market.toLowerCase())
+          );
+          const geoMatch = geoOverlap.length > 0 
+            ? (geoOverlap.length / Math.max(startup.geoMarkets.length, target.geoFocus.length)) * 100 
+            : 0;
+          const industryMatch = target.industryPreferences.some(pref => 
+            pref.toLowerCase() === startup.industry.toLowerCase()
+          ) ? 100 : 0;
+          score = {
+            geoMatch: Math.round(geoMatch),
+            industryMatch: Math.round(industryMatch),
+            fundingMatch: 0,
+            stageMatch: 0,
+            totalScore: Math.round((geoMatch * 0.5) + (industryMatch * 0.5))
+          };
+        }
+        
         allPossibleMatches.push({
-          id: `${startup.id}-${investor.id}-${Date.now()}`,
+          id: `${startup.id}-${target.id}-${Date.now()}`,
           startupId: startup.id,
-          investorId: investor.id,
+          targetId: target.id,
+          targetType: target.type,
           startupName: startup.companyName,
-          investorName: investorDisplayName(investor),
+          targetName: target.name,
           timeSlot: '',
           slotTime: '',
           compatibilityScore: score.totalScore,
           status: 'upcoming',
           completed: false,
-          score
+          score,
+          // Legacy compatibility
+          investorId: target.type === 'investor' ? target.id : undefined,
+          investorName: target.type === 'investor' ? target.name : undefined
         });
       }
     });
@@ -152,13 +260,13 @@ export function generateMatches(
   // Sort by compatibility score (highest first)
   allPossibleMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
-  // Track slot usage for each investor and startup
-  const investorSlotUsage = new Map<string, number>();
+  // Track slot usage for each target and startup
+  const targetSlotUsage = new Map<string, number>();
   const startupMeetingCount = new Map<string, number>();
   
   // Initialize counts
-  availableInvestors.forEach(investor => {
-    investorSlotUsage.set(investor.id, 0);
+  allTargets.forEach(target => {
+    targetSlotUsage.set(target.id, 0);
   });
   
   availableStartups.forEach(startup => {
@@ -167,17 +275,18 @@ export function generateMatches(
 
   // Account for preserved matches (completed and locked)
   preservedMatches.forEach(match => {
-    const currentInvestorUsage = investorSlotUsage.get(match.investorId) || 0;
+    const matchTargetId = match.targetId || match.investorId || '';
+    const currentTargetUsage = targetSlotUsage.get(matchTargetId) || 0;
     const currentStartupCount = startupMeetingCount.get(match.startupId) || 0;
     
-    investorSlotUsage.set(match.investorId, currentInvestorUsage + 1);
+    targetSlotUsage.set(matchTargetId, currentTargetUsage + 1);
     startupMeetingCount.set(match.startupId, currentStartupCount + 1);
   });
 
   // Calculate target meetings per startup (evenly distributed)
-  const totalAvailableSlots = availableInvestors.reduce((sum, inv) => {
-    const usedSlots = investorSlotUsage.get(inv.id) || 0;
-    return sum + Math.max(0, inv.totalSlots - usedSlots);
+  const totalAvailableSlots = allTargets.reduce((sum, target) => {
+    const usedSlots = targetSlotUsage.get(target.id) || 0;
+    return sum + Math.max(0, target.totalSlots - usedSlots);
   }, 0);
   
   const targetMeetingsPerStartup = Math.floor(totalAvailableSlots / availableStartups.length);
@@ -187,27 +296,28 @@ export function generateMatches(
   const slotsToUse = timeSlots.length > 0 ? timeSlots.map(ts => ts.startTime + ' - ' + ts.endTime) : TIME_SLOTS;
   const slotLabels = timeSlots.length > 0 ? timeSlots.map(ts => ts.label) : TIME_SLOTS.map((_, i) => `Slot ${i + 1}`);
 
-  // Compute per-slot capacity (number of available investors for that slot)
+  // Compute per-slot capacity (number of available targets for that slot)
   const slotCapacity = slotLabels.map((_, i) => {
     const isSlotDone = timeSlots[i]?.isDone === true;
     if (isSlotDone) return 0;
-    return availableInvestors.filter(inv => {
-      const investorAvailable = !inv.slotAvailability || inv.slotAvailability[timeSlots[i]?.id] !== false;
-      return investorAvailable;
+    return allTargets.filter(target => {
+      const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
+      return targetAvailable;
     }).length;
   });
 
   // Create schedule grid for time slot assignment
-  const scheduleGrid: { [timeSlot: string]: { startupIds: Set<string>, investorIds: Set<string> } } = {};
+  const scheduleGrid: { [timeSlot: string]: { startupIds: Set<string>, targetIds: Set<string> } } = {};
   slotsToUse.forEach((slot, index) => {
-    scheduleGrid[slotLabels[index]] = { startupIds: new Set(), investorIds: new Set() };
+    scheduleGrid[slotLabels[index]] = { startupIds: new Set(), targetIds: new Set() };
   });
 
   // Add preserved matches to schedule grid (use label key)
   preservedMatches.forEach(match => {
     if (match.timeSlot && scheduleGrid[match.timeSlot]) {
+      const matchTargetId = match.targetId || match.investorId || '';
       scheduleGrid[match.timeSlot].startupIds.add(match.startupId);
-      scheduleGrid[match.timeSlot].investorIds.add(match.investorId);
+      scheduleGrid[match.timeSlot].targetIds.add(matchTargetId);
     }
   });
 
@@ -216,11 +326,12 @@ export function generateMatches(
   // Pre-assign locked pairs (lock the pairing only, assign any valid slot)
   for (const lm of lockedMatches) {
     const startup = availableStartups.find(s => s.id === lm.startupId);
-    const investor = availableInvestors.find(i => i.id === lm.investorId);
-    if (!startup || !investor) continue;
+    const lmTargetId = lm.targetId || lm.investorId || '';
+    const target = allTargets.find(t => t.id === lmTargetId);
+    if (!startup || !target) continue;
 
-    const currentInvestorUsage = investorSlotUsage.get(investor.id) || 0;
-    if (currentInvestorUsage >= investor.totalSlots) continue;
+    const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
+    if (currentTargetUsage >= target.totalSlots) continue;
 
     let assignedTimeSlot = '';
     let assignedSlotTime = '';
@@ -232,48 +343,52 @@ export function generateMatches(
       if (isSlotDone) continue;
 
       // Respect per-slot capacity
-      if (gridCell.investorIds.size >= slotCapacity[i]) continue;
+      if (gridCell.targetIds.size >= slotCapacity[i]) continue;
 
       const startupAvailable = !startup.slotAvailability || startup.slotAvailability[timeSlots[i]?.id] !== false;
-      const investorAvailable = !investor.slotAvailability || investor.slotAvailability[timeSlots[i]?.id] !== false;
+      const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
 
       if (
         !gridCell.startupIds.has(startup.id) &&
-        !gridCell.investorIds.has(investor.id) &&
+        !gridCell.targetIds.has(target.id) &&
         startupAvailable &&
-        investorAvailable
+        targetAvailable
       ) {
         assignedTimeSlot = slotLabel;
         assignedSlotTime = slotsToUse[i];
         gridCell.startupIds.add(startup.id);
-        gridCell.investorIds.add(investor.id);
+        gridCell.targetIds.add(target.id);
         break;
       }
     }
 
     if (!assignedTimeSlot) continue;
 
-    const score = calculateCompatibilityScore(startup, investor);
     const lockedMatch: Match = {
       id: lm.id,
       startupId: startup.id,
-      investorId: investor.id,
+      targetId: target.id,
+      targetType: target.type,
       startupName: startup.companyName,
-      investorName: investorDisplayName(investor),
+      targetName: target.name,
       timeSlot: assignedTimeSlot,
       slotTime: assignedSlotTime,
-      compatibilityScore: score.totalScore,
+      compatibilityScore: lm.compatibilityScore || 0,
       status: 'upcoming',
       completed: false,
       locked: true,
       startupAttending: true,
-      investorAttending: true
+      targetAttending: true,
+      // Legacy
+      investorId: target.type === 'investor' ? target.id : undefined,
+      investorName: target.type === 'investor' ? target.name : undefined,
+      investorAttending: target.type === 'investor' ? true : undefined
     };
 
     newMatches.push(lockedMatch);
-    hasMet.add(`${startup.id}::${investor.id}`);
+    hasMet.add(`${startup.id}::${target.id}`);
 
-    investorSlotUsage.set(investor.id, (investorSlotUsage.get(investor.id) || 0) + 1);
+    targetSlotUsage.set(target.id, (targetSlotUsage.get(target.id) || 0) + 1);
     const currentStartupCount = startupMeetingCount.get(startup.id) || 0;
     startupMeetingCount.set(startup.id, currentStartupCount + 1);
   }
@@ -307,12 +422,13 @@ export function generateMatches(
 
       // Try candidates in score order
       for (const cand of candidates) {
-        if (hasMet.has(`${cand.startupId}::${cand.investorId}`)) continue;
-        const investor = availableInvestors.find(i => i.id === cand.investorId);
-        if (!investor) continue;
+        const candTargetId = cand.targetId || cand.investorId || '';
+        if (hasMet.has(`${cand.startupId}::${candTargetId}`)) continue;
+        const target = allTargets.find(t => t.id === candTargetId);
+        if (!target) continue;
 
-        const currentInvestorUsage = investorSlotUsage.get(investor.id) || 0;
-        if (currentInvestorUsage >= investor.totalSlots) continue; // investor full
+        const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
+        if (currentTargetUsage >= target.totalSlots) continue; // target full
 
         // Find an available time slot for both
         let assignedTimeSlot = '';
@@ -326,52 +442,57 @@ export function generateMatches(
           if (isSlotDone) continue;
 
           // Respect per-slot capacity
-          if (gridCell.investorIds.size >= slotCapacity[i]) continue;
+          if (gridCell.targetIds.size >= slotCapacity[i]) continue;
 
           const startupAvailable = !startup.slotAvailability || startup.slotAvailability[timeSlots[i]?.id] !== false;
-          const investorAvailable = !investor.slotAvailability || investor.slotAvailability[timeSlots[i]?.id] !== false;
+          const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
 
           if (
             !gridCell.startupIds.has(startup.id) &&
-            !gridCell.investorIds.has(investor.id) &&
+            !gridCell.targetIds.has(target.id) &&
             startupAvailable &&
-            investorAvailable
+            targetAvailable
           ) {
             assignedTimeSlot = slotLabel;
             assignedSlotTime = slotsToUse[i];
 
             // Reserve this slot
             gridCell.startupIds.add(startup.id);
-            gridCell.investorIds.add(investor.id);
+            gridCell.targetIds.add(target.id);
             break;
           }
         }
 
         if (!assignedTimeSlot) {
-          // Couldn't find a slot with this investor; try next candidate
+          // Couldn't find a slot with this target; try next candidate
           continue;
         }
 
         // Create the match
         const newMatch: Match = {
-          id: `${startup.id}-${investor.id}-${Date.now()}-rr${round}`,
+          id: `${startup.id}-${target.id}-${Date.now()}-rr${round}`,
           startupId: startup.id,
-          investorId: investor.id,
+          targetId: target.id,
+          targetType: target.type,
           startupName: startup.companyName,
-          investorName: investorDisplayName(investor),
+          targetName: target.name,
           timeSlot: assignedTimeSlot,
           slotTime: assignedSlotTime,
           compatibilityScore: cand.compatibilityScore,
           status: 'upcoming',
           completed: false,
           startupAttending: true,
-          investorAttending: true
+          targetAttending: true,
+          // Legacy
+          investorId: target.type === 'investor' ? target.id : undefined,
+          investorName: target.type === 'investor' ? target.name : undefined,
+          investorAttending: target.type === 'investor' ? true : undefined
         };
 
         newMatches.push(newMatch);
-        hasMet.add(`${startup.id}::${investor.id}`);
+        hasMet.add(`${startup.id}::${target.id}`);
 
-        investorSlotUsage.set(investor.id, currentInvestorUsage + 1);
+        targetSlotUsage.set(target.id, currentTargetUsage + 1);
         startupMeetingCount.set(startup.id, currentCount + 1);
         break; // assign only one meeting for this round for this startup
       }
@@ -380,16 +501,18 @@ export function generateMatches(
 
   // Fill up to per-startup maximums using remaining high-score opportunities
   for (const potentialMatch of allPossibleMatches) {
-    const investor = availableInvestors.find(i => i.id === potentialMatch.investorId)!;
-    const startup = availableStartups.find(s => s.id === potentialMatch.startupId)!;
+    const potTargetId = potentialMatch.targetId || potentialMatch.investorId || '';
+    const target = allTargets.find(t => t.id === potTargetId);
+    const startup = availableStartups.find(s => s.id === potentialMatch.startupId);
+    
+    if (!target || !startup) continue;
+    if (hasMet.has(`${startup.id}::${target.id}`)) continue;
 
-    if (hasMet.has(`${startup.id}::${investor.id}`)) continue;
-
-    const currentInvestorUsage = investorSlotUsage.get(investor.id) || 0;
+    const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
     const currentStartupCount = startupMeetingCount.get(startup.id) || 0;
 
-    // Respect investor capacity
-    if (currentInvestorUsage >= investor.totalSlots) continue;
+    // Respect target capacity
+    if (currentTargetUsage >= target.totalSlots) continue;
 
     // Respect per-startup cap (balanced distribution: max = base + extras)
     const startupIndex = availableStartups.findIndex(s => s.id === startup.id);
@@ -407,21 +530,21 @@ export function generateMatches(
       if (isSlotDone) continue;
 
       // Respect per-slot capacity
-      if (slot.investorIds.size >= slotCapacity[i]) continue;
+      if (slot.targetIds.size >= slotCapacity[i]) continue;
 
       const startupAvailable = !startup.slotAvailability || startup.slotAvailability[timeSlots[i]?.id] !== false;
-      const investorAvailable = !investor.slotAvailability || investor.slotAvailability[timeSlots[i]?.id] !== false;
+      const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
 
       if (
         !slot.startupIds.has(startup.id) &&
-        !slot.investorIds.has(investor.id) &&
+        !slot.targetIds.has(target.id) &&
         startupAvailable &&
-        investorAvailable
+        targetAvailable
       ) {
         assignedTimeSlot = slotLabel;
         assignedSlotTime = slotsToUse[i];
         slot.startupIds.add(startup.id);
-        slot.investorIds.add(investor.id);
+        slot.targetIds.add(target.id);
         break;
       }
     }
@@ -431,71 +554,85 @@ export function generateMatches(
     const newMatch: Match = {
       id: potentialMatch.id,
       startupId: startup.id,
-      investorId: investor.id,
+      targetId: target.id,
+      targetType: target.type,
       startupName: startup.companyName,
-      investorName: investorDisplayName(investor),
+      targetName: target.name,
       timeSlot: assignedTimeSlot,
       slotTime: assignedSlotTime,
       compatibilityScore: potentialMatch.compatibilityScore,
       status: 'upcoming',
       completed: false,
       startupAttending: true,
-      investorAttending: true
+      targetAttending: true,
+      // Legacy
+      investorId: target.type === 'investor' ? target.id : undefined,
+      investorName: target.type === 'investor' ? target.name : undefined,
+      investorAttending: target.type === 'investor' ? true : undefined
     };
 
     newMatches.push(newMatch);
-    hasMet.add(`${startup.id}::${investor.id}`);
-    investorSlotUsage.set(investor.id, currentInvestorUsage + 1);
+    hasMet.add(`${startup.id}::${target.id}`);
+    targetSlotUsage.set(target.id, currentTargetUsage + 1);
     startupMeetingCount.set(startup.id, currentStartupCount + 1);
   }
 
-  // Second pass: fill remaining open investor slots per time slot to maximize meetings
+  // Second pass: fill remaining open target slots per time slot to maximize meetings
   for (let i = 0; i < slotLabels.length; i++) {
     const slotLabel = slotLabels[i];
     const slot = scheduleGrid[slotLabel];
     const isSlotDone = timeSlots[i]?.isDone === true;
     if (isSlotDone) continue;
-    if (slot.investorIds.size >= slotCapacity[i]) continue;
+    if (slot.targetIds.size >= slotCapacity[i]) continue;
 
-    for (const investor of availableInvestors) {
-      const currentInvestorUsage = investorSlotUsage.get(investor.id) || 0;
-      if (currentInvestorUsage >= investor.totalSlots) continue;
-      if (slot.investorIds.has(investor.id)) continue;
+    for (const target of allTargets) {
+      const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
+      if (currentTargetUsage >= target.totalSlots) continue;
+      if (slot.targetIds.has(target.id)) continue;
 
-      const investorAvailable = !investor.slotAvailability || investor.slotAvailability[timeSlots[i]?.id] !== false;
-      if (!investorAvailable) continue;
+      const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
+      if (!targetAvailable) continue;
 
       const candidates = allPossibleMatches
-        .filter(pm => pm.investorId === investor.id)
+        .filter(pm => {
+          const pmTargetId = pm.targetId || pm.investorId || '';
+          return pmTargetId === target.id;
+        })
         .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
       for (const cand of candidates) {
-        const startup = availableStartups.find(s => s.id === cand.startupId)!;
+        const startup = availableStartups.find(s => s.id === cand.startupId);
+        if (!startup) continue;
         const startupAvailable = !startup.slotAvailability || startup.slotAvailability[timeSlots[i]?.id] !== false;
 
-        if (!slot.startupIds.has(startup.id) && startupAvailable && !hasMet.has(`${startup.id}::${investor.id}`)) {
+        if (!slot.startupIds.has(startup.id) && startupAvailable && !hasMet.has(`${startup.id}::${target.id}`)) {
           const newMatch: Match = {
-            id: `${startup.id}-${investor.id}-${Date.now()}-${i}`,
+            id: `${startup.id}-${target.id}-${Date.now()}-${i}`,
             startupId: startup.id,
-            investorId: investor.id,
+            targetId: target.id,
+            targetType: target.type,
             startupName: startup.companyName,
-            investorName: investorDisplayName(investor),
+            targetName: target.name,
             timeSlot: slotLabel,
             slotTime: slotsToUse[i],
             compatibilityScore: cand.compatibilityScore,
             status: 'upcoming',
             completed: false,
             startupAttending: true,
-            investorAttending: true
+            targetAttending: true,
+            // Legacy
+            investorId: target.type === 'investor' ? target.id : undefined,
+            investorName: target.type === 'investor' ? target.name : undefined,
+            investorAttending: target.type === 'investor' ? true : undefined
           };
           newMatches.push(newMatch);
-          hasMet.add(`${startup.id}::${investor.id}`);
+          hasMet.add(`${startup.id}::${target.id}`);
 
-          investorSlotUsage.set(investor.id, (investorSlotUsage.get(investor.id) || 0) + 1);
+          targetSlotUsage.set(target.id, (targetSlotUsage.get(target.id) || 0) + 1);
           const currentStartupCount = startupMeetingCount.get(startup.id) || 0;
           startupMeetingCount.set(startup.id, currentStartupCount + 1);
 
-          slot.investorIds.add(investor.id);
+          slot.targetIds.add(target.id);
           slot.startupIds.add(startup.id);
           break;
         }

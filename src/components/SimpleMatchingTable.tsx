@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowUpDown, Filter, Lock, Unlock } from "lucide-react";
-import { Match, Startup, Investor } from "@/types";
+import { Match, Startup, Investor, Mentor, CorporatePartner } from "@/types";
 
 interface SimpleMatchingTableProps {
   matches: Match[];
   startups: Startup[];
   investors: Investor[];
+  mentors?: Mentor[];
+  corporates?: CorporatePartner[];
   onToggleCompleted: (matchId: string) => void;
   onToggleLocked: (matchId: string) => void;
   onUpdateMatch: (matchId: string, updates: Partial<Match>) => void;
@@ -20,6 +22,8 @@ export function SimpleMatchingTable({
   matches, 
   startups, 
   investors,
+  mentors = [],
+  corporates = [],
   onToggleCompleted,
   onToggleLocked,
   onUpdateMatch
@@ -64,9 +68,20 @@ export function SimpleMatchingTable({
     return 'bg-destructive text-destructive-foreground';
   };
 
-  const getInvestorStatus = (investorId: string) => {
-    const investor = investors.find(i => i.id === investorId);
-    return investor?.availabilityStatus || 'present';
+  const getTargetStatus = (match: Match) => {
+    const targetId = match.targetId || match.investorId || '';
+    const targetType = match.targetType || 'investor';
+    
+    if (targetType === 'investor') {
+      const investor = investors.find(i => i.id === targetId);
+      return investor?.availabilityStatus || 'present';
+    } else if (targetType === 'mentor') {
+      const mentor = mentors.find(m => m.id === targetId);
+      return mentor?.availabilityStatus || 'present';
+    } else {
+      const corporate = corporates.find(c => c.id === targetId);
+      return corporate?.availabilityStatus || 'present';
+    }
   };
 
   const handleStartupChange = (matchId: string, startupId: string) => {
@@ -138,10 +153,10 @@ export function SimpleMatchingTable({
               </th>
               <th 
                 className="text-left p-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('investorName')}
+                onClick={() => handleSort('targetName')}
               >
                 <div className="flex items-center gap-1">
-                  Investor
+                  Partner
                   <ArrowUpDown className="h-3 w-3" />
                 </div>
               </th>
@@ -159,21 +174,22 @@ export function SimpleMatchingTable({
           </thead>
           <tbody>
             {sortedMatches.map((match) => {
-              const investorStatus = getInvestorStatus(match.investorId);
-              const isInvestorUnavailable = investorStatus !== 'present';
+              const targetStatus = getTargetStatus(match);
+              const isTargetUnavailable = targetStatus !== 'present';
+              const displayName = match.targetName || match.investorName || 'Unknown';
               
               return (
                 <tr 
                   key={match.id} 
                   className={`border-b border-table-border hover:bg-table-row-hover transition-colors ${
                     match.completed ? 'opacity-60' : ''
-                  } ${isInvestorUnavailable ? 'bg-destructive/10' : ''}`}
+                  } ${isTargetUnavailable ? 'bg-destructive/10' : ''}`}
                 >
                   <td className="p-3">
                     <Checkbox
                       checked={match.completed}
                       onCheckedChange={() => onToggleCompleted(match.id)}
-                      disabled={isInvestorUnavailable}
+                      disabled={isTargetUnavailable}
                       className="data-[state=checked]:bg-success data-[state=checked]:border-success"
                     />
                   </td>
@@ -199,25 +215,11 @@ export function SimpleMatchingTable({
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <Select
-                        value={match.investorId}
-                        onValueChange={(value) => handleInvestorChange(match.id, value)}
-                        disabled={match.completed}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select investor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {investors
-                            .filter(i => i.availabilityStatus === 'present')
-                            .map((investor) => (
-                              <SelectItem key={investor.id} value={investor.id}>
-                                {investor.firmName} ({investor.memberName})
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      {isInvestorUnavailable && (
+                      <span className="text-sm">{displayName}</span>
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {match.targetType || 'investor'}
+                      </Badge>
+                      {isTargetUnavailable && (
                         <Badge variant="secondary" className="text-xs">
                           Unavailable
                         </Badge>
