@@ -1039,11 +1039,15 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
         first_row = rows[0]
         headers_lower = {k.lower().strip(): k for k in first_row.keys() if k}
         
+        print(f"[DEBUG] CSV Headers detected: {list(headers_lower.keys())}")
+        
         # Detect type based on headers
         has_mentor_headers = any(h in headers_lower for h in ['full name', 'fullname']) and any(h in headers_lower for h in ['email'])
         has_corporate_headers = any(h in headers_lower for h in ['contact name', 'contactname']) and any(h in headers_lower for h in ['firm name', 'firmname', 'company name', 'companyname'])
         has_investor_headers = any(h in headers_lower for h in ['firm name', 'firmname']) and any(h in headers_lower for h in ['member name', 'membername', 'team member'])
         has_startup_headers = any(h in headers_lower for h in ['company name', 'companyname']) and any(h in headers_lower for h in ['funding', 'stage'])
+        
+        print(f"[DEBUG] Mentor headers: {has_mentor_headers}, Corporate: {has_corporate_headers}, Investor: {has_investor_headers}, Startup: {has_startup_headers}")
         
         startups = []
         investors = []
