@@ -1024,10 +1024,141 @@ async def list_models():
         raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
 
 @app.post("/convert", response_model=ConversionResponse)
+def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[ConversionResponse]:
+    """
+    Try to parse CSV directly without Ollama if headers are clear.
+    Returns ConversionResponse if successful, None if uncertain.
+    """
+    try:
+        reader = csv.DictReader(StringIO(text_data))
+        rows = list(reader)
+        
+        if not rows:
+            return None
+        
+        # Check first row to determine type
+        first_row = rows[0]
+        headers_lower = {k.lower().strip(): k for k in first_row.keys() if k}
+        
+        # Detect type based on headers
+        has_mentor_headers = any(h in headers_lower for h in ['full name', 'fullname']) and any(h in headers_lower for h in ['email'])
+        has_corporate_headers = any(h in headers_lower for h in ['contact name', 'contactname']) and any(h in headers_lower for h in ['firm name', 'firmname', 'company name', 'companyname'])
+        has_investor_headers = any(h in headers_lower for h in ['firm name', 'firmname']) and any(h in headers_lower for h in ['member name', 'membername', 'team member'])
+        has_startup_headers = any(h in headers_lower for h in ['company name', 'companyname']) and any(h in headers_lower for h in ['funding', 'stage'])
+        
+        startups = []
+        investors = []
+        mentors = []
+        corporates = []
+        warnings = []
+        
+        if has_mentor_headers:
+            for row in rows:
+                try:
+                    mentor = normalize_mentor_data(row)
+                    if mentor.fullName and mentor.email:
+                        mentors.append(mentor)
+                except Exception as e:
+                    warnings.append(f"Error parsing mentor row: {str(e)}")
+            
+            if mentors:
+                return ConversionResponse(
+                    startups=[],
+                    investors=[],
+                    mentors=mentors,
+                    corporates=[],
+                    detectedType="mentor",
+                    confidence=0.95,
+                    warnings=warnings,
+                    errors=[]
+                )
+        
+        elif has_corporate_headers:
+            for row in rows:
+                try:
+                    corp = normalize_corporate_data(row)
+                    if corp.firmName and corp.contactName:
+                        corporates.append(corp)
+                except Exception as e:
+                    warnings.append(f"Error parsing corporate row: {str(e)}")
+            
+            if corporates:
+                return ConversionResponse(
+                    startups=[],
+                    investors=[],
+                    mentors=[],
+                    corporates=corporates,
+                    detectedType="corporate",
+                    confidence=0.95,
+                    warnings=warnings,
+                    errors=[]
+                )
+        
+        elif has_investor_headers:
+            for row in rows:
+                try:
+                    inv = normalize_investor_data(row)
+                    if inv.firmName:
+                        if not inv.memberName:
+                            inv.memberName = "UNKNOWN"
+                        investors.append(inv)
+                except Exception as e:
+                    warnings.append(f"Error parsing investor row: {str(e)}")
+            
+            if investors:
+                return ConversionResponse(
+                    startups=[],
+                    investors=investors,
+                    mentors=[],
+                    corporates=[],
+                    detectedType="investor",
+                    confidence=0.95,
+                    warnings=warnings,
+                    errors=[]
+                )
+        
+        elif has_startup_headers:
+            for row in rows:
+                try:
+                    startup = normalize_startup_data(row)
+                    if startup.companyName:
+                        startups.append(startup)
+                except Exception as e:
+                    warnings.append(f"Error parsing startup row: {str(e)}")
+            
+            if startups:
+                return ConversionResponse(
+                    startups=startups,
+                    investors=[],
+                    mentors=[],
+                    corporates=[],
+                    detectedType="startup",
+                    confidence=0.95,
+                    warnings=warnings,
+                    errors=[]
+                )
+        
+        # If we couldn't determine type or no data, return None to fall back to Ollama
+        return None
+        
+    except Exception as e:
+        print(f"Direct CSV parse exception: {e}")
+        return None
+
 async def convert_data(request: ConversionRequest):
     """
     Convert unstructured data to structured format using Ollama
     """
+    # Try direct CSV parsing first if format is CSV
+    if request.format == 'csv':
+        try:
+            direct_result = try_direct_csv_parse(request.data, request.dataType)
+            if direct_result:
+                return direct_result
+        except Exception as e:
+            # If direct CSV parsing fails, fall through to Ollama
+            print(f"Direct CSV parse failed, falling back to Ollama: {e}")
+    
     try:
         # Check models via HTTP API (more reliable than python ollama.list on some setups)
         try:
