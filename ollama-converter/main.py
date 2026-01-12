@@ -914,9 +914,21 @@ async def convert_data(request: ConversionRequest):
                         except Exception as e:
                             errors.append(f"Error processing investor item: {str(e)}")
 
-                detected_type = "mixed" if (startups and investors) else ("startup" if startups else "investor")
-                if not startups and not investors:
-                    errors.append("No valid data extracted. Please check the input format.")
+                # Determine detected type
+                types_found = []
+                if startups:
+                    types_found.append("startup")
+                if investors:
+                    types_found.append("investor")
+                if mentors:
+                    types_found.append("mentor")
+                if corporates:
+                    types_found.append("corporate")
+                
+                detected_type = "+".join(types_found) if types_found else "unknown"
+                
+                if not (startups or investors or mentors or corporates):
+                    errors.append("No valid data extracted. Please check the input format and column names.")
 
                 return ConversionResponse(
                     startups=startups,
@@ -984,8 +996,8 @@ async def convert_data(request: ConversionRequest):
             except Exception as e:
                 errors.append(f"Error processing item: {str(e)}")
         
-        if not startups and not investors:
-            errors.append("No valid data extracted. Please check the input format.")
+        if not (startups or investors or mentors or corporates):
+            errors.append("No valid data extracted. Please check the input format and column names.")
         
         return ConversionResponse(
             startups=startups,
@@ -1001,7 +1013,12 @@ async def convert_data(request: ConversionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
-def validate_structured_rows(startups: List[StartupData], investors: List[InvestorData]) -> List[str]:
+def validate_structured_rows(
+    startups: List[StartupData], 
+    investors: List[InvestorData],
+    mentors: List[MentorData] = None,
+    corporates: List[CorporateData] = None
+) -> List[str]:
     """
     Row-level validation with explicit row numbers and missing fields.
     """
@@ -1026,6 +1043,24 @@ def validate_structured_rows(startups: List[StartupData], investors: List[Invest
         # Do not require geoFocus/industryPreferences/stagePreferences/ticket sizes here.
         if missing:
             errors.append(f"Investor row {idx}: missing {', '.join(missing)}")
+
+    for idx, mentor in enumerate(mentors or [], start=1):
+        missing = []
+        if not mentor.fullName:
+            missing.append("fullName")
+        if not mentor.email:
+            missing.append("email")
+        if missing:
+            errors.append(f"Mentor row {idx}: missing {', '.join(missing)}")
+
+    for idx, corp in enumerate(corporates or [], start=1):
+        missing = []
+        if not corp.firmName:
+            missing.append("firmName")
+        if not corp.contactName:
+            missing.append("contactName")
+        if missing:
+            errors.append(f"Corporate row {idx}: missing {', '.join(missing)}")
 
     return errors
 
@@ -1084,14 +1119,25 @@ async def convert_file(file: UploadFile = File(...), dataType: Optional[str] = N
         conversion_result = await convert_data(request)
 
         # Validate critical identifiers, but don't hard-fail if optional fields are missing.
-        row_errors = validate_structured_rows(conversion_result.startups, conversion_result.investors)
+        row_errors = validate_structured_rows(
+            conversion_result.startups, 
+            conversion_result.investors,
+            conversion_result.mentors,
+            conversion_result.corporates
+        )
 
         # Block only if nothing was extracted
-        if (not conversion_result.startups and not conversion_result.investors):
+        has_any_data = (
+            conversion_result.startups or 
+            conversion_result.investors or 
+            conversion_result.mentors or 
+            conversion_result.corporates
+        )
+        if not has_any_data:
             # Return a 200 with errors so the frontend can show a meaningful message
             # (instead of a generic HTTP failure that hides conversion_result.errors).
             conversion_result.errors = (conversion_result.errors or []) + [
-                "No valid data extracted. If this PDF is scanned/image-only, OCR it (make it searchable) or upload the original XLSX/CSV."
+                "No valid data extracted. Please check the input format and column names. Expected columns for Investors: firmName, memberName, geoFocus, industryPreferences, stagePreferences. For Mentors: fullName, email, geoFocus. For Corporates: firmName, contactName, geoFocus, partnershipTypes."
             ]
             return conversion_result
 
