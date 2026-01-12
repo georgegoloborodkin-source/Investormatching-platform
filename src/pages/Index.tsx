@@ -12,6 +12,8 @@ import { TimeSlotManager } from "@/components/TimeSlotManager";
 import { EditableSchedule } from "@/components/EditableSchedule";
 import { StartupForm } from "@/components/StartupForm";
 import { InvestorForm } from "@/components/InvestorForm";
+import { MentorForm } from "@/components/MentorForm";
+import { CorporateForm } from "@/components/CorporateForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
@@ -43,9 +45,13 @@ const Index = () => {
   // Modal states
   const [showStartupForm, setShowStartupForm] = useState(false);
   const [showInvestorForm, setShowInvestorForm] = useState(false);
+  const [showMentorForm, setShowMentorForm] = useState(false);
+  const [showCorporateForm, setShowCorporateForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingStartup, setEditingStartup] = useState<Startup | null>(null);
   const [editingInvestor, setEditingInvestor] = useState<Investor | null>(null);
+  const [editingMentor, setEditingMentor] = useState<Mentor | null>(null);
+  const [editingCorporate, setEditingCorporate] = useState<CorporatePartner | null>(null);
   
   // Data states
   const [startups, setStartups] = useState<Startup[]>([
@@ -307,6 +313,58 @@ const Index = () => {
     setShowInvestorForm(false);
   }, [editingInvestor, toast]);
 
+  const handleAddMentor = useCallback((mentorData: Omit<Mentor, 'id'>) => {
+    if (editingMentor) {
+      setMentors(prev => prev.map(m => 
+        m.id === editingMentor.id 
+          ? { ...mentorData, id: editingMentor.id }
+          : m
+      ));
+      setEditingMentor(null);
+      toast({
+        title: "Mentor Updated",
+        description: `${mentorData.fullName} has been updated successfully.`,
+      });
+    } else {
+      const newMentor: Mentor = {
+        ...mentorData,
+        id: `mentor-${Date.now()}`
+      };
+      setMentors(prev => [...prev, newMentor]);
+      toast({
+        title: "Mentor Added",
+        description: `${mentorData.fullName} has been added successfully.`,
+      });
+    }
+    setShowMentorForm(false);
+  }, [editingMentor, toast]);
+
+  const handleAddCorporate = useCallback((corporateData: Omit<CorporatePartner, 'id'>) => {
+    if (editingCorporate) {
+      setCorporates(prev => prev.map(c => 
+        c.id === editingCorporate.id 
+          ? { ...corporateData, id: editingCorporate.id }
+          : c
+      ));
+      setEditingCorporate(null);
+      toast({
+        title: "Corporate Updated",
+        description: `${corporateData.firmName} has been updated successfully.`,
+      });
+    } else {
+      const newCorporate: CorporatePartner = {
+        ...corporateData,
+        id: `corporate-${Date.now()}`
+      };
+      setCorporates(prev => [...prev, newCorporate]);
+      toast({
+        title: "Corporate Added",
+        description: `${corporateData.firmName} has been added successfully.`,
+      });
+    }
+    setShowCorporateForm(false);
+  }, [editingCorporate, toast]);
+
   const handleStartupsImported = useCallback((importedStartups: Startup[]) => {
     setStartups(prev => [...prev, ...importedStartups]);
     setShowCSVUpload(false);
@@ -537,6 +595,16 @@ const Index = () => {
     setShowInvestorForm(true);
   }, []);
 
+  const handleEditMentor = useCallback((mentor: Mentor) => {
+    setEditingMentor(mentor);
+    setShowMentorForm(true);
+  }, []);
+
+  const handleEditCorporate = useCallback((corporate: CorporatePartner) => {
+    setEditingCorporate(corporate);
+    setShowCorporateForm(true);
+  }, []);
+
   const handleDeleteStartup = useCallback((id: string) => {
     setStartups(prev => prev.filter(s => s.id !== id));
     // Remove related matches
@@ -546,7 +614,19 @@ const Index = () => {
   const handleDeleteInvestor = useCallback((id: string) => {
     setInvestors(prev => prev.filter(i => i.id !== id));
     // Remove related matches
-    setMatches(prev => prev.filter(m => m.investorId !== id));
+    setMatches(prev => prev.filter(m => (m.targetId || m.investorId) === id));
+  }, []);
+
+  const handleDeleteMentor = useCallback((id: string) => {
+    setMentors(prev => prev.filter(m => m.id !== id));
+    // Remove related matches
+    setMatches(prev => prev.filter(m => m.targetId !== id));
+  }, []);
+
+  const handleDeleteCorporate = useCallback((id: string) => {
+    setCorporates(prev => prev.filter(c => c.id !== id));
+    // Remove related matches
+    setMatches(prev => prev.filter(m => m.targetId !== id));
   }, []);
 
   const handleAddIndustry = useCallback((newIndustry: string) => {
@@ -669,6 +749,8 @@ const Index = () => {
             <ParticipantManagement
               startups={startups}
               investors={investors}
+              mentors={mentors}
+              corporates={corporates}
               onAddStartup={() => {
                 setEditingStartup(null);
                 setShowStartupForm(true);
@@ -677,10 +759,22 @@ const Index = () => {
                 setEditingInvestor(null);
                 setShowInvestorForm(true);
               }}
+              onAddMentor={() => {
+                setEditingMentor(null);
+                setShowMentorForm(true);
+              }}
+              onAddCorporate={() => {
+                setEditingCorporate(null);
+                setShowCorporateForm(true);
+              }}
               onEditStartup={handleEditStartup}
               onEditInvestor={handleEditInvestor}
+              onEditMentor={handleEditMentor}
+              onEditCorporate={handleEditCorporate}
               onDeleteStartup={handleDeleteStartup}
               onDeleteInvestor={handleDeleteInvestor}
+              onDeleteMentor={handleDeleteMentor}
+              onDeleteCorporate={handleDeleteCorporate}
             />
           </TabsContent>
 
@@ -764,6 +858,42 @@ const Index = () => {
             onCancel={() => {
               setShowInvestorForm(false);
               setEditingInvestor(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMentorForm} onOpenChange={(open) => {
+        setShowMentorForm(open);
+        if (!open) setEditingMentor(null);
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <MentorForm
+            mentor={editingMentor}
+            industries={allIndustries}
+            onSave={handleAddMentor}
+            onAddIndustry={handleAddIndustry}
+            onCancel={() => {
+              setShowMentorForm(false);
+              setEditingMentor(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCorporateForm} onOpenChange={(open) => {
+        setShowCorporateForm(open);
+        if (!open) setEditingCorporate(null);
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <CorporateForm
+            corporate={editingCorporate}
+            industries={allIndustries}
+            onSave={handleAddCorporate}
+            onAddIndustry={handleAddIndustry}
+            onCancel={() => {
+              setShowCorporateForm(false);
+              setEditingCorporate(null);
             }}
           />
         </DialogContent>
