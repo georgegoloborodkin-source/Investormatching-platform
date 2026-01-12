@@ -1240,9 +1240,15 @@ async def convert_data(request: ConversionRequest):
                 # Auto-detect type if not specified
                 if not request.dataType:
                     has_startup_fields = any(k in item for k in ['companyName', 'fundingTarget', 'fundingStage'])
-                    has_investor_fields = any(k in item for k in ['firmName', 'minTicketSize', 'maxTicketSize'])
+                    has_investor_fields = any(k in item for k in ['firmName', 'minTicketSize', 'maxTicketSize', 'memberName'])
+                    has_mentor_fields = any(k in item for k in ['fullName', 'Full Name', 'expertiseAreas', 'Expertise Areas']) and any(k in item for k in ['email', 'Email'])
+                    has_corporate_fields = any(k in item for k in ['contactName', 'Contact Name', 'partnershipTypes', 'Partnership Types'])
                     
-                    if has_startup_fields and not has_investor_fields:
+                    if has_mentor_fields:
+                        detected_type = "mentor"
+                    elif has_corporate_fields:
+                        detected_type = "corporate"
+                    elif has_startup_fields and not has_investor_fields:
                         detected_type = "startup"
                     elif has_investor_fields and not has_startup_fields:
                         detected_type = "investor"
@@ -1258,6 +1264,18 @@ async def convert_data(request: ConversionRequest):
                     startup = normalize_startup_data(item)
                     if startup.companyName:
                         startups.append(startup)
+                elif detected_type == "mentor" or (not request.dataType and any(k in item for k in ['fullName', 'Full Name'])):
+                    mentor = normalize_mentor_data(item)
+                    if mentor.fullName and mentor.email:
+                        mentors.append(mentor)
+                    elif mentor.fullName:
+                        warnings.append(f"Mentor '{mentor.fullName}' missing email, skipping")
+                elif detected_type == "corporate" or (not request.dataType and any(k in item for k in ['contactName', 'Contact Name'])):
+                    corporate = normalize_corporate_data(item)
+                    if corporate.firmName and corporate.contactName:
+                        corporates.append(corporate)
+                    elif corporate.firmName:
+                        warnings.append(f"Corporate '{corporate.firmName}' missing contact name, skipping")
                 elif detected_type == "investor" or (not request.dataType and 'firmName' in item):
                     investor = normalize_investor_data(item)
                     if investor.firmName:
