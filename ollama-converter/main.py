@@ -1023,7 +1023,6 @@ async def list_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
 
-@app.post("/convert", response_model=ConversionResponse)
 def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[ConversionResponse]:
     """
     Try to parse CSV directly without Ollama if headers are clear.
@@ -1145,6 +1144,7 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
         print(f"Direct CSV parse exception: {e}")
         return None
 
+@app.post("/convert", response_model=ConversionResponse)
 async def convert_data(request: ConversionRequest):
     """
     Convert unstructured data to structured format using Ollama
