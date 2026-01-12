@@ -169,6 +169,27 @@ class InvestorData(BaseModel):
     tableNumber: Optional[str] = None
     availabilityStatus: str = "present"
 
+class MentorData(BaseModel):
+    fullName: str
+    email: str
+    linkedinUrl: Optional[str] = None
+    geoFocus: List[str]
+    industryPreferences: List[str]
+    expertiseAreas: List[str]
+    totalSlots: int = 3
+    availabilityStatus: str = "present"
+
+class CorporateData(BaseModel):
+    firmName: str
+    contactName: str
+    email: Optional[str] = None
+    geoFocus: List[str]
+    industryPreferences: List[str]
+    partnershipTypes: List[str]
+    stages: List[str]
+    totalSlots: int = 3
+    availabilityStatus: str = "present"
+
 class ConversionRequest(BaseModel):
     data: str  # Unstructured data (text, CSV, JSON, etc.)
     dataType: Optional[str] = None  # 'startup', 'investor', or None for auto-detect
@@ -177,6 +198,8 @@ class ConversionRequest(BaseModel):
 class ConversionResponse(BaseModel):
     startups: List[StartupData] = []
     investors: List[InvestorData] = []
+    mentors: List[MentorData] = []
+    corporates: List[CorporateData] = []
     detectedType: str
     confidence: float
     warnings: List[str] = []
@@ -193,7 +216,7 @@ class FileValidationResponse(BaseModel):
 # System prompt for Ollama
 SYSTEM_PROMPT = """You are a data extraction and conversion expert. Your task is to extract structured information from unstructured text and convert it into JSON format.
 
-You will receive unstructured data about startups or investors, and you must extract the following information:
+You will receive unstructured data about startups, investors, mentors, or corporates, and you must extract the following information:
 
 FOR STARTUPS:
 - companyName: The name of the company/startup
@@ -212,6 +235,25 @@ FOR INVESTORS:
 - maxTicketSize: Maximum investment amount as integer
 - totalSlots: Number of meeting slots (default: 3)
 - tableNumber: Optional table/booth number
+
+FOR MENTORS:
+- fullName: Full name of the mentor (REQUIRED)
+- email: Email address (REQUIRED)
+- linkedinUrl: LinkedIn profile URL
+- geoFocus: List of geographic focus areas
+- industryPreferences: List of preferred industries
+- expertiseAreas: List of expertise areas (e.g., ["Product Development", "Fundraising"])
+- totalSlots: Number of meeting slots (default: 3)
+
+FOR CORPORATES:
+- firmName: Name of the corporate/company (REQUIRED)
+- contactName: Name of the corporate contact person (REQUIRED)
+- email: Email address
+- geoFocus: List of geographic focus areas
+- industryPreferences: List of preferred industries
+- partnershipTypes: List of partnership types (e.g., ["Pilot Program", "Distribution"])
+- stages: List of startup stages of interest (e.g., ["Seed", "Series A"])
+- totalSlots: Number of meeting slots (default: 3)
 
 IMPORTANT RULES:
 1. Always return valid JSON only, no markdown or explanations
@@ -489,6 +531,154 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         maxTicketSize=max_ticket,
         totalSlots=total_slots,
         tableNumber=data.get('tableNumber', data.get('table_number', data.get('table', None))),
+        availabilityStatus='present'
+    )
+
+def normalize_mentor_data(data: Dict[str, Any]) -> MentorData:
+    """Normalize extracted mentor data to match schema"""
+    def safe_str(val: Any) -> str:
+        return val.strip() if isinstance(val, str) else (str(val).strip() if val is not None else "")
+    
+    def parse_list(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            return [item.strip() for item in re.split(r'[,;|]', value) if item.strip()]
+        return []
+    
+    full_name = safe_str(
+        data.get('fullName') or 
+        data.get('full_name') or 
+        data.get('Full Name') or 
+        data.get('name') or 
+        ''
+    )
+    
+    email = safe_str(
+        data.get('email') or 
+        data.get('Email') or 
+        ''
+    )
+    
+    linkedin_url = safe_str(
+        data.get('linkedinUrl') or 
+        data.get('linkedin_url') or 
+        data.get('LinkedIn URL') or 
+        data.get('LinkedIn') or 
+        None
+    )
+    
+    geo_focus = parse_list(
+        data.get('geoFocus') or
+        data.get('geo_focus') or 
+        data.get('Location') or
+        data.get('region') or 
+        []
+    )
+    
+    industry_prefs = parse_list(
+        data.get('industryPreferences') or 
+        data.get('industry_preferences') or 
+        data.get('Industry Preferences') or
+        data.get('industries') or 
+        []
+    )
+    
+    expertise_areas = parse_list(
+        data.get('expertiseAreas') or 
+        data.get('expertise_areas') or 
+        data.get('Expertise Areas') or
+        data.get('expertise') or 
+        []
+    )
+    
+    total_slots = int(data.get('totalSlots') or data.get('total_slots') or data.get('Total Slots') or 3)
+    
+    return MentorData(
+        fullName=full_name,
+        email=email,
+        linkedinUrl=linkedin_url,
+        geoFocus=geo_focus,
+        industryPreferences=industry_prefs,
+        expertiseAreas=expertise_areas,
+        totalSlots=total_slots,
+        availabilityStatus='present'
+    )
+
+def normalize_corporate_data(data: Dict[str, Any]) -> CorporateData:
+    """Normalize extracted corporate data to match schema"""
+    def safe_str(val: Any) -> str:
+        return val.strip() if isinstance(val, str) else (str(val).strip() if val is not None else "")
+    
+    def parse_list(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            return [item.strip() for item in re.split(r'[,;|]', value) if item.strip()]
+        return []
+    
+    firm_name = safe_str(
+        data.get('firmName') or 
+        data.get('firm_name') or 
+        data.get('Company Name') or 
+        data.get('companyName') or 
+        data.get('name') or 
+        ''
+    )
+    
+    contact_name = safe_str(
+        data.get('contactName') or 
+        data.get('contact_name') or 
+        data.get('Contact Name') or 
+        ''
+    )
+    
+    email = safe_str(
+        data.get('email') or 
+        data.get('Email') or 
+        None
+    )
+    
+    geo_focus = parse_list(
+        data.get('geoFocus') or
+        data.get('geo_focus') or 
+        data.get('Location') or
+        data.get('region') or 
+        []
+    )
+    
+    industry_prefs = parse_list(
+        data.get('industryPreferences') or 
+        data.get('industry_preferences') or 
+        data.get('Industry Preferences') or
+        data.get('industries') or 
+        []
+    )
+    
+    partnership_types = parse_list(
+        data.get('partnershipTypes') or 
+        data.get('partnership_types') or 
+        data.get('Partnership Types') or
+        []
+    )
+    
+    stages = parse_list(
+        data.get('stages') or 
+        data.get('Stages') or 
+        []
+    )
+    
+    total_slots = int(data.get('totalSlots') or data.get('total_slots') or data.get('Total Slots') or 3)
+    
+    return CorporateData(
+        firmName=firm_name,
+        contactName=contact_name,
+        email=email,
+        geoFocus=geo_focus,
+        industryPreferences=industry_prefs,
+        partnershipTypes=partnership_types,
+        stages=stages,
+        totalSlots=total_slots,
         availabilityStatus='present'
     )
 
@@ -945,6 +1135,8 @@ async def convert_data(request: ConversionRequest):
             elif isinstance(wrapper.get("startups"), (list, dict)) or isinstance(wrapper.get("investors"), (list, dict)):
                 startups = []
                 investors = []
+                mentors = []
+                corporates = []
                 warnings = []
                 errors = []
 
@@ -978,6 +1170,24 @@ async def convert_data(request: ConversionRequest):
                         except Exception as e:
                             errors.append(f"Error processing investor item: {str(e)}")
 
+                for item in ensure_list(wrapper.get("mentors")):
+                    if isinstance(item, dict):
+                        try:
+                            mentor = normalize_mentor_data(item)
+                            if mentor.fullName and mentor.email:
+                                mentors.append(mentor)
+                        except Exception as e:
+                            errors.append(f"Error processing mentor item: {str(e)}")
+
+                for item in ensure_list(wrapper.get("corporates")):
+                    if isinstance(item, dict):
+                        try:
+                            corp = normalize_corporate_data(item)
+                            if corp.firmName and corp.contactName:
+                                corporates.append(corp)
+                        except Exception as e:
+                            errors.append(f"Error processing corporate item: {str(e)}")
+
                 # Determine detected type
                 types_found = []
                 if startups:
@@ -997,6 +1207,8 @@ async def convert_data(request: ConversionRequest):
                 return ConversionResponse(
                     startups=startups,
                     investors=investors,
+                    mentors=mentors,
+                    corporates=corporates,
                     detectedType=detected_type,
                     confidence=0.8 if (startups or investors) else 0.0,
                     warnings=warnings,
@@ -1013,6 +1225,8 @@ async def convert_data(request: ConversionRequest):
         # Convert to structured format
         startups = []
         investors = []
+        mentors = []
+        corporates = []
         warnings = []
         errors = []
         detected_type = request.dataType or "unknown"
@@ -1066,6 +1280,8 @@ async def convert_data(request: ConversionRequest):
         return ConversionResponse(
             startups=startups,
             investors=investors,
+            mentors=mentors,
+            corporates=corporates,
             detectedType=detected_type,
             confidence=0.8 if (startups or investors) else 0.0,
             warnings=warnings,
