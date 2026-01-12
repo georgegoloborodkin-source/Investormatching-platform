@@ -470,7 +470,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         try:
             import zipfile
             from io import BytesIO
-            with zipfile.ZipF   ile(BytesIO(content)) as z:
+            with zipfile.ZipFile(BytesIO(content)) as z:
                 names = set(z.namelist())
                 if 'word/document.xml' in names:
                     file_ext = 'docx'
