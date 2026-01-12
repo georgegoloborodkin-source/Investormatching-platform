@@ -331,20 +331,63 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                     Auto‑Detect Upload
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Upload a file and we’ll detect if it’s startups, investors, or both.
+                    Upload CSV, Excel, PDF, or text files. We'll detect startups, investors, mentors, and corporates.
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    downloadTemplate('startups');
-                    setTimeout(() => downloadTemplate('investors'), 500);
-                  }}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Templates
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = '/templates/startup-template.csv';
+                      link.download = 'startup-template.csv';
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Startup
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = '/templates/investor-template.csv';
+                      link.download = 'investor-template.csv';
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Investor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = '/templates/mentor-template.csv';
+                      link.download = 'mentor-template.csv';
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Mentor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = '/templates/corporate-template.csv';
+                      link.download = 'corporate-template.csv';
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Corporate
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
