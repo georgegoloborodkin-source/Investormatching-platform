@@ -403,21 +403,85 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         return safe_int(value, 0)
     
     geo_focus = parse_list(
-        data.get(
-            'geoFocus',
-            data.get('geo_focus', data.get('geoMarkets', data.get('region', data.get('regions', data.get('geography', [])))))
-        )
+        data.get('geoFocus') or
+        data.get('geo_focus') or 
+        data.get('Main Geographies Targeted (labels)') or  # Orbit CSV format
+        data.get('Location') or
+        data.get('geoMarkets') or 
+        data.get('region') or 
+        data.get('regions') or 
+        data.get('geography') or 
+        []
     )
-    industry_prefs = parse_list(data.get('industryPreferences', data.get('industry_preferences', data.get('industries', []))))
-    stage_prefs = parse_list(data.get('stagePreferences', data.get('stage_preferences', data.get('stages', []))))
     
-    min_ticket = parse_number(data.get('minTicketSize', data.get('min_ticket_size', data.get('minInvestment', 0))))
-    max_ticket = parse_number(data.get('maxTicketSize', data.get('max_ticket_size', data.get('maxInvestment', 10000000))))
-    total_slots = safe_int(data.get('totalSlots', data.get('total_slots', data.get('slots', 3))), 3)
+    industry_prefs = parse_list(
+        data.get('industryPreferences') or 
+        data.get('industry_preferences') or 
+        data.get('[BD] Vertical Interests / Vertical (labels)') or  # Orbit CSV format
+        data.get('Vertical Interests') or
+        data.get('industries') or 
+        []
+    )
+    
+    stage_prefs = parse_list(
+        data.get('stagePreferences') or 
+        data.get('stage_preferences') or 
+        data.get('stages') or 
+        []
+    )
+    
+    # Handle cheque/ticket size - may be a range like "100K-500K" or ">1M"
+    cheque_size_raw = data.get('[INV] Cheque Size (labels)') or data.get('Cheque Size') or data.get('Check Size') or ''
+    
+    if cheque_size_raw and isinstance(cheque_size_raw, str):
+        # Parse ranges like "100K-500K" or ">1M"
+        if '-' in cheque_size_raw:
+            parts = cheque_size_raw.split('-')
+            min_ticket = parse_number(parts[0]) if len(parts) > 0 else 0
+            max_ticket = parse_number(parts[1]) if len(parts) > 1 else min_ticket * 10
+        elif '>' in cheque_size_raw:
+            min_ticket = parse_number(cheque_size_raw.replace('>', ''))
+            max_ticket = min_ticket * 10
+        elif '<' in cheque_size_raw:
+            max_ticket = parse_number(cheque_size_raw.replace('<', ''))
+            min_ticket = max_ticket // 10
+        else:
+            min_ticket = parse_number(cheque_size_raw)
+            max_ticket = min_ticket * 5
+    else:
+        min_ticket = parse_number(data.get('minTicketSize') or data.get('min_ticket_size') or data.get('minInvestment') or 0)
+        max_ticket = parse_number(data.get('maxTicketSize') or data.get('max_ticket_size') or data.get('maxInvestment') or 10000000)
+    
+    total_slots = safe_int(data.get('totalSlots') or data.get('total_slots') or data.get('slots') or 3, 3)
 
+    # Handle various column name formats from different sources
+    firm_name = safe_str(
+        data.get('firmName') or 
+        data.get('firm_name') or 
+        data.get('Investor name') or  # Orbit CSV format
+        data.get('name') or 
+        data.get('firm') or 
+        data.get('Company Name') or
+        ''
+    )
+    
+    member_name = safe_str(
+        data.get('memberName') or 
+        data.get('member_name') or 
+        data.get('🦅 [INV] Team Member (users)') or  # Orbit CSV format
+        data.get('[INV] Team Member (users)') or
+        data.get('Team Member') or
+        data.get('investment_member') or 
+        data.get('investorMemberName') or 
+        data.get('contactName') or 
+        data.get('partnerName') or 
+        data.get('personName') or 
+        ''
+    )
+    
     return InvestorData(
-        firmName=safe_str(data.get('firmName', data.get('firm_name', data.get('name', data.get('firm', ''))))),
-        memberName=safe_str(data.get('memberName', data.get('member_name', data.get('investment_member', data.get('investorMemberName', data.get('contactName', data.get('partnerName', data.get('personName', '')))))))),
+        firmName=firm_name,
+        memberName=member_name,
         geoFocus=geo_focus,
         industryPreferences=industry_prefs,
         stagePreferences=stage_prefs,
