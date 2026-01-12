@@ -8,7 +8,6 @@ import { Header } from "@/components/Header";
 import { SimpleMatchingTable } from "@/components/SimpleMatchingTable";
 import { ParticipantManagement } from "@/components/ParticipantManagement";
 import { MeetingVisibilityTable } from "@/components/MeetingVisibilityTable";
-import { TimeSlotManager } from "@/components/TimeSlotManager";
 import { EditableSchedule } from "@/components/EditableSchedule";
 import { StartupForm } from "@/components/StartupForm";
 import { InvestorForm } from "@/components/InvestorForm";
@@ -17,7 +16,7 @@ import { CorporateForm } from "@/components/CorporateForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
-import { generateMatches } from "@/utils/matchingAlgorithmMVP";
+import { generateMatches } from "@/utils/matchingAlgorithm";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
 import { CoverageReport } from "@/components/CoverageReport";
 import { Save } from "lucide-react";
@@ -188,7 +187,7 @@ const Index = () => {
   const [customIndustries, setCustomIndustries] = useState<string[]>([]);
   // Filters removed: always include attending participants only; member filter handled inside Edit Schedule.
   const [activeTab, setActiveTab] = useState<string>("table");
-  const safeActiveTab = ["manage", "timeslots", "visibility", "table", "editable"].includes(activeTab)
+  const safeActiveTab = ["manage", "visibility", "table", "editable"].includes(activeTab)
     ? activeTab
     : "table";
 
@@ -737,9 +736,8 @@ const Index = () => {
         </div>
         
         <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="manage">Manage</TabsTrigger>
-            <TabsTrigger value="timeslots">Time Slots</TabsTrigger>
             <TabsTrigger value="visibility">Overview</TabsTrigger>
             <TabsTrigger value="table">Table View</TabsTrigger>
             <TabsTrigger value="editable">Edit Schedule</TabsTrigger>
@@ -775,13 +773,6 @@ const Index = () => {
               onDeleteInvestor={handleDeleteInvestor}
               onDeleteMentor={handleDeleteMentor}
               onDeleteCorporate={handleDeleteCorporate}
-            />
-          </TabsContent>
-
-          <TabsContent value="timeslots">
-            <TimeSlotManager
-              timeSlots={timeSlots}
-              onUpdateTimeSlots={setTimeSlots}
             />
           </TabsContent>
 

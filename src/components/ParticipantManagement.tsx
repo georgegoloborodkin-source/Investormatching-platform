@@ -4,18 +4,26 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Edit, Plus } from "lucide-react";
-import { Startup, Investor } from "@/types";
+import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 interface ParticipantManagementProps {
   startups: Startup[];
   investors: Investor[];
+  mentors: Mentor[];
+  corporates: CorporatePartner[];
   onAddStartup: () => void;
   onAddInvestor: () => void;
+  onAddMentor: () => void;
+  onAddCorporate: () => void;
   onEditStartup: (startup: Startup) => void;
   onEditInvestor: (investor: Investor) => void;
+  onEditMentor: (mentor: Mentor) => void;
+  onEditCorporate: (corporate: CorporatePartner) => void;
   onDeleteStartup: (id: string) => void;
   onDeleteInvestor: (id: string) => void;
+  onDeleteMentor: (id: string) => void;
+  onDeleteCorporate: (id: string) => void;
 }
 
 export function ParticipantManagement({
