@@ -193,7 +193,8 @@ const Index = () => {
 
   const allIndustries = [...INDUSTRIES, ...customIndustries];
 
-  const hasData = startups.length > 0 && investors.length > 0;
+  // We can generate if we have startups and at least one target (investor/mentor/corporate)
+  const hasData = startups.length > 0 && (investors.length > 0 || mentors.length > 0 || corporates.length > 0);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -409,7 +410,7 @@ const Index = () => {
     if (!hasData) {
       toast({
         title: "Cannot Generate Matches",
-        description: "Please add at least one startup and one investor before generating matches.",
+        description: "Please add at least one startup and one target (investor, mentor, or corporate) before generating matches.",
         variant: "destructive"
       });
       return;
@@ -418,6 +419,8 @@ const Index = () => {
     // Check for available participants
     const availableStartups = startups.filter(s => s.availabilityStatus === 'present');
     const availableInvestors = investors.filter(i => i.availabilityStatus === 'present');
+    const availableMentors = mentors.filter(m => m.availabilityStatus === 'present');
+    const availableCorporates = corporates.filter(c => c.availabilityStatus === 'present');
 
     if (availableStartups.length === 0) {
       toast({
@@ -428,21 +431,23 @@ const Index = () => {
       return;
     }
 
-    if (availableInvestors.length === 0) {
+    if (availableInvestors.length + availableMentors.length + availableCorporates.length === 0) {
       toast({
-        title: "No Available Investors",
-        description: "All investors are marked as 'not attending'. Please update their availability status.",
+        title: "No Available Targets",
+        description: "All investors/mentors/corporates are marked as 'not attending'. Please update their availability status.",
         variant: "destructive"
       });
       return;
     }
 
-    // Check if investors have slots configured
+    // Check if targets have slots configured (investors/mentors/corporates)
     const investorsWithSlots = availableInvestors.filter(inv => inv.totalSlots > 0);
-    if (investorsWithSlots.length === 0) {
+    const mentorsWithSlots = availableMentors.filter(m => m.totalSlots > 0);
+    const corporatesWithSlots = availableCorporates.filter(c => c.totalSlots > 0);
+    if (investorsWithSlots.length + mentorsWithSlots.length + corporatesWithSlots.length === 0) {
       toast({
-        title: "No Investor Slots Available",
-        description: "All investors have 0 total slots. Please set total slots for investors.",
+        title: "No Target Slots Available",
+        description: "All investors/mentors/corporates have 0 total slots. Please set total slots.",
         variant: "destructive"
       });
       return;
@@ -452,6 +457,8 @@ const Index = () => {
       console.log('Generating matches with:', {
         startups: availableStartups.length,
         investors: availableInvestors.length,
+        mentors: availableMentors.length,
+        corporates: availableCorporates.length,
         timeSlots: timeSlots.length
       });
 
@@ -465,14 +472,13 @@ const Index = () => {
       const seenFirm = new Set<string>();
       const seenNamePair = new Set<string>();
       const newMatches = rawMatches.filter(m => {
-        const key = `${m.startupId}::${m.investorId}`;
+        const targetId = m.targetId || m.investorId || '';
+        const targetName = m.targetName || m.investorName || '';
+        const key = `${m.startupId}::${targetId}`;
         if (seen.has(key)) return false;
-        const inv = investors.find(i => i.id === m.investorId);
-        const firmKey = inv
-          ? `${m.startupId}::${inv.firmName.toLowerCase().trim()}`
-          : `${m.startupId}::${m.investorName.toLowerCase().trim()}`;
+        const firmKey = `${m.startupId}::${(targetName || '').toLowerCase().trim()}`;
         if (seenFirm.has(firmKey)) return false;
-        const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(m.investorName || '').toLowerCase().trim()}`;
+        const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(targetName || '').toLowerCase().trim()}`;
         if (seenNamePair.has(nameKey)) return false;
         seen.add(key);
         seenFirm.add(firmKey);
@@ -523,14 +529,13 @@ const Index = () => {
     const seenFirm = new Set<string>();
     const seenNamePair = new Set<string>();
     const newMatches = rawMatches.filter(m => {
-      const key = `${m.startupId}::${m.investorId}`;
+      const targetId = m.targetId || m.investorId || '';
+      const targetName = m.targetName || m.investorName || '';
+      const key = `${m.startupId}::${targetId}`;
       if (seen.has(key)) return false;
-      const inv = investors.find(i => i.id === m.investorId);
-      const firmKey = inv
-        ? `${m.startupId}::${inv.firmName.toLowerCase().trim()}`
-        : `${m.startupId}::${m.investorName.toLowerCase().trim()}`;
+      const firmKey = `${m.startupId}::${(targetName || '').toLowerCase().trim()}`;
       if (seenFirm.has(firmKey)) return false;
-      const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(m.investorName || '').toLowerCase().trim()}`;
+      const nameKey = `${(m.startupName || '').toLowerCase().trim()}::${(targetName || '').toLowerCase().trim()}`;
       if (seenNamePair.has(nameKey)) return false;
       seen.add(key);
       seenFirm.add(firmKey);
