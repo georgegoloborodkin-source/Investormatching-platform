@@ -803,10 +803,18 @@ const Index = () => {
 
           <TabsContent value="visibility">
             <div className="space-y-6">
-              <CoverageReport startups={startups} investors={investors} matches={matches} />
+              <CoverageReport 
+                startups={startups} 
+                investors={investors} 
+                mentors={mentors}
+                corporates={corporates}
+                matches={matches} 
+              />
             <MeetingVisibilityTable
               startups={startups}
               investors={investors}
+              mentors={mentors}
+              corporates={corporates}
               matches={matches}
             />
             </div>
