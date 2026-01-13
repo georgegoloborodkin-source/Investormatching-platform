@@ -190,11 +190,12 @@ const Index = () => {
   const safeActiveTab = ["manage", "visibility", "table", "editable"].includes(activeTab)
     ? activeTab
     : "table";
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const allIndustries = [...INDUSTRIES, ...customIndustries];
 
   // We can generate if we have startups and at least one target (investor/mentor/corporate)
-  const hasData = startups.length > 0 && (investors.length > 0 || mentors.length > 0 || corporates.length > 0);
+  const hasData = dataLoaded && startups.length > 0 && (investors.length > 0 || mentors.length > 0 || corporates.length > 0);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -255,6 +256,7 @@ const Index = () => {
         console.error('Failed to load saved time slots');
       }
     }
+    setDataLoaded(true);
   }, []);
 
   const handleAddStartup = useCallback((startupData: Omit<Startup, 'id'>) => {
@@ -406,6 +408,8 @@ const Index = () => {
   }, [toast]);
 
   const handleGenerateMatches = useCallback(() => {
+    if (!dataLoaded) return;
+
     // Check if we have data
     if (!hasData) {
       toast({
