@@ -416,11 +416,32 @@ const Index = () => {
       return;
     }
 
+    // Normalize and filter participants (default availability = present, default slots = 3)
+    const normStartups = startups.map(s => ({
+      ...s,
+      availabilityStatus: s.availabilityStatus || 'present',
+    }));
+    const normInvestors = investors.map(i => ({
+      ...i,
+      availabilityStatus: i.availabilityStatus || 'present',
+      totalSlots: i.totalSlots ?? 3,
+    }));
+    const normMentors = mentors.map(m => ({
+      ...m,
+      availabilityStatus: m.availabilityStatus || 'present',
+      totalSlots: m.totalSlots ?? 3,
+    }));
+    const normCorporates = corporates.map(c => ({
+      ...c,
+      availabilityStatus: c.availabilityStatus || 'present',
+      totalSlots: c.totalSlots ?? 3,
+    }));
+
     // Check for available participants
-    const availableStartups = startups.filter(s => s.availabilityStatus === 'present');
-    const availableInvestors = investors.filter(i => i.availabilityStatus === 'present');
-    const availableMentors = mentors.filter(m => m.availabilityStatus === 'present');
-    const availableCorporates = corporates.filter(c => c.availabilityStatus === 'present');
+    const availableStartups = normStartups.filter(s => s.availabilityStatus === 'present');
+    const availableInvestors = normInvestors.filter(i => i.availabilityStatus === 'present');
+    const availableMentors = normMentors.filter(m => m.availabilityStatus === 'present');
+    const availableCorporates = normCorporates.filter(c => c.availabilityStatus === 'present');
 
     if (availableStartups.length === 0) {
       toast({
@@ -462,9 +483,9 @@ const Index = () => {
         timeSlots: timeSlots.length
       });
 
-      const rawMatches = generateMatches(startups, investors, [], timeSlots, {
-        mentors,
-        corporates
+      const rawMatches = generateMatches(normStartups, normInvestors, [], timeSlots, {
+        mentors: normMentors,
+        corporates: normCorporates
       });
       // Safety net: ensure no duplicates by IDs and also by visible names (prevents duplicate-looking rows
       // when the same startup is imported twice with different IDs).
@@ -521,9 +542,15 @@ const Index = () => {
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    const rawMatches = generateMatches(startups, investors, matches, timeSlots, {
-      mentors,
-      corporates
+    // Normalize participants before rematching
+    const normStartups = startups.map(s => ({ ...s, availabilityStatus: s.availabilityStatus || 'present' }));
+    const normInvestors = investors.map(i => ({ ...i, availabilityStatus: i.availabilityStatus || 'present', totalSlots: i.totalSlots ?? 3 }));
+    const normMentors = mentors.map(m => ({ ...m, availabilityStatus: m.availabilityStatus || 'present', totalSlots: m.totalSlots ?? 3 }));
+    const normCorporates = corporates.map(c => ({ ...c, availabilityStatus: c.availabilityStatus || 'present', totalSlots: c.totalSlots ?? 3 }));
+
+    const rawMatches = generateMatches(normStartups, normInvestors, matches, timeSlots, {
+      mentors: normMentors,
+      corporates: normCorporates
     });
     const seen = new Set<string>();
     const seenFirm = new Set<string>();
