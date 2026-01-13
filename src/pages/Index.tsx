@@ -191,6 +191,8 @@ const Index = () => {
     ? activeTab
     : "table";
 
+  const [dataLoaded, setDataLoaded] = useState(false);
+
   const allIndustries = [...INDUSTRIES, ...customIndustries];
 
   // We can generate if we have startups and at least one target (investor/mentor/corporate)
@@ -255,6 +257,7 @@ const Index = () => {
         console.error('Failed to load saved time slots');
       }
     }
+    setDataLoaded(true);
   }, []);
 
   const handleAddStartup = useCallback((startupData: Omit<Startup, 'id'>) => {
@@ -406,6 +409,15 @@ const Index = () => {
   }, [toast]);
 
   const handleGenerateMatches = useCallback(() => {
+    if (!dataLoaded) {
+      toast({
+        title: "Please wait",
+        description: "Data is still loading. Try again in a moment.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Check if we have data
     if (!hasData) {
       toast({
