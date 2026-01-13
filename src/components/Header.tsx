@@ -54,7 +54,7 @@ export function Header({
               className="gradient-primary"
             >
               <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
-              {isRematching ? 'Rematching...' : 'Rematch'}
+              {isRematching ? 'Generating...' : 'Generate Matches'}
             </Button>
             
             <Button 
