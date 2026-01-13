@@ -31,6 +31,7 @@ export function SimpleMatchingTable({
   const [sortField, setSortField] = useState<string>('timeSlot');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [showCompleted, setShowCompleted] = useState(true);
+  const [startupFilter, setStartupFilter] = useState<string>('all');
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -43,6 +44,7 @@ export function SimpleMatchingTable({
 
   const sortedMatches = matches
     .filter(match => showCompleted || !match.completed)
+    .filter(match => startupFilter === 'all' || match.startupId === startupFilter)
     .sort((a, b) => {
       const aValue = a[sortField as keyof Match];
       const bValue = b[sortField as keyof Match];
@@ -123,6 +125,22 @@ export function SimpleMatchingTable({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Matchmaking Schedule</h2>
           <div className="flex items-center gap-2">
+            <Select
+              value={startupFilter}
+              onValueChange={(val) => setStartupFilter(val)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by startup" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All startups</SelectItem>
+                {startups.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.companyName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={showCompleted}
