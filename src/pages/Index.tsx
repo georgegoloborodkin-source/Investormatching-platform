@@ -384,6 +384,26 @@ const Index = () => {
     });
   }, [toast]);
 
+  const handleMentorsImported = useCallback((importedMentors: Mentor[]) => {
+    setMentors(prev => [...prev, ...importedMentors]);
+    setShowCSVUpload(false);
+    
+    toast({
+      title: "Mentors Imported", 
+      description: `${importedMentors.length} mentors imported successfully.`,
+    });
+  }, [toast]);
+
+  const handleCorporatesImported = useCallback((importedCorporates: CorporatePartner[]) => {
+    setCorporates(prev => [...prev, ...importedCorporates]);
+    setShowCSVUpload(false);
+    
+    toast({
+      title: "Corporates Imported", 
+      description: `${importedCorporates.length} corporates imported successfully.`,
+    });
+  }, [toast]);
+
   const handleGenerateMatches = useCallback(() => {
     // Check if we have data
     if (!hasData) {
@@ -895,6 +915,8 @@ const Index = () => {
           <CSVUpload
             onStartupsImported={handleStartupsImported}
             onInvestorsImported={handleInvestorsImported}
+            onMentorsImported={handleMentorsImported}
+            onCorporatesImported={handleCorporatesImported}
             onClose={() => setShowCSVUpload(false)}
           />
         </DialogContent>

@@ -10,23 +10,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { generateStartupCSVTemplate, generateInvestorCSVTemplate, downloadCSV } from "@/utils/csvUtils";
 import { smartConvertStartupCSV, smartConvertInvestorCSV, detectCSVType, detectMixedCSV, parseMixedCSV } from "@/utils/smartCsvConverter";
 import { convertWithOllama, convertFileWithOllama, checkOllamaHealth } from "@/utils/ollamaConverter";
-import { Startup, Investor } from "@/types";
+import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 
 interface CSVUploadProps {
   onStartupsImported: (startups: Startup[]) => void;
   onInvestorsImported: (investors: Investor[]) => void;
+  onMentorsImported: (mentors: Mentor[]) => void;
+  onCorporatesImported: (corporates: CorporatePartner[]) => void;
   onClose: () => void;
 }
 
-export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: CSVUploadProps) {
+export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsImported, onCorporatesImported, onClose }: CSVUploadProps) {
   const [error, setError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null);
   const [previewData, setPreviewData] = useState<{
-    type: 'startups' | 'investors' | 'mixed';
-    data: Startup[] | Investor[];
+    type: 'startups' | 'investors' | 'mentors' | 'corporates' | 'mixed';
+    data: Array<Startup | Investor | Mentor | CorporatePartner>;
     startups?: Startup[];
     investors?: Investor[];
+    mentors?: Mentor[];
+    corporates?: CorporatePartner[];
     mappings: Array<{ originalName: string; mappedField: string; confidence: number }>;
     warnings: string[];
     errors: string[];
@@ -52,6 +56,49 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
     try {
       const isCsv = file.name.toLowerCase().endsWith('.csv');
 
+      // Helper to build preview from Ollama result (supports mentors & corporates too)
+      const buildPreviewFromOllama = (result: Awaited<ReturnType<typeof convertFileWithOllama>>) => {
+        const startups = result.startups || [];
+        const investors = result.investors || [];
+        const mentors = (result.mentors as Mentor[] | undefined) || [];
+        const corporates = (result.corporates as CorporatePartner[] | undefined) || [];
+
+        const kinds: Array<'startups' | 'investors' | 'mentors' | 'corporates'> = [];
+        if (startups.length) kinds.push('startups');
+        if (investors.length) kinds.push('investors');
+        if (mentors.length) kinds.push('mentors');
+        if (corporates.length) kinds.push('corporates');
+
+        if (kinds.length === 0) {
+          setError(result.errors.join('; ') || 'Ollama AI returned no rows. Please check the file contents.');
+          return;
+        }
+
+        const previewType = kinds.length === 1 ? kinds[0] : 'mixed';
+        const totalRows = startups.length + investors.length + mentors.length + corporates.length;
+
+        setPreviewData({
+          type: previewType,
+          data: [...startups, ...investors, ...mentors, ...corporates],
+          startups: startups.length ? startups : undefined,
+          investors: investors.length ? investors : undefined,
+          mentors: mentors.length ? mentors : undefined,
+          corporates: corporates.length ? corporates : undefined,
+          mappings: [],
+          warnings: [
+            ...(result.warnings || []),
+            isCsv ? 'Used AI converter (Ollama) due to unclear CSV format' : `Used AI converter (Ollama) to convert ${file.name}`
+          ],
+          errors: result.errors || [],
+          stats: {
+            totalRows,
+            validRows: totalRows,
+            skippedRows: 0
+          },
+          confidence: result.confidence
+        });
+      };
+
       // AUTO: For any non-CSV file, use Ollama AI immediately (if available)
       if (!isCsv && ollamaAvailable) {
         const result = await convertFileWithOllama(file);
@@ -59,25 +106,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
           setError(result.errors.join('; '));
           return;
         }
-
-        const startups = result.startups || [];
-        const investors = result.investors || [];
-
-        setPreviewData({
-          type: startups.length > 0 && investors.length > 0 ? 'mixed' : (startups.length > 0 ? 'startups' : 'investors'),
-          data: [...startups, ...investors] as any,
-          startups: startups.length > 0 ? startups : undefined,
-          investors: investors.length > 0 ? investors : undefined,
-          mappings: [],
-          warnings: result.warnings,
-          errors: result.errors,
-          stats: {
-            totalRows: startups.length + investors.length,
-            validRows: startups.length + investors.length,
-            skippedRows: 0
-          },
-          confidence: result.confidence
-        });
+        buildPreviewFromOllama(result);
         return;
       }
 
@@ -223,30 +252,12 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
           console.log('Using Ollama AI converter for file:', file.name);
           try {
             const result = await convertFileWithOllama(file);
-            if (result.errors.length === 0 && (result.startups.length > 0 || result.investors.length > 0)) {
-              const startups = result.startups || [];
-              const investors = result.investors || [];
-              
-              setPreviewData({
-                type: startups.length > 0 && investors.length > 0 ? 'mixed' : (startups.length > 0 ? 'startups' : 'investors'),
-                data: [...startups, ...investors] as any,
-                startups: startups.length > 0 ? startups : undefined,
-                investors: investors.length > 0 ? investors : undefined,
-                mappings: [],
-                warnings: [...result.warnings, isCsv ? 'Used AI converter (Ollama) due to messy CSV format' : `Used AI converter (Ollama) to convert ${file.name}`],
-                errors: result.errors,
-                stats: {
-                  totalRows: startups.length + investors.length,
-                  validRows: startups.length + investors.length,
-                  skippedRows: 0
-                },
-                confidence: result.confidence
-              });
-              return;
-            } else if (result.errors.length > 0) {
+            if (result.errors.length > 0) {
               setError(result.errors.join('; '));
               return;
             }
+            buildPreviewFromOllama(result);
+            return;
           } catch (ollamaError) {
             console.warn('Ollama conversion failed:', ollamaError);
             setError(`Ollama AI conversion failed: ${ollamaError instanceof Error ? ollamaError.message : 'Unknown error'}. Please check that Ollama is running and the file format is supported.`);
@@ -284,14 +295,24 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
       if (previewData.investors && previewData.investors.length > 0) {
         onInvestorsImported(previewData.investors);
       }
+      if (previewData.mentors && previewData.mentors.length > 0) {
+        onMentorsImported(previewData.mentors);
+      }
+      if (previewData.corporates && previewData.corporates.length > 0) {
+        onCorporatesImported(previewData.corporates);
+      }
     } else if (previewData.type === 'startups') {
       onStartupsImported(previewData.data as Startup[]);
-    } else {
+    } else if (previewData.type === 'investors') {
       onInvestorsImported(previewData.data as Investor[]);
+    } else if (previewData.type === 'mentors') {
+      onMentorsImported(previewData.data as Mentor[]);
+    } else if (previewData.type === 'corporates') {
+      onCorporatesImported(previewData.data as CorporatePartner[]);
     }
     
     onClose();
-  }, [previewData, onStartupsImported, onInvestorsImported, onClose]);
+  }, [previewData, onStartupsImported, onInvestorsImported, onMentorsImported, onCorporatesImported, onClose]);
 
   const downloadTemplate = useCallback((type: 'startups' | 'investors') => {
     const template = type === 'startups' 
@@ -448,19 +469,23 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                 <h3 className="text-lg font-medium">
                   Preview: {
                     previewData.type === 'mixed' 
-                      ? `Mixed (${previewData.startups?.length || 0} startups, ${previewData.investors?.length || 0} investors)`
-                      : previewData.type === 'startups' 
-                        ? 'Startups' 
-                        : 'Investors'
+                      ? `Mixed (${[
+                          previewData.startups ? `${previewData.startups.length} startups` : null,
+                          previewData.investors ? `${previewData.investors.length} investors` : null,
+                          previewData.mentors ? `${previewData.mentors.length} mentors` : null,
+                          previewData.corporates ? `${previewData.corporates.length} corporates` : null,
+                        ].filter(Boolean).join(', ')})`
+                      : previewData.type === 'startups'
+                        ? 'Startups'
+                        : previewData.type === 'investors'
+                          ? 'Investors'
+                          : previewData.type === 'mentors'
+                            ? 'Mentors'
+                            : 'Corporates'
                   }
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {previewData.stats.validRows} valid rows • {previewData.stats.skippedRows} skipped
-                  {previewData.type === 'mixed' && (
-                    <span className="ml-2">
-                      ({previewData.startups?.length || 0} startups, {previewData.investors?.length || 0} investors)
-                    </span>
-                  )}
                   {previewData.confidence !== undefined && (
                     <span className="ml-2">
                       • Confidence: {Math.round(previewData.confidence * 100)}%
@@ -600,6 +625,84 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                     )}
                   </div>
                 )}
+                {previewData.mentors && previewData.mentors.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Mentors ({previewData.mentors.length})</h4>
+                    <div className="border rounded-lg max-h-64 overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Full Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>LinkedIn</TableHead>
+                            <TableHead>Geo Focus</TableHead>
+                            <TableHead>Industries</TableHead>
+                            <TableHead>Expertise</TableHead>
+                            <TableHead>Slots</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previewData.mentors.slice(0, 5).map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{item.fullName}</TableCell>
+                              <TableCell>{item.email}</TableCell>
+                              <TableCell>{item.linkedinUrl}</TableCell>
+                              <TableCell>{item.geoFocus.join(', ')}</TableCell>
+                              <TableCell>{item.industryPreferences.join(', ')}</TableCell>
+                              <TableCell>{item.expertiseAreas.join(', ')}</TableCell>
+                              <TableCell>{item.totalSlots}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {previewData.mentors.length > 5 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Showing first 5 of {previewData.mentors.length} mentors
+                      </p>
+                    )}
+                  </div>
+                )}
+                {previewData.corporates && previewData.corporates.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Corporates ({previewData.corporates.length})</h4>
+                    <div className="border rounded-lg max-h-64 overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Firm Name</TableHead>
+                            <TableHead>Contact Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Geo Focus</TableHead>
+                            <TableHead>Industries</TableHead>
+                            <TableHead>Partnership Types</TableHead>
+                            <TableHead>Stages</TableHead>
+                            <TableHead>Slots</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previewData.corporates.slice(0, 5).map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{item.firmName}</TableCell>
+                              <TableCell>{item.contactName}</TableCell>
+                              <TableCell>{item.email}</TableCell>
+                              <TableCell>{item.geoFocus.join(', ')}</TableCell>
+                              <TableCell>{item.industryPreferences.join(', ')}</TableCell>
+                              <TableCell>{item.partnershipTypes.join(', ')}</TableCell>
+                              <TableCell>{item.stages.join(', ')}</TableCell>
+                              <TableCell>{item.totalSlots}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {previewData.corporates.length > 5 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Showing first 5 of {previewData.corporates.length} corporates
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -615,7 +718,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                             <TableHead>Funding Target</TableHead>
                             <TableHead>Geo Markets</TableHead>
                           </>
-                        ) : (
+                        ) : previewData.type === 'investors' ? (
                           <>
                             <TableHead>Firm Name</TableHead>
                             <TableHead>Investment Member</TableHead>
@@ -623,6 +726,27 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                             <TableHead>Industries</TableHead>
                             <TableHead>Stages</TableHead>
                             <TableHead>Ticket Size</TableHead>
+                            <TableHead>Slots</TableHead>
+                          </>
+                        ) : previewData.type === 'mentors' ? (
+                          <>
+                            <TableHead>Full Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>LinkedIn</TableHead>
+                            <TableHead>Geo Focus</TableHead>
+                            <TableHead>Industries</TableHead>
+                            <TableHead>Expertise</TableHead>
+                            <TableHead>Slots</TableHead>
+                          </>
+                        ) : (
+                          <>
+                            <TableHead>Firm Name</TableHead>
+                            <TableHead>Contact Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Geo Focus</TableHead>
+                            <TableHead>Industries</TableHead>
+                            <TableHead>Partnership Types</TableHead>
+                            <TableHead>Stages</TableHead>
                             <TableHead>Slots</TableHead>
                           </>
                         )}
@@ -639,7 +763,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                               <TableCell>${((item as Startup).fundingTarget / 1000000).toFixed(1)}M</TableCell>
                               <TableCell>{(item as Startup).geoMarkets.join(', ')}</TableCell>
                             </>
-                          ) : (
+                          ) : previewData.type === 'investors' ? (
                             <>
                               <TableCell>{(item as Investor).firmName}</TableCell>
                               <TableCell>{(item as Investor).memberName}</TableCell>
@@ -648,6 +772,27 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onClose }: 
                               <TableCell>{(item as Investor).stagePreferences.join(', ')}</TableCell>
                               <TableCell>${((item as Investor).minTicketSize / 1000000).toFixed(1)}M - ${((item as Investor).maxTicketSize / 1000000).toFixed(1)}M</TableCell>
                               <TableCell>{(item as Investor).totalSlots}</TableCell>
+                            </>
+                          ) : previewData.type === 'mentors' ? (
+                            <>
+                              <TableCell>{(item as Mentor).fullName}</TableCell>
+                              <TableCell>{(item as Mentor).email}</TableCell>
+                              <TableCell>{(item as Mentor).linkedinUrl}</TableCell>
+                              <TableCell>{(item as Mentor).geoFocus.join(', ')}</TableCell>
+                              <TableCell>{(item as Mentor).industryPreferences.join(', ')}</TableCell>
+                              <TableCell>{(item as Mentor).expertiseAreas.join(', ')}</TableCell>
+                              <TableCell>{(item as Mentor).totalSlots}</TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell>{(item as CorporatePartner).firmName}</TableCell>
+                              <TableCell>{(item as CorporatePartner).contactName}</TableCell>
+                              <TableCell>{(item as CorporatePartner).email}</TableCell>
+                              <TableCell>{(item as CorporatePartner).geoFocus.join(', ')}</TableCell>
+                              <TableCell>{(item as CorporatePartner).industryPreferences.join(', ')}</TableCell>
+                              <TableCell>{(item as CorporatePartner).partnershipTypes.join(', ')}</TableCell>
+                              <TableCell>{(item as CorporatePartner).stages.join(', ')}</TableCell>
+                              <TableCell>{(item as CorporatePartner).totalSlots}</TableCell>
                             </>
                           )}
                         </TableRow>
