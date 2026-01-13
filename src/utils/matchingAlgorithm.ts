@@ -407,6 +407,91 @@ export function generateMatches(
     list.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
   }
 
+  // Helper to try assigning the best candidate of a specific target type per startup
+  const tryAssignPreferredType = (targetType: 'mentor' | 'corporate') => {
+    for (const startup of availableStartups) {
+      const candidates = (candidatesByStartup.get(startup.id) || []).filter(
+        (c) => c.targetType === targetType
+      );
+      if (candidates.length === 0) continue;
+
+      const currentStartupCount = startupMeetingCount.get(startup.id) || 0;
+      // Try the best-scoring candidate of this type
+      for (const cand of candidates) {
+        const candTargetId = cand.targetId || cand.investorId || "";
+        if (hasMet.has(`${cand.startupId}::${candTargetId}`)) continue;
+        const target = allTargets.find((t) => t.id === candTargetId);
+        if (!target) continue;
+
+        const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
+        if (currentTargetUsage >= target.totalSlots) continue; // target full
+
+        // Find an available time slot for both
+        let assignedTimeSlot = "";
+        let assignedSlotTime = "";
+        for (let i = 0; i < slotLabels.length; i++) {
+          const slotLabel = slotLabels[i];
+          const gridCell = scheduleGrid[slotLabel];
+
+          const isSlotDone = timeSlots[i]?.isDone === true;
+          if (isSlotDone) continue;
+
+          // Respect per-slot capacity
+          if (gridCell.targetIds.size >= slotCapacity[i]) continue;
+
+          const startupAvailable =
+            !startup.slotAvailability || startup.slotAvailability[timeSlots[i]?.id] !== false;
+          const targetAvailable =
+            !target.slotAvailability || target.slotAvailability[timeSlots[i]?.id] !== false;
+
+          if (
+            !gridCell.startupIds.has(startup.id) &&
+            !gridCell.targetIds.has(target.id) &&
+            startupAvailable &&
+            targetAvailable
+          ) {
+            assignedTimeSlot = slotLabel;
+            assignedSlotTime = slotsToUse[i];
+            gridCell.startupIds.add(startup.id);
+            gridCell.targetIds.add(target.id);
+            break;
+          }
+        }
+
+        if (!assignedTimeSlot) continue;
+
+        const newMatch: Match = {
+          id: `${startup.id}-${target.id}-${Date.now()}-${targetType}`,
+          startupId: startup.id,
+          targetId: target.id,
+          targetType: target.type,
+          startupName: startup.companyName,
+          targetName: target.name,
+          timeSlot: assignedTimeSlot,
+          slotTime: assignedSlotTime,
+          compatibilityScore: cand.compatibilityScore,
+          status: "upcoming",
+          completed: false,
+          startupAttending: true,
+          targetAttending: true,
+          investorId: target.type === "investor" ? target.id : undefined,
+          investorName: target.type === "investor" ? target.name : undefined,
+          investorAttending: target.type === "investor" ? true : undefined,
+        };
+
+        newMatches.push(newMatch);
+        hasMet.add(`${startup.id}::${target.id}`);
+        targetSlotUsage.set(target.id, currentTargetUsage + 1);
+        startupMeetingCount.set(startup.id, currentStartupCount + 1);
+        break; // only one preferred match of this type per startup
+      }
+    }
+  };
+
+  // Prefer to secure one mentor and one corporate (if available) per startup before general rounds
+  tryAssignPreferredType('mentor');
+  tryAssignPreferredType('corporate');
+
   // Round-robin assign one meeting per round to the startups with the fewest meetings
   for (let round = 1; round <= minTargetPerStartup; round++) {
     // Sort startups by current meeting count (ascending) to always prioritize those with fewer meetings
