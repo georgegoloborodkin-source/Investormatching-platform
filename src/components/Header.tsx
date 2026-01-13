@@ -49,7 +49,7 @@ export function Header({
             
             <Button 
               size="sm" 
-              onClick={onRematch}
+              onClick={onGenerateMatches}
               disabled={isRematching || !hasData}
               className="gradient-primary"
             >
