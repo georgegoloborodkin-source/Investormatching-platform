@@ -484,16 +484,17 @@ const Index = () => {
         timeSlots: timeSlots.length
       });
 
-      const rawMatches = generateMatches(normStartups, normInvestors, [], timeSlots, {
-        mentors: normMentors,
-        corporates: normCorporates
-      });
-      // If we somehow got zero mentor/corporate matches but have those participants, retry once.
       const hasMentorCorpTargets = normMentors.length > 0 || normCorporates.length > 0;
-      const hasMentorCorpMatches = rawMatches.some(m => m.targetType === 'mentor' || m.targetType === 'corporate');
-      const finalRawMatches = !hasMentorCorpMatches && hasMentorCorpTargets
-        ? generateMatches(normStartups, normInvestors, [], timeSlots, { mentors: normMentors, corporates: normCorporates })
-        : rawMatches;
+      let finalRawMatches: Match[] = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const raw = generateMatches(normStartups, normInvestors, [], timeSlots, {
+          mentors: normMentors,
+          corporates: normCorporates
+        });
+        const hasMentorCorpMatches = raw.some(m => m.targetType === 'mentor' || m.targetType === 'corporate');
+        finalRawMatches = raw;
+        if (!hasMentorCorpTargets || hasMentorCorpMatches) break;
+      }
       // Safety net: ensure no duplicates by IDs and also by visible names (prevents duplicate-looking rows
       // when the same startup is imported twice with different IDs).
       const seen = new Set<string>();
@@ -555,18 +556,16 @@ const Index = () => {
     const normMentors = mentors.map(m => ({ ...m, availabilityStatus: m.availabilityStatus || 'present', totalSlots: m.totalSlots ?? 3 }));
     const normCorporates = corporates.map(c => ({ ...c, availabilityStatus: c.availabilityStatus || 'present', totalSlots: c.totalSlots ?? 3 }));
 
-    let rawMatches = generateMatches(normStartups, normInvestors, matches, timeSlots, {
-      mentors: normMentors,
-      corporates: normCorporates
-    });
-    // Retry once if mentors/corporates exist but none were scheduled
+    let rawMatches: Match[] = [];
     const hasMentorCorpTargets = normMentors.length > 0 || normCorporates.length > 0;
-    const hasMentorCorpMatches = rawMatches.some(m => m.targetType === 'mentor' || m.targetType === 'corporate');
-    if (!hasMentorCorpMatches && hasMentorCorpTargets) {
-      rawMatches = generateMatches(normStartups, normInvestors, matches, timeSlots, {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const raw = generateMatches(normStartups, normInvestors, matches, timeSlots, {
         mentors: normMentors,
         corporates: normCorporates
       });
+      rawMatches = raw;
+      const hasMentorCorpMatches = raw.some(m => m.targetType === 'mentor' || m.targetType === 'corporate');
+      if (!hasMentorCorpTargets || hasMentorCorpMatches) break;
     }
     const seen = new Set<string>();
     const seenFirm = new Set<string>();
