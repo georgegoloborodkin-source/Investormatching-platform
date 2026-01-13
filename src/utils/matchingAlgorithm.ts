@@ -725,6 +725,86 @@ export function generateMatches(
     }
   }
 
+  // Post-pass: ensure each startup gets at least one mentor and one corporate if available
+  const ensureTypeForStartups = (desiredType: 'mentor' | 'corporate') => {
+    const targetsOfType = allTargets.filter(t => t.type === desiredType);
+    if (targetsOfType.length === 0) return;
+
+    for (const startup of availableStartups) {
+      const alreadyHas = newMatches.some(m => m.startupId === startup.id && m.targetType === desiredType);
+      if (alreadyHas) continue;
+
+      const candidates = (candidatesByStartup.get(startup.id) || [])
+        .filter(c => c.targetType === desiredType)
+        .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+      if (candidates.length === 0) continue;
+
+      const cand = candidates[0];
+      const candTargetId = cand.targetId || cand.investorId || '';
+      const target = allTargets.find(t => t.id === candTargetId);
+      if (!target) continue;
+
+      const currentTargetUsage = targetSlotUsage.get(target.id) || 0;
+      if (currentTargetUsage >= target.totalSlots) continue;
+
+      let assignedTimeSlot = '';
+      let assignedSlotTime = '';
+      for (let j = 0; j < slotLabels.length; j++) {
+        const slotLabel = slotLabels[j];
+        const gridCell = scheduleGrid[slotLabel];
+        const isSlotDone = timeSlots[j]?.isDone === true;
+        if (isSlotDone) continue;
+        if (gridCell.targetIds.size >= slotCapacity[j]) continue;
+
+        const startupAvailable = !startup.slotAvailability || startup.slotAvailability[timeSlots[j]?.id] !== false;
+        const targetAvailable = !target.slotAvailability || target.slotAvailability[timeSlots[j]?.id] !== false;
+
+        if (
+          !gridCell.startupIds.has(startup.id) &&
+          !gridCell.targetIds.has(target.id) &&
+          startupAvailable &&
+          targetAvailable
+        ) {
+          assignedTimeSlot = slotLabel;
+          assignedSlotTime = slotsToUse[j];
+          gridCell.startupIds.add(startup.id);
+          gridCell.targetIds.add(target.id);
+          break;
+        }
+      }
+
+      if (!assignedTimeSlot) continue;
+
+      const newMatch: Match = {
+        id: `${startup.id}-${target.id}-${Date.now()}-ensure-${desiredType}`,
+        startupId: startup.id,
+        targetId: target.id,
+        targetType: target.type,
+        startupName: startup.companyName,
+        targetName: target.name,
+        timeSlot: assignedTimeSlot,
+        slotTime: assignedSlotTime,
+        compatibilityScore: cand.compatibilityScore,
+        status: 'upcoming',
+        completed: false,
+        startupAttending: true,
+        targetAttending: true,
+        investorId: target.type === 'investor' ? target.id : undefined,
+        investorName: target.type === 'investor' ? target.name : undefined,
+        investorAttending: target.type === 'investor' ? true : undefined
+      };
+
+      newMatches.push(newMatch);
+      hasMet.add(`${startup.id}::${target.id}`);
+      targetSlotUsage.set(target.id, currentTargetUsage + 1);
+      const currentStartupCount = startupMeetingCount.get(startup.id) || 0;
+      startupMeetingCount.set(startup.id, currentStartupCount + 1);
+    }
+  };
+
+  ensureTypeForStartups('mentor');
+  ensureTypeForStartups('corporate');
+
   // Combine preserved matches with new matches and sort by time slot
   const allMatches = [...preservedMatches, ...newMatches];
   
