@@ -819,15 +819,30 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                   previewData.errors.length > 0 ||
                   (previewData.type === 'mixed'
                     ? ((!previewData.startups || previewData.startups.length === 0) &&
-                      (!previewData.investors || previewData.investors.length === 0))
+                      (!previewData.investors || previewData.investors.length === 0) &&
+                      (!previewData.mentors || previewData.mentors.length === 0) &&
+                      (!previewData.corporates || previewData.corporates.length === 0))
                     : previewData.data.length === 0)
                 }
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Import {
                   previewData.type === 'mixed' 
-                    ? `${previewData.startups?.length || 0} startups, ${previewData.investors?.length || 0} investors`
-                    : `${previewData.data.length} ${previewData.type === 'startups' ? 'Startups' : 'Investors'}`
+                    ? [
+                        previewData.startups?.length ? `${previewData.startups.length} startups` : null,
+                        previewData.investors?.length ? `${previewData.investors.length} investors` : null,
+                        previewData.mentors?.length ? `${previewData.mentors.length} mentors` : null,
+                        previewData.corporates?.length ? `${previewData.corporates.length} corporates` : null,
+                      ].filter(Boolean).join(', ')
+                    : `${previewData.data.length} ${
+                        previewData.type === 'startups'
+                          ? 'Startups'
+                          : previewData.type === 'investors'
+                            ? 'Investors'
+                            : previewData.type === 'mentors'
+                              ? 'Mentors'
+                              : 'Corporates'
+                      }`
                 }
               </Button>
             </div>
