@@ -49,18 +49,9 @@ export function Header({
             
             <Button 
               size="sm" 
-              onClick={onGenerateMatches}
-              disabled={!hasData}
-              className="gradient-primary"
-            >
-              Generate Matches
-            </Button>
-            
-            <Button 
-              variant="secondary" 
-              size="sm" 
               onClick={onRematch}
               disabled={isRematching || !hasData}
+              className="gradient-primary"
             >
               <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
               {isRematching ? 'Rematching...' : 'Rematch'}
