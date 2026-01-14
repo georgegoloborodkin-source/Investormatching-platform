@@ -1,4 +1,4 @@
-import { Investor, Match, Startup, TimeSlotConfig } from "@/types";
+import { Investor, Mentor, CorporatePartner, Match, Startup, TimeSlotConfig } from "@/types";
 
 type BreakdownLine = string;
 
@@ -7,13 +7,30 @@ interface GenerateOptions {
   memberNameFilter?: string[]; // if provided, only these memberNames (case-insensitive) are eligible
   maxMeetingsPerStartup?: number; // default 1 (coverage-first)
   onlyAttending?: boolean; // default true
+  mentors?: Mentor[];
+  corporates?: CorporatePartner[];
+}
+
+type TargetKind = "investor" | "mentor" | "corporate";
+
+interface TargetWrapper {
+  kind: TargetKind;
+  investor?: Investor;
+  mentor?: Mentor;
+  corporate?: CorporatePartner;
+  id: string;
+  displayName: string;
+  totalSlots: number;
+  availabilityStatus: "present" | "not-attending";
+  slotAvailability?: Record<string, boolean>;
 }
 
 interface ScoredCandidate {
   startup: Startup;
-  investor: Investor;
+  target: TargetWrapper;
   score: number;
   breakdown: BreakdownLine[];
+  topReason: string;
 }
 
 const DEFAULT_TIME_SLOTS = [
@@ -81,12 +98,37 @@ function stageMatches(startup: Startup, investor: Investor): boolean {
  * 2) geo overlap non-empty
  * 3) funding target within ticket range
  */
-function passesHardFilters(startup: Startup, investor: Investor): boolean {
-  if (!industryMatches(startup, investor)) return false;
-  if (geoOverlap(startup, investor).length === 0) return false;
-  if (startup.fundingTarget < investor.minTicketSize) return false;
-  if (startup.fundingTarget > investor.maxTicketSize) return false;
-  return true;
+function passesHardFilters(startup: Startup, target: TargetWrapper): boolean {
+  if (target.kind === "investor" && target.investor) {
+    const investor = target.investor;
+    if (!industryMatches(startup, investor)) return false;
+    if (geoOverlap(startup, investor).length === 0) return false;
+    if (startup.fundingTarget < investor.minTicketSize) return false;
+    if (startup.fundingTarget > investor.maxTicketSize) return false;
+    return true;
+  }
+
+  if (target.kind === "mentor" && target.mentor) {
+    const mentor = target.mentor;
+    const industries = new Set((mentor.industryPreferences || []).map(norm));
+    const geos = new Set((mentor.geoFocus || []).map(norm));
+    const industryPass = industries.size === 0 || industries.has(norm(startup.industry));
+    const geoPass = geos.size === 0 || startup.geoMarkets.some((g) => geos.has(norm(g)));
+    return industryPass && geoPass;
+  }
+
+  if (target.kind === "corporate" && target.corporate) {
+    const corp = target.corporate;
+    const industries = new Set((corp.industryPreferences || []).map(norm));
+    const geos = new Set((corp.geoFocus || []).map(norm));
+    const stages = new Set((corp.stages || []).map(norm));
+    const industryPass = industries.size === 0 || industries.has(norm(startup.industry));
+    const geoPass = geos.size === 0 || startup.geoMarkets.some((g) => geos.has(norm(g)));
+    const stagePass = stages.size === 0 || stages.has(norm(startup.fundingStage));
+    return industryPass && geoPass && stagePass;
+  }
+
+  return false;
 }
 
 /**
@@ -101,38 +143,77 @@ function passesHardFilters(startup: Startup, investor: Investor): boolean {
  */
 function scoreCandidate(
   startup: Startup,
-  investor: Investor,
+  target: TargetWrapper,
   remainingSlots: number
 ): { score: number; breakdown: BreakdownLine[]; topReason: string } {
   const breakdown: BreakdownLine[] = [];
 
   const components: { label: string; points: number }[] = [];
 
-  // Hard-filtered facts
-  components.push({ label: `Industry match (${startup.industry})`, points: 30 });
-  const overlap = geoOverlap(startup, investor);
-  components.push({ label: `Geo overlap (${overlap.join(", ")})`, points: 20 });
+  // Shared: industry & geo
+  if (target.kind === "investor" && target.investor) {
+    const investor = target.investor;
+    components.push({ label: `Industry match (${startup.industry})`, points: 30 });
+    const overlap = geoOverlap(startup, investor);
+    components.push({ label: `Geo overlap (${overlap.join(", ")})`, points: 20 });
 
-  // Funding midpoint proximity
-  const min = investor.minTicketSize;
-  const max = investor.maxTicketSize;
-  const mid = (min + max) / 2;
-  const halfRange = Math.max(1, (max - min) / 2); // avoid divide by zero
-  const distance = Math.abs(startup.fundingTarget - mid);
-  const closeness = Math.max(0, 1 - distance / halfRange); // 1 at midpoint, 0 at ends
-  const fundingPoints = Math.round(20 * closeness);
-  components.push({
-    label: `Ticket fit (target ${startup.fundingTarget.toLocaleString()} within ${min.toLocaleString()}–${max.toLocaleString()})`,
-    points: fundingPoints,
-  });
+    // Funding midpoint proximity
+    const min = investor.minTicketSize;
+    const max = investor.maxTicketSize;
+    const mid = (min + max) / 2;
+    const halfRange = Math.max(1, (max - min) / 2); // avoid divide by zero
+    const distance = Math.abs(startup.fundingTarget - mid);
+    const closeness = Math.max(0, 1 - distance / halfRange); // 1 at midpoint, 0 at ends
+    const fundingPoints = Math.round(20 * closeness);
+    components.push({
+      label: `Ticket fit (target ${startup.fundingTarget.toLocaleString()} within ${min.toLocaleString()}–${max.toLocaleString()})`,
+      points: fundingPoints,
+    });
 
-  // Stage alignment (not a hard filter in MVP spec)
-  const stagePoints = stageMatches(startup, investor) ? 15 : 0;
-  components.push({ label: `Stage alignment (${startup.fundingStage})`, points: stagePoints });
+    // Stage alignment (not a hard filter in MVP spec)
+    const stagePoints = stageMatches(startup, investor) ? 15 : 0;
+    components.push({ label: `Stage alignment (${startup.fundingStage})`, points: stagePoints });
+  }
 
-  // Remaining slots
-  const slotPoints = remainingSlots > 0 ? 15 : 0;
-  components.push({ label: `Slots available`, points: slotPoints });
+  if (target.kind === "mentor" && target.mentor) {
+    const mentor = target.mentor;
+    const industries = new Set((mentor.industryPreferences || []).map(norm));
+    const geos = new Set((mentor.geoFocus || []).map(norm));
+    const overlapGeo = startup.geoMarkets.filter((g) => geos.has(norm(g)));
+    const industryMatch = industries.size === 0 || industries.has(norm(startup.industry));
+    const geoMatch = geos.size === 0 || overlapGeo.length > 0;
+    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 0 });
+    components.push({ label: `Geo overlap (${overlapGeo.join(", ")})`, points: geoMatch ? 20 : 0 });
+
+    const expertiseOverlap = mentor.expertiseAreas.filter((e) =>
+      (startup.industry + " " + startup.companyName).toLowerCase().includes(e.toLowerCase())
+    ).length;
+    const expertisePoints = Math.min(20, expertiseOverlap * 5);
+    components.push({ label: `Expertise relevance`, points: expertisePoints });
+    components.push({ label: `Slots available`, points: remainingSlots > 0 ? 15 : 0 });
+  }
+
+  if (target.kind === "corporate" && target.corporate) {
+    const corp = target.corporate;
+    const industries = new Set((corp.industryPreferences || []).map(norm));
+    const geos = new Set((corp.geoFocus || []).map(norm));
+    const stages = new Set((corp.stages || []).map(norm));
+    const overlapGeo = startup.geoMarkets.filter((g) => geos.has(norm(g)));
+    const industryMatch = industries.size === 0 || industries.has(norm(startup.industry));
+    const geoMatch = geos.size === 0 || overlapGeo.length > 0;
+    const stageMatch = stages.size === 0 || stages.has(norm(startup.fundingStage));
+    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 0 });
+    components.push({ label: `Geo overlap (${overlapGeo.join(", ")})`, points: geoMatch ? 20 : 0 });
+    const stagePoints = stageMatch ? 15 : 0;
+    components.push({ label: `Stage fit (${startup.fundingStage})`, points: stagePoints });
+    components.push({ label: `Partnership capacity`, points: remainingSlots > 0 ? 15 : 0 });
+  }
+
+  // Remaining slots for any target kind
+  if (target.kind !== "mentor" && target.kind !== "corporate") {
+    const slotPoints = remainingSlots > 0 ? 15 : 0;
+    components.push({ label: `Slots available`, points: slotPoints });
+  }
 
   const score = components.reduce((sum, c) => sum + c.points, 0);
   const maxComp = components.reduce((best, c) => (c.points > best.points ? c : best), components[0]);
@@ -153,7 +234,7 @@ function buildSlots(timeSlots: TimeSlotConfig[]) {
   return { slotsToUse, slotLabels };
 }
 
-function isAvailableForSlot(entity: Startup | Investor, slotId?: string): boolean {
+function isAvailableForSlot(entity: { slotAvailability?: Record<string, boolean> }, slotId?: string): boolean {
   if (!slotId) return true;
   if (!entity.slotAvailability) return true;
   return entity.slotAvailability[slotId] !== false;
@@ -189,6 +270,8 @@ export function generateMatches(
   const filterByMember = memberNameFilter.length > 0;
   const maxMeetingsPerStartup = options.maxMeetingsPerStartup ?? 1; // coverage-first cap
   const onlyAttending = options.onlyAttending !== false;
+  const mentors = options.mentors || [];
+  const corporates = options.corporates || [];
 
   // Keep only attending
   const availableStartupsRaw = onlyAttending ? startups.filter((s) => s.availabilityStatus === "present") : startups;
@@ -199,6 +282,8 @@ export function generateMatches(
     }
     return true;
   });
+  const availableMentors = mentors.filter((m) => (onlyAttending ? m.availabilityStatus === "present" : true));
+  const availableCorporates = corporates.filter((c) => (onlyAttending ? c.availabilityStatus === "present" : true));
 
   // Deduplicate startups by normalized name to avoid duplicate-looking entries eating slots
   const startupByName = new Map<string, Startup>();
@@ -218,11 +303,11 @@ export function generateMatches(
     string,
     {
       startupIds: Set<string>;
-      investorIds: Set<string>;
+      targetIds: Set<string>;
     }
   > = {};
   slotLabels.forEach((label) => {
-    scheduleGrid[label] = { startupIds: new Set(), investorIds: new Set() };
+    scheduleGrid[label] = { startupIds: new Set(), targetIds: new Set() };
   });
 
   // Preserve completed/locked matches ONLY if they still pass hard filters, and count them toward slots.
@@ -232,79 +317,164 @@ export function generateMatches(
   const usedPairs = new Set<string>();
   const usedFirmPairs = new Set<string>(); // startupId::firmKey
   const usedNamePairs = new Set<string>(); // startupName::firmName::memberName (prevents duplicate-looking rows)
-  const investorUsedCount = new Map<string, number>();
+  const targetUsedCount = new Map<string, number>(); // key = targetKind::id
   const startupUsedCount = new Map<string, number>();
 
   for (const m of preservedRaw) {
     const startup = availableStartups.find((s) => s.id === m.startupId);
-    const investor = availableInvestors.find((i) => i.id === m.investorId);
-    if (!startup || !investor) continue;
+    const targetKind = m.targetType || "investor";
+    const target =
+      targetKind === "investor"
+        ? availableInvestors.find((i) => i.id === (m.investorId || m.targetId))
+        : targetKind === "mentor"
+        ? availableMentors.find((i) => i.id === m.targetId)
+        : availableCorporates.find((i) => i.id === m.targetId);
+    if (!startup || !target) continue;
 
-    if (!passesHardFilters(startup, investor)) continue;
+    const wrapped: TargetWrapper =
+      targetKind === "investor"
+        ? {
+            kind: "investor",
+            investor: target as Investor,
+            id: (target as Investor).id,
+            displayName: makeInvestorDisplayName(target as Investor),
+            totalSlots: (target as Investor).totalSlots,
+            availabilityStatus: (target as Investor).availabilityStatus,
+            slotAvailability: (target as Investor).slotAvailability,
+          }
+        : targetKind === "mentor"
+        ? {
+            kind: "mentor",
+            mentor: target as Mentor,
+            id: (target as Mentor).id,
+            displayName: (target as Mentor).fullName,
+            totalSlots: (target as Mentor).totalSlots,
+            availabilityStatus: (target as Mentor).availabilityStatus,
+            slotAvailability: (target as Mentor).slotAvailability,
+          }
+        : {
+            kind: "corporate",
+            corporate: target as CorporatePartner,
+            id: (target as CorporatePartner).id,
+            displayName: `${(target as CorporatePartner).firmName} (${(target as CorporatePartner).contactName})`,
+            totalSlots: (target as CorporatePartner).totalSlots,
+            availabilityStatus: (target as CorporatePartner).availabilityStatus,
+            slotAvailability: (target as CorporatePartner).slotAvailability,
+          };
 
-    const key = `${startup.id}::${investor.id}`;
+    if (!passesHardFilters(startup, wrapped)) continue;
+
+    const key = `${startup.id}::${wrapped.kind}::${wrapped.id}`;
     if (usedPairs.has(key)) continue;
-    const firmKey = `${startup.id}::${investorFirmKey(investor)}`;
-    if (usedFirmPairs.has(firmKey)) continue;
-    const nameKey = `${startupNameKey(startup)}::${investorFirmKey(investor)}::${investorMemberKey(investor)}`;
-    if (usedNamePairs.has(nameKey)) continue;
+    if (wrapped.kind === "investor" && wrapped.investor) {
+      const firmKey = `${startup.id}::${investorFirmKey(wrapped.investor)}`;
+      if (usedFirmPairs.has(firmKey)) continue;
+      const nameKey = `${startupNameKey(startup)}::${investorFirmKey(wrapped.investor)}::${investorMemberKey(
+        wrapped.investor
+      )}`;
+      if (usedNamePairs.has(nameKey)) continue;
+    }
 
-    const used = investorUsedCount.get(investor.id) || 0;
-    if (used >= investor.totalSlots) continue;
+    const used = targetUsedCount.get(`${wrapped.kind}::${wrapped.id}`) || 0;
+    if (used >= wrapped.totalSlots) continue;
     const su = startupUsedCount.get(startup.id) || 0;
     if (su >= maxMeetingsPerStartup) continue;
 
     // Reserve the existing slot if it exists in this run
     if (m.timeSlot && scheduleGrid[m.timeSlot]) {
       scheduleGrid[m.timeSlot].startupIds.add(startup.id);
-      scheduleGrid[m.timeSlot].investorIds.add(investor.id);
+      scheduleGrid[m.timeSlot].targetIds.add(`${wrapped.kind}::${wrapped.id}`);
     }
 
-    const { score, breakdown } = scoreCandidate(startup, investor, investor.totalSlots - used);
-    if (score < 70) continue;
+    const { score, breakdown } = scoreCandidate(startup, wrapped, wrapped.totalSlots - used);
+    if (score < 50) continue;
 
     preserved.push({
       ...m,
       startupName: startup.companyName,
-      investorName: makeInvestorDisplayName(investor),
+      targetType: wrapped.kind,
+      targetId: wrapped.id,
+      targetName: wrapped.displayName,
+      investorId: wrapped.kind === "investor" ? wrapped.id : undefined,
+      investorName: wrapped.kind === "investor" ? wrapped.displayName : undefined,
       compatibilityScore: score,
       scoreBreakdown: breakdown,
     });
 
     usedPairs.add(key);
-    usedFirmPairs.add(firmKey);
-    usedNamePairs.add(nameKey);
-    investorUsedCount.set(investor.id, used + 1);
+    if (wrapped.kind === "investor" && wrapped.investor) {
+      usedFirmPairs.add(`${startup.id}::${investorFirmKey(wrapped.investor)}`);
+      usedNamePairs.add(`${startupNameKey(startup)}::${investorFirmKey(wrapped.investor)}::${investorMemberKey(
+        wrapped.investor
+      )}`);
+    }
+    targetUsedCount.set(`${wrapped.kind}::${wrapped.id}`, used + 1);
     startupUsedCount.set(startup.id, su + 1);
   }
 
   // Build scored candidates grouped per startup for fairness-first allocation
   const candidatesByStartup = new Map<string, ScoredCandidate[]>();
 
-  for (const investor of availableInvestors) {
-    const alreadyUsed = investorUsedCount.get(investor.id) || 0;
-    const remainingSlots = Math.max(0, investor.totalSlots - alreadyUsed);
+  const targets: TargetWrapper[] = [
+    ...availableInvestors.map<TargetWrapper>((i) => ({
+      kind: "investor",
+      investor: i,
+      id: i.id,
+      displayName: makeInvestorDisplayName(i),
+      totalSlots: i.totalSlots,
+      availabilityStatus: i.availabilityStatus,
+      slotAvailability: i.slotAvailability,
+    })),
+    ...availableMentors.map<TargetWrapper>((m) => ({
+      kind: "mentor",
+      mentor: m,
+      id: m.id,
+      displayName: m.fullName,
+      totalSlots: m.totalSlots,
+      availabilityStatus: m.availabilityStatus,
+      slotAvailability: m.slotAvailability,
+    })),
+    ...availableCorporates.map<TargetWrapper>((c) => ({
+      kind: "corporate",
+      corporate: c,
+      id: c.id,
+      displayName: `${c.firmName} (${c.contactName})`,
+      totalSlots: c.totalSlots,
+      availabilityStatus: c.availabilityStatus,
+      slotAvailability: c.slotAvailability,
+    })),
+  ];
+
+  for (const target of targets) {
+    const keyBase = `${target.kind}::${target.id}`;
+    const alreadyUsed = targetUsedCount.get(keyBase) || 0;
+    const remainingSlots = Math.max(0, target.totalSlots - alreadyUsed);
     if (remainingSlots <= 0) continue;
 
     for (const startup of availableStartups) {
-      const key = `${startup.id}::${investor.id}`;
+      const key = `${startup.id}::${target.kind}::${target.id}`;
       if (usedPairs.has(key)) continue;
-      const firmKey = `${startup.id}::${investorFirmKey(investor)}`;
-      if (usedFirmPairs.has(firmKey)) continue;
-      const nameKey = `${startupNameKey(startup)}::${investorFirmKey(investor)}::${investorMemberKey(investor)}`;
-      if (usedNamePairs.has(nameKey)) continue;
+      if (target.kind === "investor" && target.investor) {
+        const firmKey = `${startup.id}::${investorFirmKey(target.investor)}`;
+        if (usedFirmPairs.has(firmKey)) continue;
+        const nameKey = `${startupNameKey(startup)}::${investorFirmKey(target.investor)}::${investorMemberKey(
+          target.investor
+        )}`;
+        if (usedNamePairs.has(nameKey)) continue;
+      }
 
-      if (!passesHardFilters(startup, investor)) continue;
+      if (!passesHardFilters(startup, target)) continue;
 
-      const { score, breakdown } = scoreCandidate(startup, investor, remainingSlots);
-      if (score < 70) continue;
+      const { score, breakdown, topReason } = scoreCandidate(startup, target, remainingSlots);
+      if (score < 50) continue;
 
       const bucket = candidatesByStartup.get(startup.id) || [];
       bucket.push({
         startup,
-        investor,
+        target,
         score,
         breakdown,
+        topReason,
       });
       candidatesByStartup.set(startup.id, bucket);
     }
@@ -312,13 +482,17 @@ export function generateMatches(
 
   // Helper to try to assign a candidate with earliest available slot
   function tryAssignCandidate(cand: ScoredCandidate): Match | null {
-    const { startup, investor, score, breakdown } = cand;
-    const key = `${startup.id}::${investor.id}`;
+    const { startup, target, score, breakdown, topReason } = cand;
+    const key = `${startup.id}::${target.kind}::${target.id}`;
     if (usedPairs.has(key)) return null;
-    const firmKey = `${startup.id}::${investorFirmKey(investor)}`;
-    if (usedFirmPairs.has(firmKey)) return null;
-    const nameKey = `${startupNameKey(startup)}::${investorFirmKey(investor)}::${investorMemberKey(investor)}`;
-    if (usedNamePairs.has(nameKey)) return null;
+    if (target.kind === "investor" && target.investor) {
+      const firmKey = `${startup.id}::${investorFirmKey(target.investor)}`;
+      if (usedFirmPairs.has(firmKey)) return null;
+      const nameKey = `${startupNameKey(startup)}::${investorFirmKey(target.investor)}::${investorMemberKey(
+        target.investor
+      )}`;
+      if (usedNamePairs.has(nameKey)) return null;
+    }
     const startupCount = startupUsedCount.get(startup.id) || 0;
     if (startupCount >= maxMeetingsPerStartup) return null;
 
@@ -334,40 +508,52 @@ export function generateMatches(
 
       const cell = scheduleGrid[slotLabel];
       if (cell.startupIds.has(startup.id)) continue;
-      if (cell.investorIds.has(investor.id)) continue;
+      if (cell.targetIds.has(`${target.kind}::${target.id}`)) continue;
 
       if (!isAvailableForSlot(startup, slotConfigId)) continue;
-      if (!isAvailableForSlot(investor, slotConfigId)) continue;
+      if (!isAvailableForSlot(target, slotConfigId)) continue;
 
       assignedTimeSlot = slotLabel;
       assignedSlotTime = slotTime || "";
       cell.startupIds.add(startup.id);
-      cell.investorIds.add(investor.id);
+      cell.targetIds.add(`${target.kind}::${target.id}`);
       break;
     }
 
     if (!assignedTimeSlot) return null;
 
+    const breakdownWithReason = topReason ? [topReason, ...breakdown] : breakdown;
+
     const match: Match = {
-      id: `match-${startup.id}-${investor.id}-${Date.now()}-${Math.random()}`,
+      id: `match-${startup.id}-${target.id}-${Date.now()}-${Math.random()}`,
       startupId: startup.id,
-      investorId: investor.id,
+      targetId: target.id,
+      targetType: target.kind,
       startupName: startup.companyName,
-      investorName: makeInvestorDisplayName(investor),
+      targetName: target.displayName,
+      investorId: target.kind === "investor" ? target.id : undefined,
+      investorName: target.kind === "investor" ? target.displayName : undefined,
       timeSlot: assignedTimeSlot,
       slotTime: assignedSlotTime,
       compatibilityScore: score,
       status: "upcoming",
       completed: false,
       startupAttending: true,
-      investorAttending: true,
-      scoreBreakdown: breakdown,
+      targetAttending: true,
+      investorAttending: target.kind === "investor",
+      scoreBreakdown: breakdownWithReason,
     };
 
     usedPairs.add(key);
-    usedFirmPairs.add(firmKey);
-    usedNamePairs.add(nameKey);
-    investorUsedCount.set(investor.id, (investorUsedCount.get(investor.id) || 0) + 1);
+    if (target.kind === "investor" && target.investor) {
+      const firmKey = `${startup.id}::${investorFirmKey(target.investor)}`;
+      const nameKey = `${startupNameKey(startup)}::${investorFirmKey(target.investor)}::${investorMemberKey(
+        target.investor
+      )}`;
+      usedFirmPairs.add(firmKey);
+      usedNamePairs.add(nameKey);
+    }
+    targetUsedCount.set(`${target.kind}::${target.id}`, (targetUsedCount.get(`${target.kind}::${target.id}`) || 0) + 1);
     startupUsedCount.set(startup.id, startupCount + 1);
 
     return match;
@@ -379,8 +565,10 @@ export function generateMatches(
   for (const startup of availableStartups) {
     const list = (candidatesByStartup.get(startup.id) || []).sort((a, b) => b.score - a.score);
     for (const cand of list) {
-      const investor = cand.investor;
-      const remaining = Math.max(0, investor.totalSlots - (investorUsedCount.get(investor.id) || 0));
+      const remaining = Math.max(
+        0,
+        cand.target.totalSlots - (targetUsedCount.get(`${cand.target.kind}::${cand.target.id}`) || 0)
+      );
       if (remaining <= 0) continue;
       const match = tryAssignCandidate(cand);
       if (match) {
@@ -390,14 +578,40 @@ export function generateMatches(
     }
   }
 
+  // PASS 1B: Guarantee at least one mentor and one corporate per startup when available
+  function assignPreferred(kind: TargetKind) {
+    for (const startup of availableStartups) {
+      const list = (candidatesByStartup.get(startup.id) || [])
+        .filter((c) => c.target.kind === kind)
+        .sort((a, b) => b.score - a.score);
+      for (const cand of list) {
+        const remaining = Math.max(
+          0,
+          cand.target.totalSlots - (targetUsedCount.get(`${cand.target.kind}::${cand.target.id}`) || 0)
+        );
+        if (remaining <= 0) continue;
+        const match = tryAssignCandidate(cand);
+        if (match) {
+          newMatches.push(match);
+          break; // move to next startup for this kind
+        }
+      }
+    }
+  }
+
+  if (availableMentors.length > 0) assignPreferred("mentor");
+  if (availableCorporates.length > 0) assignPreferred("corporate");
+
   // Build a flat list of remaining candidates for utilization pass
   const remainingCandidates: ScoredCandidate[] = [];
   for (const bucket of candidatesByStartup.values()) {
     for (const cand of bucket) {
-      const investor = cand.investor;
-      const remaining = Math.max(0, investor.totalSlots - (investorUsedCount.get(investor.id) || 0));
+      const remaining = Math.max(
+        0,
+        cand.target.totalSlots - (targetUsedCount.get(`${cand.target.kind}::${cand.target.id}`) || 0)
+      );
       if (remaining <= 0) continue;
-      const key = `${cand.startup.id}::${cand.investor.id}`;
+      const key = `${cand.startup.id}::${cand.target.kind}::${cand.target.id}`;
       if (usedPairs.has(key)) continue;
       remainingCandidates.push(cand);
     }
@@ -406,8 +620,10 @@ export function generateMatches(
 
   // PASS 2: Utilization — fill remaining slots by score
   for (const cand of remainingCandidates) {
-    const investor = cand.investor;
-    const remaining = Math.max(0, investor.totalSlots - (investorUsedCount.get(investor.id) || 0));
+    const remaining = Math.max(
+      0,
+      cand.target.totalSlots - (targetUsedCount.get(`${cand.target.kind}::${cand.target.id}`) || 0)
+    );
     if (remaining <= 0) continue;
     const match = tryAssignCandidate(cand);
     if (match) newMatches.push(match);
@@ -416,11 +632,14 @@ export function generateMatches(
   // Optional: ensure min meetings per investor (if configured) — second-chance fill
   if (minMeetingsPerInvestor > 0) {
     for (const investor of availableInvestors) {
-      while ((investorUsedCount.get(investor.id) || 0) < minMeetingsPerInvestor) {
-        const candidates = remainingCandidates.filter((c) => c.investor.id === investor.id);
+      while ((targetUsedCount.get(`investor::${investor.id}`) || 0) < minMeetingsPerInvestor) {
+        const candidates = remainingCandidates.filter((c) => c.target.kind === "investor" && c.target.id === investor.id);
         const next = candidates.find((c) => {
-          const key = `${c.startup.id}::${c.investor.id}`;
-          return !usedPairs.has(key) && (investor.totalSlots - (investorUsedCount.get(investor.id) || 0)) > 0;
+          const key = `${c.startup.id}::${c.target.kind}::${c.target.id}`;
+          return (
+            !usedPairs.has(key) &&
+            investor.totalSlots - (targetUsedCount.get(`investor::${investor.id}`) || 0) > 0
+          );
         });
         if (!next) break;
         const match = tryAssignCandidate(next);
@@ -446,13 +665,17 @@ export function generateMatches(
   const seen = new Set<string>();
   const seenFirm = new Set<string>();
   for (const m of allMatches) {
-    const key = `${m.startupId}::${m.investorId}`;
+    const key = `${m.startupId}::${m.targetType || "investor"}::${m.targetId || m.investorId}`;
     if (seen.has(key)) continue;
-    const investor = investors.find((i) => i.id === m.investorId);
-    const firmKey = investor ? `${m.startupId}::${investorFirmKey(investor)}` : `${m.startupId}::${norm(m.investorName)}`;
-    if (seenFirm.has(firmKey)) continue;
+    if (m.targetType === "investor") {
+      const investor = investors.find((i) => i.id === (m.investorId || m.targetId));
+      const firmKey = investor
+        ? `${m.startupId}::${investorFirmKey(investor)}`
+        : `${m.startupId}::${norm(m.investorName || m.targetName || "")}`;
+      if (seenFirm.has(firmKey)) continue;
+      seenFirm.add(firmKey);
+    }
     seen.add(key);
-    seenFirm.add(firmKey);
     final.push(m);
   }
 
