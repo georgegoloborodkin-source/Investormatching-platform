@@ -93,10 +93,9 @@ function stageMatches(startup: Startup, investor: Investor): boolean {
 }
 
 /**
- * MVP hard filters (NON-NEGOTIABLE):
- * 1) industry match
- * 2) geo overlap non-empty
- * 3) funding target within ticket range
+ * MVP hard filters:
+ * - Investors: industry match + geo overlap + funding in range (STRICT)
+ * - Mentors/Corporates: ALWAYS PASS (permissive) - we want them to match
  */
 function passesHardFilters(startup: Startup, target: TargetWrapper): boolean {
   if (target.kind === "investor" && target.investor) {
@@ -108,24 +107,10 @@ function passesHardFilters(startup: Startup, target: TargetWrapper): boolean {
     return true;
   }
 
-  if (target.kind === "mentor" && target.mentor) {
-    const mentor = target.mentor;
-    const industries = new Set((mentor.industryPreferences || []).map(norm));
-    const geos = new Set((mentor.geoFocus || []).map(norm));
-    const industryPass = industries.size === 0 || industries.has(norm(startup.industry));
-    const geoPass = geos.size === 0 || startup.geoMarkets.some((g) => geos.has(norm(g)));
-    return industryPass && geoPass;
-  }
-
-  if (target.kind === "corporate" && target.corporate) {
-    const corp = target.corporate;
-    const industries = new Set((corp.industryPreferences || []).map(norm));
-    const geos = new Set((corp.geoFocus || []).map(norm));
-    const stages = new Set((corp.stages || []).map(norm));
-    const industryPass = industries.size === 0 || industries.has(norm(startup.industry));
-    const geoPass = geos.size === 0 || startup.geoMarkets.some((g) => geos.has(norm(g)));
-    const stagePass = stages.size === 0 || stages.has(norm(startup.fundingStage));
-    return industryPass && geoPass && stagePass;
+  // Mentors and corporates ALWAYS pass hard filters - they should match any startup
+  // The scoring will reflect how good the match is
+  if (target.kind === "mentor" || target.kind === "corporate") {
+    return true;
   }
 
   return false;
@@ -182,14 +167,10 @@ function scoreCandidate(
     const overlapGeo = startup.geoMarkets.filter((g) => geos.has(norm(g)));
     const industryMatch = industries.size === 0 || industries.has(norm(startup.industry));
     const geoMatch = geos.size === 0 || overlapGeo.length > 0;
-    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 0 });
-    components.push({ label: `Geo overlap (${overlapGeo.join(", ")})`, points: geoMatch ? 20 : 0 });
-
-    const expertiseOverlap = mentor.expertiseAreas.filter((e) =>
-      (startup.industry + " " + startup.companyName).toLowerCase().includes(e.toLowerCase())
-    ).length;
-    const expertisePoints = Math.min(20, expertiseOverlap * 5);
-    components.push({ label: `Expertise relevance`, points: expertisePoints });
+    // Give baseline points even without overlap (mentors should always match)
+    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 15 });
+    components.push({ label: `Geo overlap`, points: geoMatch ? 20 : 10 });
+    components.push({ label: `Mentor availability`, points: 20 }); // baseline for being a mentor
     components.push({ label: `Slots available`, points: remainingSlots > 0 ? 15 : 0 });
   }
 
@@ -202,11 +183,12 @@ function scoreCandidate(
     const industryMatch = industries.size === 0 || industries.has(norm(startup.industry));
     const geoMatch = geos.size === 0 || overlapGeo.length > 0;
     const stageMatch = stages.size === 0 || stages.has(norm(startup.fundingStage));
-    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 0 });
-    components.push({ label: `Geo overlap (${overlapGeo.join(", ")})`, points: geoMatch ? 20 : 0 });
-    const stagePoints = stageMatch ? 15 : 0;
+    // Give baseline points even without overlap (corporates should always match)
+    components.push({ label: `Industry match (${startup.industry})`, points: industryMatch ? 30 : 15 });
+    components.push({ label: `Geo overlap`, points: geoMatch ? 20 : 10 });
+    const stagePoints = stageMatch ? 15 : 5;
     components.push({ label: `Stage fit (${startup.fundingStage})`, points: stagePoints });
-    components.push({ label: `Partnership capacity`, points: remainingSlots > 0 ? 15 : 0 });
+    components.push({ label: `Partnership opportunity`, points: 15 }); // baseline for being a corporate
   }
 
   // Remaining slots for any target kind
@@ -470,8 +452,9 @@ export function generateMatches(
       if (!passesHardFilters(startup, target)) continue;
 
     const { score, breakdown, topReason } = scoreCandidate(startup, target, remainingSlots);
-    const minScore = target.kind === "investor" ? 50 : 5; // allow mentors/corporates even with low signal
-      if (score < minScore) continue;
+    // Investors need 50+ score; mentors/corporates have NO minimum (always match)
+    const minScore = target.kind === "investor" ? 50 : 0;
+    if (score < minScore) continue;
 
       const bucket = candidatesByStartup.get(startup.id) || [];
       bucket.push({
