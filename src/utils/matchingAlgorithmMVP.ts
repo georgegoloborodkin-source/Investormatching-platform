@@ -390,7 +390,8 @@ export function generateMatches(
     }
 
     const { score, breakdown } = scoreCandidate(startup, wrapped, wrapped.totalSlots - used);
-    if (score < 50) continue;
+    const minScore = wrapped.kind === "investor" ? 50 : 5;
+    if (score < minScore) continue;
 
     preserved.push({
       ...m,
@@ -468,8 +469,9 @@ export function generateMatches(
 
       if (!passesHardFilters(startup, target)) continue;
 
-      const { score, breakdown, topReason } = scoreCandidate(startup, target, remainingSlots);
-      if (score < 50) continue;
+    const { score, breakdown, topReason } = scoreCandidate(startup, target, remainingSlots);
+    const minScore = target.kind === "investor" ? 50 : 5; // allow mentors/corporates even with low signal
+      if (score < minScore) continue;
 
       const bucket = candidatesByStartup.get(startup.id) || [];
       bucket.push({
