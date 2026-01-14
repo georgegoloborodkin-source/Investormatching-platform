@@ -549,25 +549,8 @@ export function generateMatches(
 
   const newMatches: Match[] = [];
 
-  // PASS 1: Fairness — give each startup its best available investor (if any slots)
-  for (const startup of availableStartups) {
-    const list = (candidatesByStartup.get(startup.id) || []).sort((a, b) => b.score - a.score);
-    for (const cand of list) {
-      const remaining = Math.max(
-        0,
-        cand.target.totalSlots - (targetUsedCount.get(`${cand.target.kind}::${cand.target.id}`) || 0)
-      );
-      if (remaining <= 0) continue;
-      const match = tryAssignCandidate(cand);
-      if (match) {
-        newMatches.push(match);
-        break; // move to next startup
-      }
-    }
-  }
-
-  // PASS 1B: Guarantee at least one mentor and one corporate per startup when available
-  function assignPreferred(kind: TargetKind) {
+  // Helper to assign best candidate of a specific type to each startup
+  function assignByType(kind: TargetKind) {
     for (const startup of availableStartups) {
       const list = (candidatesByStartup.get(startup.id) || [])
         .filter((c) => c.target.kind === kind)
@@ -581,16 +564,22 @@ export function generateMatches(
         const match = tryAssignCandidate(cand);
         if (match) {
           newMatches.push(match);
-          break; // move to next startup for this kind
+          break; // move to next startup for this type
         }
       }
     }
   }
 
-  if (availableMentors.length > 0) assignPreferred("mentor");
-  if (availableCorporates.length > 0) assignPreferred("corporate");
+  // PASS 1: Give each startup its best INVESTOR first (priority)
+  if (availableInvestors.length > 0) assignByType("investor");
+  
+  // PASS 2: Give each startup one MENTOR
+  if (availableMentors.length > 0) assignByType("mentor");
+  
+  // PASS 3: Give each startup one CORPORATE
+  if (availableCorporates.length > 0) assignByType("corporate");
 
-  // Build a flat list of remaining candidates for utilization pass
+  // PASS 4: Build a flat list of remaining candidates for utilization pass
   const remainingCandidates: ScoredCandidate[] = [];
   for (const bucket of candidatesByStartup.values()) {
     for (const cand of bucket) {
@@ -606,7 +595,7 @@ export function generateMatches(
   }
   remainingCandidates.sort((a, b) => b.score - a.score);
 
-  // PASS 2: Utilization — fill remaining slots by score
+  // PASS 5: Utilization — fill remaining slots by score
   for (const cand of remainingCandidates) {
     const remaining = Math.max(
       0,
