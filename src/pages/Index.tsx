@@ -540,7 +540,7 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  }, [startups, investors, hasData, timeSlots, toast]);
+  }, [startups, investors, mentors, corporates, hasData, timeSlots, toast]);
 
   const handleRematch = useCallback(async () => {
     if (!hasData) return;
@@ -592,7 +592,7 @@ const Index = () => {
     });
     
     setIsRematching(false);
-  }, [startups, investors, matches, hasData, timeSlots, toast]);
+  }, [startups, investors, mentors, corporates, matches, hasData, timeSlots, toast]);
 
   const handleExport = useCallback(() => {
     if (matches.length === 0) {
