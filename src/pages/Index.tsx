@@ -16,7 +16,7 @@ import { CorporateForm } from "@/components/CorporateForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
-import { generateMatches } from "@/utils/matchingAlgorithm";
+import { generateMatches } from "@/utils/matchingAlgorithmMVP";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
 import { CoverageReport } from "@/components/CoverageReport";
 import { Save } from "lucide-react";
