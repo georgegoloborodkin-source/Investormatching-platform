@@ -268,7 +268,6 @@ export function generateMatches(
   const minMeetingsPerInvestor = options.minMeetingsPerInvestor ?? 0;
   const memberNameFilter = (options.memberNameFilter || []).map(norm);
   const filterByMember = memberNameFilter.length > 0;
-  const maxMeetingsPerStartup = options.maxMeetingsPerStartup ?? 1; // coverage-first cap
   const onlyAttending = options.onlyAttending !== false;
   const mentors = options.mentors || [];
   const corporates = options.corporates || [];
@@ -284,6 +283,10 @@ export function generateMatches(
   });
   const availableMentors = mentors.filter((m) => (onlyAttending ? m.availabilityStatus === "present" : true));
   const availableCorporates = corporates.filter((c) => (onlyAttending ? c.availabilityStatus === "present" : true));
+  // Allow one slot per target type by default (investor + mentor + corporate)
+  const maxMeetingsPerStartup =
+    options.maxMeetingsPerStartup ??
+    (1 + (availableMentors.length > 0 ? 1 : 0) + (availableCorporates.length > 0 ? 1 : 0));
 
   // Deduplicate startups by normalized name to avoid duplicate-looking entries eating slots
   const startupByName = new Map<string, Startup>();
