@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { generateStartupCSVTemplate, generateInvestorCSVTemplate, downloadCSV } from "@/utils/csvUtils";
 import { smartConvertStartupCSV, smartConvertInvestorCSV, detectCSVType, detectMixedCSV, parseMixedCSV } from "@/utils/smartCsvConverter";
-import { convertWithOllama, convertFileWithOllama, checkOllamaHealth } from "@/utils/ollamaConverter";
+import { convertFileWithAI, checkConverterHealth } from "@/utils/aiConverter";
 import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 
 interface CSVUploadProps {
@@ -23,7 +23,7 @@ interface CSVUploadProps {
 export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsImported, onCorporatesImported, onClose }: CSVUploadProps) {
   const [error, setError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null);
+  const [converterAvailable, setConverterAvailable] = useState<boolean | null>(null);
   const [previewData, setPreviewData] = useState<{
     type: 'startups' | 'investors' | 'mentors' | 'corporates' | 'mixed';
     data: Array<Startup | Investor | Mentor | CorporatePartner>;
@@ -38,10 +38,10 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
     confidence?: number;
   } | null>(null);
 
-  // Check Ollama availability on mount
+  // Check converter availability on mount
   useEffect(() => {
-    checkOllamaHealth().then((health) => {
-      setOllamaAvailable(health.available);
+    checkConverterHealth().then((health) => {
+      setConverterAvailable(health.available);
     });
   }, []);
 
@@ -56,8 +56,8 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
     try {
       const isCsv = file.name.toLowerCase().endsWith('.csv');
 
-      // Helper to build preview from Ollama result (supports mentors & corporates too)
-      const buildPreviewFromOllama = (result: Awaited<ReturnType<typeof convertFileWithOllama>>) => {
+      // Helper to build preview from AI result (supports mentors & corporates too)
+      const buildPreviewFromAI = (result: Awaited<ReturnType<typeof convertFileWithAI>>) => {
         const startups = result.startups || [];
         const investors = result.investors || [];
         const mentors = (result.mentors as Mentor[] | undefined) || [];
@@ -70,7 +70,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
         if (corporates.length) kinds.push('corporates');
 
         if (kinds.length === 0) {
-          setError(result.errors.join('; ') || 'Ollama AI returned no rows. Please check the file contents.');
+          setError(result.errors.join('; ') || 'AI converter returned no rows. Please check the file contents.');
           return;
         }
 
@@ -87,7 +87,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
           mappings: [],
           warnings: [
             ...(result.warnings || []),
-            isCsv ? 'Used AI converter (Ollama) due to unclear CSV format' : `Used AI converter (Ollama) to convert ${file.name}`
+            isCsv ? 'Used AI converter due to unclear CSV format' : `Used AI converter to convert ${file.name}`
           ],
           errors: result.errors || [],
           stats: {
@@ -99,14 +99,14 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
         });
       };
 
-      // AUTO: For any non-CSV file, use Ollama AI immediately (if available)
-      if (!isCsv && ollamaAvailable) {
-        const result = await convertFileWithOllama(file);
+      // AUTO: For any non-CSV file, use AI converter immediately (if available)
+      if (!isCsv && converterAvailable) {
+        const result = await convertFileWithAI(file);
         if (result.errors.length > 0) {
           setError(result.errors.join('; '));
           return;
         }
-        buildPreviewFromOllama(result);
+        buildPreviewFromAI(result);
         return;
       }
 
@@ -117,7 +117,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
       const isMixed = detectMixedCSV(content);
       
       let ruleBasedWorked = false;
-      let shouldTryOllama = false;
+      let shouldTryAI = false;
       
       if (isMixed) {
         // Parse mixed CSV
@@ -129,7 +129,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
         const hasManyWarnings = mixedResult.warnings.length > mixedResult.startups.length + mixedResult.investors.length;
         
         if (hasErrors || hasLowValidRows || hasManyWarnings) {
-          shouldTryOllama = true;
+          shouldTryAI = true;
         } else {
           ruleBasedWorked = true;
           setPreviewData({
@@ -160,7 +160,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
           const investorHasErrors = investorResult.errors.length > 0 || investorResult.validRows === 0;
           
           if (startupHasErrors && investorHasErrors) {
-            shouldTryOllama = true;
+            shouldTryAI = true;
           } else if (startupResult.data.length > 0 && investorResult.data.length === 0) {
             // Definitely startups
             ruleBasedWorked = true;
@@ -192,7 +192,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
               }
             });
           } else {
-            shouldTryOllama = true;
+            shouldTryAI = true;
           }
         } else {
           // Process with detected type
@@ -203,7 +203,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
             const hasManyWarnings = result.warnings.length > result.validRows * 2;
             
             if (hasErrors || hasLowValidRows || hasManyWarnings) {
-              shouldTryOllama = true;
+              shouldTryAI = true;
             } else {
               ruleBasedWorked = true;
               setPreviewData({
@@ -226,7 +226,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
             const hasManyWarnings = result.warnings.length > result.validRows * 2;
             
             if (hasErrors || hasLowValidRows || hasManyWarnings) {
-              shouldTryOllama = true;
+              shouldTryAI = true;
             } else {
               ruleBasedWorked = true;
               setPreviewData({
@@ -246,36 +246,36 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
         }
       }
       
-      // Fallback to Ollama if rule-based failed or had poor results, OR if file is not CSV
-      if ((!ruleBasedWorked && shouldTryOllama) || !isCsv) {
-        if (ollamaAvailable) {
-          console.log('Using Ollama AI converter for file:', file.name);
+      // Fallback to AI if rule-based failed or had poor results, OR if file is not CSV
+      if ((!ruleBasedWorked && shouldTryAI) || !isCsv) {
+        if (converterAvailable) {
+          console.log('Using AI converter for file:', file.name);
           try {
-            const result = await convertFileWithOllama(file);
+            const result = await convertFileWithAI(file);
             if (result.errors.length > 0) {
               setError(result.errors.join('; '));
               return;
             }
-            buildPreviewFromOllama(result);
+            buildPreviewFromAI(result);
             return;
-          } catch (ollamaError) {
-            console.warn('Ollama conversion failed:', ollamaError);
-            setError(`Ollama AI conversion failed: ${ollamaError instanceof Error ? ollamaError.message : 'Unknown error'}. Please check that Ollama is running and the file format is supported.`);
+          } catch (aiError) {
+            console.warn('AI conversion failed:', aiError);
+            setError(`AI conversion failed: ${aiError instanceof Error ? aiError.message : 'Unknown error'}. Please check that the converter API is reachable and the file format is supported.`);
             return;
           }
         } else {
-          // Ollama not available
+          // Converter not available
           if (!isCsv) {
-            setError(`File format "${file.name.split('.').pop()?.toUpperCase()}" requires Ollama AI converter. Please start Ollama (see OLLAMA_SETUP_GUIDE.md) or convert to CSV first.`);
+            setError(`File format "${file.name.split('.').pop()?.toUpperCase()}" requires the AI converter. Please start the converter API or upload CSV instead.`);
           } else {
-            setError('CSV format is messy/unclear. Rule-based converter failed. Enable Ollama AI converter to handle this file. See OLLAMA_SETUP_GUIDE.md');
+            setError('CSV format is messy/unclear. Rule-based converter failed. Enable the AI converter to handle this file.');
           }
           return;
         }
       }
       
       // If we get here and rule-based didn't work, show the error
-      if (!ruleBasedWorked && !shouldTryOllama) {
+      if (!ruleBasedWorked && !shouldTryAI) {
         setError('Could not auto-detect CSV type. The file may contain both startups and investors, or the format is unclear. Please ensure your CSV has clear column names.');
       }
     } catch (err) {
@@ -283,7 +283,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
     } finally {
       setIsProcessing(false);
     }
-  }, [ollamaAvailable]);
+  }, [converterAvailable]);
 
   const handleConfirmImport = useCallback(() => {
     if (!previewData) return;
@@ -415,7 +415,7 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                 <div className="flex items-center justify-between">
                   <Label htmlFor="auto-csv">Select any file format</Label>
                   <span className="text-xs text-muted-foreground">
-                    AI converter: {ollamaAvailable ? 'online' : 'offline'}
+                    AI converter: {converterAvailable ? 'online' : 'offline'}
                   </span>
                 </div>
 
@@ -427,11 +427,11 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                   disabled={isProcessing}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Upload any file format (CSV, TXT, JSON, PDF, DOCX, XLSX, etc.) — Ollama AI will automatically convert it to structured data.
+                  Upload any file format (CSV, TXT, JSON, PDF, DOCX, XLSX, etc.) — the AI converter will automatically convert it to structured data.
                 </p>
               </div>
 
-              {ollamaAvailable === false && (
+              {converterAvailable === false && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
@@ -440,20 +440,9 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                         <strong>AI converter is offline.</strong>
                       </div>
                       <div className="text-sm">
-                        <div><strong>1)</strong> Confirm Ollama is running:</div>
-                        <div><code>ollama list</code> (if it works, Ollama is already running — don’t run <code>ollama serve</code> again)</div>
-                      </div>
-                      <div className="text-sm">
-                        <div><strong>2)</strong> Start the converter API (new terminal):</div>
-                        <div>
-                          Run <code>ollama-converter\\start.bat</code>
-                        </div>
-                      </div>
-                      <div className="text-sm">
+                        <div><strong>1)</strong> Start the converter API on your server.</div>
+                        <div><strong>2)</strong> Set <code>VITE_CONVERTER_API_URL</code> in the frontend env for production.</div>
                         <div><strong>3)</strong> Refresh this page.</div>
-                      </div>
-                      <div className="text-sm">
-                        Full guide: <code>OLLAMA_SETUP_GUIDE.md</code>
                       </div>
                     </div>
                   </AlertDescription>

@@ -1,17 +1,17 @@
 /**
- * Ollama-based data converter utility
- * Converts unstructured data to structured Startup/Investor format
+ * AI converter client utility
+ * Talks to the backend converter API (Claude or other provider).
  */
 
 import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 
-const ENV_OLLAMA_API_URL = import.meta.env.VITE_OLLAMA_API_URL as string | undefined;
+const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
 
 function buildCandidateBaseUrls(): string[] {
   const ports = [8010, 8011, 8012, 8013, 8014, 8015, 8000];
   const urls: string[] = [];
 
-  if (ENV_OLLAMA_API_URL) urls.push(ENV_OLLAMA_API_URL);
+  if (ENV_CONVERTER_API_URL) urls.push(ENV_CONVERTER_API_URL);
 
   // When the UI is opened via a LAN IP (e.g. http://10.x.x.x:8080),
   // "localhost" in the browser still points to the client machine.
@@ -43,7 +43,7 @@ async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 800
   }
 }
 
-async function resolveOllamaApiBaseUrl(): Promise<string> {
+async function resolveConverterApiBaseUrl(): Promise<string> {
   if (resolvedBaseUrl) return resolvedBaseUrl;
 
   const candidates = buildCandidateBaseUrls();
@@ -65,13 +65,13 @@ async function resolveOllamaApiBaseUrl(): Promise<string> {
   return resolvedBaseUrl;
 }
 
-export interface OllamaConversionRequest {
+export interface AIConversionRequest {
   data: string;
   dataType?: "startup" | "investor" | "mentor" | "corporate";
   format?: string;
 }
 
-export interface OllamaConversionResponse {
+export interface AIConversionResponse {
   startups: Startup[];
   investors: Investor[];
   mentors: Mentor[];
@@ -83,14 +83,14 @@ export interface OllamaConversionResponse {
 }
 
 /**
- * Convert unstructured data using Ollama
+ * Convert unstructured data using the converter API
  */
-export async function convertWithOllama(
+export async function convertWithAI(
   data: string,
   dataType?: "startup" | "investor"
-): Promise<OllamaConversionResponse> {
+): Promise<AIConversionResponse> {
   try {
-    const baseUrl = await resolveOllamaApiBaseUrl();
+    const baseUrl = await resolveConverterApiBaseUrl();
     const response = await fetch(`${baseUrl}/convert`, {
       method: "POST",
       headers: {
@@ -99,7 +99,7 @@ export async function convertWithOllama(
       body: JSON.stringify({
         data,
         dataType,
-      } as OllamaConversionRequest),
+      } as AIConversionRequest),
     });
 
     if (!response.ok) {
@@ -107,7 +107,7 @@ export async function convertWithOllama(
       throw new Error(error.detail || `HTTP error! status: ${response.status}`);
     }
 
-    const result: OllamaConversionResponse = await response.json();
+    const result: AIConversionResponse = await response.json();
 
     // Convert to our internal types
     return {
@@ -163,21 +163,19 @@ export async function convertWithOllama(
     };
   } catch (error) {
     throw new Error(
-      `Ollama conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      `AI conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 }
 
 /**
- * Convert file using Ollama
+ * Convert file using the converter API
  */
-export async function convertFileWithOllama(
+export async function convertFileWithAI(
   file: File,
   dataType?: "startup" | "investor"
-): Promise<OllamaConversionResponse> {
+): Promise<AIConversionResponse> {
   // Re-pack the file from bytes before uploading.
-  // We’ve seen intermittent 0-byte multipart uploads in some browsers/setups even when the File looks valid.
-  // Building a fresh File from `arrayBuffer()` ensures we actually send the bytes.
   const buf = await file.arrayBuffer();
   if (buf.byteLength === 0) {
     throw new Error(
@@ -196,7 +194,7 @@ export async function convertFileWithOllama(
   }
 
   try {
-    const baseUrl = await resolveOllamaApiBaseUrl();
+    const baseUrl = await resolveConverterApiBaseUrl();
     const response = await fetch(`${baseUrl}/convert-file`, {
       method: "POST",
       body: formData,
@@ -207,7 +205,7 @@ export async function convertFileWithOllama(
       throw new Error(error.detail || `HTTP error! status: ${response.status}`);
     }
 
-    const result: OllamaConversionResponse = await response.json();
+    const result: AIConversionResponse = await response.json();
 
     // Convert to our internal types
     return {
@@ -264,27 +262,30 @@ export async function convertFileWithOllama(
   } catch (error) {
     const baseUrl = resolvedBaseUrl ?? "(unresolved)";
     throw new Error(
-      `Ollama file conversion failed (API: ${baseUrl}): ${error instanceof Error ? error.message : "Unknown error"}`
+      `AI file conversion failed (API: ${baseUrl}): ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 }
 
 /**
- * Check if Ollama API is available
+ * Check if converter API is available
  */
-export async function checkOllamaHealth(): Promise<{
+export async function checkConverterHealth(): Promise<{
   available: boolean;
+  provider?: string;
   models?: string[];
   error?: string;
 }> {
   try {
     // Re-resolve each time; if user starts API later, we can find it.
     resolvedBaseUrl = null;
-    const baseUrl = await resolveOllamaApiBaseUrl();
+    const baseUrl = await resolveConverterApiBaseUrl();
     const response = await fetch(`${baseUrl}/health`);
     const data = await response.json();
+    const available = data.available === true || data.status === "healthy";
     return {
-      available: data.ollama_available === true,
+      available,
+      provider: data.provider,
       models: data.models,
       error: data.error,
     };
@@ -293,106 +294,6 @@ export async function checkOllamaHealth(): Promise<{
       available: false,
       error: error instanceof Error ? error.message : "Connection failed",
     };
-  }
-}
-
-/**
- * List available Ollama models
- */
-export async function listOllamaModels(): Promise<string[]> {
-  try {
-    const baseUrl = await resolveOllamaApiBaseUrl();
-    const response = await fetch(`${baseUrl}/models`);
-    const data = await response.json();
-    return data.models.map((m: { name: string }) => m.name);
-  } catch (error) {
-    throw new Error(
-      `Failed to list models: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
-  }
-}
-
-/**
- * Validate data and get missing fields report
- * This tells the investment team what needs to be added!
- */
-export interface ValidationResult {
-  isValid: boolean;
-  missingFields: {
-    startups: string[];
-    investors: string[];
-  };
-  incompleteFields: {
-    startups: string[];
-    investors: string[];
-  };
-  suggestions: string[];
-  extractedData: {
-    startups: Startup[];
-    investors: Investor[];
-    detectedType: string;
-    confidence: number;
-  };
-}
-
-export async function validateDataWithOllama(
-  data: string,
-  dataType?: "startup" | "investor"
-): Promise<ValidationResult> {
-  try {
-    const baseUrl = await resolveOllamaApiBaseUrl();
-    const response = await fetch(`${baseUrl}/validate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        data,
-        dataType,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
-    }
-
-    const result: ValidationResult = await response.json();
-
-    // Convert to our internal types
-    return {
-      ...result,
-      extractedData: {
-        startups: result.extractedData.startups.map((s: any) => ({
-          id: `startup-${Date.now()}-${Math.random()}`,
-          companyName: s.companyName,
-          geoMarkets: s.geoMarkets || [],
-          industry: s.industry,
-          fundingTarget: s.fundingTarget,
-          fundingStage: s.fundingStage,
-          availabilityStatus: s.availabilityStatus || "present",
-        })),
-        investors: result.extractedData.investors.map((i: any) => ({
-          id: `investor-${Date.now()}-${Math.random()}`,
-          firmName: i.firmName,
-          memberName: i.memberName || "UNKNOWN",
-          geoFocus: i.geoFocus || [],
-          industryPreferences: i.industryPreferences || [],
-          stagePreferences: i.stagePreferences || [],
-          minTicketSize: i.minTicketSize,
-          maxTicketSize: i.maxTicketSize,
-          totalSlots: i.totalSlots || 3,
-          tableNumber: i.tableNumber,
-          availabilityStatus: i.availabilityStatus || "present",
-        })),
-        detectedType: result.extractedData.detectedType,
-        confidence: result.extractedData.confidence,
-      },
-    };
-  } catch (error) {
-    throw new Error(
-      `Validation failed: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
   }
 }
 

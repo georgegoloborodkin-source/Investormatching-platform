@@ -1,7 +1,7 @@
 @echo off
-echo Starting Ollama Data Converter API...
+echo Starting Data Converter API (Claude mode)...
 echo.
-echo Make sure Ollama is running (you usually do NOT need to run "ollama serve" if "ollama list" works)
+echo No Ollama required when CONVERTER_PROVIDER=claude.
 echo.
 
 REM Auto-pick a free port (try 8010..8015) to avoid "port already in use"
@@ -25,6 +25,17 @@ if "%PORT%"=="" (
 
 echo Using PORT=%PORT%
 echo.
+set CONVERTER_PROVIDER=claude
+set ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+set ANTHROPIC_API_KEY=REPLACE_WITH_YOUR_KEY
+
+if "%ANTHROPIC_API_KEY%"=="REPLACE_WITH_YOUR_KEY" (
+  echo ERROR: ANTHROPIC_API_KEY is not set. Edit start.bat and paste your new key.
+  echo.
+  pause
+  exit /b 1
+)
+
 python main.py
 
 pause

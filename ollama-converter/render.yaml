@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ai-converter-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: CONVERTER_PROVIDER
+        value: claude
+      - key: ANTHROPIC_MODEL
+        value: claude-3-5-sonnet-20241022
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Set this manually in Render dashboard
+      - key: PORT
+        fromService:
+          type: web
+          name: ai-converter-api
+          property: port
+

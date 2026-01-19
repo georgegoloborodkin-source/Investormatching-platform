@@ -71,9 +71,17 @@ def try_ocr_pdf_bytes(content: bytes) -> str:
 
     return "\n".join(parts).strip()
 
+# Converter provider settings
+CONVERTER_PROVIDER = os.getenv("CONVERTER_PROVIDER", "ollama").lower().strip()
+
 # Ollama connection settings
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
+
+# Anthropic (Claude) settings
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
 
 
 async def fetch_ollama_model_names() -> List[str]:
@@ -286,7 +294,7 @@ def create_conversion_prompt(data: str, data_type: Optional[str] = None) -> str:
     return prompt
 
 def parse_ollama_response(response: str) -> Dict[str, Any]:
-    """Parse Ollama response and extract JSON"""
+    """Parse model response and extract JSON"""
     # Remove markdown code blocks if present
     response = re.sub(r'```json\n?', '', response)
     response = re.sub(r'```\n?', '', response)
@@ -357,6 +365,44 @@ def parse_ollama_response(response: str) -> Dict[str, Any]:
             "Could not parse JSON from model response (likely truncated / non-JSON). "
             f"Response starts with: {response[:200]}"
         )
+
+async def call_anthropic(prompt: str) -> str:
+    """
+    Call Anthropic (Claude) API and return the raw text response.
+    Uses server-side API key from environment variables.
+    """
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY not set. Set it in the server environment to use Claude."
+        )
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+    }
+    payload = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 4096,
+        "temperature": 0.1,
+        "system": SYSTEM_PROMPT,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(ANTHROPIC_API_URL, headers=headers, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            content = data.get("content", [])
+            if not content or not isinstance(content, list) or "text" not in content[0]:
+                raise HTTPException(status_code=502, detail="Claude returned empty content.")
+            return content[0]["text"]
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {str(e)}")
 
 def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     """Normalize extracted startup data to match schema"""
@@ -992,11 +1038,21 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Check if Ollama is available"""
+    if CONVERTER_PROVIDER == "claude":
+        return {
+            "status": "healthy" if ANTHROPIC_API_KEY else "unhealthy",
+            "ollama_available": bool(ANTHROPIC_API_KEY),
+            "provider": "claude",
+            "models": [ANTHROPIC_MODEL],
+            "error": None if ANTHROPIC_API_KEY else "ANTHROPIC_API_KEY not set",
+        }
+
     try:
         model_list = await fetch_ollama_model_names()
         return {
             "status": "healthy",
             "ollama_available": True,
+            "provider": "ollama",
             "models": model_list,
             "ollama_host": OLLAMA_HOST,
             "preferred_model": PREFERRED_OLLAMA_MODEL,
@@ -1005,6 +1061,7 @@ async def health_check():
         return {
             "status": "unhealthy",
             "ollama_available": False,
+            "provider": "ollama",
             "error": str(e),
             "ollama_host": OLLAMA_HOST,
             "preferred_model": PREFERRED_OLLAMA_MODEL,
@@ -1164,96 +1221,110 @@ async def convert_data(request: ConversionRequest):
             print(f"Direct CSV parse failed, falling back to Ollama: {e}")
     
     try:
-        # Check models via HTTP API (more reliable than python ollama.list on some setups)
-        try:
-            available_models = await fetch_ollama_model_names()
-        except Exception as e:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Ollama not reachable at {OLLAMA_HOST}. Error: {str(e)}"
-            )
-
-        if not available_models:
-            # Final fallback: attempt python client list directly
-            try:
-                client = get_ollama_client()
-                models = client.list()
-                if isinstance(models, dict):
-                    for m in models.get("models", []) or []:
-                        name = None
-                        if isinstance(m, dict) and m.get("name"):
-                            name = m["name"]
-                        elif isinstance(m, str):
-                            name = m
-                        if name:
-                            available_models.append(name)
-            except Exception:
-                pass
-
-        if not available_models:
-            raise HTTPException(
-                status_code=503,
-                detail=f"No Ollama models available at {OLLAMA_HOST}. Run: ollama pull llama3.1"
-            )
-
-        model_name = pick_model(available_models)
-        
         # Create prompt
         prompt = create_conversion_prompt(request.data, request.dataType)
-        
-        # Call Ollama
-        client = get_ollama_client()
-        # Prefer JSON mode if supported by the client/version, otherwise fall back.
-        chat_kwargs = dict(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            options={
-                "temperature": 0.1,  # Low temperature for consistent extraction
-                "num_predict": 4096,  # More headroom to avoid truncated JSON
-            },
-        )
-        try:
-            response = client.chat(**chat_kwargs, format="json")
-        except TypeError:
-            response = client.chat(**chat_kwargs)
-        
-        # Extract response content
-        response_text = response.get('message', {}).get('content')
-        if not isinstance(response_text, str):
-            raise HTTPException(status_code=502, detail="Ollama returned empty content. Ensure the model is available and retry.")
-        
-        # Parse JSON from response (retry once if model output is truncated/non-JSON)
-        try:
-            parsed_data = parse_ollama_response(response_text)
-        except Exception:
-            # Retry with a stricter prompt and higher output budget
-            retry_prompt = (
-                "Return ONLY valid JSON. Do not include markdown or explanations. "
-                "Restart the JSON from scratch and ensure all brackets are closed.\n\n"
-                + create_conversion_prompt(request.data, request.dataType)
-            )
-            retry_kwargs = dict(
+
+        # Decide which provider to use
+        if CONVERTER_PROVIDER == "claude":
+            response_text = await call_anthropic(prompt)
+            try:
+                parsed_data = parse_ollama_response(response_text)
+            except Exception:
+                retry_prompt = (
+                    "Return ONLY valid JSON. Do not include markdown or explanations. "
+                    "Restart the JSON from scratch and ensure all brackets are closed.\n\n"
+                    + create_conversion_prompt(request.data, request.dataType)
+                )
+                retry_text = await call_anthropic(retry_prompt)
+                parsed_data = parse_ollama_response(retry_text)
+        else:
+            # Check models via HTTP API (more reliable than python ollama.list on some setups)
+            try:
+                available_models = await fetch_ollama_model_names()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Ollama not reachable at {OLLAMA_HOST}. Error: {str(e)}"
+                )
+
+            if not available_models:
+                # Final fallback: attempt python client list directly
+                try:
+                    client = get_ollama_client()
+                    models = client.list()
+                    if isinstance(models, dict):
+                        for m in models.get("models", []) or []:
+                            name = None
+                            if isinstance(m, dict) and m.get("name"):
+                                name = m["name"]
+                            elif isinstance(m, str):
+                                name = m
+                            if name:
+                                available_models.append(name)
+                except Exception:
+                    pass
+
+            if not available_models:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"No Ollama models available at {OLLAMA_HOST}. Run: ollama pull llama3.1"
+                )
+
+            model_name = pick_model(available_models)
+
+            # Call Ollama
+            client = get_ollama_client()
+            # Prefer JSON mode if supported by the client/version, otherwise fall back.
+            chat_kwargs = dict(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": retry_prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 options={
-                    "temperature": 0.0,
-                    "num_predict": 8192,
+                    "temperature": 0.1,  # Low temperature for consistent extraction
+                    "num_predict": 4096,  # More headroom to avoid truncated JSON
                 },
             )
             try:
-                retry_res = client.chat(**retry_kwargs, format="json")
+                response = client.chat(**chat_kwargs, format="json")
             except TypeError:
-                retry_res = client.chat(**retry_kwargs)
-            retry_text = retry_res.get("message", {}).get("content")
-            if not isinstance(retry_text, str):
-                raise HTTPException(status_code=502, detail="Ollama returned empty content on retry.")
-            parsed_data = parse_ollama_response(retry_text)
+                response = client.chat(**chat_kwargs)
+
+            # Extract response content
+            response_text = response.get('message', {}).get('content')
+            if not isinstance(response_text, str):
+                raise HTTPException(status_code=502, detail="Ollama returned empty content. Ensure the model is available and retry.")
+
+            # Parse JSON from response (retry once if model output is truncated/non-JSON)
+            try:
+                parsed_data = parse_ollama_response(response_text)
+            except Exception:
+                # Retry with a stricter prompt and higher output budget
+                retry_prompt = (
+                    "Return ONLY valid JSON. Do not include markdown or explanations. "
+                    "Restart the JSON from scratch and ensure all brackets are closed.\n\n"
+                    + create_conversion_prompt(request.data, request.dataType)
+                )
+                retry_kwargs = dict(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": retry_prompt},
+                    ],
+                    options={
+                        "temperature": 0.0,
+                        "num_predict": 8192,
+                    },
+                )
+                try:
+                    retry_res = client.chat(**retry_kwargs, format="json")
+                except TypeError:
+                    retry_res = client.chat(**retry_kwargs)
+                retry_text = retry_res.get("message", {}).get("content")
+                if not isinstance(retry_text, str):
+                    raise HTTPException(status_code=502, detail="Ollama returned empty content on retry.")
+                parsed_data = parse_ollama_response(retry_text)
         
         # If the model returns a wrapper object (common), unwrap it.
         # Supported shapes:
