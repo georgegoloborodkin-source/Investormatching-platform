@@ -72,7 +72,8 @@ def try_ocr_pdf_bytes(content: bytes) -> str:
     return "\n".join(parts).strip()
 
 # Converter provider settings
-CONVERTER_PROVIDER = os.getenv("CONVERTER_PROVIDER", "ollama").lower().strip()
+_provider_env = os.getenv("CONVERTER_PROVIDER")
+CONVERTER_PROVIDER = (_provider_env or "ollama").lower().strip()
 
 # Ollama connection settings
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -1037,21 +1038,29 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Check if Ollama is available"""
-    if CONVERTER_PROVIDER == "claude":
+    """Check which converter provider is available"""
+    if ANTHROPIC_API_KEY:
         return {
-            "status": "healthy" if ANTHROPIC_API_KEY else "unhealthy",
-            "ollama_available": bool(ANTHROPIC_API_KEY),
+            "status": "healthy",
+            "available": True,
             "provider": "claude",
             "models": [ANTHROPIC_MODEL],
-            "error": None if ANTHROPIC_API_KEY else "ANTHROPIC_API_KEY not set",
+            "error": None,
+        }
+    if CONVERTER_PROVIDER == "claude":
+        return {
+            "status": "unhealthy",
+            "available": False,
+            "provider": "claude",
+            "models": [ANTHROPIC_MODEL],
+            "error": "ANTHROPIC_API_KEY not set",
         }
 
     try:
         model_list = await fetch_ollama_model_names()
         return {
             "status": "healthy",
-            "ollama_available": True,
+            "available": True,
             "provider": "ollama",
             "models": model_list,
             "ollama_host": OLLAMA_HOST,
@@ -1060,7 +1069,7 @@ async def health_check():
     except Exception as e:
         return {
             "status": "unhealthy",
-            "ollama_available": False,
+            "available": False,
             "provider": "ollama",
             "error": str(e),
             "ollama_host": OLLAMA_HOST,
@@ -1225,7 +1234,8 @@ async def convert_data(request: ConversionRequest):
         prompt = create_conversion_prompt(request.data, request.dataType)
 
         # Decide which provider to use
-        if CONVERTER_PROVIDER == "claude":
+        use_claude = ANTHROPIC_API_KEY is not None and ANTHROPIC_API_KEY.strip() != ""
+        if CONVERTER_PROVIDER == "claude" or use_claude:
             response_text = await call_anthropic(prompt)
             try:
                 parsed_data = parse_ollama_response(response_text)
