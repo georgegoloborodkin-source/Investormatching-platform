@@ -15,7 +15,30 @@ import { MentorForm } from "@/components/MentorForm";
 import { CorporateForm } from "@/components/CorporateForm";
 import { CSVUpload } from "@/components/CSVUpload";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Startup, Investor, Mentor, CorporatePartner, Match, TimeSlotConfig, INDUSTRIES } from "@/types";
+import {
+  ensureActiveEventForOrg,
+  ensureOrganizationForUser,
+  getCorporatesByEvent,
+  getInvestorsByEvent,
+  getMatchesByEvent,
+  getMentorsByEvent,
+  getStartupsByEvent,
+  getTimeSlotsByEvent,
+  mapCorporateRow,
+  mapInvestorRow,
+  mapMatchRow,
+  mapMentorRow,
+  mapStartupRow,
+  mapTimeSlotRow,
+  upsertCorporates,
+  upsertInvestors,
+  upsertMatches,
+  upsertMentors,
+  upsertStartups,
+  upsertTimeSlots,
+} from "@/utils/supabaseHelpers";
 import { generateMatches } from "@/utils/matchingAlgorithmMVP";
 import { exportMatchesToCSV, downloadCSV } from "@/utils/csvUtils";
 import { CoverageReport } from "@/components/CoverageReport";
@@ -23,7 +46,10 @@ import { Save } from "lucide-react";
 
 const Index = () => {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [isRematching, setIsRematching] = useState(false);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const dedupeMatchesOnLoad = useCallback((raw: Match[]) => {
     const seen = new Set<string>();
@@ -197,8 +223,7 @@ const Index = () => {
   // We can generate if we have startups and at least one target (investor/mentor/corporate)
   const hasData = startups.length > 0 && (investors.length > 0 || mentors.length > 0 || corporates.length > 0);
 
-  // Load data from localStorage on mount
-  useEffect(() => {
+  const loadLocalData = useCallback(() => {
     const savedStartups = localStorage.getItem('matchmaking-startups');
     const savedInvestors = localStorage.getItem('matchmaking-investors');
     const savedMentors = localStorage.getItem('matchmaking-mentors');
@@ -256,7 +281,89 @@ const Index = () => {
         console.error('Failed to load saved time slots');
       }
     }
-  }, []);
+  }, [dedupeMatchesOnLoad]);
+
+  // Load data from Supabase (fallback to localStorage)
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSupabaseData = async () => {
+      if (!profile) {
+        loadLocalData();
+        return;
+      }
+
+      setIsSyncing(true);
+      const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
+      if (orgError || !orgData?.organization) {
+        console.error("Failed to ensure organization", orgError);
+        toast({
+          title: "Supabase sync failed",
+          description: "Falling back to local data. Please check your Supabase setup.",
+          variant: "destructive",
+        });
+        loadLocalData();
+        setIsSyncing(false);
+        return;
+      }
+
+      const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
+      if (eventError || !event) {
+        console.error("Failed to ensure active event", eventError);
+        toast({
+          title: "Supabase sync failed",
+          description: "Could not load event data. Please check your RLS policies.",
+          variant: "destructive",
+        });
+        loadLocalData();
+        setIsSyncing(false);
+        return;
+      }
+
+      if (cancelled) return;
+      setActiveEventId(event.id);
+
+      const [
+        startupsRes,
+        investorsRes,
+        mentorsRes,
+        corporatesRes,
+        matchesRes,
+        timeSlotsRes,
+      ] = await Promise.all([
+        getStartupsByEvent(event.id),
+        getInvestorsByEvent(event.id),
+        getMentorsByEvent(event.id),
+        getCorporatesByEvent(event.id),
+        getMatchesByEvent(event.id),
+        getTimeSlotsByEvent(event.id),
+      ]);
+
+      if (cancelled) return;
+
+      const timeSlotRows = (timeSlotsRes.data || []).map(mapTimeSlotRow);
+      const timeSlotMap = new Map(timeSlotRows.map((slot) => [slot.id, slot]));
+      const mappedMatches = (matchesRes.data || []).map((row) => {
+        const match = mapMatchRow(row);
+        const slot = timeSlotMap.get(match.timeSlot);
+        const slotLabel = slot ? `${slot.label} (${slot.startTime}-${slot.endTime})` : "";
+        return { ...match, slotTime: slotLabel };
+      });
+
+      setStartups((startupsRes.data || []).map(mapStartupRow));
+      setInvestors((investorsRes.data || []).map(mapInvestorRow));
+      setMentors((mentorsRes.data || []).map(mapMentorRow));
+      setCorporates((corporatesRes.data || []).map(mapCorporateRow));
+      setTimeSlots(timeSlotRows.length ? timeSlotRows : generateDefaultTimeSlots());
+      setMatches(dedupeMatchesOnLoad(mappedMatches));
+      setIsSyncing(false);
+    };
+
+    loadSupabaseData();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, toast, loadLocalData, dedupeMatchesOnLoad]);
 
   const handleAddStartup = useCallback((startupData: Omit<Startup, 'id'>) => {
     if (editingStartup) {
@@ -702,7 +809,51 @@ const Index = () => {
   }, [customIndustries]);
 
 
-  const handleSaveData = useCallback(() => {
+  const handleSaveData = useCallback(async () => {
+    if (activeEventId) {
+      setIsSyncing(true);
+      const [
+        startupsRes,
+        investorsRes,
+        mentorsRes,
+        corporatesRes,
+        matchesRes,
+        timeSlotsRes,
+      ] = await Promise.all([
+        upsertStartups(activeEventId, startups),
+        upsertInvestors(activeEventId, investors),
+        upsertMentors(activeEventId, mentors),
+        upsertCorporates(activeEventId, corporates),
+        upsertMatches(activeEventId, matches),
+        upsertTimeSlots(activeEventId, timeSlots),
+      ]);
+
+      const errors = [
+        startupsRes.error,
+        investorsRes.error,
+        mentorsRes.error,
+        corporatesRes.error,
+        matchesRes.error,
+        timeSlotsRes.error,
+      ].filter(Boolean);
+
+      if (errors.length > 0) {
+        console.error("Supabase save errors", errors);
+        toast({
+          title: "Save Failed",
+          description: "Supabase rejected the update. Check your RLS policies.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Synced to Supabase",
+          description: "All participants and matches have been saved.",
+        });
+      }
+      setIsSyncing(false);
+      return;
+    }
+
     try {
       localStorage.setItem('matchmaking-startups', JSON.stringify(startups));
       localStorage.setItem('matchmaking-investors', JSON.stringify(investors));
@@ -710,7 +861,7 @@ const Index = () => {
       localStorage.setItem('matchmaking-corporates', JSON.stringify(corporates));
       localStorage.setItem('matchmaking-matches', JSON.stringify(matches));
       localStorage.setItem('matchmaking-timeslots', JSON.stringify(timeSlots));
-      
+
       toast({
         title: "Data Saved",
         description: "All participants and matches have been saved locally.",
@@ -722,7 +873,7 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  }, [startups, investors, mentors, corporates, matches, timeSlots, toast]);
+  }, [activeEventId, startups, investors, mentors, corporates, matches, timeSlots, toast]);
 
   const handleUpdateMatch = useCallback((matchId: string, updates: Partial<Match>) => {
     setMatches(prev => prev.map(match => 
