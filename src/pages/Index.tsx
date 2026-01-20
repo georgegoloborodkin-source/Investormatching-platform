@@ -223,73 +223,13 @@ const Index = () => {
   // We can generate if we have startups and at least one target (investor/mentor/corporate)
   const hasData = startups.length > 0 && (investors.length > 0 || mentors.length > 0 || corporates.length > 0);
 
-  const loadLocalData = useCallback(() => {
-    const savedStartups = localStorage.getItem('matchmaking-startups');
-    const savedInvestors = localStorage.getItem('matchmaking-investors');
-    const savedMentors = localStorage.getItem('matchmaking-mentors');
-    const savedCorporates = localStorage.getItem('matchmaking-corporates');
-    const savedMatches = localStorage.getItem('matchmaking-matches');
-    const savedTimeSlots = localStorage.getItem('matchmaking-timeslots');
-
-    if (savedStartups) {
-      try {
-        setStartups(JSON.parse(savedStartups));
-      } catch (e) {
-        console.error('Failed to load saved startups');
-      }
-    }
-
-    if (savedInvestors) {
-      try {
-        setInvestors(JSON.parse(savedInvestors));
-      } catch (e) {
-        console.error('Failed to load saved investors');
-      }
-    }
-
-    if (savedMentors) {
-      try {
-        setMentors(JSON.parse(savedMentors));
-      } catch (e) {
-        console.error('Failed to load saved mentors');
-      }
-    }
-
-    if (savedCorporates) {
-      try {
-        setCorporates(JSON.parse(savedCorporates));
-      } catch (e) {
-        console.error('Failed to load saved corporates');
-      }
-    }
-
-    if (savedMatches) {
-      try {
-        const parsed = JSON.parse(savedMatches);
-        const deduped = Array.isArray(parsed) ? dedupeMatchesOnLoad(parsed) : [];
-        setMatches(deduped);
-      } catch (e) {
-        console.error('Failed to load saved matches');
-      }
-    }
-
-    if (savedTimeSlots) {
-      try {
-        const parsed = JSON.parse(savedTimeSlots);
-        setTimeSlots(normalizeTimeSlots(parsed));
-      } catch (e) {
-        console.error('Failed to load saved time slots');
-      }
-    }
-  }, [dedupeMatchesOnLoad]);
-
-  // Load data from Supabase (fallback to localStorage)
+  // Load data from Supabase
   useEffect(() => {
     let cancelled = false;
 
     const loadSupabaseData = async () => {
       if (!profile) {
-        loadLocalData();
+        setIsSyncing(false);
         return;
       }
 
@@ -299,10 +239,9 @@ const Index = () => {
         console.error("Failed to ensure organization", orgError);
         toast({
           title: "Supabase sync failed",
-          description: "Falling back to local data. Please check your Supabase setup.",
+          description: "Could not load organization data. Please check your Supabase setup.",
           variant: "destructive",
         });
-        loadLocalData();
         setIsSyncing(false);
         return;
       }
@@ -315,7 +254,6 @@ const Index = () => {
           description: "Could not load event data. Please check your RLS policies.",
           variant: "destructive",
         });
-        loadLocalData();
         setIsSyncing(false);
         return;
       }
@@ -363,7 +301,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-  }, [profile, toast, loadLocalData, dedupeMatchesOnLoad]);
+  }, [profile, toast, dedupeMatchesOnLoad]);
 
   const handleAddStartup = useCallback((startupData: Omit<Startup, 'id'>) => {
     if (editingStartup) {
@@ -810,69 +748,55 @@ const Index = () => {
 
 
   const handleSaveData = useCallback(async () => {
-    if (activeEventId) {
-      setIsSyncing(true);
-      const [
-        startupsRes,
-        investorsRes,
-        mentorsRes,
-        corporatesRes,
-        matchesRes,
-        timeSlotsRes,
-      ] = await Promise.all([
-        upsertStartups(activeEventId, startups),
-        upsertInvestors(activeEventId, investors),
-        upsertMentors(activeEventId, mentors),
-        upsertCorporates(activeEventId, corporates),
-        upsertMatches(activeEventId, matches),
-        upsertTimeSlots(activeEventId, timeSlots),
-      ]);
-
-      const errors = [
-        startupsRes.error,
-        investorsRes.error,
-        mentorsRes.error,
-        corporatesRes.error,
-        matchesRes.error,
-        timeSlotsRes.error,
-      ].filter(Boolean);
-
-      if (errors.length > 0) {
-        console.error("Supabase save errors", errors);
-        toast({
-          title: "Save Failed",
-          description: "Supabase rejected the update. Check your RLS policies.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Synced to Supabase",
-          description: "All participants and matches have been saved.",
-        });
-      }
-      setIsSyncing(false);
+    if (!activeEventId) {
+      toast({
+        title: "Save Failed",
+        description: "No active event found. Please refresh and try again.",
+        variant: "destructive",
+      });
       return;
     }
 
-    try {
-      localStorage.setItem('matchmaking-startups', JSON.stringify(startups));
-      localStorage.setItem('matchmaking-investors', JSON.stringify(investors));
-      localStorage.setItem('matchmaking-mentors', JSON.stringify(mentors));
-      localStorage.setItem('matchmaking-corporates', JSON.stringify(corporates));
-      localStorage.setItem('matchmaking-matches', JSON.stringify(matches));
-      localStorage.setItem('matchmaking-timeslots', JSON.stringify(timeSlots));
+    setIsSyncing(true);
+    const [
+      startupsRes,
+      investorsRes,
+      mentorsRes,
+      corporatesRes,
+      matchesRes,
+      timeSlotsRes,
+    ] = await Promise.all([
+      upsertStartups(activeEventId, startups),
+      upsertInvestors(activeEventId, investors),
+      upsertMentors(activeEventId, mentors),
+      upsertCorporates(activeEventId, corporates),
+      upsertMatches(activeEventId, matches),
+      upsertTimeSlots(activeEventId, timeSlots),
+    ]);
 
-      toast({
-        title: "Data Saved",
-        description: "All participants and matches have been saved locally.",
-      });
-    } catch (error) {
+    const errors = [
+      startupsRes.error,
+      investorsRes.error,
+      mentorsRes.error,
+      corporatesRes.error,
+      matchesRes.error,
+      timeSlotsRes.error,
+    ].filter(Boolean);
+
+    if (errors.length > 0) {
+      console.error("Supabase save errors", errors);
       toast({
         title: "Save Failed",
-        description: "Failed to save data. Please try again.",
-        variant: "destructive"
+        description: "Supabase rejected the update. Check your RLS policies.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Synced to Supabase",
+        description: "All participants and matches have been saved.",
       });
     }
+    setIsSyncing(false);
   }, [activeEventId, startups, investors, mentors, corporates, matches, timeSlots, toast]);
 
   const handleUpdateMatch = useCallback((matchId: string, updates: Partial<Match>) => {
