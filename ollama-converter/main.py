@@ -84,6 +84,26 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
 ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
 
+def get_anthropic_api_url() -> str:
+    """
+    Normalize Anthropic API URL.
+    Accepts base URLs like:
+      - https://api.anthropic.com
+      - https://api.anthropic.com/v1
+      - https://api.anthropic.com/v1/messages
+    Returns the full /v1/messages endpoint.
+    """
+    base = (ANTHROPIC_API_URL or "").strip()
+    if not base:
+        return "https://api.anthropic.com/v1/messages"
+    if base.endswith("/v1/messages"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/messages"
+    if base.endswith("/"):
+        base = base[:-1]
+    return f"{base}/v1/messages"
+
 
 async def fetch_ollama_model_names() -> List[str]:
     """
@@ -394,8 +414,18 @@ async def call_anthropic(prompt: str) -> str:
     }
 
     try:
+        url = get_anthropic_api_url()
         async with httpx.AsyncClient(timeout=60.0) as client:
-            res = await client.post(ANTHROPIC_API_URL, headers=headers, json=payload)
+            res = await client.post(url, headers=headers, json=payload)
+            if res.status_code == 404:
+                body = res.text[:400].strip()
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"Claude API 404 at {url}. Check ANTHROPIC_API_URL and account access. "
+                        f"Response: {body or 'empty'}"
+                    ),
+                )
             res.raise_for_status()
             data = res.json()
             content = data.get("content", [])
