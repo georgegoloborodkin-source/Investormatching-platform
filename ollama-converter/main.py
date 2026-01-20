@@ -81,8 +81,16 @@ PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
 
 # Anthropic (Claude) settings
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
 ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
+ANTHROPIC_MODEL_FALLBACKS = [
+    ANTHROPIC_MODEL,
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+    "claude-3-opus-20240229",
+]
 
 def get_anthropic_api_url() -> str:
     """
@@ -387,6 +395,14 @@ def parse_ollama_response(response: str) -> Dict[str, Any]:
             f"Response starts with: {response[:200]}"
         )
 
+def is_model_not_found(response: httpx.Response) -> bool:
+    try:
+        data = response.json() or {}
+        err = data.get("error") or {}
+        return err.get("type") == "not_found_error" and "model" in str(err.get("message", "")).lower()
+    except Exception:
+        return False
+
 async def call_anthropic(prompt: str) -> str:
     """
     Call Anthropic (Claude) API and return the raw text response.
@@ -403,24 +419,29 @@ async def call_anthropic(prompt: str) -> str:
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
     }
-    payload = {
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": 4096,
-        "temperature": 0.1,
-        "system": SYSTEM_PROMPT,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-    }
+    url = get_anthropic_api_url()
+    default_url = "https://api.anthropic.com/v1/messages"
 
-    try:
-        url = get_anthropic_api_url()
-        default_url = "https://api.anthropic.com/v1/messages"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+    last_error: Optional[str] = None
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model_name in [m for m in ANTHROPIC_MODEL_FALLBACKS if m]:
+            payload = {
+                "model": model_name,
+                "max_tokens": 4096,
+                "temperature": 0.1,
+                "system": SYSTEM_PROMPT,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+            }
+
             res = await client.post(url, headers=headers, json=payload)
             # If a misconfigured URL causes 404, retry with the canonical endpoint.
             if res.status_code == 404 and url != default_url:
                 res = await client.post(default_url, headers=headers, json=payload)
+            if res.status_code == 404 and is_model_not_found(res):
+                last_error = f"Model not found: {model_name}"
+                continue
             if res.status_code == 404:
                 body = res.text[:400].strip()
                 raise HTTPException(
@@ -430,20 +451,23 @@ async def call_anthropic(prompt: str) -> str:
                         f"Response: {body or 'empty'}"
                     ),
                 )
-            res.raise_for_status()
+            try:
+                res.raise_for_status()
+            except httpx.HTTPError as e:
+                last_error = str(e)
+                continue
+
             data = res.json()
             content = data.get("content", [])
             if not content or not isinstance(content, list) or "text" not in content[0]:
-                raise HTTPException(status_code=502, detail="Claude returned empty content.")
+                last_error = "Claude returned empty content."
+                continue
             return content[0]["text"]
-    except httpx.HTTPError as e:
-        detail = str(e)
-        try:
-            if "res" in locals():
-                detail = f"{detail}. Response: {res.text[:500]}"
-        except Exception:
-            pass
-        raise HTTPException(status_code=502, detail=f"Claude API error: {detail}")
+
+    raise HTTPException(
+        status_code=502,
+        detail=f"Claude API error: {last_error or 'Unknown error. All models failed.'}"
+    )
 
 def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     """Normalize extracted startup data to match schema"""
