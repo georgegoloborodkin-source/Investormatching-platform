@@ -91,17 +91,17 @@ def get_anthropic_api_url() -> str:
       - https://api.anthropic.com
       - https://api.anthropic.com/v1
       - https://api.anthropic.com/v1/messages
+      - https://api.anthropic.com/v1/messages/
     Returns the full /v1/messages endpoint.
     """
     base = (ANTHROPIC_API_URL or "").strip()
     if not base:
         return "https://api.anthropic.com/v1/messages"
+    base = base.rstrip("/")
     if base.endswith("/v1/messages"):
         return base
     if base.endswith("/v1"):
         return f"{base}/messages"
-    if base.endswith("/"):
-        base = base[:-1]
     return f"{base}/v1/messages"
 
 
@@ -415,8 +415,12 @@ async def call_anthropic(prompt: str) -> str:
 
     try:
         url = get_anthropic_api_url()
+        default_url = "https://api.anthropic.com/v1/messages"
         async with httpx.AsyncClient(timeout=60.0) as client:
             res = await client.post(url, headers=headers, json=payload)
+            # If a misconfigured URL causes 404, retry with the canonical endpoint.
+            if res.status_code == 404 and url != default_url:
+                res = await client.post(default_url, headers=headers, json=payload)
             if res.status_code == 404:
                 body = res.text[:400].strip()
                 raise HTTPException(
@@ -433,7 +437,13 @@ async def call_anthropic(prompt: str) -> str:
                 raise HTTPException(status_code=502, detail="Claude returned empty content.")
             return content[0]["text"]
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {str(e)}")
+        detail = str(e)
+        try:
+            if "res" in locals():
+                detail = f"{detail}. Response: {res.text[:500]}"
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"Claude API error: {detail}")
 
 def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     """Normalize extracted startup data to match schema"""
