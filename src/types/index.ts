@@ -179,6 +179,20 @@ export interface DecisionLog {
   confidence_score: number;
   outcome: string | null;
   notes: string | null;
+  document_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  event_id: string;
+  title: string | null;
+  source_type: string;
+  file_name: string | null;
+  detected_type: string | null;
+  extracted_json: Record<string, any> | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

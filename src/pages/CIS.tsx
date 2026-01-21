@@ -51,6 +51,7 @@ import {
   ensureOrganizationForUser,
   getDecisionsByEvent,
   insertDecision,
+  insertDocument,
   updateDecision,
   deleteDecision,
 } from "@/utils/supabaseHelpers";
@@ -140,9 +141,16 @@ function mapDecisionRow(row: any): Decision {
 function DocumentConverterTab({
   onDecisionDraft,
   onOpenDecisionLog,
+  onAutoLogDecision,
 }: {
   onDecisionDraft: (draft: { startupName: string; sector?: string; stage?: string }) => void;
   onOpenDecisionLog: () => void;
+  onAutoLogDecision: (input: {
+    draft: { startupName: string; sector?: string; stage?: string };
+    conversion: AIConversionResponse;
+    sourceType: "upload" | "paste";
+    fileName: string | null;
+  }) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [documentText, setDocumentText] = useState("");
@@ -158,6 +166,23 @@ function DocumentConverterTab({
       const conversion = await convertFileWithAI(file);
       setResult(conversion);
       toast({ title: "Conversion complete", description: `Detected ${conversion.detectedType || "data"}` });
+
+      const draft = conversion.startups?.[0]
+        ? {
+            startupName: conversion.startups[0].companyName || "Unknown Company",
+            sector: conversion.startups[0].industry || undefined,
+            stage: conversion.startups[0].fundingStage || undefined,
+          }
+        : null;
+      if (draft) {
+        await onAutoLogDecision({
+          draft,
+          conversion,
+          sourceType: "upload",
+          fileName: file.name || null,
+        });
+        toast({ title: "Decision logged", description: "Auto-created from extraction." });
+      }
     } catch (error) {
       toast({
         title: "Conversion failed",
@@ -167,7 +192,7 @@ function DocumentConverterTab({
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, onAutoLogDecision]);
 
   const handleExtract = useCallback(async () => {
     if (!documentText.trim()) {
@@ -184,6 +209,23 @@ function DocumentConverterTab({
         title: "Extraction complete",
         description: `Detected ${conversion.detectedType || "data"}`,
       });
+
+      const draft = conversion.startups?.[0]
+        ? {
+            startupName: conversion.startups[0].companyName || "Unknown Company",
+            sector: conversion.startups[0].industry || undefined,
+            stage: conversion.startups[0].fundingStage || undefined,
+          }
+        : null;
+      if (draft) {
+        await onAutoLogDecision({
+          draft,
+          conversion,
+          sourceType: "paste",
+          fileName: null,
+        });
+        toast({ title: "Decision logged", description: "Auto-created from extraction." });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -193,7 +235,7 @@ function DocumentConverterTab({
     } finally {
       setIsLoading(false);
     }
-  }, [documentText, toast]);
+  }, [documentText, toast, onAutoLogDecision]);
 
   const downloadJSON = useCallback(() => {
     if (!result) return;
@@ -337,9 +379,9 @@ function DocumentConverterTab({
                   )}
 
                   {quickLogEnabled && (
-                    <Button onClick={handleQuickLog} className="w-full">
+                    <Button onClick={handleQuickLog} className="w-full" variant="outline">
                       <ClipboardList className="h-4 w-4 mr-2" />
-                      Quick Log Decision
+                      Open in Decision Log
                     </Button>
                   )}
 
@@ -1007,6 +1049,53 @@ export default function CIS() {
     stage?: string;
   } | null>(null);
 
+  const handleAutoLogDecision = useCallback(
+    async (input: {
+      draft: { startupName: string; sector?: string; stage?: string };
+      conversion: AIConversionResponse;
+      sourceType: "upload" | "paste";
+      fileName: string | null;
+    }) => {
+      if (!activeEventId) {
+        return;
+      }
+      const { data: doc, error: docError } = await insertDocument(activeEventId, {
+        title: input.draft.startupName,
+        source_type: input.sourceType,
+        file_name: input.fileName,
+        detected_type: input.conversion.detectedType || "unknown",
+        extracted_json: input.conversion as unknown as Record<string, any>,
+        created_by: profile?.id || null,
+      });
+
+      const docId = (doc as { id?: string } | null)?.id;
+      if (docError || !docId) {
+        return;
+      }
+
+      const { data: decision, error } = await insertDecision(activeEventId, {
+        actor_id: profile?.id || null,
+        actor_name: profile?.full_name || profile?.email || "Unknown",
+        action_type: "meeting",
+        startup_name: input.draft.startupName,
+        context: {
+          sector: input.draft.sector || undefined,
+          stage: input.draft.stage || undefined,
+        },
+        confidence_score: 70,
+        outcome: "pending",
+        notes: null,
+        document_id: docId,
+      });
+
+      if (error || !decision) {
+        return;
+      }
+      setDecisions((prev) => [mapDecisionRow(decision), ...prev]);
+    },
+    [activeEventId, profile]
+  );
+
   const scopedMessages = useMemo(() => messages.filter((m) => m.threadId === activeThread), [messages, activeThread]);
 
   useEffect(() => {
@@ -1268,6 +1357,7 @@ export default function CIS() {
             <DocumentConverterTab
               onDecisionDraft={(draft) => setDraftDecision(draft)}
               onOpenDecisionLog={() => setActiveTab("decisions")}
+              onAutoLogDecision={handleAutoLogDecision}
             />
           </TabsContent>
 

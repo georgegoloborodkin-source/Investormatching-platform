@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CorporatePartner, DecisionLog, Event, Investor, Match, Mentor, Startup, TimeSlotConfig, UserProfile } from "@/types";
+import type { CorporatePartner, DecisionLog, DocumentRecord, Event, Investor, Match, Mentor, Startup, TimeSlotConfig, UserProfile } from "@/types";
 
 type SupabaseResult<T> = { data: T | null; error: any };
 
@@ -116,6 +116,7 @@ export async function insertDecision(
     confidence_score: number;
     outcome: string | null;
     notes: string | null;
+    document_id?: string | null;
   }
 ) {
   return supabase.from("decisions").insert({ event_id: eventId, ...payload }).select("*").single();
@@ -127,6 +128,32 @@ export async function updateDecision(decisionId: string, updates: Partial<Decisi
 
 export async function deleteDecision(decisionId: string) {
   return supabase.from("decisions").delete().eq("id", decisionId);
+}
+
+export async function insertDocument(
+  eventId: string,
+  payload: {
+    title: string | null;
+    source_type: string;
+    file_name: string | null;
+    detected_type: string | null;
+    extracted_json: Record<string, any>;
+    created_by: string | null;
+  }
+) {
+  return supabase
+    .from("documents")
+    .insert({ event_id: eventId, ...payload })
+    .select("*")
+    .single();
+}
+
+export async function getDocumentsByEvent(eventId: string) {
+  return supabase
+    .from("documents")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
 }
 
 export async function upsertInvestors(eventId: string, investors: Investor[]) {
