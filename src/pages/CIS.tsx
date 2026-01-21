@@ -42,12 +42,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  extractWithClaude,
   calculateDecisionStats,
   exportDecisionsToCSV,
-  type DealMemo,
   type Decision,
-  type ExtractionResult,
 } from "@/utils/claudeConverter";
 import {
   ensureActiveEventForOrg,
@@ -57,6 +54,7 @@ import {
   updateDecision,
   deleteDecision,
 } from "@/utils/supabaseHelpers";
+import { convertFileWithAI, convertWithAI, type AIConversionResponse } from "@/utils/aiConverter";
 
 // ============================================================================
 // TYPES
@@ -139,34 +137,35 @@ function mapDecisionRow(row: any): Decision {
 // DOCUMENT CONVERTER TAB
 // ============================================================================
 
-function DocumentConverterTab() {
+function DocumentConverterTab({
+  onDecisionDraft,
+  onOpenDecisionLog,
+}: {
+  onDecisionDraft: (draft: { startupName: string; sector?: string; stage?: string }) => void;
+  onOpenDecisionLog: () => void;
+}) {
   const { toast } = useToast();
   const [documentText, setDocumentText] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ExtractionResult | null>(null);
+  const [result, setResult] = useState<AIConversionResponse | null>(null);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // For now, only handle text files. PDF extraction would need additional library
-    if (file.type === "text/plain" || file.name.endsWith(".txt") || file.name.endsWith(".md")) {
-      const text = await file.text();
-      setDocumentText(text);
-      toast({ title: "File loaded", description: `Loaded ${file.name} (${text.length} characters)` });
-    } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+    setIsLoading(true);
+    setResult(null);
+    try {
+      const conversion = await convertFileWithAI(file);
+      setResult(conversion);
+      toast({ title: "Conversion complete", description: `Detected ${conversion.detectedType || "data"}` });
+    } catch (error) {
       toast({
-        title: "PDF Support",
-        description: "For PDF extraction, paste the text content or use the backend PDF parser.",
-        variant: "default",
-      });
-    } else {
-      toast({
-        title: "Unsupported file",
-        description: "Please upload a .txt, .md, or paste text directly",
+        title: "Conversion failed",
+        description: error instanceof Error ? error.message : "File conversion failed",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   }, [toast]);
 
@@ -175,34 +174,16 @@ function DocumentConverterTab() {
       toast({ title: "No content", description: "Please paste or upload document text", variant: "destructive" });
       return;
     }
-    if (!apiKey.trim()) {
-      toast({
-        title: "Missing API key",
-        description: "Provide a Claude API key or use a backend proxy for production.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
     setResult(null);
 
     try {
-    const extractionResult = await extractWithClaude(documentText, apiKey);
-      setResult(extractionResult);
-      
-      if (extractionResult.success) {
-        toast({
-          title: "Extraction complete",
-          description: `Extracted data with ${extractionResult.data?.rawConfidence || 0}% confidence`,
-        });
-      } else {
-        toast({
-          title: "Extraction failed",
-          description: extractionResult.error || "Unknown error",
-          variant: "destructive",
-        });
-      }
+      const conversion = await convertWithAI(documentText);
+      setResult(conversion);
+      toast({
+        title: "Extraction complete",
+        description: `Detected ${conversion.detectedType || "data"}`,
+      });
     } catch (error) {
       toast({
         title: "Error",
@@ -212,18 +193,31 @@ function DocumentConverterTab() {
     } finally {
       setIsLoading(false);
     }
-  }, [documentText, apiKey, toast]);
+  }, [documentText, toast]);
 
   const downloadJSON = useCallback(() => {
-    if (!result?.data) return;
-    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `deal-memo-${result.data.company.name || "unknown"}.json`;
+    a.download = `conversion-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [result]);
+
+  const primaryStartup = result?.startups?.[0];
+  const quickLogEnabled = !!primaryStartup;
+
+  const handleQuickLog = () => {
+    if (!primaryStartup) return;
+    onDecisionDraft({
+      startupName: primaryStartup.companyName || "Unknown Company",
+      sector: primaryStartup.industry || undefined,
+      stage: primaryStartup.fundingStage || undefined,
+    });
+    onOpenDecisionLog();
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -241,25 +235,10 @@ function DocumentConverterTab() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="api-key">Claude API Key (required for extraction)</Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="sk-ant-api..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                For production, route requests through a backend proxy.
-              </p>
-            </div>
-
-            <div>
               <Label>Upload File</Label>
               <Input
                 type="file"
-                accept=".txt,.md,.pdf"
+                accept=".txt,.md,.pdf,.docx,.xlsx,.xls,.csv,.json"
                 onChange={handleFileUpload}
                 className="cursor-pointer"
               />
@@ -281,7 +260,7 @@ function DocumentConverterTab() {
 
             <Button
               onClick={handleExtract}
-              disabled={isLoading || !documentText.trim() || !apiKey.trim()}
+              disabled={isLoading || !documentText.trim()}
               className="w-full"
             >
               {isLoading ? (
@@ -292,7 +271,7 @@ function DocumentConverterTab() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Extract Deal Info
+                  Extract & Detect
                 </>
               )}
             </Button>
@@ -320,119 +299,59 @@ function DocumentConverterTab() {
       <div className="space-y-4">
         {result ? (
           <>
-            <Card className={result.success ? "border-green-500/50" : "border-red-500/50"}>
+            <Card className="border-green-500/50">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    {result.success ? (
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5 text-red-600" />
-                    )}
-                    Extraction Result
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Conversion Result
                   </span>
-                  {result.success && (
+                  {result && (
                     <Button size="sm" variant="outline" onClick={downloadJSON}>
                       <Download className="h-4 w-4 mr-1" />
                       JSON
                     </Button>
                   )}
                 </CardTitle>
-                {result.costEstimate && (
-                  <CardDescription>Cost: {result.costEstimate}</CardDescription>
-                )}
+                <CardDescription>Detected: {result.detectedType || "unknown"}</CardDescription>
               </CardHeader>
               <CardContent>
-                {result.success && result.data ? (
-                  <div className="space-y-4">
-                    {/* Company Overview */}
+                <div className="space-y-4">
+                  {primaryStartup ? (
                     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-lg">{result.data.company.name}</h3>
-                        <Badge variant="outline">{result.data.company.stage}</Badge>
+                        <h3 className="font-bold text-lg">{primaryStartup.companyName}</h3>
+                        {primaryStartup.fundingStage && <Badge variant="outline">{primaryStartup.fundingStage}</Badge>}
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        <Badge>{result.data.company.sector}</Badge>
-                        <Badge variant="secondary">{result.data.company.location}</Badge>
+                        {primaryStartup.industry && <Badge>{primaryStartup.industry}</Badge>}
+                        {primaryStartup.geoMarkets?.length > 0 && (
+                          <Badge variant="secondary">{primaryStartup.geoMarkets.join(", ")}</Badge>
+                        )}
                       </div>
                     </div>
-
-                    {/* Confidence */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Confidence:</span>
-                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all"
-                          style={{ width: `${result.data.rawConfidence}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-medium">{result.data.rawConfidence}%</span>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No startup detected yet. Upload a pitch deck or paste content.
                     </div>
+                  )}
 
-                    {/* Highlights & Red Flags */}
-                    {result.data.highlights.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-green-600 mb-1">✓ Highlights</h4>
-                        <ul className="text-sm space-y-1">
-                          {result.data.highlights.map((h, i) => (
-                            <li key={i} className="text-muted-foreground">• {h}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                  {quickLogEnabled && (
+                    <Button onClick={handleQuickLog} className="w-full">
+                      <ClipboardList className="h-4 w-4 mr-2" />
+                      Quick Log Decision
+                    </Button>
+                  )}
 
-                    {result.data.redFlags.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-red-600 mb-1">⚠ Red Flags</h4>
-                        <ul className="text-sm space-y-1">
-                          {result.data.redFlags.map((r, i) => (
-                            <li key={i} className="text-muted-foreground">• {r}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Risks */}
-                    {result.data.risks.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium mb-2">Identified Risks</h4>
-                        <div className="space-y-2">
-                          {result.data.risks.map((risk, i) => (
-                            <div key={i} className="flex items-start gap-2 text-sm">
-                              <Badge
-                                variant={
-                                  risk.severity === "high" ? "destructive" :
-                                  risk.severity === "medium" ? "default" : "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {risk.severity}
-                              </Badge>
-                              <div>
-                                <span className="font-medium">{risk.category}:</span>{" "}
-                                <span className="text-muted-foreground">{risk.description}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Full JSON */}
-                    <details className="text-sm">
-                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                        View full JSON
-                      </summary>
-                      <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto max-h-[300px] text-xs">
-                        {JSON.stringify(result.data, null, 2)}
-                      </pre>
-                    </details>
-                  </div>
-                ) : (
-                  <div className="text-red-600 text-sm">
-                    Error: {result.error}
-                  </div>
-                )}
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                      View full JSON
+                    </summary>
+                    <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto max-h-[300px] text-xs">
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  </details>
+                </div>
               </CardContent>
             </Card>
           </>
@@ -459,11 +378,15 @@ function DecisionLoggerTab({
   setDecisions,
   activeEventId,
   actorDefault,
+  draftDecision,
+  onDraftConsumed,
 }: {
   decisions: Decision[];
   setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>;
   activeEventId: string | null;
   actorDefault: string;
+  draftDecision: { startupName: string; sector?: string; stage?: string } | null;
+  onDraftConsumed: () => void;
 }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -485,6 +408,15 @@ function DecisionLoggerTab({
       setActor(actorDefault);
     }
   }, [actorDefault, actor]);
+
+  useEffect(() => {
+    if (!draftDecision) return;
+    setStartupName(draftDecision.startupName);
+    setSector(draftDecision.sector || "");
+    setStage(draftDecision.stage || "");
+    setShowForm(true);
+    onDraftConsumed();
+  }, [draftDecision, onDraftConsumed]);
 
   const handleSaveDecision = useCallback(async () => {
     if (!activeEventId) {
@@ -1069,6 +1001,11 @@ export default function CIS() {
   const [activeTab, setActiveTab] = useState("chat");
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [draftDecision, setDraftDecision] = useState<{
+    startupName: string;
+    sector?: string;
+    stage?: string;
+  } | null>(null);
 
   const scopedMessages = useMemo(() => messages.filter((m) => m.threadId === activeThread), [messages, activeThread]);
 
@@ -1328,7 +1265,10 @@ export default function CIS() {
 
           {/* Converter Tab */}
           <TabsContent value="converter">
-            <DocumentConverterTab />
+            <DocumentConverterTab
+              onDecisionDraft={(draft) => setDraftDecision(draft)}
+              onOpenDecisionLog={() => setActiveTab("decisions")}
+            />
           </TabsContent>
 
           {/* Decisions Tab */}
@@ -1338,6 +1278,8 @@ export default function CIS() {
               setDecisions={setDecisions}
               activeEventId={activeEventId}
               actorDefault={profile?.full_name || profile?.email || ""}
+              draftDecision={draftDecision}
+              onDraftConsumed={() => setDraftDecision(null)}
             />
           </TabsContent>
 
