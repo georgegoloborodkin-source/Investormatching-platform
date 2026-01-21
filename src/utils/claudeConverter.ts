@@ -152,15 +152,17 @@ Document content:
 
 /**
  * Extract structured deal information using Claude API
- * Falls back to local processing if API is unavailable
+ * Requires a server-side API key (do not expose in production).
  */
 export async function extractWithClaude(
   documentText: string,
   apiKey?: string
 ): Promise<ExtractionResult> {
-  // If no API key, use mock/demo mode
   if (!apiKey) {
-    return mockExtraction(documentText);
+    return {
+      success: false,
+      error: "Claude API key is required. Configure a backend proxy for production use.",
+    };
   }
 
   try {
@@ -215,71 +217,6 @@ export async function extractWithClaude(
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
-}
-
-/**
- * Mock extraction for demo/offline mode
- */
-function mockExtraction(documentText: string): ExtractionResult {
-  const lowerText = documentText.toLowerCase();
-  
-  // Simple keyword extraction for demo
-  const extractName = () => {
-    const match = documentText.match(/(?:company|startup|about)\s*:?\s*([A-Z][a-zA-Z0-9\s]+)/i);
-    return match?.[1]?.trim() || 'Unknown Company';
-  };
-
-  const extractSector = () => {
-    const sectors = ['fintech', 'healthtech', 'edtech', 'saas', 'ai', 'marketplace', 'ecommerce'];
-    for (const s of sectors) {
-      if (lowerText.includes(s)) return s.charAt(0).toUpperCase() + s.slice(1);
-    }
-    return 'Technology';
-  };
-
-  const extractStage = () => {
-    const stages = ['pre-seed', 'seed', 'series a', 'series b', 'series c'];
-    for (const s of stages) {
-      if (lowerText.includes(s)) return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    }
-    return 'Seed';
-  };
-
-  const mockData: DealMemo = {
-    company: {
-      name: extractName(),
-      sector: extractSector(),
-      stage: extractStage(),
-      location: lowerText.includes('singapore') ? 'Singapore' : 
-               lowerText.includes('indonesia') ? 'Indonesia' : 'Southeast Asia',
-    },
-    team: {
-      founders: [{ name: 'Founder Name', role: 'CEO', background: 'Extracted from document' }],
-    },
-    financials: {
-      revenue: lowerText.includes('revenue') ? 'Mentioned in document' : undefined,
-      targetRaise: lowerText.includes('raising') ? 'Mentioned in document' : undefined,
-    },
-    product: {
-      description: 'Product description extracted from document text.',
-    },
-    market: {
-      competitors: [],
-    },
-    risks: [
-      { category: 'Demo Mode', description: 'Using mock extraction - add Claude API key for real analysis', severity: 'medium' },
-    ],
-    highlights: ['Demo mode active'],
-    redFlags: ['No API key configured - using mock data'],
-    rawConfidence: 30,
-  };
-
-  return {
-    success: true,
-    data: mockData,
-    tokensUsed: { input: Math.ceil(documentText.length / 4), output: 500 },
-    costEstimate: '$0.00 (Demo mode - no API call)',
-  };
 }
 
 // ============================================================================

@@ -167,3 +167,18 @@ export interface Event {
   created_at: string;
   updated_at: string;
 }
+
+export interface DecisionLog {
+  id: string;
+  event_id: string;
+  actor_id: string | null;
+  actor_name: string;
+  action_type: string;
+  startup_name: string;
+  context: Record<string, any> | null;
+  confidence_score: number;
+  outcome: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

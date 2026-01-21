@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -23,6 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Brain,
   FileText,
@@ -42,15 +43,20 @@ import {
 } from "lucide-react";
 import {
   extractWithClaude,
-  saveDecision,
-  loadDecisions,
-  deleteDecision,
   calculateDecisionStats,
   exportDecisionsToCSV,
   type DealMemo,
   type Decision,
   type ExtractionResult,
 } from "@/utils/claudeConverter";
+import {
+  ensureActiveEventForOrg,
+  ensureOrganizationForUser,
+  getDecisionsByEvent,
+  insertDecision,
+  updateDecision,
+  deleteDecision,
+} from "@/utils/supabaseHelpers";
 
 // ============================================================================
 // TYPES
@@ -79,45 +85,9 @@ const initialScopes: ScopeItem[] = [
   { id: "historical", label: "All historical", checked: false, type: "global" },
 ];
 
-const initialThreads: Thread[] = [
-  { id: "t1", title: "Main: Company D red flags" },
-  { id: "t2", title: "Branch: Compare with Company A", parentId: "t1" },
-  { id: "t3", title: "Branch: Financial Risks", parentId: "t1" },
-];
-
-const initialMessages: Message[] = [
-  { id: "m1", author: "user", text: "What are the main red flags for Company D?", threadId: "t1" },
-  { id: "m2", author: "assistant", text: "Known risks: weak CFO signals; GTM unclear; burn high vs. pipeline.", threadId: "t1" },
-  { id: "m3", author: "assistant", text: "Past cases similar: Company A (cash crunch), Company C (late GTM fit).", threadId: "t2" },
-  { id: "m4", author: "assistant", text: "Financial: burn 450k/mo; runway 9m; pipeline coverage 0.8x.", threadId: "t3" },
-];
-
-const initialKOs: KnowledgeObject[] = [
-  {
-    id: "ko1",
-    type: "Risk",
-    title: "Weak CFO bench",
-    text: "CFO org is thin; missed close last quarter.",
-    source: "DD Memo (2023-08)",
-    linked: ["Company A", "Company C"],
-  },
-  {
-    id: "ko2",
-    type: "Decision",
-    title: "Conditioned term sheet",
-    text: "Proceed if CFO hired + GTM plan validated within 60 days.",
-    source: "IC Notes (2024-01)",
-    linked: ["Outcome: GTM delay"],
-  },
-  {
-    id: "ko3",
-    type: "Outcome",
-    title: "Cash crunch in 12m",
-    text: "Similar pattern led to cash issues at Company A within 12 months.",
-    source: "Portfolio Post-mortem",
-    linked: ["Company A"],
-  },
-];
+const initialThreads: Thread[] = [];
+const initialMessages: Message[] = [];
+const initialKOs: KnowledgeObject[] = [];
 
 // ============================================================================
 // THREAD TREE COMPONENT
@@ -149,6 +119,20 @@ function ThreadTree({ threads, active, onSelect }: { threads: Thread[]; active: 
     return arr;
   };
   return <div className="space-y-1">{root.flatMap((t) => walk(t, 0))}</div>;
+}
+
+function mapDecisionRow(row: any): Decision {
+  return {
+    id: row.id,
+    timestamp: row.created_at,
+    actor: row.actor_name,
+    actionType: row.action_type,
+    startupName: row.startup_name,
+    context: row.context || {},
+    confidenceScore: row.confidence_score ?? 0,
+    outcome: row.outcome ?? undefined,
+    notes: row.notes ?? undefined,
+  };
 }
 
 // ============================================================================
@@ -191,12 +175,20 @@ function DocumentConverterTab() {
       toast({ title: "No content", description: "Please paste or upload document text", variant: "destructive" });
       return;
     }
+    if (!apiKey.trim()) {
+      toast({
+        title: "Missing API key",
+        description: "Provide a Claude API key or use a backend proxy for production.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsLoading(true);
     setResult(null);
 
     try {
-      const extractionResult = await extractWithClaude(documentText, apiKey || undefined);
+    const extractionResult = await extractWithClaude(documentText, apiKey);
       setResult(extractionResult);
       
       if (extractionResult.success) {
@@ -249,7 +241,7 @@ function DocumentConverterTab() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="api-key">Claude API Key (optional for demo)</Label>
+              <Label htmlFor="api-key">Claude API Key (required for extraction)</Label>
               <Input
                 id="api-key"
                 type="password"
@@ -259,7 +251,7 @@ function DocumentConverterTab() {
                 className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Without API key, uses demo mode with mock data
+                For production, route requests through a backend proxy.
               </p>
             </div>
 
@@ -289,7 +281,7 @@ function DocumentConverterTab() {
 
             <Button
               onClick={handleExtract}
-              disabled={isLoading || !documentText.trim()}
+              disabled={isLoading || !documentText.trim() || !apiKey.trim()}
               className="w-full"
             >
               {isLoading ? (
@@ -462,13 +454,22 @@ function DocumentConverterTab() {
 // DECISION LOGGER TAB
 // ============================================================================
 
-function DecisionLoggerTab() {
+function DecisionLoggerTab({
+  decisions,
+  setDecisions,
+  activeEventId,
+  actorDefault,
+}: {
+  decisions: Decision[];
+  setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>;
+  activeEventId: string | null;
+  actorDefault: string;
+}) {
   const { toast } = useToast();
-  const [decisions, setDecisions] = useState<Decision[]>(() => loadDecisions());
   const [showForm, setShowForm] = useState(false);
 
   // Form state
-  const [actor, setActor] = useState("");
+  const [actor, setActor] = useState(actorDefault);
   const [actionType, setActionType] = useState<Decision["actionType"]>("meeting");
   const [startupName, setStartupName] = useState("");
   const [sector, setSector] = useState("");
@@ -479,27 +480,42 @@ function DecisionLoggerTab() {
 
   const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
 
-  const handleSaveDecision = useCallback(() => {
+  useEffect(() => {
+    if (actorDefault && !actor) {
+      setActor(actorDefault);
+    }
+  }, [actorDefault, actor]);
+
+  const handleSaveDecision = useCallback(async () => {
+    if (!activeEventId) {
+      toast({ title: "No active event", description: "Please refresh and try again.", variant: "destructive" });
+      return;
+    }
     if (!actor.trim() || !startupName.trim()) {
       toast({ title: "Missing fields", description: "Actor and Startup name are required", variant: "destructive" });
       return;
     }
-
-    const newDecision = saveDecision({
-      actor: actor.trim(),
-      actionType,
-      startupName: startupName.trim(),
+    const { data, error } = await insertDecision(activeEventId, {
+      actor_id: null,
+      actor_name: actor.trim(),
+      action_type: actionType,
+      startup_name: startupName.trim(),
       context: {
         sector: sector.trim() || undefined,
         stage: stage.trim() || undefined,
         geo: geo.trim() || undefined,
       },
-      confidenceScore: confidence[0],
+      confidence_score: confidence[0],
       outcome: "pending",
-      notes: notes.trim() || undefined,
+      notes: notes.trim() || null,
     });
 
-    setDecisions(prev => [...prev, newDecision]);
+    if (error || !data) {
+      toast({ title: "Save failed", description: "Supabase rejected the decision.", variant: "destructive" });
+      return;
+    }
+
+    setDecisions(prev => [mapDecisionRow(data), ...prev]);
     toast({ title: "Decision logged", description: `Logged ${actionType} for ${startupName}` });
 
     // Reset form
@@ -511,21 +527,28 @@ function DecisionLoggerTab() {
     setConfidence([70]);
     setNotes("");
     setShowForm(false);
-  }, [actor, actionType, startupName, sector, stage, geo, confidence, notes, toast]);
+  }, [activeEventId, actor, actionType, startupName, sector, stage, geo, confidence, notes, toast, setDecisions]);
 
-  const handleDeleteDecision = useCallback((id: string) => {
-    deleteDecision(id);
+  const handleDeleteDecision = useCallback(async (id: string) => {
+    const { error } = await deleteDecision(id);
+    if (error) {
+      toast({ title: "Delete failed", description: "Supabase rejected the delete.", variant: "destructive" });
+      return;
+    }
     setDecisions(prev => prev.filter(d => d.id !== id));
     toast({ title: "Deleted", description: "Decision removed" });
-  }, [toast]);
+  }, [toast, setDecisions]);
 
-  const handleUpdateOutcome = useCallback((id: string, outcome: Decision["outcome"]) => {
-    const updated = decisions.map(d => 
-      d.id === id ? { ...d, outcome } : d
+  const handleUpdateOutcome = useCallback(async (id: string, outcome: Decision["outcome"]) => {
+    const { error } = await updateDecision(id, { outcome });
+    if (error) {
+      toast({ title: "Update failed", description: "Supabase rejected the update.", variant: "destructive" });
+      return;
+    }
+    setDecisions(prev =>
+      prev.map(d => (d.id === id ? { ...d, outcome } : d))
     );
-    localStorage.setItem("cis_decisions", JSON.stringify(updated));
-    setDecisions(updated);
-  }, [decisions]);
+  }, [toast, setDecisions]);
 
   const handleExport = useCallback(() => {
     const csv = exportDecisionsToCSV(decisions);
@@ -819,29 +842,285 @@ function DecisionLoggerTab() {
 }
 
 // ============================================================================
+// DECISION ENGINE DASHBOARD TAB
+// ============================================================================
+
+function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
+  const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
+  const uniqueActors = new Set(decisions.map((d) => d.actor).filter(Boolean)).size;
+  const positiveOutcomes = stats.byOutcome.positive || 0;
+  const hasEnoughData = decisions.length >= 20;
+
+  const patternCards = [
+    {
+      title: "Intro Timing Effects",
+      insight: hasEnoughData ? "Derived from decision history (rolling 90d)." : "Not enough data to compute yet.",
+      tag: "Timing",
+      signal: hasEnoughData ? "Live" : "Needs data",
+    },
+    {
+      title: "Partner Attention Drift",
+      insight: hasEnoughData ? "Comparing partner time vs. winning sectors." : "Not enough data to compute yet.",
+      tag: "Behavior",
+      signal: hasEnoughData ? "Live" : "Needs data",
+    },
+    {
+      title: "Peer Signal Reversal",
+      insight: hasEnoughData ? "Tracking pass → invest reversals." : "Not enough data to compute yet.",
+      tag: "Network",
+      signal: hasEnoughData ? "Live" : "Needs data",
+    },
+    {
+      title: "Warm Intro Lift",
+      insight: hasEnoughData ? "Warm vs. cold intro follow‑up rate." : "Not enough data to compute yet.",
+      tag: "Signal",
+      signal: hasEnoughData ? "Live" : "Needs data",
+    },
+  ];
+
+  const graphNodes = ["Founder", "Startup", "Investor", "Partner", "Intro", "Meeting", "Outcome"];
+  const graphEdges = ["Introduced", "Met", "Followed up", "Passed", "Invested"];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Target className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.totalDecisions}</p>
+                <p className="text-xs text-muted-foreground">Decisions Logged</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-500/10 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.averageConfidence}%</p>
+                <p className="text-xs text-muted-foreground">Avg Confidence</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{uniqueActors}</p>
+                <p className="text-xs text-muted-foreground">Active Partners</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-500/10 rounded-lg">
+                <Clock className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{positiveOutcomes}</p>
+                <p className="text-xs text-muted-foreground">Positive Outcomes</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Undiscovered Pattern Dashboard</CardTitle>
+          <CardDescription>
+            Real edge comes from longitudinal decision data, not complex models.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {patternCards.map((card) => (
+            <div key={card.title} className="border rounded-lg p-3 bg-muted/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="font-medium">{card.title}</div>
+                <Badge variant="outline">{card.tag}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground">{card.insight}</div>
+              <div className="text-xs text-muted-foreground">{card.signal}</div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Decision Graph (Phase 1)</CardTitle>
+          <CardDescription>Cheap, structured foundation. No ML required.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="text-sm font-medium mb-2">Nodes</div>
+            <div className="flex flex-wrap gap-2">
+              {graphNodes.map((node) => (
+                <Badge key={node} variant="secondary">
+                  {node}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2">Edges</div>
+            <div className="flex flex-wrap gap-2">
+              {graphEdges.map((edge) => (
+                <Badge key={edge} variant="outline">
+                  {edge}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Store every action as an edge. The graph itself becomes the intelligence layer.
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Phase 1: Decision Graph</CardTitle>
+            <CardDescription>Postgres tables + constraints</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <div>Data: intros, meetings, outcomes</div>
+            <div>Output: cross‑fund pattern visibility</div>
+            <Badge variant="secondary">Cost: near zero</Badge>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Phase 2: Scored Decisions</CardTitle>
+            <CardDescription>Statistics, not ML</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <div>Data: actor, context, confidence</div>
+            <div>Output: win‑rate by partner/sector</div>
+            <Badge variant="secondary">Cost: low</Badge>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Phase 3: Lightweight Learning</CardTitle>
+            <CardDescription>After 1k+ decisions</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <div>Models: logistic/Bayesian/bandits</div>
+            <div>Output: ranked decisions + alerts</div>
+            <Badge variant="secondary">Cost: &lt;$5k/mo</Badge>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Best Build Path (SaaS)</CardTitle>
+          <CardDescription>Operating system for VC networks, not “chat over files”.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            Start with structured decision capture + strict schemas.
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            Add privacy boundaries by organization and event.
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            Use Claude only for extraction and summarization, not decisions.
+          </div>
+          <Separator />
+          <div className="text-xs">
+            Goal: trust, constraints, and repeatable decisions before advanced ML.
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN CIS COMPONENT
 // ============================================================================
 
 export default function CIS() {
+  const { profile } = useAuth();
   const [scopes, setScopes] = useState<ScopeItem[]>(initialScopes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
-  const [activeThread, setActiveThread] = useState<string>("t1");
+  const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [activeTab, setActiveTab] = useState("chat");
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
 
   const scopedMessages = useMemo(() => messages.filter((m) => m.threadId === activeThread), [messages, activeThread]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadDecisions = async () => {
+      if (!profile) return;
+      // Sync decisions from Supabase
+
+      const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
+      if (orgError || !orgData?.organization) {
+        return;
+      }
+
+      const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
+      if (eventError || !event) {
+        return;
+      }
+
+      if (cancelled) return;
+      setActiveEventId(event.id);
+
+      const { data: decisionRows } = await getDecisionsByEvent(event.id);
+      if (cancelled) return;
+      const mapped = (decisionRows || []).map(mapDecisionRow);
+      setDecisions(mapped);
+    };
+
+    loadDecisions();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
+
   const addMessage = () => {
     if (!input.trim()) return;
+    let threadId = activeThread;
+    if (!threadId) {
+      const newThreadId = `t-${Date.now()}`;
+      setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
+      setActiveThread(newThreadId);
+      threadId = newThreadId;
+    }
     const id = `m-${Date.now()}`;
-    setMessages((prev) => [...prev, { id, author: "user", text: input.trim(), threadId: activeThread }]);
+    setMessages((prev) => [...prev, { id, author: "user", text: input.trim(), threadId }]);
     setInput("");
   };
 
   const createBranch = (title: string) => {
     const id = `t-${Date.now()}`;
-    setThreads((prev) => [...prev, { id, title, parentId: activeThread }]);
+    const parentId = activeThread || undefined;
+    setThreads((prev) => [...prev, { id, title, parentId }]);
     setActiveThread(id);
   };
 
@@ -872,7 +1151,7 @@ export default function CIS() {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
             <TabsTrigger value="chat" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Intelligence Chat
@@ -884,6 +1163,10 @@ export default function CIS() {
             <TabsTrigger value="decisions" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
               Decision Logger
+            </TabsTrigger>
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Decision Engine
             </TabsTrigger>
           </TabsList>
 
@@ -922,7 +1205,11 @@ export default function CIS() {
                     <CardTitle className="text-base">Threads (Branching)</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <ThreadTree threads={threads} active={activeThread} onSelect={setActiveThread} />
+                    {threads.length > 0 ? (
+                      <ThreadTree threads={threads} active={activeThread} onSelect={setActiveThread} />
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No threads yet.</div>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => createBranch("New branch")} className="w-full">
                       + New branch
                     </Button>
@@ -938,24 +1225,30 @@ export default function CIS() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="border rounded-md p-3 h-[420px] overflow-auto space-y-3 bg-muted/20">
-                      {scopedMessages.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`p-3 rounded-md border ${
-                            m.author === "user" ? "bg-primary/10 border-primary/30" : "bg-card"
-                          }`}
-                        >
-                          <div className="text-xs text-muted-foreground mb-1 uppercase">{m.author}</div>
-                          <div className="text-sm leading-relaxed">{m.text}</div>
-                          {m.author === "assistant" && (
-                            <div className="mt-2">
-                              <Button size="sm" variant="secondary" onClick={() => createBranch("Branch: follow-up")}>
-                                Branch
-                              </Button>
-                            </div>
-                          )}
+                      {scopedMessages.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-10">
+                          No messages yet. Start the first question to build the memory trail.
                         </div>
-                      ))}
+                      ) : (
+                        scopedMessages.map((m) => (
+                          <div
+                            key={m.id}
+                            className={`p-3 rounded-md border ${
+                              m.author === "user" ? "bg-primary/10 border-primary/30" : "bg-card"
+                            }`}
+                          >
+                            <div className="text-xs text-muted-foreground mb-1 uppercase">{m.author}</div>
+                            <div className="text-sm leading-relaxed">{m.text}</div>
+                            {m.author === "assistant" && (
+                              <div className="mt-2">
+                                <Button size="sm" variant="secondary" onClick={() => createBranch("Branch: follow-up")}>
+                                  Branch
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -991,25 +1284,29 @@ export default function CIS() {
                     <CardTitle className="text-base">Memory & Evidence</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {evidence.map((ko) => (
-                      <div key={ko.id} className="border rounded-md p-3 space-y-1 bg-muted/20">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={ko.type === "Risk" ? "destructive" : ko.type === "Outcome" ? "default" : "secondary"}>
-                            {ko.type}
-                          </Badge>
-                          <div className="font-medium text-sm">{ko.title}</div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">{ko.text}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Source: <span className="font-medium">{ko.source}</span>
-                        </div>
-                        {ko.linked.length > 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            Linked: {ko.linked.join(", ")}
+                    {evidence.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No knowledge objects yet.</div>
+                    ) : (
+                      evidence.map((ko) => (
+                        <div key={ko.id} className="border rounded-md p-3 space-y-1 bg-muted/20">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={ko.type === "Risk" ? "destructive" : ko.type === "Outcome" ? "default" : "secondary"}>
+                              {ko.type}
+                            </Badge>
+                            <div className="font-medium text-sm">{ko.title}</div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="text-xs text-muted-foreground">{ko.text}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Source: <span className="font-medium">{ko.source}</span>
+                          </div>
+                          {ko.linked.length > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              Linked: {ko.linked.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1036,7 +1333,17 @@ export default function CIS() {
 
           {/* Decisions Tab */}
           <TabsContent value="decisions">
-            <DecisionLoggerTab />
+            <DecisionLoggerTab
+              decisions={decisions}
+              setDecisions={setDecisions}
+              activeEventId={activeEventId}
+              actorDefault={profile?.full_name || profile?.email || ""}
+            />
+          </TabsContent>
+
+          {/* Decision Engine Dashboard Tab */}
+          <TabsContent value="dashboard">
+            <DecisionEngineDashboardTab decisions={decisions} />
           </TabsContent>
         </Tabs>
       </div>

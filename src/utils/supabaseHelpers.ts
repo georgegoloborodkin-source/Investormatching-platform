@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CorporatePartner, Event, Investor, Match, Mentor, Startup, TimeSlotConfig, UserProfile } from "@/types";
+import type { CorporatePartner, DecisionLog, Event, Investor, Match, Mentor, Startup, TimeSlotConfig, UserProfile } from "@/types";
 
 type SupabaseResult<T> = { data: T | null; error: any };
 
@@ -95,6 +95,38 @@ export async function getMentorsByEvent(eventId: string) {
 
 export async function getCorporatesByEvent(eventId: string) {
   return supabase.from("corporates").select("*").eq("event_id", eventId);
+}
+
+export async function getDecisionsByEvent(eventId: string) {
+  return supabase
+    .from("decisions")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+}
+
+export async function insertDecision(
+  eventId: string,
+  payload: {
+    actor_id: string | null;
+    actor_name: string;
+    action_type: string;
+    startup_name: string;
+    context: Record<string, any> | null;
+    confidence_score: number;
+    outcome: string | null;
+    notes: string | null;
+  }
+) {
+  return supabase.from("decisions").insert({ event_id: eventId, ...payload }).select("*").single();
+}
+
+export async function updateDecision(decisionId: string, updates: Partial<DecisionLog>) {
+  return supabase.from("decisions").update(updates).eq("id", decisionId);
+}
+
+export async function deleteDecision(decisionId: string) {
+  return supabase.from("decisions").delete().eq("id", decisionId);
 }
 
 export async function upsertInvestors(eventId: string, investors: Investor[]) {
