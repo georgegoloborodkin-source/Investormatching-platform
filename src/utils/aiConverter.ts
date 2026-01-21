@@ -8,27 +8,8 @@ import { Startup, Investor, Mentor, CorporatePartner } from "@/types";
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
 
 function buildCandidateBaseUrls(): string[] {
-  const ports = [8010, 8011, 8012, 8013, 8014, 8015, 8000];
-  const urls: string[] = [];
-
-  if (ENV_CONVERTER_API_URL) urls.push(ENV_CONVERTER_API_URL);
-
-  // When the UI is opened via a LAN IP (e.g. http://10.x.x.x:8080),
-  // "localhost" in the browser still points to the client machine.
-  // So we must also try the current hostname.
-  const host =
-    typeof window !== "undefined" && window.location?.hostname
-      ? window.location.hostname
-      : "localhost";
-
-  const candidates = Array.from(new Set([host, "localhost", "127.0.0.1"]));
-  for (const c of candidates) {
-    for (const p of ports) {
-      urls.push(`http://${c}:${p}`);
-    }
-  }
-
-  return Array.from(new Set(urls));
+  if (ENV_CONVERTER_API_URL) return [ENV_CONVERTER_API_URL];
+  return [];
 }
 
 let resolvedBaseUrl: string | null = null;
@@ -47,6 +28,9 @@ async function resolveConverterApiBaseUrl(): Promise<string> {
   if (resolvedBaseUrl) return resolvedBaseUrl;
 
   const candidates = buildCandidateBaseUrls();
+  if (!candidates.length) {
+    throw new Error("VITE_CONVERTER_API_URL is not set. Configure it to use the Render converter.");
+  }
 
   for (const base of candidates) {
     try {
