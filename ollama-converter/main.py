@@ -1158,23 +1158,72 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
     Try to parse CSV directly without Ollama if headers are clear.
     Returns ConversionResponse if successful, None if uncertain.
     """
+    def normalize_header(value: str) -> str:
+        if not value:
+            return ""
+        lowered = value.lower()
+        lowered = re.sub(r'\[.*?\]', ' ', lowered)
+        lowered = re.sub(r'[^a-z0-9\s]', ' ', lowered)
+        lowered = re.sub(r'\s+', ' ', lowered).strip()
+        return lowered
+
     try:
-        reader = csv.DictReader(StringIO(text_data))
-        rows = list(reader)
-        
+        # Parse rows with csv.reader to detect header row even if file starts with blank lines
+        raw_rows = list(csv.reader(StringIO(text_data)))
+        if not raw_rows:
+            return None
+
+        header_idx = None
+        normalized_rows = []
+        for idx, row in enumerate(raw_rows):
+            normalized = [normalize_header(cell) for cell in row]
+            normalized_rows.append(normalized)
+            if not any(normalized):
+                continue
+            # Look for known header signals
+            if (
+                ("investor name" in normalized or "firm name" in normalized) and
+                any("team member" in h or "member" == h for h in normalized)
+            ):
+                header_idx = idx
+                break
+            if ("company name" in normalized and any("funding" in h or "stage" == h for h in normalized)):
+                header_idx = idx
+                break
+            if ("full name" in normalized and "email" in normalized):
+                header_idx = idx
+                break
+            if (("contact name" in normalized or "contact" in normalized) and ("firm name" in normalized or "company name" in normalized)):
+                header_idx = idx
+                break
+
+        if header_idx is None:
+            # Fallback to DictReader using first line as headers
+            reader = csv.DictReader(StringIO(text_data))
+            rows = list(reader)
+        else:
+            header = raw_rows[header_idx]
+            data_rows = raw_rows[header_idx + 1 :]
+            rows = []
+            for row in data_rows:
+                if not any(cell.strip() for cell in row if isinstance(cell, str)) and not any(row):
+                    continue
+                record = {header[i]: (row[i] if i < len(row) else "") for i in range(len(header))}
+                rows.append(record)
+
         if not rows:
             return None
-        
+
         # Check first row to determine type
         first_row = rows[0]
-        headers_lower = {k.lower().strip(): k for k in first_row.keys() if k}
+        headers_lower = {normalize_header(k): k for k in first_row.keys() if k}
         
         print(f"[DEBUG] CSV Headers detected: {list(headers_lower.keys())}")
         
         # Detect type based on headers
         has_mentor_headers = any(h in headers_lower for h in ['full name', 'fullname']) and any(h in headers_lower for h in ['email'])
         has_corporate_headers = any(h in headers_lower for h in ['contact name', 'contactname']) and any(h in headers_lower for h in ['firm name', 'firmname', 'company name', 'companyname'])
-        has_investor_headers = any(h in headers_lower for h in ['firm name', 'firmname']) and any(h in headers_lower for h in ['member name', 'membername', 'team member'])
+        has_investor_headers = any(h in headers_lower for h in ['investor name', 'firm name', 'firmname']) and any(h in headers_lower for h in ['member name', 'membername', 'team member'])
         has_startup_headers = any(h in headers_lower for h in ['company name', 'companyname']) and any(h in headers_lower for h in ['funding', 'stage'])
         
         print(f"[DEBUG] Mentor headers: {has_mentor_headers}, Corporate: {has_corporate_headers}, Investor: {has_investor_headers}, Startup: {has_startup_headers}")
