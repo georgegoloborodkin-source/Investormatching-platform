@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Brain,
   FileText,
@@ -50,6 +51,7 @@ import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
   getDecisionsByEvent,
+  getDocumentsByEvent,
   insertDecision,
   insertDocument,
   updateDecision,
@@ -131,6 +133,7 @@ function mapDecisionRow(row: any): Decision {
     confidenceScore: row.confidence_score ?? 0,
     outcome: row.outcome ?? undefined,
     notes: row.notes ?? undefined,
+    documentId: row.document_id ?? undefined,
   };
 }
 
@@ -150,6 +153,7 @@ function DocumentConverterTab({
     conversion: AIConversionResponse;
     sourceType: "upload" | "paste";
     fileName: string | null;
+    file: File | null;
   }) => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -180,6 +184,7 @@ function DocumentConverterTab({
           conversion,
           sourceType: "upload",
           fileName: file.name || null,
+          file,
         });
         toast({ title: "Decision logged", description: "Auto-created from extraction." });
       }
@@ -223,6 +228,7 @@ function DocumentConverterTab({
           conversion,
           sourceType: "paste",
           fileName: null,
+          file: null,
         });
         toast({ title: "Decision logged", description: "Auto-created from extraction." });
       }
@@ -422,6 +428,7 @@ function DecisionLoggerTab({
   actorDefault,
   draftDecision,
   onDraftConsumed,
+  documents,
 }: {
   decisions: Decision[];
   setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>;
@@ -429,6 +436,7 @@ function DecisionLoggerTab({
   actorDefault: string;
   draftDecision: { startupName: string; sector?: string; stage?: string } | null;
   onDraftConsumed: () => void;
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
 }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -442,6 +450,7 @@ function DecisionLoggerTab({
   const [geo, setGeo] = useState("");
   const [confidence, setConfidence] = useState([70]);
   const [notes, setNotes] = useState("");
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>("all");
 
   const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
 
@@ -536,6 +545,15 @@ function DecisionLoggerTab({
     toast({ title: "Exported", description: `Downloaded ${decisions.length} decisions as CSV` });
   }, [decisions, toast]);
 
+  const filteredDecisions = selectedDocumentId === "all"
+    ? decisions
+    : decisions.filter((d) => d.documentId === selectedDocumentId);
+
+  const getDocumentUrl = (storagePath: string | null) => {
+    if (!storagePath) return null;
+    return supabase.storage.from("cis-documents").getPublicUrl(storagePath).data.publicUrl;
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats Overview */}
@@ -598,7 +616,7 @@ function DecisionLoggerTab({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? "Cancel" : "Log New Decision"}
         </Button>
@@ -608,6 +626,19 @@ function DecisionLoggerTab({
             Export CSV
           </Button>
         )}
+        <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Filter by document" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All documents</SelectItem>
+            {documents.map((doc) => (
+              <SelectItem key={doc.id} value={doc.id}>
+                {doc.title || doc.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* New Decision Form */}
@@ -717,7 +748,7 @@ function DecisionLoggerTab({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {decisions.length === 0 ? (
+          {filteredDecisions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No decisions logged yet</p>
@@ -725,7 +756,10 @@ function DecisionLoggerTab({
             </div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-auto">
-              {decisions.slice().reverse().map((d) => (
+              {filteredDecisions.slice().reverse().map((d) => {
+                const doc = documents.find((doc) => doc.id === d.documentId);
+                const docUrl = doc ? getDocumentUrl(doc.storage_path) : null;
+                return (
                 <div
                   key={d.id}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
@@ -740,10 +774,22 @@ function DecisionLoggerTab({
                         {d.actor} • {new Date(d.timestamp).toLocaleDateString()}
                         {d.context.sector && ` • ${d.context.sector}`}
                       </p>
+                      {doc && (
+                        <p className="text-xs text-muted-foreground">
+                          Source: {doc.title || "Document"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{d.confidenceScore}%</span>
+                    {docUrl && (
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={docUrl} target="_blank" rel="noreferrer">
+                          View source
+                        </a>
+                      </Button>
+                    )}
                     <Select
                       value={d.outcome || "pending"}
                       onValueChange={(v) => handleUpdateOutcome(d.id, v as Decision["outcome"])}
@@ -779,7 +825,7 @@ function DecisionLoggerTab({
                     </Button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </CardContent>
@@ -1043,6 +1089,7 @@ export default function CIS() {
   const [activeTab, setActiveTab] = useState("chat");
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
   const [draftDecision, setDraftDecision] = useState<{
     startupName: string;
     sector?: string;
@@ -1055,14 +1102,28 @@ export default function CIS() {
       conversion: AIConversionResponse;
       sourceType: "upload" | "paste";
       fileName: string | null;
+      file: File | null;
     }) => {
       if (!activeEventId) {
         return;
       }
+      let storagePath: string | null = null;
+      if (input.file) {
+        const safeName = input.fileName?.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
+        const path = `${activeEventId}/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("cis-documents")
+          .upload(path, input.file, { upsert: true });
+        if (!uploadError) {
+          storagePath = path;
+        }
+      }
+
       const { data: doc, error: docError } = await insertDocument(activeEventId, {
         title: input.draft.startupName,
         source_type: input.sourceType,
         file_name: input.fileName,
+        storage_path: storagePath,
         detected_type: input.conversion.detectedType || "unknown",
         extracted_json: input.conversion as unknown as Record<string, any>,
         created_by: profile?.id || null,
@@ -1092,6 +1153,9 @@ export default function CIS() {
         return;
       }
       setDecisions((prev) => [mapDecisionRow(decision), ...prev]);
+      if (storagePath) {
+        setDocuments((prev) => [{ id: docId, title: input.draft.startupName, storage_path: storagePath }, ...prev]);
+      }
     },
     [activeEventId, profile]
   );
@@ -1117,10 +1181,20 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const { data: decisionRows } = await getDecisionsByEvent(event.id);
+      const [decisionsRes, documentsRes] = await Promise.all([
+        getDecisionsByEvent(event.id),
+        getDocumentsByEvent(event.id),
+      ]);
       if (cancelled) return;
-      const mapped = (decisionRows || []).map(mapDecisionRow);
+      const mapped = (decisionsRes.data || []).map(mapDecisionRow);
       setDecisions(mapped);
+      setDocuments(
+        (documentsRes.data || []).map((doc: any) => ({
+          id: doc.id,
+          title: doc.title,
+          storage_path: doc.storage_path || null,
+        }))
+      );
     };
 
     loadDecisions();
@@ -1370,6 +1444,7 @@ export default function CIS() {
               actorDefault={profile?.full_name || profile?.email || ""}
               draftDecision={draftDecision}
               onDraftConsumed={() => setDraftDecision(null)}
+              documents={documents}
             />
           </TabsContent>
 

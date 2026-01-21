@@ -190,6 +190,7 @@ export interface DocumentRecord {
   title: string | null;
   source_type: string;
   file_name: string | null;
+  storage_path: string | null;
   detected_type: string | null;
   extracted_json: Record<string, any> | null;
   created_by: string | null;

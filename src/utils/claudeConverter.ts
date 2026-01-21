@@ -92,6 +92,7 @@ export interface Decision {
   confidenceScore: number;
   outcome?: 'positive' | 'negative' | 'pending';
   notes?: string;
+  documentId?: string;
 }
 
 export interface DecisionStats {

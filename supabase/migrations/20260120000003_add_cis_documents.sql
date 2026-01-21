@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS documents (
   title TEXT,
   source_type TEXT DEFAULT 'upload' CHECK (source_type IN ('upload', 'paste', 'api')),
   file_name TEXT,
+  storage_path TEXT,
   detected_type TEXT,
   extracted_json JSONB,
   created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
