@@ -1850,32 +1850,50 @@ async def ingest_clickup(request: ClickUpIngestRequest):
 
 @app.post("/ingest/google-drive", response_model=GoogleDriveIngestResponse)
 async def ingest_google_drive(request: GoogleDriveIngestRequest):
+    if not request.access_token:
+        raise HTTPException(status_code=400, detail="Access token required for private Google Drive files.")
+    
     kind, file_id = parse_google_drive_url(request.url.strip())
-
-    if kind == "document":
-        export_url = f"https://docs.google.com/document/d/{file_id}/export?format=txt"
-        source_type = "notes"
-    elif kind == "presentation":
-        export_url = f"https://docs.google.com/presentation/d/{file_id}/export?format=txt"
-        source_type = "deck"
-    elif kind == "spreadsheet":
-        export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
-        source_type = "notes"
-    else:
+    
+    if kind not in ["document", "presentation", "spreadsheet"]:
         raise HTTPException(status_code=400, detail="Drive file URLs require a Docs/Slides/Sheets link.")
 
-    headers = {}
-    if request.access_token:
-        headers["Authorization"] = f"Bearer {request.access_token}"
+    # Use Google Drive API v3 to download the file
+    # For Google Docs/Sheets/Slides, we need to export them
+    if kind == "document":
+        # Export as plain text
+        api_url = f"https://www.googleapis.com/drive/v3/files/{file_id}/export?mimeType=text/plain"
+        source_type = "notes"
+    elif kind == "presentation":
+        # Export as plain text
+        api_url = f"https://www.googleapis.com/drive/v3/files/{file_id}/export?mimeType=text/plain"
+        source_type = "deck"
+    elif kind == "spreadsheet":
+        # Export as CSV
+        api_url = f"https://www.googleapis.com/drive/v3/files/{file_id}/export?mimeType=text/csv"
+        source_type = "notes"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type.")
+
+    headers = {
+        "Authorization": f"Bearer {request.access_token}",
+        "Accept": "text/plain" if kind != "spreadsheet" else "text/csv"
+    }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        res = await client.get(export_url, headers=headers)
+        res = await client.get(api_url, headers=headers)
         if res.status_code >= 400:
+            error_detail = res.text[:500] if res.text else "No error details"
             raise HTTPException(
                 status_code=res.status_code,
-                detail="Google Drive export failed. Make sure the file is shared or sign in again for Drive access."
+                detail=f"Google Drive API failed (status {res.status_code}): {error_detail}. Make sure you have Drive access and the file is accessible."
             )
         content = res.text
+        
+        # Log if content is empty
+        if not content or len(content.strip()) == 0:
+            print(f"WARNING: Google Drive API returned empty content for {file_id}. Status: {res.status_code}")
+            content = f"[Empty content from Google Drive file: {file_id}]"
 
     title = f"{kind}-{file_id[:8]}"
     return GoogleDriveIngestResponse(title=title, content=content, raw_content=content, sourceType=source_type)
