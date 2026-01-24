@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CorporatePartner, DecisionLog, DocumentRecord, Event, Investor, Match, Mentor, Startup, TimeSlotConfig, UserProfile } from "@/types";
+import type { CorporatePartner, DecisionLog, DocumentRecord, Event, Investor, Match, Mentor, SourceRecord, Startup, TimeSlotConfig, UserProfile } from "@/types";
 
 type SupabaseResult<T> = { data: T | null; error: any };
 
@@ -155,6 +155,33 @@ export async function getDocumentsByEvent(eventId: string) {
     .select("*")
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
+}
+
+export async function getSourcesByEvent(eventId: string) {
+  return supabase
+    .from("sources")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+}
+
+export async function insertSource(
+  eventId: string,
+  payload: {
+    title: string | null;
+    source_type: SourceRecord["source_type"];
+    external_url: string | null;
+    storage_path: string | null;
+    tags: string[] | null;
+    status: SourceRecord["status"];
+    created_by: string | null;
+  }
+) {
+  return supabase.from("sources").insert({ event_id: eventId, ...payload }).select("*").single();
+}
+
+export async function deleteSource(sourceId: string) {
+  return supabase.from("sources").delete().eq("id", sourceId);
 }
 
 export async function upsertInvestors(eventId: string, investors: Investor[]) {
