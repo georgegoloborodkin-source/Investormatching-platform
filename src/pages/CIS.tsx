@@ -1583,7 +1583,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 // ============================================================================
 
 export default function CIS() {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { toast } = useToast();
   const [scopes, setScopes] = useState<ScopeItem[]>(initialScopes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
@@ -1648,17 +1648,18 @@ export default function CIS() {
       if (!eventId) {
         throw new Error("No active event available.");
       }
+      const userId = profile?.id || user?.id || null;
       const { data, error } = await insertSource(eventId, {
         ...payload,
         storage_path: null,
-        created_by: profile?.id || null,
+        created_by: userId,
       });
       if (error || !data) {
         throw new Error("Supabase rejected the source.");
       }
       setSources((prev) => [data as SourceRecord, ...prev]);
     },
-    [activeEventId, profile]
+    [activeEventId, profile, user]
   );
 
   const ensureActiveEventId = useCallback(async () => {
@@ -1724,6 +1725,7 @@ export default function CIS() {
         }
       }
 
+      const userId = profile?.id || user?.id || null;
       const { data: doc, error: docError } = await insertDocument(eventId, {
         title: input.draft.startupName,
         source_type: input.sourceType,
@@ -1732,7 +1734,7 @@ export default function CIS() {
         detected_type: input.conversion.detectedType || "unknown",
         extracted_json: input.conversion as unknown as Record<string, any>,
         raw_content: input.rawContent || null,
-        created_by: profile?.id || null,
+        created_by: userId,
       });
 
       const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
@@ -1746,8 +1748,8 @@ export default function CIS() {
       ]);
 
       const { data: decision, error } = await insertDecision(eventId, {
-        actor_id: profile?.id || null,
-        actor_name: profile?.full_name || profile?.email || "Unknown",
+        actor_id: userId,
+        actor_name: profile?.full_name || profile?.email || user?.email || "Unknown",
         action_type: "meeting",
         startup_name: input.draft.startupName,
         context: {
@@ -1768,7 +1770,7 @@ export default function CIS() {
         setDocuments((prev) => [{ id: docId, title: input.draft.startupName, storage_path: storagePath }, ...prev]);
       }
     },
-    [activeEventId, profile]
+    [activeEventId, profile, user]
   );
 
   const scopedMessages = useMemo(() => messages.filter((m) => m.threadId === activeThread), [messages, activeThread]);
@@ -2085,7 +2087,7 @@ export default function CIS() {
               }
               activeEventId={activeEventId}
               ensureActiveEventId={ensureActiveEventId}
-              currentUserId={profile?.id || null}
+              currentUserId={profile?.id || user?.id || null}
             />
           </TabsContent>
 
