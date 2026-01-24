@@ -940,6 +940,7 @@ function SourcesTab({
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
+  activeEventId,
 }: {
   sources: SourceRecord[];
   onCreateSource: (payload: {
@@ -958,6 +959,7 @@ function SourcesTab({
     fileName: string | null;
     file: File | null;
   }) => Promise<void>;
+  activeEventId: string | null;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -971,6 +973,7 @@ function SourcesTab({
   const [isImportingDrive, setIsImportingDrive] = useState(false);
   const [autoExtract, setAutoExtract] = useState(true);
   const MAX_IMPORT_CHARS = 24000;
+  const canImport = Boolean(activeEventId);
 
   const handleAdd = useCallback(async () => {
     if (!title.trim() && !externalUrl.trim()) {
@@ -1008,6 +1011,14 @@ function SourcesTab({
   }, [externalUrl, onCreateSource, sourceType, tags, title, toast]);
 
   const handleImportClickUp = useCallback(async () => {
+    if (!canImport) {
+      toast({
+        title: "No active event",
+        description: "Wait a moment for your event to load, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!clickUpListId.trim()) {
       toast({
         title: "Missing list ID",
@@ -1045,9 +1056,17 @@ function SourcesTab({
     } finally {
       setIsImportingClickUp(false);
     }
-  }, [clickUpListId, onCreateSource, toast]);
+  }, [canImport, clickUpListId, onCreateSource, toast]);
 
   const handleImportDrive = useCallback(async () => {
+    if (!canImport) {
+      toast({
+        title: "No active event",
+        description: "Wait a moment for your event to load, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!driveUrl.trim()) {
       toast({
         title: "Missing Drive link",
@@ -1111,10 +1130,17 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [autoExtract, driveUrl, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
+  }, [autoExtract, canImport, driveUrl, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
 
   return (
     <div className="space-y-6">
+      {!canImport && (
+        <Card>
+          <CardContent className="pt-4 text-sm text-muted-foreground">
+            Loading your active event... Imports will be available in a moment.
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>ClickUp Import</CardTitle>
@@ -1938,6 +1964,7 @@ export default function CIS() {
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}
+              activeEventId={activeEventId}
             />
           </TabsContent>
 
