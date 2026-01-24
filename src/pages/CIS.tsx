@@ -161,6 +161,7 @@ function DocumentConverterTab({
     sourceType: "upload" | "paste" | "api";
     fileName: string | null;
     file: File | null;
+    eventIdOverride?: string | null;
   }) => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -941,15 +942,19 @@ function SourcesTab({
   getGoogleAccessToken,
   onAutoLogDecision,
   activeEventId,
+  ensureActiveEventId,
 }: {
   sources: SourceRecord[];
-  onCreateSource: (payload: {
-    title: string | null;
-    source_type: SourceRecord["source_type"];
-    external_url: string | null;
-    tags: string[] | null;
-    status: SourceRecord["status"];
-  }) => Promise<void>;
+  onCreateSource: (
+    payload: {
+      title: string | null;
+      source_type: SourceRecord["source_type"];
+      external_url: string | null;
+      tags: string[] | null;
+      status: SourceRecord["status"];
+    },
+    eventIdOverride?: string | null
+  ) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
   onAutoLogDecision: (input: {
@@ -958,8 +963,10 @@ function SourcesTab({
     sourceType: "upload" | "paste" | "api";
     fileName: string | null;
     file: File | null;
+    eventIdOverride?: string | null;
   }) => Promise<void>;
   activeEventId: string | null;
+  ensureActiveEventId: () => Promise<string | null>;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -1011,10 +1018,11 @@ function SourcesTab({
   }, [externalUrl, onCreateSource, sourceType, tags, title, toast]);
 
   const handleImportClickUp = useCallback(async () => {
-    if (!canImport) {
+    const eventId = activeEventId || (await ensureActiveEventId());
+    if (!eventId) {
       toast({
         title: "No active event",
-        description: "Wait a moment for your event to load, then try again.",
+        description: "Create or activate an event before importing.",
         variant: "destructive",
       });
       return;
@@ -1042,7 +1050,7 @@ function SourcesTab({
           external_url: task.url || null,
           tags: tagList.length ? tagList : null,
           status: "active",
-        });
+        }, eventId);
         created += 1;
       }
       toast({ title: "Import complete", description: `Imported ${created} ClickUp tasks.` });
@@ -1056,13 +1064,14 @@ function SourcesTab({
     } finally {
       setIsImportingClickUp(false);
     }
-  }, [canImport, clickUpListId, onCreateSource, toast]);
+  }, [activeEventId, clickUpListId, ensureActiveEventId, onCreateSource, toast]);
 
   const handleImportDrive = useCallback(async () => {
-    if (!canImport) {
+    const eventId = activeEventId || (await ensureActiveEventId());
+    if (!eventId) {
       toast({
         title: "No active event",
-        description: "Wait a moment for your event to load, then try again.",
+        description: "Create or activate an event before importing.",
         variant: "destructive",
       });
       return;
@@ -1093,7 +1102,7 @@ function SourcesTab({
         external_url: driveUrl.trim(),
         tags: ["google-drive"],
         status: "active",
-      });
+      }, eventId);
       toast({ title: "Drive import complete", description: "Source saved to your library." });
 
       if (autoExtract && result.content) {
@@ -1111,6 +1120,7 @@ function SourcesTab({
             sourceType: "api",
             fileName: result.title || null,
             file: null,
+            eventIdOverride: eventId,
           });
           toast({ title: "Decision logged", description: "Auto-created from Drive extraction." });
         } else if (conversion.errors?.length) {
@@ -1130,7 +1140,7 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [autoExtract, canImport, driveUrl, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
+  }, [activeEventId, autoExtract, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
 
   return (
     <div className="space-y-6">
@@ -1527,6 +1537,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
 export default function CIS() {
   const { profile, signOut } = useAuth();
+  const { toast } = useToast();
   const [scopes, setScopes] = useState<ScopeItem[]>(initialScopes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
@@ -1561,17 +1572,21 @@ export default function CIS() {
   );
 
   const handleCreateSource = useCallback(
-    async (payload: {
-      title: string | null;
-      source_type: SourceRecord["source_type"];
-      external_url: string | null;
-      tags: string[] | null;
-      status: SourceRecord["status"];
-    }) => {
-      if (!activeEventId) {
+    async (
+      payload: {
+        title: string | null;
+        source_type: SourceRecord["source_type"];
+        external_url: string | null;
+        tags: string[] | null;
+        status: SourceRecord["status"];
+      },
+      eventIdOverride?: string | null
+    ) => {
+      const eventId = eventIdOverride ?? activeEventId;
+      if (!eventId) {
         throw new Error("No active event available.");
       }
-      const { data, error } = await insertSource(activeEventId, {
+      const { data, error } = await insertSource(eventId, {
         ...payload,
         storage_path: null,
         created_by: profile?.id || null,
@@ -1583,6 +1598,30 @@ export default function CIS() {
     },
     [activeEventId, profile]
   );
+
+  const ensureActiveEventId = useCallback(async () => {
+    if (!profile) return null;
+    const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
+    if (orgError || !orgData?.organization) {
+      toast({
+        title: "Organization missing",
+        description: "We could not load your organization.",
+        variant: "destructive",
+      });
+      return null;
+    }
+    const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
+    if (eventError || !event) {
+      toast({
+        title: "No active event",
+        description: "Create or activate an event first.",
+        variant: "destructive",
+      });
+      return null;
+    }
+    setActiveEventId(event.id);
+    return event.id;
+  }, [profile, toast]);
 
   const handleDeleteSource = useCallback(async (sourceId: string) => {
     const { error } = await deleteSource(sourceId);
@@ -1604,14 +1643,16 @@ export default function CIS() {
       sourceType: "upload" | "paste" | "api";
       fileName: string | null;
       file: File | null;
+      eventIdOverride?: string | null;
     }) => {
-      if (!activeEventId) {
+      const eventId = input.eventIdOverride ?? activeEventId;
+      if (!eventId) {
         return;
       }
       let storagePath: string | null = null;
       if (input.file) {
         const safeName = input.fileName?.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
-        const path = `${activeEventId}/${Date.now()}-${safeName}`;
+        const path = `${eventId}/${Date.now()}-${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from("cis-documents")
           .upload(path, input.file, { upsert: true });
@@ -1620,7 +1661,7 @@ export default function CIS() {
         }
       }
 
-      const { data: doc, error: docError } = await insertDocument(activeEventId, {
+      const { data: doc, error: docError } = await insertDocument(eventId, {
         title: input.draft.startupName,
         source_type: input.sourceType,
         file_name: input.fileName,
@@ -1640,7 +1681,7 @@ export default function CIS() {
         ...prev,
       ]);
 
-      const { data: decision, error } = await insertDecision(activeEventId, {
+      const { data: decision, error } = await insertDecision(eventId, {
         actor_id: profile?.id || null,
         actor_name: profile?.full_name || profile?.email || "Unknown",
         action_type: "meeting",
@@ -1965,6 +2006,7 @@ export default function CIS() {
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}
               activeEventId={activeEventId}
+              ensureActiveEventId={ensureActiveEventId}
             />
           </TabsContent>
 
