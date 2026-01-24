@@ -950,8 +950,10 @@ function SourcesTab({
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
+  onDocumentSaved,
   activeEventId,
   ensureActiveEventId,
+  currentUserId,
 }: {
   sources: SourceRecord[];
   onCreateSource: (
@@ -975,8 +977,10 @@ function SourcesTab({
     rawContent?: string | null;
     eventIdOverride?: string | null;
   }) => Promise<void>;
+  onDocumentSaved: (doc: { id: string; title: string | null; storage_path: string | null }) => void;
   activeEventId: string | null;
   ensureActiveEventId: () => Promise<string | null>;
+  currentUserId: string | null;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -1154,19 +1158,21 @@ function SourcesTab({
           detected_type: conversionResult?.detectedType || null,
           extracted_json: (conversionResult || {}) as Record<string, any>,
           raw_content: rawContent,
-          created_by: profile?.id || null,
+          created_by: currentUserId || null,
         });
-        if (docError || !doc?.id) {
+        const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
+        if (docError || !docRecord?.id) {
           toast({
             title: "Document save failed",
             description: docError?.message || "Could not save the Drive content to documents.",
             variant: "destructive",
           });
         } else {
-          setDocuments((prev) => [
-            { id: doc.id, title: doc.title || null, storage_path: doc.storage_path || null },
-            ...prev,
-          ]);
+          onDocumentSaved({
+            id: docRecord.id,
+            title: docRecord.title || null,
+            storage_path: docRecord.storage_path || null,
+          });
           toast({ title: "Document saved", description: "Raw content stored in Documents." });
         }
       }
@@ -1181,7 +1187,7 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [activeEventId, autoExtract, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, profile?.id, toast]);
+  }, [activeEventId, autoExtract, currentUserId, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, onDocumentSaved, toast]);
 
   return (
     <div className="space-y-6">
@@ -1801,7 +1807,15 @@ export default function CIS() {
           storage_path: doc.storage_path || null,
         }))
       );
-      setSources((sourcesRes.data || []) as SourceRecord[]);
+      const normalizedSources = (sourcesRes.data || []).map((source: any) => {
+        const tags = Array.isArray(source.tags)
+          ? source.tags
+          : typeof source.tags === "string"
+          ? source.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+          : null;
+        return { ...source, tags };
+      });
+      setSources(normalizedSources as SourceRecord[]);
     };
 
     loadDecisions();
@@ -2063,8 +2077,15 @@ export default function CIS() {
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}
+              onDocumentSaved={(doc) =>
+                setDocuments((prev) => [
+                  { id: doc.id, title: doc.title, storage_path: doc.storage_path },
+                  ...prev,
+                ])
+              }
               activeEventId={activeEventId}
               ensureActiveEventId={ensureActiveEventId}
+              currentUserId={profile?.id || null}
             />
           </TabsContent>
 
