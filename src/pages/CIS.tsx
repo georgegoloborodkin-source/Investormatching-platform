@@ -40,24 +40,30 @@ import {
   Clock,
   DollarSign,
   Sparkles,
+  Folder,
+  Link2,
 } from "lucide-react";
 import {
   calculateDecisionStats,
   exportDecisionsToCSV,
   type Decision,
 } from "@/utils/claudeConverter";
-import type { DocumentRecord } from "@/types";
+import type { DocumentRecord, SourceRecord } from "@/types";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
   getDecisionsByEvent,
   getDocumentsByEvent,
+  getSourcesByEvent,
   insertDecision,
   insertDocument,
+  insertSource,
   updateDecision,
   deleteDecision,
+  deleteSource,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, type AIConversionResponse } from "@/utils/aiConverter";
+import { ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
 // ============================================================================
@@ -152,7 +158,7 @@ function DocumentConverterTab({
   onAutoLogDecision: (input: {
     draft: { startupName: string; sector?: string; stage?: string };
     conversion: AIConversionResponse;
-    sourceType: "upload" | "paste";
+    sourceType: "upload" | "paste" | "api";
     fileName: string | null;
     file: File | null;
   }) => Promise<void>;
@@ -161,6 +167,7 @@ function DocumentConverterTab({
   const [documentText, setDocumentText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AIConversionResponse | null>(null);
+  const MAX_PASTE_CHARS = 24000;
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -209,7 +216,16 @@ function DocumentConverterTab({
     setResult(null);
 
     try {
-      const conversion = await convertWithAI(documentText);
+      let input = documentText;
+      if (input.length > MAX_PASTE_CHARS) {
+        input = input.slice(0, MAX_PASTE_CHARS);
+        toast({
+          title: "Content trimmed",
+          description: "Pasted text was too long; we trimmed it to fit the converter limit.",
+        });
+      }
+
+      const conversion = await convertWithAI(input);
       setResult(conversion);
       toast({
         title: "Extraction complete",
@@ -223,6 +239,14 @@ function DocumentConverterTab({
             stage: conversion.startups[0].fundingStage || undefined,
           }
         : null;
+      if (conversion.errors?.length && !draft) {
+        toast({
+          title: "Extraction warning",
+          description: conversion.errors[0],
+          variant: "destructive",
+        });
+      }
+
       if (draft) {
         await onAutoLogDecision({
           draft,
@@ -382,6 +406,31 @@ function DocumentConverterTab({
                   ) : (
                     <div className="text-sm text-muted-foreground">
                       No startup detected yet. Upload a pitch deck or paste content.
+                    </div>
+                  )}
+
+                  {(result.errors?.length || result.warnings?.length) && (
+                    <div className="border rounded-md p-3 text-xs space-y-2">
+                      {result.errors?.length ? (
+                        <div>
+                          <div className="font-semibold text-destructive">Errors</div>
+                          <ul className="list-disc list-inside text-destructive">
+                            {result.errors.slice(0, 3).map((err) => (
+                              <li key={err}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {result.warnings?.length ? (
+                        <div>
+                          <div className="font-semibold">Warnings</div>
+                          <ul className="list-disc list-inside text-muted-foreground">
+                            {result.warnings.slice(0, 3).map((warn) => (
+                              <li key={warn}>{warn}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                     </div>
                   )}
 
@@ -882,6 +931,357 @@ function DecisionLoggerTab({
 }
 
 // ============================================================================
+// SOURCES TAB
+// ============================================================================
+
+function SourcesTab({
+  sources,
+  onCreateSource,
+  onDeleteSource,
+  getGoogleAccessToken,
+  onAutoLogDecision,
+}: {
+  sources: SourceRecord[];
+  onCreateSource: (payload: {
+    title: string | null;
+    source_type: SourceRecord["source_type"];
+    external_url: string | null;
+    tags: string[] | null;
+    status: SourceRecord["status"];
+  }) => Promise<void>;
+  onDeleteSource: (sourceId: string) => Promise<void>;
+  getGoogleAccessToken: () => Promise<string | null>;
+  onAutoLogDecision: (input: {
+    draft: { startupName: string; sector?: string; stage?: string };
+    conversion: AIConversionResponse;
+    sourceType: "upload" | "paste" | "api";
+    fileName: string | null;
+    file: File | null;
+  }) => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState("");
+  const [sourceType, setSourceType] = useState<SourceRecord["source_type"]>("syndicate");
+  const [externalUrl, setExternalUrl] = useState("");
+  const [tags, setTags] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [clickUpListId, setClickUpListId] = useState("");
+  const [driveUrl, setDriveUrl] = useState("");
+  const [isImportingClickUp, setIsImportingClickUp] = useState(false);
+  const [isImportingDrive, setIsImportingDrive] = useState(false);
+  const [autoExtract, setAutoExtract] = useState(true);
+  const MAX_IMPORT_CHARS = 24000;
+
+  const handleAdd = useCallback(async () => {
+    if (!title.trim() && !externalUrl.trim()) {
+      toast({
+        title: "Missing details",
+        description: "Add a title or a URL to create a source.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onCreateSource({
+        title: title.trim() || null,
+        source_type: sourceType,
+        external_url: externalUrl.trim() || null,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+        status: "active",
+      });
+      setTitle("");
+      setExternalUrl("");
+      setTags("");
+    } catch (error) {
+      toast({
+        title: "Create failed",
+        description: error instanceof Error ? error.message : "Could not create source.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [externalUrl, onCreateSource, sourceType, tags, title, toast]);
+
+  const handleImportClickUp = useCallback(async () => {
+    if (!clickUpListId.trim()) {
+      toast({
+        title: "Missing list ID",
+        description: "Enter a ClickUp list ID to import tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportingClickUp(true);
+    try {
+      const response = await ingestClickUpList(clickUpListId.trim(), true);
+      let created = 0;
+      for (const task of response.tasks || []) {
+        const tagList = ["clickup", task.status || ""]
+          .concat(task.assignees || [])
+          .map((t) => t.trim())
+          .filter(Boolean);
+        await onCreateSource({
+          title: task.name || "ClickUp task",
+          source_type: "syndicate",
+          external_url: task.url || null,
+          tags: tagList.length ? tagList : null,
+          status: "active",
+        });
+        created += 1;
+      }
+      toast({ title: "Import complete", description: `Imported ${created} ClickUp tasks.` });
+      setClickUpListId("");
+    } catch (error) {
+      toast({
+        title: "ClickUp import failed",
+        description: error instanceof Error ? error.message : "Could not import ClickUp tasks.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImportingClickUp(false);
+    }
+  }, [clickUpListId, onCreateSource, toast]);
+
+  const handleImportDrive = useCallback(async () => {
+    if (!driveUrl.trim()) {
+      toast({
+        title: "Missing Drive link",
+        description: "Paste a Google Drive link to import.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportingDrive(true);
+    try {
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
+        toast({
+          title: "Google Drive access needed",
+          description: "Please sign in again with Google Drive access enabled.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const result = await ingestGoogleDrive(driveUrl.trim(), accessToken);
+      await onCreateSource({
+        title: result.title || "Google Drive source",
+        source_type: "notes",
+        external_url: driveUrl.trim(),
+        tags: ["google-drive"],
+        status: "active",
+      });
+      toast({ title: "Drive import complete", description: "Source saved to your library." });
+
+      if (autoExtract && result.content) {
+        const content = result.content.length > MAX_IMPORT_CHARS ? result.content.slice(0, MAX_IMPORT_CHARS) : result.content;
+        const conversion = await convertWithAI(content);
+        const primary = conversion.startups?.[0];
+        if (primary?.companyName) {
+          await onAutoLogDecision({
+            draft: {
+              startupName: primary.companyName || "Unknown Company",
+              sector: primary.industry || undefined,
+              stage: primary.fundingStage || undefined,
+            },
+            conversion,
+            sourceType: "api",
+            fileName: result.title || null,
+            file: null,
+          });
+          toast({ title: "Decision logged", description: "Auto-created from Drive extraction." });
+        } else if (conversion.errors?.length) {
+          toast({ title: "Extraction warning", description: conversion.errors[0], variant: "destructive" });
+        } else {
+          toast({ title: "No startup detected", description: "Extraction completed, but no company was found." });
+        }
+      }
+
+      setDriveUrl("");
+    } catch (error) {
+      toast({
+        title: "Drive import failed",
+        description: error instanceof Error ? error.message : "Could not import Google Drive file.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImportingDrive(false);
+    }
+  }, [autoExtract, driveUrl, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>ClickUp Import</CardTitle>
+          <CardDescription>Pull syndicate tasks directly from a ClickUp list.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Label>ClickUp List ID</Label>
+              <Input
+                value={clickUpListId}
+                onChange={(e) => setClickUpListId(e.target.value)}
+                placeholder="e.g., 90120481234"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={handleImportClickUp} disabled={isImportingClickUp} className="w-full">
+                {isImportingClickUp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                Import ClickUp
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Uses server-side token. Ask admin to set CLICKUP_API_TOKEN in the converter service.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Google Drive Import</CardTitle>
+          <CardDescription>Paste a Google Docs/Slides/Sheets link to register it.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Label>Drive URL</Label>
+              <Input
+                value={driveUrl}
+                onChange={(e) => setDriveUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/..."
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full">
+                {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                Import Drive
+              </Button>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} />
+            Auto-extract and log decision after import
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Source Library</CardTitle>
+          <CardDescription>Track syndicates, company decks, and notes in one place.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Syndicate: Astor Ventures"
+              />
+            </div>
+            <div>
+              <Label>Source Type</Label>
+              <Select value={sourceType} onValueChange={(value) => setSourceType(value as SourceRecord["source_type"])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="syndicate">Syndicate</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                  <SelectItem value="deck">Deck</SelectItem>
+                  <SelectItem value="notes">Notes</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>External URL (optional)</Label>
+              <Input
+                value={externalUrl}
+                onChange={(e) => setExternalUrl(e.target.value)}
+                placeholder="https://docs.google.com/..."
+              />
+            </div>
+            <div>
+              <Label>Tags (comma separated)</Label>
+              <Input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="SEA, fintech, seed"
+              />
+            </div>
+          </div>
+          <Button onClick={handleAdd} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Add Source
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tracked Sources</CardTitle>
+          <CardDescription>{sources.length} items</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {sources.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No sources yet. Add your first syndicate or company source.</div>
+          ) : (
+            sources.map((source) => (
+              <div key={source.id} className="flex items-center justify-between gap-3 border rounded-md p-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{source.source_type}</Badge>
+                    {source.status !== "active" && <Badge variant="secondary">{source.status}</Badge>}
+                  </div>
+                  <div className="font-medium">{source.title || "Untitled source"}</div>
+                  {source.external_url && (
+                    <div className="text-xs text-muted-foreground truncate max-w-[420px]">{source.external_url}</div>
+                  )}
+                  {source.tags && source.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {source.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {source.external_url && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={source.external_url} target="_blank" rel="noreferrer">
+                        <Link2 className="h-4 w-4 mr-1" />
+                        Open
+                      </a>
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================================
 // DECISION ENGINE DASHBOARD TAB
 // ============================================================================
 
@@ -1100,7 +1500,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 // ============================================================================
 
 export default function CIS() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const [scopes, setScopes] = useState<ScopeItem[]>(initialScopes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
@@ -1110,6 +1510,7 @@ export default function CIS() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
+  const [sources, setSources] = useState<SourceRecord[]>([]);
   const [draftDecision, setDraftDecision] = useState<{
     startupName: string;
     sector?: string;
@@ -1133,11 +1534,48 @@ export default function CIS() {
     [documents]
   );
 
+  const handleCreateSource = useCallback(
+    async (payload: {
+      title: string | null;
+      source_type: SourceRecord["source_type"];
+      external_url: string | null;
+      tags: string[] | null;
+      status: SourceRecord["status"];
+    }) => {
+      if (!activeEventId) {
+        throw new Error("No active event available.");
+      }
+      const { data, error } = await insertSource(activeEventId, {
+        ...payload,
+        storage_path: null,
+        created_by: profile?.id || null,
+      });
+      if (error || !data) {
+        throw new Error("Supabase rejected the source.");
+      }
+      setSources((prev) => [data as SourceRecord, ...prev]);
+    },
+    [activeEventId, profile]
+  );
+
+  const handleDeleteSource = useCallback(async (sourceId: string) => {
+    const { error } = await deleteSource(sourceId);
+    if (error) {
+      return;
+    }
+    setSources((prev) => prev.filter((source) => source.id !== sourceId));
+  }, []);
+
+  const getGoogleAccessToken = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.provider_token || null;
+  }, []);
+
   const handleAutoLogDecision = useCallback(
     async (input: {
       draft: { startupName: string; sector?: string; stage?: string };
       conversion: AIConversionResponse;
-      sourceType: "upload" | "paste";
+      sourceType: "upload" | "paste" | "api";
       fileName: string | null;
       file: File | null;
     }) => {
@@ -1223,9 +1661,10 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const [decisionsRes, documentsRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
+        getSourcesByEvent(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -1237,6 +1676,7 @@ export default function CIS() {
           storage_path: doc.storage_path || null,
         }))
       );
+      setSources((sourcesRes.data || []) as SourceRecord[]);
     };
 
     loadDecisions();
@@ -1276,7 +1716,7 @@ export default function CIS() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Brain className="h-7 w-7 text-primary" />
@@ -1286,14 +1726,32 @@ export default function CIS() {
               AI-powered document extraction, decision tracking, and knowledge management
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <a href="/">← Back to Matchmaking</a>
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="border rounded-md px-3 py-2 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground">
+                {profile?.full_name || profile?.email || "Signed-in user"}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{profile?.role || "member"}</Badge>
+                {profile?.organization_id ? (
+                  <span className="truncate">Org: {profile.organization_id}</span>
+                ) : (
+                  <span>Org: pending</span>
+                )}
+              </div>
+            </div>
+            <Button variant="outline" onClick={signOut}>
+              Log out
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/">← Back to Matchmaking</a>
+            </Button>
+          </div>
         </div>
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
             <TabsTrigger value="chat" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Intelligence Chat
@@ -1301,6 +1759,10 @@ export default function CIS() {
             <TabsTrigger value="converter" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Document Converter
+            </TabsTrigger>
+            <TabsTrigger value="sources" className="flex items-center gap-2">
+              <Folder className="h-4 w-4" />
+              Sources
             </TabsTrigger>
             <TabsTrigger value="decisions" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
@@ -1466,6 +1928,17 @@ export default function CIS() {
                 </Card>
               </div>
             </div>
+          </TabsContent>
+
+          {/* Sources Tab */}
+          <TabsContent value="sources">
+            <SourcesTab
+              sources={sources}
+              onCreateSource={handleCreateSource}
+              onDeleteSource={handleDeleteSource}
+              getGoogleAccessToken={getGoogleAccessToken}
+              onAutoLogDecision={handleAutoLogDecision}
+            />
           </TabsContent>
 
           {/* Converter Tab */}

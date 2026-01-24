@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id: user.id,
               email: user.email,
               full_name: (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "",
-              role: "investor",
+              role: "team_member",
             });
 
           if (insertError) throw insertError;

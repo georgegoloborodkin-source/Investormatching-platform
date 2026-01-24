@@ -137,7 +137,7 @@ export const EXPERTISE_AREAS = [
 
 // User & Organization Types
 // Simplified 2-role system: organizer (admin) and investor (participant)
-export type UserRole = 'organizer' | 'investor';
+export type UserRole = 'organizer' | 'managing_partner' | 'team_member';
 
 export interface UserProfile {
   id: string;
@@ -193,6 +193,20 @@ export interface DocumentRecord {
   storage_path: string | null;
   detected_type: string | null;
   extracted_json: Record<string, any> | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceRecord {
+  id: string;
+  event_id: string;
+  title: string | null;
+  source_type: 'syndicate' | 'company' | 'deck' | 'notes' | 'other';
+  external_url: string | null;
+  storage_path: string | null;
+  tags: string[] | null;
+  status: 'active' | 'archived';
   created_by: string | null;
   created_at: string;
   updated_at: string;

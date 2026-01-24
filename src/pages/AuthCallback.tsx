@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const handleAuthCallback = async () => {
@@ -30,7 +32,7 @@ export default function AuthCallback() {
                 id: data.session.user.id,
                 email: data.session.user.email,
                 full_name: data.session.user.user_metadata?.full_name || data.session.user.user_metadata?.name || '',
-                role: 'investor', // Default role (organizer can promote users later)
+                role: 'team_member', // Default role (organizer can promote users later)
               });
 
             if (insertError) throw insertError;
@@ -43,7 +45,7 @@ export default function AuthCallback() {
 
           navigate("/");
         } else {
-          navigate("/login");
+          setErrorMessage("No session returned from Supabase. Check redirect URLs and try again.");
         }
       } catch (error: any) {
         console.error("Auth callback error:", error);
@@ -52,7 +54,7 @@ export default function AuthCallback() {
           description: error.message || "Failed to complete sign in",
           variant: "destructive",
         });
-        navigate("/login");
+        setErrorMessage(error.message || "Failed to complete sign in.");
       }
     };
 
@@ -62,8 +64,18 @@ export default function AuthCallback() {
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Completing sign in...</p>
+        {errorMessage ? (
+          <div className="space-y-3">
+            <div className="text-lg font-semibold">Sign-in failed</div>
+            <div className="text-sm text-muted-foreground">{errorMessage}</div>
+            <Button onClick={() => navigate("/login")}>Back to Login</Button>
+          </div>
+        ) : (
+          <>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Completing sign in...</p>
+          </>
+        )}
       </div>
     </div>
   );

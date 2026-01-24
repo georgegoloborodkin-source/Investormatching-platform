@@ -92,6 +92,9 @@ ANTHROPIC_MODEL_FALLBACKS = [
     "claude-3-opus-20240229",
 ]
 
+# Ingestion settings
+CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
+
 def get_anthropic_api_url() -> str:
     """
     Normalize Anthropic API URL.
@@ -249,6 +252,21 @@ class FileValidationResponse(BaseModel):
     detectedType: Optional[str] = None
     startupCsvTemplate: Optional[str] = None
     investorCsvTemplate: Optional[str] = None
+
+class ClickUpIngestRequest(BaseModel):
+    list_id: str
+    include_closed: bool = True
+
+class ClickUpIngestResponse(BaseModel):
+    tasks: List[Dict[str, Any]] = []
+
+class GoogleDriveIngestRequest(BaseModel):
+    url: str
+
+class GoogleDriveIngestResponse(BaseModel):
+    title: str
+    content: str
+    sourceType: str
 
 # System prompt for Ollama
 SYSTEM_PROMPT = """You are a data extraction and conversion expert. Your task is to extract structured information from unstructured text and convert it into JSON format.
@@ -1777,6 +1795,84 @@ async def convert_file(file: UploadFile = File(...), dataType: Optional[str] = N
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File conversion failed: {str(e)}")
+
+def parse_google_drive_url(url: str) -> Tuple[str, str]:
+    patterns = [
+        ("document", r"https?://docs\.google\.com/document/d/([^/]+)"),
+        ("presentation", r"https?://docs\.google\.com/presentation/d/([^/]+)"),
+        ("spreadsheet", r"https?://docs\.google\.com/spreadsheets/d/([^/]+)"),
+        ("drive", r"https?://drive\.google\.com/file/d/([^/]+)"),
+    ]
+    for kind, pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return kind, match.group(1)
+    # Alternate Drive URL pattern: open?id=FILE_ID
+    match = re.search(r"[?&]id=([^&]+)", url)
+    if match:
+        return "drive", match.group(1)
+    raise HTTPException(status_code=400, detail="Unsupported Google Drive URL format.")
+
+@app.post("/ingest/clickup", response_model=ClickUpIngestResponse)
+async def ingest_clickup(request: ClickUpIngestRequest):
+    if not CLICKUP_API_TOKEN:
+        raise HTTPException(status_code=503, detail="CLICKUP_API_TOKEN not set on the server.")
+
+    list_id = request.list_id.strip()
+    if not list_id:
+        raise HTTPException(status_code=400, detail="list_id is required.")
+
+    url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
+    params = {"include_closed": "true" if request.include_closed else "false"}
+    headers = {"Authorization": CLICKUP_API_TOKEN}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(url, headers=headers, params=params)
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code, detail=res.text[:400])
+        data = res.json()
+
+    tasks = []
+    for task in data.get("tasks", []):
+        assignees = [a.get("username") for a in (task.get("assignees") or []) if a.get("username")]
+        tasks.append({
+            "id": task.get("id"),
+            "name": task.get("name"),
+            "url": task.get("url"),
+            "status": (task.get("status") or {}).get("status"),
+            "assignees": assignees,
+            "description": task.get("description"),
+        })
+
+    return ClickUpIngestResponse(tasks=tasks)
+
+@app.post("/ingest/google-drive", response_model=GoogleDriveIngestResponse)
+async def ingest_google_drive(request: GoogleDriveIngestRequest):
+    kind, file_id = parse_google_drive_url(request.url.strip())
+
+    if kind == "document":
+        export_url = f"https://docs.google.com/document/d/{file_id}/export?format=txt"
+        source_type = "notes"
+    elif kind == "presentation":
+        export_url = f"https://docs.google.com/presentation/d/{file_id}/export?format=txt"
+        source_type = "deck"
+    elif kind == "spreadsheet":
+        export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
+        source_type = "notes"
+    else:
+        raise HTTPException(status_code=400, detail="Drive file URLs require a Docs/Slides/Sheets link.")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(export_url)
+        if res.status_code >= 400:
+            raise HTTPException(
+                status_code=res.status_code,
+                detail="Google Drive export failed. Make sure the file is shared with 'Anyone with the link'."
+            )
+        content = res.text
+
+    title = f"{kind}-{file_id[:8]}"
+    return GoogleDriveIngestResponse(title=title, content=content, sourceType=source_type)
 
 class ValidationRequest(BaseModel):
     data: str

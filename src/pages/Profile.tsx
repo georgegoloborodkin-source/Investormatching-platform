@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvestorAvailability } from "@/components/InvestorAvailability";
 import { Loader2, Save, LogOut, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +17,7 @@ export default function Profile() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState(profile?.role || "team_member");
   const [saving, setSaving] = useState(false);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [events, setEvents] = useState<any[]>([]);
@@ -24,6 +26,7 @@ export default function Profile() {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || "");
+      setRole(profile.role || "team_member");
     }
   }, [profile]);
 
@@ -69,7 +72,7 @@ export default function Profile() {
     try {
       const { error } = await supabase
         .from('user_profiles')
-        .update({ full_name: fullName })
+        .update({ full_name: fullName, role })
         .eq('id', user.id);
 
       if (error) throw error;
@@ -175,11 +178,19 @@ export default function Profile() {
 
               <div className="space-y-2">
                 <Label>Role</Label>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-md text-sm font-medium">
-                    {profile.role === 'organizer' ? 'Organizer' : 'Investor'}
-                  </span>
-                </div>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="managing_partner">Managing Partner</SelectItem>
+                    <SelectItem value="team_member">Team Member</SelectItem>
+                    <SelectItem value="organizer">Organizer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Role controls access to org data and workflows.
+                </p>
               </div>
 
               <Separator />
