@@ -1852,6 +1852,10 @@ export default function CIS() {
   };
 
   const evidence = initialKOs;
+  const buildStamp =
+    (import.meta.env.VITE_BUILD_STAMP as string | undefined) ||
+    (import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA as string | undefined) ||
+    "local";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1879,6 +1883,9 @@ export default function CIS() {
                 ) : (
                   <span>Org: pending</span>
                 )}
+              </div>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                Build: {buildStamp}
               </div>
             </div>
             <Button variant="outline" onClick={signOut}>
