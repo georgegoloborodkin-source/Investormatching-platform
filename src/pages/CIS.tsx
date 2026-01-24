@@ -1149,7 +1149,14 @@ function SourcesTab({
         }
       }
 
-      if (rawContent && !autoLogged) {
+      if (!rawContent) {
+        toast({
+          title: "Drive import note",
+          description: "Drive returned no text content. Saving the source without raw text.",
+        });
+      }
+
+      if (!autoLogged) {
         const { data: doc, error: docError } = await insertDocument(eventId, {
           title: result.title || "Google Drive import",
           source_type: "api",
@@ -1157,7 +1164,7 @@ function SourcesTab({
           storage_path: null,
           detected_type: conversionResult?.detectedType || null,
           extracted_json: (conversionResult || {}) as Record<string, any>,
-          raw_content: rawContent,
+          raw_content: rawContent || null,
           created_by: currentUserId || null,
         });
         const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
