@@ -139,6 +139,7 @@ export async function insertDocument(
     storage_path: string | null;
     detected_type: string | null;
     extracted_json: Record<string, any>;
+    raw_content?: string | null;
     created_by: string | null;
   }
 ) {
@@ -146,6 +147,14 @@ export async function insertDocument(
     .from("documents")
     .insert({ event_id: eventId, ...payload })
     .select("*")
+    .single();
+}
+
+export async function getDocumentById(documentId: string) {
+  return supabase
+    .from("documents")
+    .select("*")
+    .eq("id", documentId)
     .single();
 }
 

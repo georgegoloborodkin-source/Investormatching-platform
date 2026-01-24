@@ -20,6 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +68,7 @@ import {
   updateDecision,
   deleteDecision,
   deleteSource,
+  getDocumentById,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, type AIConversionResponse } from "@/utils/aiConverter";
 import { ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
@@ -161,6 +169,7 @@ function DocumentConverterTab({
     sourceType: "upload" | "paste" | "api";
     fileName: string | null;
     file: File | null;
+    rawContent?: string | null;
     eventIdOverride?: string | null;
   }) => Promise<void>;
 }) {
@@ -963,6 +972,7 @@ function SourcesTab({
     sourceType: "upload" | "paste" | "api";
     fileName: string | null;
     file: File | null;
+    rawContent?: string | null;
     eventIdOverride?: string | null;
   }) => Promise<void>;
   activeEventId: string | null;
@@ -1120,6 +1130,7 @@ function SourcesTab({
             sourceType: "api",
             fileName: result.title || null,
             file: null,
+            rawContent: result.content, // Store the raw content from Google Drive
             eventIdOverride: eventId,
           });
           toast({ title: "Decision logged", description: "Auto-created from Drive extraction." });
@@ -1553,22 +1564,37 @@ export default function CIS() {
     sector?: string;
     stage?: string;
   } | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<{
+    id: string;
+    title: string | null;
+    raw_content: string | null;
+    extracted_json: Record<string, any> | null;
+    file_name: string | null;
+    storage_path: string | null;
+  } | null>(null);
 
   const handleOpenDocument = useCallback(
     async (documentId: string) => {
-      const doc = documents.find((d) => d.id === documentId);
-      if (!doc?.storage_path) {
+      const { data: doc, error } = await getDocumentById(documentId);
+      if (error || !doc) {
+        toast({
+          title: "Document not found",
+          description: "Could not load document details.",
+          variant: "destructive",
+        });
         return;
       }
-      const { data, error } = await supabase.storage
-        .from("cis-documents")
-        .createSignedUrl(doc.storage_path, 60);
-      if (error || !data?.signedUrl) {
-        return;
-      }
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      const docData = doc as any;
+      setViewingDocument({
+        id: docData.id,
+        title: docData.title,
+        raw_content: docData.raw_content || null,
+        extracted_json: docData.extracted_json || null,
+        file_name: docData.file_name || null,
+        storage_path: docData.storage_path || null,
+      });
     },
-    [documents]
+    [toast]
   );
 
   const handleCreateSource = useCallback(
@@ -1643,6 +1669,7 @@ export default function CIS() {
       sourceType: "upload" | "paste" | "api";
       fileName: string | null;
       file: File | null;
+      rawContent?: string | null;
       eventIdOverride?: string | null;
     }) => {
       const eventId = input.eventIdOverride ?? activeEventId;
@@ -1668,6 +1695,7 @@ export default function CIS() {
         storage_path: storagePath,
         detected_type: input.conversion.detectedType || "unknown",
         extracted_json: input.conversion as unknown as Record<string, any>,
+        raw_content: input.rawContent || null,
         created_by: profile?.id || null,
       });
 
@@ -2039,6 +2067,119 @@ export default function CIS() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Document Viewer Modal */}
+      <Dialog open={!!viewingDocument} onOpenChange={(open) => !open && setViewingDocument(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{viewingDocument?.title || "Document Viewer"}</DialogTitle>
+            <DialogDescription>
+              {viewingDocument?.file_name && `File: ${viewingDocument.file_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto space-y-4">
+            <Tabs defaultValue="extracted" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="extracted">Extracted JSON</TabsTrigger>
+                <TabsTrigger value="raw">Raw Content</TabsTrigger>
+              </TabsList>
+              <TabsContent value="extracted" className="mt-4">
+                {viewingDocument?.extracted_json ? (
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Structured data extracted by AI
+                    </div>
+                    <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs">
+                      {JSON.stringify(viewingDocument.extracted_json, null, 2)}
+                    </pre>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(viewingDocument?.extracted_json, null, 2)], {
+                          type: "application/json",
+                        });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${viewingDocument?.title || "document"}-extracted.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download JSON
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No extracted JSON available</p>
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="raw" className="mt-4">
+                {viewingDocument?.raw_content ? (
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Original text content ({viewingDocument.raw_content.length} characters)
+                    </div>
+                    <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs whitespace-pre-wrap">
+                      {viewingDocument.raw_content}
+                    </pre>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const blob = new Blob([viewingDocument?.raw_content || ""], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${viewingDocument?.title || "document"}-raw.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Raw Text
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No raw content stored</p>
+                    {viewingDocument?.storage_path && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-4"
+                        onClick={async () => {
+                          if (!viewingDocument?.storage_path) return;
+                          const { data, error } = await supabase.storage
+                            .from("cis-documents")
+                            .createSignedUrl(viewingDocument.storage_path, 60);
+                          if (error || !data?.signedUrl) {
+                            toast({
+                              title: "File not found",
+                              description: "Could not access stored file.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                        }}
+                      >
+                        <Link2 className="h-4 w-4 mr-2" />
+                        Open Stored File
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

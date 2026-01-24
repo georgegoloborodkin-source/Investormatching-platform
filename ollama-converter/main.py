@@ -262,6 +262,7 @@ class ClickUpIngestResponse(BaseModel):
 
 class GoogleDriveIngestRequest(BaseModel):
     url: str
+    access_token: Optional[str] = None
 
 class GoogleDriveIngestResponse(BaseModel):
     title: str
@@ -1862,12 +1863,16 @@ async def ingest_google_drive(request: GoogleDriveIngestRequest):
     else:
         raise HTTPException(status_code=400, detail="Drive file URLs require a Docs/Slides/Sheets link.")
 
+    headers = {}
+    if request.access_token:
+        headers["Authorization"] = f"Bearer {request.access_token}"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
-        res = await client.get(export_url)
+        res = await client.get(export_url, headers=headers)
         if res.status_code >= 400:
             raise HTTPException(
                 status_code=res.status_code,
-                detail="Google Drive export failed. Make sure the file is shared with 'Anyone with the link'."
+                detail="Google Drive export failed. Make sure the file is shared or sign in again for Drive access."
             )
         content = res.text
 

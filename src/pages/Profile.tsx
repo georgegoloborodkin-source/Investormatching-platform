@@ -98,6 +98,26 @@ export default function Profile() {
     navigate("/login");
   };
 
+  const handleCreateProfile = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase.from("user_profiles").insert({
+        id: user.id,
+        email: user.email,
+        full_name: (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "",
+        role: "team_member",
+      });
+      if (error) throw error;
+      await refreshProfile();
+    } catch (error: any) {
+      toast({
+        title: "Profile setup failed",
+        description: error.message || "Could not create profile record.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -114,9 +134,19 @@ export default function Profile() {
             <p className="text-center text-muted-foreground">
               Please sign in to view your profile.
             </p>
-            <Button onClick={() => navigate("/login")} className="w-full mt-4">
-              Sign In
-            </Button>
+            <div className="mt-4 space-y-2">
+              <Button onClick={() => navigate("/login")} className="w-full">
+                Sign In
+              </Button>
+              {user ? (
+                <Button variant="outline" onClick={handleCreateProfile} className="w-full">
+                  Fix Profile
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={handleSignOut} className="w-full">
+                Log out
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
