@@ -1110,6 +1110,7 @@ function SourcesTab({
         return;
       }
       const result = await ingestGoogleDrive(driveUrl.trim(), accessToken);
+      console.log("Drive import result:", { title: result.title, hasContent: !!result.content, hasRaw: !!result.raw_content });
       await onCreateSource({
         title: result.title || "Google Drive source",
         source_type: "notes",
@@ -1156,31 +1157,50 @@ function SourcesTab({
         });
       }
 
+      // Always create a document, even if auto-logged (document might be created by onAutoLogDecision)
+      // But if auto-logged didn't create one, create it here
       if (!autoLogged) {
-        const { data: doc, error: docError } = await insertDocument(eventId, {
-          title: result.title || "Google Drive import",
-          source_type: "api",
-          file_name: result.title || null,
-          storage_path: null,
-          detected_type: conversionResult?.detectedType || null,
-          extracted_json: (conversionResult || {}) as Record<string, any>,
-          raw_content: rawContent || null,
-          created_by: currentUserId || null,
-        });
-        const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
-        if (docError || !docRecord?.id) {
+        try {
+          const { data: doc, error: docError } = await insertDocument(eventId, {
+            title: result.title || "Google Drive import",
+            source_type: "api",
+            file_name: result.title || null,
+            storage_path: null,
+            detected_type: conversionResult?.detectedType || null,
+            extracted_json: (conversionResult || {}) as Record<string, any>,
+            raw_content: rawContent || null,
+            created_by: currentUserId || null,
+          });
+          const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
+          if (docError) {
+            console.error("Document insert error:", docError);
+            toast({
+              title: "Document save failed",
+              description: docError.message || JSON.stringify(docError),
+              variant: "destructive",
+            });
+          } else if (!docRecord?.id) {
+            console.error("Document insert returned no ID:", doc);
+            toast({
+              title: "Document save failed",
+              description: "Insert succeeded but no document ID returned.",
+              variant: "destructive",
+            });
+          } else {
+            onDocumentSaved({
+              id: docRecord.id,
+              title: docRecord.title || null,
+              storage_path: docRecord.storage_path || null,
+            });
+            toast({ title: "Document saved", description: "Raw content stored in Documents." });
+          }
+        } catch (err) {
+          console.error("Exception during document insert:", err);
           toast({
-            title: "Document save failed",
-            description: docError?.message || "Could not save the Drive content to documents.",
+            title: "Document save error",
+            description: err instanceof Error ? err.message : "Unexpected error saving document.",
             variant: "destructive",
           });
-        } else {
-          onDocumentSaved({
-            id: docRecord.id,
-            title: docRecord.title || null,
-            storage_path: docRecord.storage_path || null,
-          });
-          toast({ title: "Document saved", description: "Raw content stored in Documents." });
         }
       }
 
@@ -1746,7 +1766,22 @@ export default function CIS() {
 
       const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
       const docId = docRecord?.id;
-      if (docError || !docId) {
+      if (docError) {
+        console.error("Document insert error in auto-log:", docError);
+        toast({
+          title: "Document save failed",
+          description: docError.message || "Could not save document.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!docId) {
+        console.error("Document insert returned no ID:", doc);
+        toast({
+          title: "Document save failed",
+          description: "Insert succeeded but no document ID returned.",
+          variant: "destructive",
+        });
         return;
       }
       setDocuments((prev) => [
