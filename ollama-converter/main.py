@@ -267,6 +267,7 @@ class GoogleDriveIngestRequest(BaseModel):
 class GoogleDriveIngestResponse(BaseModel):
     title: str
     content: str
+    raw_content: str  # Alias for content, for clarity
     sourceType: str
 
 # System prompt for Ollama
@@ -1877,7 +1878,7 @@ async def ingest_google_drive(request: GoogleDriveIngestRequest):
         content = res.text
 
     title = f"{kind}-{file_id[:8]}"
-    return GoogleDriveIngestResponse(title=title, content=content, sourceType=source_type)
+    return GoogleDriveIngestResponse(title=title, content=content, raw_content=content, sourceType=source_type)
 
 class ValidationRequest(BaseModel):
     data: str

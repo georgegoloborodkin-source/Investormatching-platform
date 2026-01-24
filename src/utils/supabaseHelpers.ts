@@ -400,4 +400,3 @@ export function mapMatchRow(row: any): Match {
     investorId: row.investor_id || undefined,
   };
 }
-

@@ -1115,10 +1115,13 @@ function SourcesTab({
       }, eventId);
       toast({ title: "Drive import complete", description: "Source saved to your library." });
 
-      if (autoExtract && result.content) {
-        const content = result.content.length > MAX_IMPORT_CHARS ? result.content.slice(0, MAX_IMPORT_CHARS) : result.content;
-        const conversion = await convertWithAI(content);
-        const primary = conversion.startups?.[0];
+      const rawContent = result.raw_content || result.content;
+      let autoLogged = false;
+      let conversionResult: AIConversionResponse | null = null;
+      if (autoExtract && rawContent) {
+        const content = rawContent.length > MAX_IMPORT_CHARS ? rawContent.slice(0, MAX_IMPORT_CHARS) : rawContent;
+        conversionResult = await convertWithAI(content);
+        const primary = conversionResult.startups?.[0];
         if (primary?.companyName) {
           await onAutoLogDecision({
             draft: {
@@ -1126,18 +1129,45 @@ function SourcesTab({
               sector: primary.industry || undefined,
               stage: primary.fundingStage || undefined,
             },
-            conversion,
+            conversion: conversionResult,
             sourceType: "api",
             fileName: result.title || null,
             file: null,
-            rawContent: result.content, // Store the raw content from Google Drive
+            rawContent, // Store the raw content from Google Drive
             eventIdOverride: eventId,
           });
+          autoLogged = true;
           toast({ title: "Decision logged", description: "Auto-created from Drive extraction." });
-        } else if (conversion.errors?.length) {
-          toast({ title: "Extraction warning", description: conversion.errors[0], variant: "destructive" });
+        } else if (conversionResult.errors?.length) {
+          toast({ title: "Extraction warning", description: conversionResult.errors[0], variant: "destructive" });
         } else {
           toast({ title: "No startup detected", description: "Extraction completed, but no company was found." });
+        }
+      }
+
+      if (rawContent && !autoLogged) {
+        const { data: doc, error: docError } = await insertDocument(eventId, {
+          title: result.title || "Google Drive import",
+          source_type: "api",
+          file_name: result.title || null,
+          storage_path: null,
+          detected_type: conversionResult?.detectedType || null,
+          extracted_json: (conversionResult || {}) as Record<string, any>,
+          raw_content: rawContent,
+          created_by: profile?.id || null,
+        });
+        if (docError || !doc?.id) {
+          toast({
+            title: "Document save failed",
+            description: docError?.message || "Could not save the Drive content to documents.",
+            variant: "destructive",
+          });
+        } else {
+          setDocuments((prev) => [
+            { id: doc.id, title: doc.title || null, storage_path: doc.storage_path || null },
+            ...prev,
+          ]);
+          toast({ title: "Document saved", description: "Raw content stored in Documents." });
         }
       }
 
@@ -1151,7 +1181,7 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [activeEventId, autoExtract, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, toast]);
+  }, [activeEventId, autoExtract, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, profile?.id, toast]);
 
   return (
     <div className="space-y-6">

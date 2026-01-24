@@ -78,7 +78,7 @@ export async function ingestClickUpList(
 export async function ingestGoogleDrive(
   url: string,
   accessToken?: string | null
-): Promise<{ title: string; content: string; sourceType: string }> {
+): Promise<{ title: string; content: string; raw_content: string; sourceType: string }> {
   try {
     const baseUrl = await resolveIngestionBaseUrl();
     const response = await fetch(`${baseUrl}/ingest/google-drive`, {
