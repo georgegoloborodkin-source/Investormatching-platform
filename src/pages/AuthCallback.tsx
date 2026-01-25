@@ -85,6 +85,13 @@ export default function AuthCallback() {
         // Clear URL parameters to clean up
         window.history.replaceState(null, '', window.location.pathname);
 
+        // Check if user needs to select role (new users with team_member default)
+        const { data: userProfile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
         toast({
           title: "Successfully signed in!",
           description: "Welcome to the platform.",
@@ -92,7 +99,14 @@ export default function AuthCallback() {
 
         // Small delay to ensure state is updated
         await new Promise(resolve => setTimeout(resolve, 200));
-        navigate("/");
+        
+        // Redirect to role selection if user is new (team_member by default)
+        // Or if they haven't explicitly chosen a role
+        if (userProfile?.role === 'team_member') {
+          navigate("/role-selection");
+        } else {
+          navigate("/");
+        }
       } catch (error: any) {
         console.error("Auth callback error:", error);
         toast({
