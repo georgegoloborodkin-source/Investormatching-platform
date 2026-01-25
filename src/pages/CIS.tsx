@@ -1024,7 +1024,10 @@ function SourcesTab({
   const [externalUrl, setExternalUrl] = useState("");
   const [tags, setTags] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [clickUpListId, setClickUpListId] = useState("");
+  const [clickUpListId, setClickUpListId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("clickup_list_id") || "";
+  });
   const [clickUpTeamId, setClickUpTeamId] = useState("");
   const [clickUpLists, setClickUpLists] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedListId, setSelectedListId] = useState("");
@@ -1045,6 +1048,14 @@ function SourcesTab({
       console.log('Google Client ID present:', !!googleClientId);
     }
   }, [googleApiKey, googleClientId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const trimmed = clickUpListId.trim();
+    if (trimmed) {
+      localStorage.setItem("clickup_list_id", trimmed);
+    }
+  }, [clickUpListId]);
 
   const handleAdd = useCallback(async () => {
     if (!title.trim() && !externalUrl.trim()) {
@@ -1800,6 +1811,7 @@ export default function CIS() {
   const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
+  const [chatIsLoading, setChatIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
@@ -2086,7 +2098,69 @@ export default function CIS() {
     };
   }, [profile]);
 
-  const addMessage = () => {
+  const buildSnippet = useCallback((text: string | null) => {
+    if (!text) return "No preview available.";
+    const normalized = text.replace(/\s+/g, " ").trim();
+    return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
+  }, []);
+
+  const createAssistantMessage = useCallback((text: string, threadId: string) => {
+    const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setMessages((prev) => [...prev, { id, author: "assistant", text, threadId }]);
+  }, []);
+
+  const askFund = useCallback(
+    async (question: string, threadId: string) => {
+      const eventId = activeEventId || (await ensureActiveEventId());
+      if (!eventId) {
+        createAssistantMessage("I can’t access documents yet. Please try again in a moment.", threadId);
+        return;
+      }
+
+      setChatIsLoading(true);
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id,title,file_name,raw_content,created_at,storage_path")
+        .eq("event_id", eventId)
+        .textSearch("raw_content", question, { type: "websearch", config: "english" })
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (error) {
+        createAssistantMessage(
+          `Search failed: ${error.message || "Could not query documents."}`,
+          threadId
+        );
+        setChatIsLoading(false);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        createAssistantMessage(
+          "I couldn’t find relevant documents yet. Try adding a sector, stage, or company name.",
+          threadId
+        );
+        setChatIsLoading(false);
+        return;
+      }
+
+      const bullets = data
+        .map((doc, index) => {
+          const title = doc.title || doc.file_name || "Untitled document";
+          return `${index + 1}. ${title} — ${buildSnippet(doc.raw_content ?? null)}`;
+        })
+        .join("\n");
+
+      createAssistantMessage(
+        `Here are the most relevant sources I found:\n${bullets}\n\nAsk a follow-up or add constraints (sector, stage, time).`,
+        threadId
+      );
+      setChatIsLoading(false);
+    },
+    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage]
+  );
+
+  const addMessage = async () => {
     if (!input.trim()) return;
     let threadId = activeThread;
     if (!threadId) {
@@ -2095,9 +2169,11 @@ export default function CIS() {
       setActiveThread(newThreadId);
       threadId = newThreadId;
     }
+    const question = input.trim();
     const id = `m-${Date.now()}`;
-    setMessages((prev) => [...prev, { id, author: "user", text: input.trim(), threadId }]);
+    setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
     setInput("");
+    await askFund(question, threadId);
   };
 
   const createBranch = (title: string) => {
@@ -2276,12 +2352,23 @@ export default function CIS() {
                         }}
                       />
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Ctrl+Enter to send</span>
+                        <span className="text-xs text-muted-foreground">
+                          {chatIsLoading ? "Searching fund memory..." : "Ctrl+Enter to send"}
+                        </span>
                         <div className="flex gap-2">
                           <Button variant="outline" onClick={() => createBranch("What-if branch")}>
                             New Branch
                           </Button>
-                          <Button onClick={addMessage}>Send</Button>
+                          <Button onClick={addMessage} disabled={chatIsLoading}>
+                            {chatIsLoading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Searching
+                              </>
+                            ) : (
+                              "Send"
+                            )}
+                          </Button>
                         </div>
                       </div>
                     </div>
