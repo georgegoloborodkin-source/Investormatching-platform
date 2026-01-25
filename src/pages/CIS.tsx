@@ -1886,6 +1886,15 @@ export default function CIS() {
   const [semanticMode, setSemanticMode] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
   const [claudeApproved, setClaudeApproved] = useState(false);
+  const [costLog, setCostLog] = useState<
+    Array<{
+      ts: string;
+      question: string;
+      estInputTokens: number;
+      estOutputTokens: number;
+      estCostUsd: number;
+    }>
+  >([]);
   const [lastEvidence, setLastEvidence] = useState<{
     question: string;
     docs: Array<{
@@ -2203,6 +2212,44 @@ export default function CIS() {
     return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
   }, []);
 
+  const isDeveloper =
+    (import.meta.env.VITE_DEV_MODE as string | undefined) === "true" ||
+    (profile?.email && (import.meta.env.VITE_DEV_EMAIL as string | undefined) === profile.email);
+
+  const persistCostLog = useCallback((entry: typeof costLog[number]) => {
+    const updated = [entry, ...costLog].slice(0, 100);
+    setCostLog(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("orbit_cost_log", JSON.stringify(updated));
+    }
+  }, [costLog]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const existing = localStorage.getItem("orbit_cost_log");
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing);
+        if (Array.isArray(parsed)) {
+          setCostLog(parsed);
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+  }, []);
+
+  const estimateClaudeCost = useCallback((question: string) => {
+    const ASK_MAX_TOKENS = 700;
+    const inputChars = question.length + (lastEvidence?.docs?.length || 0) * 500;
+    const estInputTokens = Math.max(1, Math.ceil(inputChars / 4));
+    const estOutputTokens = ASK_MAX_TOKENS;
+    const inputCost = (estInputTokens / 1_000_000) * 3.0;
+    const outputCost = (estOutputTokens / 1_000_000) * 15.0;
+    const estCostUsd = Number((inputCost + outputCost).toFixed(5));
+    return { estInputTokens, estOutputTokens, estCostUsd };
+  }, [lastEvidence]);
+
   const chunkText = useCallback((text: string) => {
     const CHUNK_SIZE = 800;
     const CHUNK_OVERLAP = 120;
@@ -2431,8 +2478,9 @@ export default function CIS() {
       return;
     }
     if (!claudeApproved) {
+      const estimate = estimateClaudeCost(lastEvidence.question);
       const confirmed = window.confirm(
-        "This will call Claude and may incur cost. Continue?"
+        `This will call Claude and may incur cost (~$${estimate.estCostUsd}). Continue?`
       );
       if (!confirmed) return;
       setClaudeApproved(true);
@@ -2457,6 +2505,14 @@ export default function CIS() {
         decisions: decisionsForClaude,
       });
       createAssistantMessage(response.answer, threadId);
+      const estimate = estimateClaudeCost(lastEvidence.question);
+      persistCostLog({
+        ts: new Date().toISOString(),
+        question: lastEvidence.question.slice(0, 120),
+        estInputTokens: estimate.estInputTokens,
+        estOutputTokens: estimate.estOutputTokens,
+        estCostUsd: estimate.estCostUsd,
+      });
     } catch (error: any) {
       toast({
         title: "Claude answer failed",
@@ -2552,6 +2608,35 @@ export default function CIS() {
 
           {/* Chat Tab */}
           <TabsContent value="chat" className="space-y-4">
+            {isDeveloper && (
+              <Card className="border-dashed">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Developer Cost Log</CardTitle>
+                  <CardDescription className="text-xs">
+                    Estimated Claude spend (local only).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-xs space-y-2">
+                  <div className="font-medium">
+                    Total: $
+                    {costLog.reduce((sum, entry) => sum + entry.estCostUsd, 0).toFixed(4)}
+                  </div>
+                  {costLog.length === 0 ? (
+                    <div className="text-muted-foreground">No Claude calls logged yet.</div>
+                  ) : (
+                    costLog.slice(0, 5).map((entry) => (
+                      <div key={entry.ts} className="border rounded-md p-2">
+                        <div className="font-medium">${entry.estCostUsd} • {entry.ts}</div>
+                        <div className="text-muted-foreground">Q: {entry.question}</div>
+                        <div className="text-muted-foreground">
+                          Tokens: {entry.estInputTokens} in / {entry.estOutputTokens} out
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
             <div className="text-sm text-muted-foreground">
               Scope applied:{" "}
               {scopes
