@@ -75,6 +75,30 @@ export async function ingestClickUpList(
   }
 }
 
+export async function getClickUpLists(
+  teamId: string
+): Promise<{ lists: Array<{ id: string; name: string }> }> {
+  try {
+    const baseUrl = await resolveIngestionBaseUrl();
+    const response = await fetch(`${baseUrl}/ingest/clickup/lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: teamId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw new Error(
+      `ClickUp list fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
 export async function ingestGoogleDrive(
   url: string,
   accessToken?: string | null

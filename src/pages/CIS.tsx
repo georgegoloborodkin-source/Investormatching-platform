@@ -71,7 +71,7 @@ import {
   getDocumentById,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, type AIConversionResponse } from "@/utils/aiConverter";
-import { ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
+import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
 // ============================================================================
@@ -90,6 +90,13 @@ type KnowledgeObject = {
   linked: string[];
 };
 
+declare global {
+  interface Window {
+    gapi?: any;
+    google?: any;
+  }
+}
+
 // ============================================================================
 // INITIAL DATA
 // ============================================================================
@@ -104,6 +111,35 @@ const initialScopes: ScopeItem[] = [
 const initialThreads: Thread[] = [];
 const initialMessages: Message[] = [];
 const initialKOs: KnowledgeObject[] = [];
+
+let googlePickerReady = false;
+let googlePickerPromise: Promise<void> | null = null;
+
+function loadGooglePicker(): Promise<void> {
+  if (googlePickerReady) return Promise.resolve();
+  if (googlePickerPromise) return googlePickerPromise;
+  googlePickerPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.async = true;
+    script.onload = () => {
+      if (!window.gapi) {
+        reject(new Error("Google API failed to load."));
+        return;
+      }
+      window.gapi.load("picker", {
+        callback: () => {
+          googlePickerReady = true;
+          resolve();
+        },
+        onerror: () => reject(new Error("Google Picker failed to load.")),
+      });
+    };
+    script.onerror = () => reject(new Error("Google API script failed to load."));
+    document.body.appendChild(script);
+  });
+  return googlePickerPromise;
+}
 
 // ============================================================================
 // THREAD TREE COMPONENT
@@ -989,12 +1025,18 @@ function SourcesTab({
   const [tags, setTags] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [clickUpListId, setClickUpListId] = useState("");
+  const [clickUpTeamId, setClickUpTeamId] = useState("");
+  const [clickUpLists, setClickUpLists] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [driveUrl, setDriveUrl] = useState("");
   const [isImportingClickUp, setIsImportingClickUp] = useState(false);
   const [isImportingDrive, setIsImportingDrive] = useState(false);
   const [autoExtract, setAutoExtract] = useState(true);
   const MAX_IMPORT_CHARS = 24000;
   const canImport = Boolean(activeEventId);
+  const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   const handleAdd = useCallback(async () => {
     if (!title.trim() && !externalUrl.trim()) {
@@ -1080,7 +1122,35 @@ function SourcesTab({
     }
   }, [activeEventId, clickUpListId, ensureActiveEventId, onCreateSource, toast]);
 
-  const handleImportDrive = useCallback(async () => {
+  const handleLoadClickUpLists = useCallback(async () => {
+    if (!clickUpTeamId.trim()) {
+      toast({
+        title: "Missing team ID",
+        description: "Enter a ClickUp team ID to load lists.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsLoadingLists(true);
+    try {
+      const response = await getClickUpLists(clickUpTeamId.trim());
+      setClickUpLists(response.lists || []);
+      if (response.lists?.length) {
+        setSelectedListId(response.lists[0].id);
+        setClickUpListId(response.lists[0].id);
+      }
+    } catch (error) {
+      toast({
+        title: "Load lists failed",
+        description: error instanceof Error ? error.message : "Could not load ClickUp lists.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingLists(false);
+    }
+  }, [clickUpTeamId, toast]);
+
+  const importDriveUrl = useCallback(async (url: string) => {
     const eventId = activeEventId || (await ensureActiveEventId());
     if (!eventId) {
       toast({
@@ -1090,10 +1160,10 @@ function SourcesTab({
       });
       return;
     }
-    if (!driveUrl.trim()) {
+    if (!url.trim()) {
       toast({
         title: "Missing Drive link",
-        description: "Paste a Google Drive link to import.",
+        description: "Paste or choose a Google Drive file to import.",
         variant: "destructive",
       });
       return;
@@ -1109,12 +1179,12 @@ function SourcesTab({
         });
         return;
       }
-      const result = await ingestGoogleDrive(driveUrl.trim(), accessToken);
+      const result = await ingestGoogleDrive(url.trim(), accessToken);
       console.log("Drive import result:", { title: result.title, hasContent: !!result.content, hasRaw: !!result.raw_content });
       await onCreateSource({
         title: result.title || "Google Drive source",
         source_type: "notes",
-        external_url: driveUrl.trim(),
+        external_url: url.trim(),
         tags: ["google-drive"],
         status: "active",
       }, eventId);
@@ -1214,7 +1284,62 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [activeEventId, autoExtract, currentUserId, driveUrl, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, onDocumentSaved, toast]);
+  }, [activeEventId, autoExtract, currentUserId, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, onDocumentSaved, toast]);
+
+  const handleImportDrive = useCallback(async () => {
+    await importDriveUrl(driveUrl.trim());
+  }, [driveUrl, importDriveUrl]);
+
+  const openDrivePicker = useCallback(async () => {
+    if (!googleApiKey || !googleClientId) {
+      toast({
+        title: "Google Picker not configured",
+        description: "Set VITE_GOOGLE_API_KEY and VITE_GOOGLE_CLIENT_ID to use Drive picker.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const accessToken = await getGoogleAccessToken();
+    if (!accessToken) {
+      toast({
+        title: "Google Drive access needed",
+        description: "Please sign in again with Google Drive access enabled.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await loadGooglePicker();
+      const view = new window.google.picker.DocsView()
+        .setIncludeFolders(false)
+        .setSelectFolderEnabled(false)
+        .setMimeTypes(
+          "application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation"
+        );
+      const picker = new window.google.picker.PickerBuilder()
+        .setDeveloperKey(googleApiKey)
+        .setOAuthToken(accessToken)
+        .addView(view)
+        .setCallback((data: any) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const doc = data.docs?.[0];
+            const pickedUrl = doc?.url;
+            if (pickedUrl) {
+              setDriveUrl(pickedUrl);
+              importDriveUrl(pickedUrl);
+            }
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (error) {
+      toast({
+        title: "Drive picker failed",
+        description: error instanceof Error ? error.message : "Could not open Drive picker.",
+        variant: "destructive",
+      });
+    }
+  }, [getGoogleAccessToken, googleApiKey, googleClientId, importDriveUrl, toast]);
 
   return (
     <div className="space-y-6">
@@ -1230,10 +1355,54 @@ function SourcesTab({
           <CardTitle>ClickUp Import</CardTitle>
           <CardDescription>Pull syndicate tasks directly from a ClickUp list.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label>ClickUp Team ID</Label>
+              <Input
+                value={clickUpTeamId}
+                onChange={(e) => setClickUpTeamId(e.target.value)}
+                placeholder="e.g., 1234567"
+              />
+            </div>
+            <div>
+              <Label>Available Lists</Label>
+              <Select
+                value={selectedListId}
+                onValueChange={(value) => {
+                  setSelectedListId(value);
+                  setClickUpListId(value);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a list" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clickUpLists.length === 0 ? (
+                    <SelectItem value="no-lists" disabled>
+                      No lists loaded
+                    </SelectItem>
+                  ) : (
+                    clickUpLists.map((list) => (
+                      <SelectItem key={list.id} value={list.id}>
+                        {list.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button onClick={handleLoadClickUpLists} disabled={isLoadingLists} className="w-full" variant="outline">
+                {isLoadingLists ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
+                Load Lists
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <Label>ClickUp List ID</Label>
+              <Label>ClickUp List ID (manual)</Label>
               <Input
                 value={clickUpListId}
                 onChange={(e) => setClickUpListId(e.target.value)}
@@ -1269,10 +1438,16 @@ function SourcesTab({
               />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full">
-                {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                Import Drive
-              </Button>
+              <div className="flex w-full flex-col gap-2">
+                <Button onClick={openDrivePicker} variant="outline" className="w-full">
+                  <Folder className="h-4 w-4 mr-2" />
+                  Choose from Drive
+                </Button>
+                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full">
+                  {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Import Drive
+                </Button>
+              </div>
             </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">

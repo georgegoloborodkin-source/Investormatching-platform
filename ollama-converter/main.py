@@ -260,6 +260,12 @@ class ClickUpIngestRequest(BaseModel):
 class ClickUpIngestResponse(BaseModel):
     tasks: List[Dict[str, Any]] = []
 
+class ClickUpListsRequest(BaseModel):
+    team_id: str
+
+class ClickUpListsResponse(BaseModel):
+    lists: List[Dict[str, Any]] = []
+
 class GoogleDriveIngestRequest(BaseModel):
     url: str
     access_token: Optional[str] = None
@@ -1847,6 +1853,33 @@ async def ingest_clickup(request: ClickUpIngestRequest):
         })
 
     return ClickUpIngestResponse(tasks=tasks)
+
+@app.post("/ingest/clickup/lists", response_model=ClickUpListsResponse)
+async def list_clickup_lists(request: ClickUpListsRequest):
+    if not CLICKUP_API_TOKEN:
+        raise HTTPException(status_code=503, detail="CLICKUP_API_TOKEN not set on the server.")
+
+    team_id = request.team_id.strip()
+    if not team_id:
+        raise HTTPException(status_code=400, detail="team_id is required.")
+
+    url = f"https://api.clickup.com/api/v2/team/{team_id}/list"
+    headers = {"Authorization": CLICKUP_API_TOKEN}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(url, headers=headers, params={"archived": "false"})
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code, detail=res.text[:400])
+        data = res.json()
+
+    lists = []
+    for item in data.get("lists", []):
+        lists.append({
+            "id": item.get("id"),
+            "name": item.get("name"),
+        })
+
+    return ClickUpListsResponse(lists=lists)
 
 @app.post("/ingest/google-drive", response_model=GoogleDriveIngestResponse)
 async def ingest_google_drive(request: GoogleDriveIngestRequest):
