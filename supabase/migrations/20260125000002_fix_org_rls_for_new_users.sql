@@ -8,6 +8,11 @@ DROP POLICY IF EXISTS "Authenticated can create orgs" ON public.organizations;
 DROP POLICY IF EXISTS "Users can create org" ON public.organizations;
 DROP POLICY IF EXISTS "Users can update org" ON public.organizations;
 
+-- Ensure RLS is enabled and authenticated role has table privileges
+ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.organizations TO authenticated;
+
 -- Allow authenticated users to INSERT organizations (for new users)
 CREATE POLICY "Authenticated can create orgs"
   ON public.organizations FOR INSERT
