@@ -70,7 +70,7 @@ import {
   deleteSource,
   getDocumentById,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswer, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1282,6 +1282,7 @@ function SourcesTab({
               storage_path: docRecord.storage_path || null,
             });
             toast({ title: "Document saved", description: "Raw content stored in Documents." });
+            await indexDocumentEmbeddings(docRecord.id, rawContent || null);
           }
         } catch (err) {
           console.error("Exception during document insert:", err);
@@ -1812,6 +1813,21 @@ export default function CIS() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [chatIsLoading, setChatIsLoading] = useState(false);
+  const [semanticMode, setSemanticMode] = useState(false);
+  const [isClaudeLoading, setIsClaudeLoading] = useState(false);
+  const [claudeApproved, setClaudeApproved] = useState(false);
+  const [lastEvidence, setLastEvidence] = useState<{
+    question: string;
+    docs: Array<{
+      id: string;
+      title: string | null;
+      file_name: string | null;
+      raw_content: string | null;
+      created_at: string;
+      storage_path: string | null;
+    }>;
+    decisions: Decision[];
+  } | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
@@ -1993,6 +2009,8 @@ export default function CIS() {
         });
         return;
       }
+
+      await indexDocumentEmbeddings(docId, input.rawContent || null);
       setDocuments((prev) => [
         { id: docId, title: docRecord?.title || null, storage_path: docRecord?.storage_path || null },
         ...prev,
@@ -2104,6 +2122,58 @@ export default function CIS() {
     return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
   }, []);
 
+  const chunkText = useCallback((text: string) => {
+    const CHUNK_SIZE = 800;
+    const CHUNK_OVERLAP = 120;
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < text.length) {
+      const end = Math.min(text.length, start + CHUNK_SIZE);
+      const chunk = text.slice(start, end).trim();
+      if (chunk) {
+        chunks.push(chunk);
+      }
+      if (end === text.length) break;
+      start = Math.max(0, end - CHUNK_OVERLAP);
+    }
+    return chunks;
+  }, []);
+
+  const indexDocumentEmbeddings = useCallback(
+    async (documentId: string, rawContent?: string | null) => {
+      if (!rawContent?.trim()) return;
+      try {
+        const { data: existing } = await supabase
+          .from("document_embeddings")
+          .select("id")
+          .eq("document_id", documentId)
+          .limit(1);
+        if (existing && existing.length > 0) return;
+
+        const MAX_EMBED_CHARS = 4000;
+        const MAX_EMBED_CHUNKS = 4;
+        const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
+        const chunks = chunkText(truncated).slice(0, MAX_EMBED_CHUNKS);
+
+        for (const chunk of chunks) {
+          const embedding = await embedQuery(chunk);
+          if (!embedding.length) continue;
+          const { error } = await supabase.from("document_embeddings").insert({
+            document_id: documentId,
+            chunk_text: chunk,
+            embedding,
+          });
+          if (error) {
+            console.error("Embedding insert error:", error);
+          }
+        }
+      } catch (err) {
+        console.error("Embedding index failed:", err);
+      }
+    },
+    [chunkText]
+  );
+
   const createAssistantMessage = useCallback((text: string, threadId: string) => {
     const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setMessages((prev) => [...prev, { id, author: "assistant", text, threadId }]);
@@ -2111,6 +2181,11 @@ export default function CIS() {
 
   const askFund = useCallback(
     async (question: string, threadId: string) => {
+      if (!scopes.some((s) => s.checked)) {
+        createAssistantMessage("Select at least one scope to search fund memory.", threadId);
+        return;
+      }
+
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) {
         createAssistantMessage("I can’t access documents yet. Please try again in a moment.", threadId);
@@ -2118,13 +2193,77 @@ export default function CIS() {
       }
 
       setChatIsLoading(true);
-      const { data, error } = await supabase
-        .from("documents")
-        .select("id,title,file_name,raw_content,created_at,storage_path")
-        .eq("event_id", eventId)
-        .textSearch("raw_content", question, { type: "websearch", config: "english" })
-        .order("created_at", { ascending: false })
-        .limit(6);
+      let docs: Array<{
+        id: string;
+        title: string | null;
+        file_name: string | null;
+        raw_content: string | null;
+        created_at: string;
+        storage_path: string | null;
+      }> = [];
+      let error: { message?: string } | null = null;
+      let semanticFailed = false;
+
+      if (semanticMode) {
+        try {
+          const embedding = await embedQuery(question);
+          if (embedding.length) {
+            const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
+              query_embedding: embedding,
+              match_count: 6,
+              filter_event_id: eventId,
+            });
+            if (!matchError && matches?.length) {
+              const ids = matches.map((m: any) => m.document_id);
+              const { data: docRows, error: docError } = await supabase
+                .from("documents")
+                .select("id,title,file_name,raw_content,created_at,storage_path")
+                .in("id", ids);
+              if (docError) {
+                error = docError as { message?: string };
+              } else if (docRows?.length) {
+                const docMap = new Map(docRows.map((d: any) => [d.id, d]));
+                docs = ids.map((id: string) => docMap.get(id)).filter(Boolean);
+              }
+            }
+          }
+        } catch (err) {
+          semanticFailed = true;
+        }
+      }
+
+      if (!docs.length && !error) {
+        const response = await supabase
+          .from("documents")
+          .select("id,title,file_name,raw_content,created_at,storage_path")
+          .eq("event_id", eventId)
+          .textSearch("raw_content", question, { type: "websearch", config: "english" })
+          .order("created_at", { ascending: false })
+          .limit(6);
+        docs = (response.data || []) as typeof docs;
+        if (response.error) {
+          error = response.error as { message?: string };
+        }
+      }
+
+      const normalizedQuestion = question.toLowerCase();
+      const tokens = normalizedQuestion
+        .split(/\W+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 3);
+      const decisionMatches = decisions
+        .filter((d) => {
+          const haystack = [
+            d.startupName,
+            d.actionType,
+            d.outcome ?? "",
+            d.notes ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
+          return tokens.some((t) => haystack.includes(t));
+        })
+        .slice(0, 5);
 
       if (error) {
         createAssistantMessage(
@@ -2135,32 +2274,57 @@ export default function CIS() {
         return;
       }
 
-      if (!data || data.length === 0) {
-        createAssistantMessage(
-          "I couldn’t find relevant documents yet. Try adding a sector, stage, or company name.",
-          threadId
-        );
+      if (!docs || docs.length === 0) {
+        const fallback = decisionMatches.length
+          ? `I didn’t find matching documents, but I found ${decisionMatches.length} related decisions:\n` +
+            decisionMatches
+              .map(
+                (d, index) =>
+                  `${index + 1}. ${d.startupName} — ${d.actionType}${
+                    d.outcome ? ` (${d.outcome})` : ""
+                  }${d.notes ? ` — ${d.notes}` : ""}`
+              )
+              .join("\n")
+          : "I couldn’t find relevant documents yet. Try adding a sector, stage, or company name.";
+        createAssistantMessage(fallback, threadId);
         setChatIsLoading(false);
         return;
       }
 
-      const bullets = data
+      const bullets = docs
         .map((doc, index) => {
           const title = doc.title || doc.file_name || "Untitled document";
           return `${index + 1}. ${title} — ${buildSnippet(doc.raw_content ?? null)}`;
         })
         .join("\n");
 
+      const decisionBlock = decisionMatches.length
+        ? `\n\nRelated decisions:\n${decisionMatches
+            .map(
+              (d, index) =>
+                `${index + 1}. ${d.startupName} — ${d.actionType}${
+                  d.outcome ? ` (${d.outcome})` : ""
+                }${d.notes ? ` — ${d.notes}` : ""}`
+            )
+            .join("\n")}`
+        : "";
+
+      const semanticNote = semanticFailed
+        ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
+        : "";
+
+      setLastEvidence({ question, docs, decisions: decisionMatches });
       createAssistantMessage(
-        `Here are the most relevant sources I found:\n${bullets}\n\nAsk a follow-up or add constraints (sector, stage, time).`,
+        `Here are the most relevant sources I found:\n${bullets}${decisionBlock}${semanticNote}\n\nAsk a follow-up or add constraints (sector, stage, time).`,
         threadId
       );
       setChatIsLoading(false);
     },
-    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage]
+    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage, decisions, scopes]
   );
 
   const addMessage = async () => {
+    if (chatIsLoading) return;
     if (!input.trim()) return;
     let threadId = activeThread;
     if (!threadId) {
@@ -2175,6 +2339,53 @@ export default function CIS() {
     setInput("");
     await askFund(question, threadId);
   };
+
+  const handleClaudeAnswer = useCallback(async () => {
+    if (!lastEvidence) {
+      toast({
+        title: "No sources yet",
+        description: "Ask a question first so we have sources to summarize.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!claudeApproved) {
+      const confirmed = window.confirm(
+        "This will call Claude and may incur cost. Continue?"
+      );
+      if (!confirmed) return;
+      setClaudeApproved(true);
+    }
+    const threadId = activeThread || lastEvidence?.docs?.[0]?.id || `t-${Date.now()}`;
+    setIsClaudeLoading(true);
+    try {
+      const sources = lastEvidence.docs.map((doc) => ({
+        title: doc.title,
+        file_name: doc.file_name,
+        snippet: buildSnippet(doc.raw_content ?? null),
+      }));
+      const decisionsForClaude = lastEvidence.decisions.map((d) => ({
+        startup_name: d.startupName,
+        action_type: d.actionType,
+        outcome: d.outcome ?? null,
+        notes: d.notes ?? null,
+      }));
+      const response = await askClaudeAnswer({
+        question: lastEvidence.question,
+        sources,
+        decisions: decisionsForClaude,
+      });
+      createAssistantMessage(response.answer, threadId);
+    } catch (error: any) {
+      toast({
+        title: "Claude answer failed",
+        description: error.message || "Could not get an answer.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClaudeLoading(false);
+    }
+  }, [activeThread, askClaudeAnswer, buildSnippet, createAssistantMessage, lastEvidence, toast]);
 
   const createBranch = (title: string) => {
     const id = `t-${Date.now()}`;
@@ -2370,6 +2581,29 @@ export default function CIS() {
                             )}
                           </Button>
                         </div>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Checkbox
+                            checked={semanticMode}
+                            onCheckedChange={(val) => setSemanticMode(val === true)}
+                          />
+                          Semantic search (beta, higher cost)
+                        </label>
+                        <Button
+                          variant="secondary"
+                          onClick={handleClaudeAnswer}
+                          disabled={isClaudeLoading || !lastEvidence}
+                        >
+                          {isClaudeLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Claude answering
+                            </>
+                          ) : (
+                            "Claude answer (paid)"
+                          )}
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

@@ -66,6 +66,19 @@ export interface AIConversionResponse {
   errors: string[];
 }
 
+export interface AskFundSource {
+  title?: string | null;
+  snippet?: string | null;
+  file_name?: string | null;
+}
+
+export interface AskFundDecision {
+  startup_name?: string | null;
+  action_type?: string | null;
+  outcome?: string | null;
+  notes?: string | null;
+}
+
 /**
  * Convert unstructured data using the converter API
  */
@@ -150,6 +163,47 @@ export async function convertWithAI(
       `AI conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
+}
+
+export async function askClaudeAnswer(input: {
+  question: string;
+  sources: AskFundSource[];
+  decisions: AskFundDecision[];
+}): Promise<{ answer: string }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const response = await fetch(`${baseUrl}/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
+export async function embedQuery(text: string): Promise<number[]> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const response = await fetch(`${baseUrl}/embed/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+  }
+
+  const result = await response.json();
+  return result.embedding || [];
 }
 
 /**

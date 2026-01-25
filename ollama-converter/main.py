@@ -92,6 +92,15 @@ ANTHROPIC_MODEL_FALLBACKS = [
     "claude-3-opus-20240229",
 ]
 
+# Ask-the-fund settings (keep costs lean)
+ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "700"))
+ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "6"))
+ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "400"))
+
+# Embeddings settings (semantic search)
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "ollama").lower().strip()
+OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+
 # Ingestion settings
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
 
@@ -262,6 +271,31 @@ class ClickUpIngestResponse(BaseModel):
 
 class ClickUpListsRequest(BaseModel):
     team_id: str
+
+class AskSource(BaseModel):
+    title: Optional[str] = None
+    snippet: Optional[str] = None
+    file_name: Optional[str] = None
+
+class AskDecision(BaseModel):
+    startup_name: Optional[str] = None
+    action_type: Optional[str] = None
+    outcome: Optional[str] = None
+    notes: Optional[str] = None
+
+class AskRequest(BaseModel):
+    question: str
+    sources: List[AskSource] = []
+    decisions: List[AskDecision] = []
+
+class AskResponse(BaseModel):
+    answer: str
+
+class EmbedRequest(BaseModel):
+    text: str
+
+class EmbedResponse(BaseModel):
+    embedding: List[float]
 
 class ClickUpListsResponse(BaseModel):
     lists: List[Dict[str, Any]] = []
@@ -494,6 +528,95 @@ async def call_anthropic(prompt: str) -> str:
         status_code=502,
         detail=f"Claude API error: {last_error or 'Unknown error. All models failed.'}"
     )
+
+def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision]) -> str:
+    safe_sources = (sources or [])[:ASK_MAX_SOURCES]
+    source_lines: List[str] = []
+    for idx, src in enumerate(safe_sources, start=1):
+        title = src.title or src.file_name or f"Source {idx}"
+        snippet = (src.snippet or "").strip()
+        if len(snippet) > ASK_MAX_SNIPPET_CHARS:
+            snippet = snippet[:ASK_MAX_SNIPPET_CHARS] + "…"
+        source_lines.append(f"[{idx}] {title}\n{snippet}")
+
+    decision_lines: List[str] = []
+    for d in decisions or []:
+        summary = " | ".join(
+            [part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part]
+        )
+        if summary:
+            decision_lines.append(f"- {summary}")
+
+    sources_block = "\n\n".join(source_lines) if source_lines else "No sources available."
+    decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
+
+    return f"""You are Orbit AI. Answer the question using ONLY the sources provided.
+If the sources are insufficient, say so briefly and ask a follow-up.
+Be concise and cite sources like [1], [2].
+
+Question:
+{question}
+
+Sources:
+{sources_block}
+
+Decision history (optional context):
+{decisions_block}
+"""
+
+async def call_anthropic_answer(prompt: str) -> str:
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY not set. Set it in the server environment to use Claude."
+        )
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+    }
+    url = get_anthropic_api_url()
+    default_url = "https://api.anthropic.com/v1/messages"
+
+    last_error: Optional[str] = None
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model_name in [m for m in ANTHROPIC_MODEL_FALLBACKS if m]:
+            payload = {
+                "model": model_name,
+                "max_tokens": ASK_MAX_TOKENS,
+                "temperature": 0.1,
+                "system": "You answer investor questions based on provided sources only. Cite sources.",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+            }
+
+            res = await client.post(url, headers=headers, json=payload)
+            if res.status_code == 404 and url != default_url:
+                res = await client.post(default_url, headers=headers, json=payload)
+            if res.status_code == 404 and is_model_not_found(res):
+                last_error = f"Model not found: {model_name}"
+                continue
+            if res.status_code >= 400:
+                body = res.text[:400].strip()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Claude API error ({res.status_code}): {body or 'empty response'}",
+                )
+
+            data = res.json() or {}
+            content = data.get("content") or []
+            text = ""
+            if isinstance(content, list) and content:
+                text = content[0].get("text") or ""
+            elif isinstance(content, str):
+                text = content
+            if not text:
+                raise HTTPException(status_code=502, detail="Claude returned empty content.")
+            return text.strip()
+
+    raise HTTPException(status_code=503, detail=last_error or "No Claude model available.")
 
 def normalize_startup_data(data: Dict[str, Any]) -> StartupData:
     """Normalize extracted startup data to match schema"""
@@ -1880,6 +2003,35 @@ async def list_clickup_lists(request: ClickUpListsRequest):
         })
 
     return ClickUpListsResponse(lists=lists)
+
+@app.post("/ask", response_model=AskResponse)
+async def ask_fund(request: AskRequest):
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required.")
+
+    prompt = build_answer_prompt(question, request.sources, request.decisions)
+    answer = await call_anthropic_answer(prompt)
+    return AskResponse(answer=answer)
+
+@app.post("/embed/query", response_model=EmbedResponse)
+async def embed_query(request: EmbedRequest):
+    text = (request.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required.")
+
+    if EMBEDDINGS_PROVIDER != "ollama":
+        raise HTTPException(status_code=503, detail="EMBEDDINGS_PROVIDER is not enabled.")
+
+    try:
+        response = ollama.embeddings(model=OLLAMA_EMBEDDING_MODEL, prompt=text)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Ollama embedding failed: {str(e)}")
+
+    embedding = response.get("embedding") if isinstance(response, dict) else None
+    if not embedding:
+        raise HTTPException(status_code=502, detail="No embedding returned.")
+    return EmbedResponse(embedding=embedding)
 
 @app.post("/ingest/google-drive", response_model=GoogleDriveIngestResponse)
 async def ingest_google_drive(request: GoogleDriveIngestRequest):
