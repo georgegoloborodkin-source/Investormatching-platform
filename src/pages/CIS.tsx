@@ -524,8 +524,11 @@ function DecisionLoggerTab({
   actorDefault,
   draftDecision,
   onDraftConsumed,
+  draftDocumentId,
+  onDraftDocumentConsumed,
   documents,
   onOpenDocument,
+  onOpenConverter,
 }: {
   decisions: Decision[];
   setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>;
@@ -533,8 +536,11 @@ function DecisionLoggerTab({
   actorDefault: string;
   draftDecision: { startupName: string; sector?: string; stage?: string } | null;
   onDraftConsumed: () => void;
+  draftDocumentId: string | null;
+  onDraftDocumentConsumed: () => void;
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   onOpenDocument: (documentId: string) => void;
+  onOpenConverter: () => void;
 }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -547,7 +553,9 @@ function DecisionLoggerTab({
   const [stage, setStage] = useState("");
   const [geo, setGeo] = useState("");
   const [confidence, setConfidence] = useState([70]);
-  const [notes, setNotes] = useState("");
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionOutcome, setDecisionOutcome] = useState<Decision["outcome"]>("pending");
+  const [attachedDocumentId, setAttachedDocumentId] = useState<string>("none");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("all");
 
   const filteredDecisions = useMemo(() => {
@@ -572,6 +580,13 @@ function DecisionLoggerTab({
     onDraftConsumed();
   }, [draftDecision, onDraftConsumed]);
 
+  useEffect(() => {
+    if (!draftDocumentId) return;
+    setAttachedDocumentId(draftDocumentId);
+    setShowForm(true);
+    onDraftDocumentConsumed();
+  }, [draftDocumentId, onDraftDocumentConsumed]);
+
   const handleSaveDecision = useCallback(async () => {
     if (!activeEventId) {
       toast({ title: "No active event", description: "Please refresh and try again.", variant: "destructive" });
@@ -592,8 +607,9 @@ function DecisionLoggerTab({
         geo: geo.trim() || undefined,
       },
       confidence_score: confidence[0],
-      outcome: "pending",
-      notes: notes.trim() || null,
+      outcome: decisionOutcome || "pending",
+      notes: decisionReason.trim() || null,
+      document_id: attachedDocumentId === "none" ? null : attachedDocumentId,
     });
 
     if (error || !data) {
@@ -611,9 +627,25 @@ function DecisionLoggerTab({
     setStage("");
     setGeo("");
     setConfidence([70]);
-    setNotes("");
+    setDecisionReason("");
+    setDecisionOutcome("pending");
+    setAttachedDocumentId("none");
     setShowForm(false);
-  }, [activeEventId, actor, actionType, startupName, sector, stage, geo, confidence, notes, toast, setDecisions]);
+  }, [
+    activeEventId,
+    actor,
+    actionType,
+    startupName,
+    sector,
+    stage,
+    geo,
+    confidence,
+    decisionOutcome,
+    decisionReason,
+    attachedDocumentId,
+    toast,
+    setDecisions,
+  ]);
 
   const handleDeleteDecision = useCallback(async (id: string) => {
     const { error } = await deleteDecision(id);
@@ -782,6 +814,22 @@ function DecisionLoggerTab({
                 />
               </div>
               <div>
+                <Label>Outcome</Label>
+                <Select
+                  value={decisionOutcome || "pending"}
+                  onValueChange={(v) => setDecisionOutcome(v as Decision["outcome"])}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="positive">Positive</SelectItem>
+                    <SelectItem value="negative">Negative</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Sector</Label>
                 <Input
                   placeholder="e.g., FinTech, HealthTech"
@@ -823,12 +871,34 @@ function DecisionLoggerTab({
             </div>
 
             <div>
-              <Label>Notes</Label>
+              <Label>Reason</Label>
               <Textarea
-                placeholder="Additional context or reasoning..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Why this decision? Market size, traction, risks..."
+                value={decisionReason}
+                onChange={(e) => setDecisionReason(e.target.value)}
               />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] items-end">
+              <div>
+                <Label>Attach Source Document</Label>
+                <Select value={attachedDocumentId} onValueChange={setAttachedDocumentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a document (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No document</SelectItem>
+                    {documents.map((doc) => (
+                      <SelectItem key={doc.id} value={doc.id}>
+                        {doc.title || "Untitled document"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={onOpenConverter}>
+                Upload new
+              </Button>
             </div>
 
             <Button onClick={handleSaveDecision} className="w-full">
@@ -1838,6 +1908,7 @@ export default function CIS() {
     sector?: string;
     stage?: string;
   } | null>(null);
+  const [draftDocumentId, setDraftDocumentId] = useState<string | null>(null);
   const [viewingDocument, setViewingDocument] = useState<{
     id: string;
     title: string | null;
@@ -1870,6 +1941,16 @@ export default function CIS() {
     },
     [toast]
   );
+
+  const handleLogDecisionFromDocument = useCallback(() => {
+    if (!viewingDocument) return;
+    setDraftDecision({
+      startupName: viewingDocument.title || viewingDocument.file_name || "Decision from document",
+    });
+    setDraftDocumentId(viewingDocument.id);
+    setViewingDocument(null);
+    setActiveTab("decisions");
+  }, [viewingDocument]);
 
   const handleCreateSource = useCallback(
     async (
@@ -2719,15 +2800,18 @@ export default function CIS() {
 
           {/* Decisions Tab */}
           <TabsContent value="decisions">
-            <DecisionLoggerTab
+              <DecisionLoggerTab
               decisions={decisions}
               setDecisions={setDecisions}
               activeEventId={activeEventId}
               actorDefault={profile?.full_name || profile?.email || ""}
               draftDecision={draftDecision}
               onDraftConsumed={() => setDraftDecision(null)}
+                draftDocumentId={draftDocumentId}
+                onDraftDocumentConsumed={() => setDraftDocumentId(null)}
               documents={documents}
               onOpenDocument={handleOpenDocument}
+                onOpenConverter={() => setActiveTab("converter")}
             />
           </TabsContent>
 
@@ -2742,7 +2826,12 @@ export default function CIS() {
       <Dialog open={!!viewingDocument} onOpenChange={(open) => !open && setViewingDocument(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>{viewingDocument?.title || "Document Viewer"}</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span>{viewingDocument?.title || "Document Viewer"}</span>
+              <Button variant="secondary" onClick={handleLogDecisionFromDocument}>
+                Add decision
+              </Button>
+            </DialogTitle>
             <DialogDescription>
               {viewingDocument?.file_name && `File: ${viewingDocument.file_name}`}
             </DialogDescription>
