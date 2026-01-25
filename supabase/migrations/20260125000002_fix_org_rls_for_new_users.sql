@@ -17,18 +17,36 @@ CREATE POLICY "Authenticated can create orgs"
 -- Use SECURITY DEFINER function to avoid RLS recursion
 CREATE OR REPLACE FUNCTION public.user_can_view_org(org_id uuid)
 RETURNS boolean
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_profiles
-    WHERE user_profiles.id = auth.uid()
-    AND (
-      user_profiles.organization_id = org_id
-      OR user_profiles.organization_id IS NULL  -- New user flow
-    )
-  );
+DECLARE
+  user_org_id uuid;
+BEGIN
+  -- Get user's organization_id (bypasses RLS)
+  SELECT organization_id INTO user_org_id
+  FROM public.user_profiles
+  WHERE id = auth.uid();
+  
+  -- User belongs to this organization
+  IF user_org_id = org_id THEN
+    RETURN true;
+  END IF;
+  
+  -- New user flow: can view org if they don't have an org yet
+  -- AND the org was created recently (within last 10 minutes)
+  -- This allows them to see the org they just created
+  IF user_org_id IS NULL THEN
+    RETURN EXISTS (
+      SELECT 1 FROM public.organizations
+      WHERE id = org_id
+      AND created_at > NOW() - INTERVAL '10 minutes'
+    );
+  END IF;
+  
+  RETURN false;
+END;
 $$;
 
 CREATE POLICY "Users can view organizations"
