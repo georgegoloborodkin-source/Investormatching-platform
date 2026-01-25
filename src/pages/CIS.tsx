@@ -2550,6 +2550,35 @@ export default function CIS() {
                       )}
                     </div>
 
+                    {lastEvidence && lastEvidence.docs.length > 0 && (
+                      <div className="border rounded-md p-3 bg-muted/10 space-y-2">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground">
+                          Sources Used
+                        </div>
+                        <div className="space-y-2">
+                          {lastEvidence.docs.map((doc, index) => (
+                            <div key={doc.id} className="flex items-start justify-between gap-2 text-sm">
+                              <div>
+                                <div className="font-medium">
+                                  {index + 1}. {doc.title || doc.file_name || "Untitled document"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {buildSnippet(doc.raw_content ?? null)}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenDocument(doc.id)}
+                              >
+                                View
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Textarea
                         value={input}
