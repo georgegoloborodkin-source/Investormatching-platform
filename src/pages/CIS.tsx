@@ -2269,34 +2269,44 @@ export default function CIS() {
   const indexDocumentEmbeddings = useCallback(
     async (documentId: string, rawContent?: string | null) => {
       if (!rawContent?.trim()) return;
-      try {
-        const { data: existing } = await supabase
-          .from("document_embeddings")
-          .select("id")
-          .eq("document_id", documentId)
-          .limit(1);
-        if (existing && existing.length > 0) return;
+      // Run embeddings in background - don't block document upload
+      // Errors are logged but don't affect the main flow
+      (async () => {
+        try {
+          const { data: existing } = await supabase
+            .from("document_embeddings")
+            .select("id")
+            .eq("document_id", documentId)
+            .limit(1);
+          if (existing && existing.length > 0) return;
 
-        const MAX_EMBED_CHARS = 4000;
-        const MAX_EMBED_CHUNKS = 4;
-        const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
-        const chunks = chunkText(truncated).slice(0, MAX_EMBED_CHUNKS);
+          const MAX_EMBED_CHARS = 4000;
+          const MAX_EMBED_CHUNKS = 4;
+          const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
+          const chunks = chunkText(truncated).slice(0, MAX_EMBED_CHUNKS);
 
-        for (const chunk of chunks) {
-          const embedding = await embedQuery(chunk);
-          if (!embedding.length) continue;
-          const { error } = await supabase.from("document_embeddings").insert({
-            document_id: documentId,
-            chunk_text: chunk,
-            embedding,
-          });
-          if (error) {
-            console.error("Embedding insert error:", error);
+          for (const chunk of chunks) {
+            try {
+              const embedding = await embedQuery(chunk);
+              if (!embedding.length) continue;
+              const { error } = await supabase.from("document_embeddings").insert({
+                document_id: documentId,
+                chunk_text: chunk,
+                embedding,
+              });
+              if (error) {
+                console.warn("Embedding insert error (non-blocking):", error);
+              }
+            } catch (chunkErr) {
+              // Individual chunk failures don't stop the process
+              console.warn("Embedding generation failed for chunk (non-blocking):", chunkErr);
+            }
           }
+        } catch (err) {
+          // Embedding failures are non-blocking - document upload still succeeds
+          console.warn("Embedding index failed (non-blocking):", err);
         }
-      } catch (err) {
-        console.error("Embedding index failed:", err);
-      }
+      })();
     },
     [chunkText]
   );

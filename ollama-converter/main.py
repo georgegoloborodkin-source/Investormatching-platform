@@ -98,8 +98,10 @@ ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "6"))
 ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "400"))
 
 # Embeddings settings (semantic search)
-EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "ollama").lower().strip()
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "openai").lower().strip()
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 
 # Ingestion settings
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
@@ -2020,15 +2022,45 @@ async def ask_fund(request: AskRequest):
     answer = await call_anthropic_answer(prompt)
     return AskResponse(answer=answer)
 
-@app.post("/embed/query", response_model=EmbedResponse)
-async def embed_query(request: EmbedRequest):
-    text = (request.text or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="text is required.")
+async def generate_embedding_openai(text: str) -> List[float]:
+    """Generate embedding using OpenAI API."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY not set. Set it in the server environment to use OpenAI embeddings."
+        )
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/embeddings",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": OPENAI_EMBEDDING_MODEL,
+                "input": text,
+            },
+        )
+        
+        if response.status_code >= 400:
+            error_text = response.text[:400]
+            raise HTTPException(
+                status_code=502,
+                detail=f"OpenAI embedding API error ({response.status_code}): {error_text}"
+            )
+        
+        data = response.json()
+        embedding_data = data.get("data", [{}])[0] if data.get("data") else {}
+        embedding = embedding_data.get("embedding")
+        
+        if not embedding:
+            raise HTTPException(status_code=502, detail="No embedding returned from OpenAI.")
+        
+        return embedding
 
-    if EMBEDDINGS_PROVIDER != "ollama":
-        raise HTTPException(status_code=503, detail="EMBEDDINGS_PROVIDER is not enabled.")
-
+async def generate_embedding_ollama(text: str) -> List[float]:
+    """Generate embedding using Ollama."""
     try:
         response = ollama.embeddings(model=OLLAMA_EMBEDDING_MODEL, prompt=text)
     except Exception as e:
@@ -2036,8 +2068,34 @@ async def embed_query(request: EmbedRequest):
 
     embedding = response.get("embedding") if isinstance(response, dict) else None
     if not embedding:
-        raise HTTPException(status_code=502, detail="No embedding returned.")
-    return EmbedResponse(embedding=embedding)
+        raise HTTPException(status_code=502, detail="No embedding returned from Ollama.")
+    return embedding
+
+@app.post("/embed/query", response_model=EmbedResponse)
+async def embed_query(request: EmbedRequest):
+    text = (request.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required.")
+
+    try:
+        if EMBEDDINGS_PROVIDER == "openai":
+            embedding = await generate_embedding_openai(text)
+        elif EMBEDDINGS_PROVIDER == "ollama":
+            embedding = await generate_embedding_ollama(text)
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=f"EMBEDDINGS_PROVIDER '{EMBEDDINGS_PROVIDER}' not supported. Use 'openai' or 'ollama'."
+            )
+        
+        return EmbedResponse(embedding=embedding)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding generation failed: {str(e)}"
+        )
 
 @app.post("/ingest/google-drive", response_model=GoogleDriveIngestResponse)
 async def ingest_google_drive(request: GoogleDriveIngestRequest):
