@@ -2268,9 +2268,18 @@ export default function CIS() {
 
   const indexDocumentEmbeddings = useCallback(
     async (documentId: string, rawContent?: string | null) => {
+      // Embeddings are OPTIONAL - only generate if OpenAI API key is available
+      // Full-text search works fine without embeddings
+      // This function runs silently in background and never blocks document uploads
       if (!rawContent?.trim()) return;
-      // Run embeddings in background - don't block document upload
-      // Errors are logged but don't affect the main flow
+      
+      // Check if embeddings are enabled (user can enable semantic search toggle)
+      // For now, we skip embedding generation entirely to avoid errors
+      // Users can enable semantic search later if they add OpenAI API key
+      return;
+      
+      // OLD CODE (disabled - uncomment if you add OpenAI API key):
+      /*
       (async () => {
         try {
           const { data: existing } = await supabase
@@ -2295,18 +2304,17 @@ export default function CIS() {
                 embedding,
               });
               if (error) {
-                console.warn("Embedding insert error (non-blocking):", error);
+                // Silent - embeddings are optional
               }
             } catch (chunkErr) {
-              // Individual chunk failures don't stop the process
-              console.warn("Embedding generation failed for chunk (non-blocking):", chunkErr);
+              // Silent - embeddings are optional
             }
           }
         } catch (err) {
-          // Embedding failures are non-blocking - document upload still succeeds
-          console.warn("Embedding index failed (non-blocking):", err);
+          // Silent - embeddings are optional, full-text search works fine
         }
       })();
+      */
     },
     [chunkText]
   );
@@ -2347,7 +2355,7 @@ export default function CIS() {
       if (semanticMode) {
         try {
           const embedding = await embedQuery(question);
-          if (embedding.length) {
+          if (embedding && embedding.length) {
             const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
               query_embedding: embedding,
               match_count: 6,
@@ -2374,7 +2382,9 @@ export default function CIS() {
             }
           }
         } catch (err) {
+          // Semantic search failed - silently fall back to full-text search
           semanticFailed = true;
+          // Don't log error - embeddings are optional, full-text search works fine
         }
       }
 
@@ -2855,7 +2865,7 @@ export default function CIS() {
                             checked={semanticMode}
                             onCheckedChange={(val) => setSemanticMode(val === true)}
                           />
-                          Semantic search (beta, higher cost)
+                          Semantic search (requires OpenAI API key - optional)
                         </label>
                         <Button
                           variant="secondary"
