@@ -2369,6 +2369,8 @@ export default function CIS() {
       }
 
       if (!docs.length && !error) {
+        // More aggressive search: try multiple search strategies
+        // First, try full-text search with the question
         let responseQuery = supabase
           .from("documents")
           .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
@@ -2376,13 +2378,47 @@ export default function CIS() {
           .textSearch("raw_content", question, { type: "websearch", config: "english" })
           .order("created_at", { ascending: false })
           .limit(6);
+        
+        // Apply scope filters
         if (myDocsSelected && !teamDocsSelected && currentUserId) {
           responseQuery = responseQuery.eq("created_by", currentUserId);
         } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
           responseQuery = responseQuery.neq("created_by", currentUserId);
         }
+        
         const response = await responseQuery;
         docs = (response.data || []) as typeof docs;
+        
+        // If still no results, try keyword search with individual terms
+        if (!docs.length && !response.error) {
+          const keywords = question
+            .toLowerCase()
+            .split(/\W+/)
+            .filter((w) => w.length > 3)
+            .slice(0, 3); // Use top 3 keywords
+          
+          if (keywords.length > 0) {
+            let keywordQuery = supabase
+              .from("documents")
+              .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
+              .eq("event_id", eventId)
+              .or(keywords.map((k) => `raw_content.ilike.%${k}%`).join(","))
+              .order("created_at", { ascending: false })
+              .limit(6);
+            
+            if (myDocsSelected && !teamDocsSelected && currentUserId) {
+              keywordQuery = keywordQuery.eq("created_by", currentUserId);
+            } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+              keywordQuery = keywordQuery.neq("created_by", currentUserId);
+            }
+            
+            const keywordResponse = await keywordQuery;
+            if (keywordResponse.data?.length) {
+              docs = (keywordResponse.data || []) as typeof docs;
+            }
+          }
+        }
+        
         if (response.error) {
           error = response.error as { message?: string };
         }
@@ -2418,7 +2454,7 @@ export default function CIS() {
 
       if (!docs || docs.length === 0) {
         const fallback = decisionMatches.length
-          ? `I didn’t find matching documents, but I found ${decisionMatches.length} related decisions:\n` +
+          ? `I didn't find matching documents in your uploaded sources, but I found ${decisionMatches.length} related decisions:\n` +
             decisionMatches
               .map(
                 (d, index) =>
@@ -2426,9 +2462,12 @@ export default function CIS() {
                     d.outcome ? ` (${d.outcome})` : ""
                   }${d.notes ? ` — ${d.notes}` : ""}`
               )
-              .join("\n")
-          : "I couldn’t find relevant documents yet. Try adding a sector, stage, or company name.";
+              .join("\n") +
+            "\n\n💡 To get answers about this topic, upload relevant documents (pitch decks, memos, meeting notes) in the Document Converter tab."
+          : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Document Converter tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
         createAssistantMessage(fallback, threadId);
+        // Don't set lastEvidence if no docs found - prevents Claude from being called
+        setLastEvidence(null);
         setChatIsLoading(false);
         return;
       }
@@ -2487,6 +2526,15 @@ export default function CIS() {
       toast({
         title: "No sources yet",
         description: "Ask a question first so we have sources to summarize.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // STRICT: Don't call Claude if no sources found
+    if (!lastEvidence.docs || lastEvidence.docs.length === 0) {
+      toast({
+        title: "No sources available",
+        description: "I couldn't find any relevant documents. Upload documents or try a different question.",
         variant: "destructive",
       });
       return;

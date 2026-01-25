@@ -550,9 +550,13 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
     sources_block = "\n\n".join(source_lines) if source_lines else "No sources available."
     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
 
-    return f"""You are Orbit AI. Answer the question using ONLY the sources provided.
-If the sources are insufficient, say so briefly and ask a follow-up.
-Be concise and cite sources like [1], [2].
+    return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
+
+CRITICAL RULES:
+1. ONLY use information from the sources below. Do NOT use general knowledge.
+2. If the sources don't contain the answer, say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+3. Cite sources using [1], [2], etc. for every claim.
+4. Be concise and factual. No speculation.
 
 Question:
 {question}
@@ -562,6 +566,8 @@ Sources:
 
 Decision history (optional context):
 {decisions_block}
+
+Remember: If the answer isn't in the sources above, you MUST say you don't have that information. Never make up answers.
 """
 
 async def call_anthropic_answer(prompt: str) -> str:
@@ -586,7 +592,7 @@ async def call_anthropic_answer(prompt: str) -> str:
                 "model": model_name,
                 "max_tokens": ASK_MAX_TOKENS,
                 "temperature": 0.1,
-                "system": "You answer investor questions based on provided sources only. Cite sources.",
+                "system": "You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from provided sources only. Never use general knowledge. If information isn't in the sources, say so explicitly. Always cite sources with [1], [2], etc.",
                 "messages": [
                     {"role": "user", "content": prompt}
                 ],
