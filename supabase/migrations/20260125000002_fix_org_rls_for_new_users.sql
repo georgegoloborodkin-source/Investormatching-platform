@@ -35,20 +35,22 @@ CREATE POLICY "Users can view organizations"
   ON public.organizations FOR SELECT
   USING (public.user_can_view_org(organizations.id));
 
+-- Helper function for UPDATE policy (avoids recursion)
+CREATE OR REPLACE FUNCTION public.user_can_update_org(org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE user_profiles.id = auth.uid()
+    AND user_profiles.organization_id = org_id
+  );
+$$;
+
 -- Allow users to UPDATE their organization
 CREATE POLICY "Users can update org"
   ON public.organizations FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE user_profiles.id = auth.uid()
-      AND user_profiles.organization_id = organizations.id
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE user_profiles.id = auth.uid()
-      AND user_profiles.organization_id = organizations.id
-    )
-  );
+  USING (public.user_can_update_org(organizations.id))
+  WITH CHECK (public.user_can_update_org(organizations.id));
