@@ -1,10 +1,12 @@
 -- Fix organizations RLS for new users who don't have organization_id yet
 -- This allows new users to create and view their organization
 
--- Drop all existing organization policies
+-- Drop all existing organization policies (handle all possible names)
 DROP POLICY IF EXISTS "Users can view own organization" ON public.organizations;
+DROP POLICY IF EXISTS "Users can view organizations" ON public.organizations;
 DROP POLICY IF EXISTS "Authenticated can create orgs" ON public.organizations;
 DROP POLICY IF EXISTS "Users can create org" ON public.organizations;
+DROP POLICY IF EXISTS "Users can update org" ON public.organizations;
 
 -- Allow authenticated users to INSERT organizations (for new users)
 CREATE POLICY "Authenticated can create orgs"
