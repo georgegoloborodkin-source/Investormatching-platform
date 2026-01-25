@@ -14,25 +14,26 @@ CREATE POLICY "Authenticated can create orgs"
   WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Allow authenticated users to SELECT organizations
--- Users can see organizations they belong to
--- OR if they don't have an organization_id yet (new user flow), they can see all orgs
--- (This is safe because they'll be assigned to one immediately after creation)
-CREATE POLICY "Users can view organizations"
-  ON public.organizations FOR SELECT
-  USING (
-    -- User is in this organization
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE user_profiles.id = auth.uid()
-      AND user_profiles.organization_id = organizations.id
-    )
-    -- OR user doesn't have organization_id yet (new user during signup)
-    OR EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE user_profiles.id = auth.uid()
-      AND user_profiles.organization_id IS NULL
+-- Use SECURITY DEFINER function to avoid RLS recursion
+CREATE OR REPLACE FUNCTION public.user_can_view_org(org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE user_profiles.id = auth.uid()
+    AND (
+      user_profiles.organization_id = org_id
+      OR user_profiles.organization_id IS NULL  -- New user flow
     )
   );
+$$;
+
+CREATE POLICY "Users can view organizations"
+  ON public.organizations FOR SELECT
+  USING (public.user_can_view_org(organizations.id));
 
 -- Allow users to UPDATE their organization
 CREATE POLICY "Users can update org"
