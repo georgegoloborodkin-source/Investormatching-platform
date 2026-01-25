@@ -102,10 +102,9 @@ declare global {
 // ============================================================================
 
 const initialScopes: ScopeItem[] = [
-  { id: "portfolio", label: "Portfolio Companies", checked: true, type: "portfolio" },
-  { id: "deal-d", label: "DD — Company D", checked: true, type: "deal" },
+  { id: "my-docs", label: "My docs", checked: true, type: "portfolio" },
+  { id: "team-docs", label: "Team docs", checked: true, type: "global" },
   { id: "threads", label: "Saved Threads", checked: false, type: "thread" },
-  { id: "historical", label: "All historical", checked: false, type: "global" },
 ];
 
 const initialThreads: Thread[] = [];
@@ -2321,6 +2320,9 @@ export default function CIS() {
       }
 
       setChatIsLoading(true);
+      const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
+      const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
+      const currentUserId = profile?.id || user?.id || null;
       let docs: Array<{
         id: string;
         title: string | null;
@@ -2343,10 +2345,16 @@ export default function CIS() {
             });
             if (!matchError && matches?.length) {
               const ids = matches.map((m: any) => m.document_id);
-              const { data: docRows, error: docError } = await supabase
+              let docQuery = supabase
                 .from("documents")
-                .select("id,title,file_name,raw_content,created_at,storage_path")
+                .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
                 .in("id", ids);
+              if (myDocsSelected && !teamDocsSelected && currentUserId) {
+                docQuery = docQuery.eq("created_by", currentUserId);
+              } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+                docQuery = docQuery.neq("created_by", currentUserId);
+              }
+              const { data: docRows, error: docError } = await docQuery;
               if (docError) {
                 error = docError as { message?: string };
               } else if (docRows?.length) {
@@ -2361,13 +2369,19 @@ export default function CIS() {
       }
 
       if (!docs.length && !error) {
-        const response = await supabase
+        let responseQuery = supabase
           .from("documents")
-          .select("id,title,file_name,raw_content,created_at,storage_path")
+          .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
           .eq("event_id", eventId)
           .textSearch("raw_content", question, { type: "websearch", config: "english" })
           .order("created_at", { ascending: false })
           .limit(6);
+        if (myDocsSelected && !teamDocsSelected && currentUserId) {
+          responseQuery = responseQuery.eq("created_by", currentUserId);
+        } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+          responseQuery = responseQuery.neq("created_by", currentUserId);
+        }
+        const response = await responseQuery;
         docs = (response.data || []) as typeof docs;
         if (response.error) {
           error = response.error as { message?: string };
@@ -2448,7 +2462,7 @@ export default function CIS() {
       );
       setChatIsLoading(false);
     },
-    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage, decisions, scopes]
+    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage, decisions, scopes, profile, user]
   );
 
   const addMessage = async () => {
