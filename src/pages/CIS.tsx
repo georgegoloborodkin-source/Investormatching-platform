@@ -1037,6 +1037,14 @@ function SourcesTab({
   const canImport = Boolean(activeEventId);
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+  
+  // Debug: log env vars (remove in production)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      console.log('Google API Key present:', !!googleApiKey);
+      console.log('Google Client ID present:', !!googleClientId);
+    }
+  }, [googleApiKey, googleClientId]);
 
   const handleAdd = useCallback(async () => {
     if (!title.trim() && !externalUrl.trim()) {
@@ -1865,21 +1873,35 @@ export default function CIS() {
   );
 
   const ensureActiveEventId = useCallback(async () => {
-    if (!profile) return null;
+    if (!profile) {
+      console.error("ensureActiveEventId: No profile");
+      return null;
+    }
     const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
     if (orgError || !orgData?.organization) {
+      console.error("ensureActiveEventId: Organization error:", orgError);
       toast({
         title: "Organization missing",
-        description: "We could not load your organization.",
+        description: orgError?.message || "We could not load your organization.",
         variant: "destructive",
       });
       return null;
     }
     const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
-    if (eventError || !event) {
+    if (eventError) {
+      console.error("ensureActiveEventId: Event creation error:", eventError);
+      toast({
+        title: "Event creation failed",
+        description: eventError.message || "Could not create an active event. Please refresh.",
+        variant: "destructive",
+      });
+      return null;
+    }
+    if (!event) {
+      console.error("ensureActiveEventId: No event returned");
       toast({
         title: "No active event",
-        description: "Create or activate an event first.",
+        description: "Could not create an active event. Please refresh.",
         variant: "destructive",
       });
       return null;
@@ -2000,11 +2022,32 @@ export default function CIS() {
 
       const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
       if (orgError || !orgData?.organization) {
+        console.error("Failed to ensure organization:", orgError);
+        toast({
+          title: "Organization error",
+          description: orgError?.message || "Could not load your organization. Please refresh.",
+          variant: "destructive",
+        });
         return;
       }
 
       const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
-      if (eventError || !event) {
+      if (eventError) {
+        console.error("Failed to ensure active event:", eventError);
+        toast({
+          title: "Event creation failed",
+          description: eventError.message || "Could not create an active event. Please refresh or contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!event) {
+        console.error("No event returned from ensureActiveEventForOrg");
+        toast({
+          title: "No active event",
+          description: "Could not create an active event. Please refresh.",
+          variant: "destructive",
+        });
         return;
       }
 
