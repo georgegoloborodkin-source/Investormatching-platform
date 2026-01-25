@@ -12,59 +12,48 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Handle OAuth callback - exchange code for session
-        const { data: authData, error: authError } = await supabase.auth.getSession();
+        // Supabase OAuth uses query parameters (?code=...&state=...)
+        // Supabase automatically processes these and establishes the session
+        // We just need to wait for it to complete
         
-        // If no session yet, try to get it from URL hash (OAuth callback)
-        if (!authData?.session) {
-          // Check if we have hash params (OAuth callback)
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token');
+        // Wait for Supabase to process the OAuth callback
+        // Try multiple times with increasing delays
+        let session = null;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (!session && attempts < maxAttempts) {
+          const { data, error } = await supabase.auth.getSession();
           
-          if (accessToken && refreshToken) {
-            // Set the session manually from URL hash
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            
-            if (sessionError) {
-              console.error("Set session error:", sessionError);
-              throw sessionError;
-            }
-            
-            if (!sessionData?.session) {
-              throw new Error("Failed to establish session from OAuth callback");
-            }
-          } else {
-            // No hash params, wait a bit and retry
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const { data: retryData, error: retryError } = await supabase.auth.getSession();
-            
-            if (retryError) {
-              throw retryError;
-            }
-            
-            if (!retryData?.session) {
-              throw new Error("No session found. Please try signing in again.");
-            }
+          if (error) {
+            console.error("Session error:", error);
+            throw error;
           }
+          
+          if (data?.session) {
+            session = data.session;
+            break;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 300 * (attempts + 1)));
+          attempts++;
         }
         
-        // Now get the session (should exist now)
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("Session error:", sessionError);
-          throw sessionError;
+        if (!session) {
+          // Check URL for error parameters
+          const urlParams = new URLSearchParams(window.location.search);
+          const errorParam = urlParams.get('error');
+          const errorDescription = urlParams.get('error_description');
+          
+          if (errorParam) {
+            throw new Error(errorDescription || errorParam);
+          }
+          
+          throw new Error("Session not established. Please try signing in again.");
         }
 
-        if (!sessionData?.session) {
-          throw new Error("No session returned from Supabase. Check redirect URLs and try again.");
-        }
-
-        const user = sessionData.session.user;
+        const user = session.user;
         
         // Check if user profile exists, create if not
         const { data: profile, error: profileError } = await supabase
@@ -93,7 +82,7 @@ export default function AuthCallback() {
           // Don't throw - profile might exist but RLS is blocking
         }
 
-        // Clear URL hash to clean up
+        // Clear URL parameters to clean up
         window.history.replaceState(null, '', window.location.pathname);
 
         toast({
@@ -102,7 +91,7 @@ export default function AuthCallback() {
         });
 
         // Small delay to ensure state is updated
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
         navigate("/");
       } catch (error: any) {
         console.error("Auth callback error:", error);
