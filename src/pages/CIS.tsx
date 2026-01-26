@@ -1656,6 +1656,137 @@ function SourcesTab({
 }
 
 // ============================================================================
+// DASHBOARD TAB
+// ============================================================================
+
+function DashboardTab({
+  decisions,
+  documents,
+  sources,
+}: {
+  decisions: Decision[];
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  sources: SourceRecord[];
+}) {
+  const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
+  const latestDecision = decisions[0];
+  const latestDocument = documents[0];
+  const latestSource = sources[0];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <ClipboardList className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.totalDecisions}</p>
+                <p className="text-xs text-muted-foreground">Decisions</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <FileText className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{documents.length}</p>
+                <p className="text-xs text-muted-foreground">Documents</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-500/10 rounded-lg">
+                <Folder className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{sources.length}</p>
+                <p className="text-xs text-muted-foreground">Sources</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500/10 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.byOutcome.positive || 0}</p>
+                <p className="text-xs text-muted-foreground">Positive</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Decision</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {latestDecision ? (
+              <div className="space-y-1">
+                <div className="font-medium text-foreground">{latestDecision.startupName}</div>
+                <div>{latestDecision.actionType} {latestDecision.outcome ? `(${latestDecision.outcome})` : ""}</div>
+                {latestDecision.notes && <div>{latestDecision.notes}</div>}
+              </div>
+            ) : (
+              "No decisions yet."
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Document</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {latestDocument ? (
+              <div className="space-y-1">
+                <div className="font-medium text-foreground">
+                  {latestDocument.title || "Untitled document"}
+                </div>
+                <div className="text-xs">Stored in CIS documents</div>
+              </div>
+            ) : (
+              "No documents yet."
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Source</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {latestSource ? (
+              <div className="space-y-1">
+                <div className="font-medium text-foreground">{latestSource.title || "Untitled source"}</div>
+                <div className="text-xs">{latestSource.source_type}</div>
+              </div>
+            ) : (
+              "No sources yet."
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // DECISION ENGINE DASHBOARD TAB
 // ============================================================================
 
@@ -2733,8 +2864,8 @@ export default function CIS() {
                   }${d.notes ? ` — ${d.notes}` : ""}`
               )
               .join("\n") +
-            "\n\n💡 To get answers about this topic, upload relevant documents (pitch decks, memos, meeting notes) in the Document Converter tab."
-          : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Document Converter tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
+            "\n\n💡 To get answers about this topic, upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab."
+          : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
         createAssistantMessage(fallback, threadId);
         // Don't set lastEvidence if no docs found - prevents Claude from being called
         setLastEvidence(null);
@@ -3014,9 +3145,9 @@ export default function CIS() {
               <Brain className="h-4 w-4" />
               Intelligence Chat
             </TabsTrigger>
-            <TabsTrigger value="converter" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Document Converter
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Dashboard
             </TabsTrigger>
             <TabsTrigger value="sources" className="flex items-center gap-2">
               <Folder className="h-4 w-4" />
@@ -3293,13 +3424,9 @@ export default function CIS() {
             />
           </TabsContent>
 
-          {/* Converter Tab */}
-          <TabsContent value="converter">
-            <DocumentConverterTab
-              onDecisionDraft={(draft) => setDraftDecision(draft)}
-              onOpenDecisionLog={() => setActiveTab("decisions")}
-              onAutoLogDecision={handleAutoLogDecision}
-            />
+          {/* Dashboard Tab */}
+          <TabsContent value="overview">
+            <DashboardTab decisions={decisions} documents={documents} sources={sources} />
           </TabsContent>
 
           {/* Decisions Tab */}
@@ -3315,7 +3442,7 @@ export default function CIS() {
                 onDraftDocumentConsumed={() => setDraftDocumentId(null)}
               documents={documents}
               onOpenDocument={handleOpenDocument}
-                onOpenConverter={() => setActiveTab("converter")}
+                onOpenConverter={() => setActiveTab("sources")}
             />
           </TabsContent>
 
