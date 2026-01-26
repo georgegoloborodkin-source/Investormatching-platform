@@ -1901,6 +1901,7 @@ export default function CIS() {
       title: string | null;
       file_name: string | null;
       raw_content: string | null;
+      extracted_json?: Record<string, any> | null;
       created_at: string;
       storage_path: string | null;
     }>;
@@ -2211,6 +2212,24 @@ export default function CIS() {
     return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
   }, []);
 
+  const buildDocSnippet = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }) => {
+      if (doc.raw_content?.trim()) {
+        return buildSnippet(doc.raw_content);
+      }
+      if (doc.extracted_json) {
+        try {
+          const jsonText = JSON.stringify(doc.extracted_json);
+          return buildSnippet(jsonText);
+        } catch (err) {
+          return "No preview available.";
+        }
+      }
+      return "No preview available.";
+    },
+    [buildSnippet]
+  );
+
   const isDeveloper =
     (import.meta.env.VITE_DEV_MODE as string | undefined) === "true" ||
     (profile?.email && (import.meta.env.VITE_DEV_EMAIL as string | undefined) === profile.email);
@@ -2334,6 +2353,7 @@ export default function CIS() {
         title: string | null;
         file_name: string | null;
         raw_content: string | null;
+        extracted_json?: Record<string, any> | null;
         created_at: string;
         storage_path: string | null;
       }> = [];
@@ -2353,7 +2373,7 @@ export default function CIS() {
               const ids = matches.map((m: any) => m.document_id);
               let docQuery = supabase
                 .from("documents")
-                .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
+                .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
                 .in("id", ids);
               if (myDocsSelected && !teamDocsSelected && currentUserId) {
                 docQuery = docQuery.eq("created_by", currentUserId);
@@ -2381,7 +2401,7 @@ export default function CIS() {
         // First, try full-text search with the question
         let responseQuery = supabase
           .from("documents")
-          .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
+          .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
           .eq("event_id", eventId)
           .textSearch("raw_content", question, { type: "websearch", config: "english" })
           .order("created_at", { ascending: false })
@@ -2408,7 +2428,7 @@ export default function CIS() {
           if (keywords.length > 0) {
             let keywordQuery = supabase
               .from("documents")
-              .select("id,title,file_name,raw_content,created_at,storage_path,created_by")
+              .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
               .eq("event_id", eventId)
               .or(keywords.map((k) => `raw_content.ilike.%${k}%`).join(","))
               .order("created_at", { ascending: false })
@@ -2429,6 +2449,36 @@ export default function CIS() {
         
         if (response.error) {
           error = response.error as { message?: string };
+        }
+
+        // Final fallback: client-side scan of recent docs using raw + extracted JSON
+        if (!docs.length && !error && tokens.length > 0) {
+          let recentQuery = supabase
+            .from("documents")
+            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+            .eq("event_id", eventId)
+            .order("created_at", { ascending: false })
+            .limit(50);
+          if (myDocsSelected && !teamDocsSelected && currentUserId) {
+            recentQuery = recentQuery.eq("created_by", currentUserId);
+          } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+            recentQuery = recentQuery.neq("created_by", currentUserId);
+          }
+          const recentResponse = await recentQuery;
+          if (!recentResponse.error && recentResponse.data?.length) {
+            const filtered = (recentResponse.data as typeof docs).filter((doc) => {
+              const haystack = [
+                doc.raw_content || "",
+                doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+              ]
+                .join(" ")
+                .toLowerCase();
+              return tokens.some((t) => haystack.includes(t));
+            });
+            if (filtered.length) {
+              docs = filtered.slice(0, 6);
+            }
+          }
         }
       }
 
@@ -2483,7 +2533,7 @@ export default function CIS() {
       const bullets = docs
         .map((doc, index) => {
           const title = doc.title || doc.file_name || "Untitled document";
-          return `${index + 1}. ${title} — ${buildSnippet(doc.raw_content ?? null)}`;
+          return `${index + 1}. ${title} — ${buildDocSnippet(doc)}`;
         })
         .join("\n");
 
@@ -2561,7 +2611,7 @@ export default function CIS() {
       const sources = lastEvidence.docs.map((doc) => ({
         title: doc.title,
         file_name: doc.file_name,
-        snippet: buildSnippet(doc.raw_content ?? null),
+        snippet: buildDocSnippet(doc),
       }));
       const decisionsForClaude = lastEvidence.decisions.map((d) => ({
         startup_name: d.startupName,
