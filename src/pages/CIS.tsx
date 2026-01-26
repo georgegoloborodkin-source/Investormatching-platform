@@ -2758,7 +2758,17 @@ export default function CIS() {
         : "";
 
       const filteredDocs = docs.filter((doc) => docContainsTokens(doc, tokens));
-      const answerDocs = filteredDocs.length > 0 ? filteredDocs : docs;
+      if (filteredDocs.length === 0) {
+        createAssistantMessage(
+          `I couldn’t find relevant documents in your uploaded sources for: "${question}"\n\n` +
+            "Please upload a document that mentions this topic, or refine the question.",
+          threadId
+        );
+        setLastEvidence(null);
+        setChatIsLoading(false);
+        return;
+      }
+      const answerDocs = filteredDocs;
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setChatIsLoading(false);
 
@@ -2807,15 +2817,10 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
       } catch (error: any) {
-        const fallbackDoc = answerDocs[0];
-        const fallbackText = fallbackDoc
-          ? buildStructuredAnswer(fallbackDoc, tokens)
-          : "No relevant sources found.";
         createAssistantMessage(
           `Claude answer failed: ${error?.message || "Could not generate an answer."}\n\n` +
-            `Here are the most relevant source lines:\n${fallbackText}`,
-          threadId,
-          fallbackDoc ? [fallbackDoc.id] : null
+            "Please try again in a moment.",
+          threadId
         );
       } finally {
         setIsClaudeLoading(false);
