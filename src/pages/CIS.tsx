@@ -538,6 +538,7 @@ function DecisionLoggerTab({
   documents,
   onOpenDocument,
   onOpenConverter,
+  currentUserId,
 }: {
   decisions: Decision[];
   setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>;
@@ -550,6 +551,7 @@ function DecisionLoggerTab({
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   onOpenDocument: (documentId: string) => void;
   onOpenConverter: () => void;
+  currentUserId: string | null;
 }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -627,7 +629,7 @@ function DecisionLoggerTab({
     setIsSaving(true);
     try {
       const { data, error } = await insertDecision(activeEventId, {
-        actor_id: null,
+        actor_id: currentUserId, // Use actual user ID when available
         actor_name: actor.trim(),
         action_type: actionType,
         startup_name: startupName.trim(),
@@ -3579,6 +3581,7 @@ export default function CIS() {
               documents={documents}
               onOpenDocument={handleOpenDocument}
                 onOpenConverter={() => setActiveTab("sources")}
+                currentUserId={profile?.id || user?.id || null}
             />
           </TabsContent>
 
