@@ -560,9 +560,14 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
 
 CRITICAL RULES:
 1. ONLY use information from the sources below. Do NOT use general knowledge.
-2. If the sources don't contain the answer, say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-3. Cite sources using [1], [2], etc. for every claim.
-4. Be concise and factual. No speculation.
+2. If the sources DO contain relevant details, provide a thorough, well-structured answer using those details.
+3. If the sources do NOT contain the answer, say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+4. Cite sources using [1], [2], etc. for every claim.
+5. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
+
+Answer style:
+- Use bullet points for responsibilities, qualifications, and scope.
+- Prefer completeness over brevity when sources list multiple items.
 
 Question:
 {question}
