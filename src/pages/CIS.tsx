@@ -1197,6 +1197,7 @@ function SourcesTab({
   activeEventId,
   ensureActiveEventId,
   currentUserId,
+  indexDocumentEmbeddings,
 }: {
   sources: SourceRecord[];
   onCreateSource: (
@@ -1224,6 +1225,7 @@ function SourcesTab({
   activeEventId: string | null;
   ensureActiveEventId: () => Promise<string | null>;
   currentUserId: string | null;
+  indexDocumentEmbeddings: (documentId: string, rawContent?: string | null) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -3559,6 +3561,7 @@ export default function CIS() {
               activeEventId={activeEventId}
               ensureActiveEventId={ensureActiveEventId}
               currentUserId={profile?.id || user?.id || null}
+              indexDocumentEmbeddings={indexDocumentEmbeddings}
             />
           </TabsContent>
 
