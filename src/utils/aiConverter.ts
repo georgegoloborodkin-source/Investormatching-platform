@@ -174,26 +174,36 @@ export async function askClaudeAnswer(input: {
   const controller = new AbortController();
   const timeoutMs = 20000;
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  let response: Response;
+  let response: Response | null = null;
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
   try {
-    response = await fetch(`${baseUrl}/ask`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(input),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Claude timed out. Please try again.");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        response = await fetch(`${baseUrl}/ask`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(input),
+          signal: controller.signal,
+        });
+        break;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          throw new Error("Claude timed out. Please try again.");
+        }
+        if (attempt === 0) {
+          await sleep(1000);
+          continue;
+        }
+        throw error;
+      }
     }
-    throw error;
   } finally {
     window.clearTimeout(timeout);
   }
 
-  if (!response.ok) {
+  if (!response || !response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || `HTTP error! status: ${response.status}`);
   }

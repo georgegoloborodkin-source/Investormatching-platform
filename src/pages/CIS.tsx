@@ -2309,31 +2309,32 @@ export default function CIS() {
 
       const lowerTokens = tokens.map((t) => t.toLowerCase());
       const lines = combined.split("\n").map((line) => line.trim()).filter(Boolean);
-      const matchedIndices: number[] = [];
+      const startIdx = lines.findIndex((line) =>
+        lowerTokens.some((t) => line.toLowerCase().includes(t))
+      );
 
-      lines.forEach((line, idx) => {
-        const haystack = line.toLowerCase();
-        if (lowerTokens.some((t) => haystack.includes(t))) {
-          matchedIndices.push(idx);
-        }
-      });
-
-      if (matchedIndices.length > 0) {
-        const picked = new Set<number>();
-        matchedIndices.forEach((idx) => {
-          for (let i = idx; i <= Math.min(lines.length - 1, idx + 12); i += 1) {
-            picked.add(i);
-          }
-        });
-        const matchedLines = Array.from(picked)
-          .sort((a, b) => a - b)
-          .map((idx) => lines[idx]);
-        const joined = matchedLines.join("\n");
-        return joined.length > 1200 ? `${joined.slice(0, 1200)}…` : joined;
+      if (startIdx >= 0) {
+        const slice = lines.slice(startIdx, startIdx + 40);
+        const joined = slice.join("\n");
+        return joined.length > 2000 ? `${joined.slice(0, 2000)}…` : joined;
       }
 
-      // Fallback: return the first 1200 chars of the document
-      return combined.length > 1200 ? `${combined.slice(0, 1200)}…` : combined;
+      // Fallback: return the first 2000 chars of the document
+      return combined.length > 2000 ? `${combined.slice(0, 2000)}…` : combined;
+    },
+    []
+  );
+
+  const docContainsTokens = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+      if (!tokens.length) return true;
+      const haystack = [
+        doc.raw_content || "",
+        doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return tokens.some((t) => haystack.includes(t));
     },
     []
   );
@@ -2714,13 +2715,15 @@ export default function CIS() {
         ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
         : "";
 
-      setLastEvidence({ question, docs, decisions: decisionMatches });
+      const filteredDocs = docs.filter((doc) => docContainsTokens(doc, tokens));
+      const answerDocs = filteredDocs.length > 0 ? filteredDocs : docs;
+      setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setChatIsLoading(false);
 
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
       try {
-        const docsForClaude = docs.slice(0, 3);
+        const docsForClaude = answerDocs.slice(0, 3);
         const claudeTokens = question
           .toLowerCase()
           .split(/\W+/)
@@ -2756,9 +2759,15 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
       } catch (error: any) {
+        const fallbackDoc = answerDocs[0];
+        const fallbackText = fallbackDoc
+          ? buildClaudeContext(fallbackDoc, tokens)
+          : "No relevant sources found.";
         createAssistantMessage(
-          `Claude answer failed: ${error?.message || "Could not generate an answer."}`,
-          threadId
+          `Claude answer failed: ${error?.message || "Could not generate an answer."}\n\n` +
+            `Here are the most relevant source lines:\n${fallbackText}`,
+          threadId,
+          fallbackDoc ? [fallbackDoc.id] : null
         );
       } finally {
         setIsClaudeLoading(false);
@@ -2769,6 +2778,7 @@ export default function CIS() {
       ensureActiveEventId,
       buildSnippet,
       buildClaudeContext,
+      docContainsTokens,
       createAssistantMessage,
       decisions,
       scopes,
