@@ -2252,6 +2252,40 @@ export default function CIS() {
     [buildDocSnippet]
   );
 
+  const buildClaudeContext = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+      const combined = [
+        doc.raw_content || "",
+        doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+      ]
+        .join("\n")
+        .replace(/\r/g, "")
+        .trim();
+      if (!combined) return "No preview available.";
+
+      const lowerTokens = tokens.map((t) => t.toLowerCase());
+      const lines = combined.split("\n").map((line) => line.trim()).filter(Boolean);
+      const matchedLines: string[] = [];
+
+      for (const line of lines) {
+        const haystack = line.toLowerCase();
+        if (lowerTokens.some((t) => haystack.includes(t))) {
+          matchedLines.push(line);
+        }
+      }
+
+      // If we found matching lines, return them (up to 2000 chars)
+      if (matchedLines.length > 0) {
+        const joined = matchedLines.join("\n");
+        return joined.length > 2000 ? `${joined.slice(0, 2000)}…` : joined;
+      }
+
+      // Fallback: return the first 2000 chars of the document
+      return combined.length > 2000 ? `${combined.slice(0, 2000)}…` : combined;
+    },
+    []
+  );
+
   const isDeveloper =
     (import.meta.env.VITE_DEV_MODE as string | undefined) === "true" ||
     (profile?.email && (import.meta.env.VITE_DEV_EMAIL as string | undefined) === profile.email);
@@ -2644,7 +2678,7 @@ export default function CIS() {
       const sources = lastEvidence.docs.map((doc) => ({
         title: doc.title,
         file_name: doc.file_name,
-        snippet: buildRelevantSnippet(doc, tokens),
+        snippet: buildClaudeContext(doc, tokens),
       }));
       const decisionsForClaude = lastEvidence.decisions.map((d) => ({
         startup_name: d.startupName,
