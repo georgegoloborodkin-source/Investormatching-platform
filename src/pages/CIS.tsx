@@ -2230,6 +2230,28 @@ export default function CIS() {
     [buildSnippet]
   );
 
+  const buildRelevantSnippet = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+      const combined = [
+        doc.raw_content || "",
+        doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+      ]
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!combined) return "No preview available.";
+      const haystack = combined.toLowerCase();
+      const match = tokens.find((t) => haystack.includes(t));
+      if (!match) return buildDocSnippet(doc);
+      const idx = haystack.indexOf(match);
+      const start = Math.max(0, idx - 140);
+      const end = Math.min(combined.length, idx + match.length + 160);
+      const snippet = combined.slice(start, end).trim();
+      return snippet.length > 0 ? `${start > 0 ? "…" : ""}${snippet}${end < combined.length ? "…" : ""}` : buildDocSnippet(doc);
+    },
+    [buildDocSnippet]
+  );
+
   const isDeveloper =
     (import.meta.env.VITE_DEV_MODE as string | undefined) === "true" ||
     (profile?.email && (import.meta.env.VITE_DEV_EMAIL as string | undefined) === profile.email);
@@ -2533,7 +2555,7 @@ export default function CIS() {
       const bullets = docs
         .map((doc, index) => {
           const title = doc.title || doc.file_name || "Untitled document";
-          return `${index + 1}. ${title} — ${buildDocSnippet(doc)}`;
+          return `${index + 1}. ${title} — ${buildRelevantSnippet(doc, tokens)}`;
         })
         .join("\n");
 
@@ -2605,13 +2627,24 @@ export default function CIS() {
       if (!confirmed) return;
       setClaudeApproved(true);
     }
-    const threadId = activeThread || lastEvidence?.docs?.[0]?.id || `t-${Date.now()}`;
+    let threadId = activeThread;
+    if (!threadId) {
+      const newThreadId = `t-${Date.now()}`;
+      setThreads((prev) => [...prev, { id: newThreadId, title: "Claude answer" }]);
+      setActiveThread(newThreadId);
+      threadId = newThreadId;
+    }
     setIsClaudeLoading(true);
     try {
+      const tokens = lastEvidence.question
+        .toLowerCase()
+        .split(/\W+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 3);
       const sources = lastEvidence.docs.map((doc) => ({
         title: doc.title,
         file_name: doc.file_name,
-        snippet: buildDocSnippet(doc),
+        snippet: buildRelevantSnippet(doc, tokens),
       }));
       const decisionsForClaude = lastEvidence.decisions.map((d) => ({
         startup_name: d.startupName,
