@@ -27,6 +27,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -543,9 +553,19 @@ function DecisionLoggerTab({
 }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Form state
-  const [actor, setActor] = useState(actorDefault);
+  const [actor, setActor] = useState(() => {
+    if (typeof window !== "undefined" && actorDefault) {
+      const saved = localStorage.getItem("last_actor");
+      return saved || actorDefault;
+    }
+    return actorDefault;
+  });
   const [actionType, setActionType] = useState<Decision["actionType"]>("meeting");
   const [startupName, setStartupName] = useState("");
   const [sector, setSector] = useState("");
@@ -595,41 +615,69 @@ function DecisionLoggerTab({
       toast({ title: "Missing fields", description: "Actor and Startup name are required", variant: "destructive" });
       return;
     }
-    const { data, error } = await insertDecision(activeEventId, {
-      actor_id: null,
-      actor_name: actor.trim(),
-      action_type: actionType,
-      startup_name: startupName.trim(),
-      context: {
-        sector: sector.trim() || undefined,
-        stage: stage.trim() || undefined,
-        geo: geo.trim() || undefined,
-      },
-      confidence_score: confidence[0],
-      outcome: decisionOutcome || "pending",
-      notes: decisionReason.trim() || null,
-      document_id: attachedDocumentId === "none" ? null : attachedDocumentId,
-    });
-
-    if (error || !data) {
-      toast({ title: "Save failed", description: "Supabase rejected the decision.", variant: "destructive" });
+    if (startupName.trim().length > 200) {
+      toast({ title: "Invalid input", description: "Startup name must be less than 200 characters", variant: "destructive" });
+      return;
+    }
+    if (actor.trim().length > 100) {
+      toast({ title: "Invalid input", description: "Actor name must be less than 100 characters", variant: "destructive" });
       return;
     }
 
-    setDecisions(prev => [mapDecisionRow(data), ...prev]);
-    toast({ title: "Decision logged", description: `Logged ${actionType} for ${startupName}` });
+    setIsSaving(true);
+    try {
+      const { data, error } = await insertDecision(activeEventId, {
+        actor_id: null,
+        actor_name: actor.trim(),
+        action_type: actionType,
+        startup_name: startupName.trim(),
+        context: {
+          sector: sector.trim() || undefined,
+          stage: stage.trim() || undefined,
+          geo: geo.trim() || undefined,
+        },
+        confidence_score: confidence[0],
+        outcome: decisionOutcome || "pending",
+        notes: decisionReason.trim() || null,
+        document_id: attachedDocumentId === "none" ? null : attachedDocumentId,
+      });
 
-    // Reset form
-    setActor("");
-    setStartupName("");
-    setSector("");
-    setStage("");
-    setGeo("");
-    setConfidence([70]);
-    setDecisionReason("");
-    setDecisionOutcome("pending");
-    setAttachedDocumentId("none");
-    setShowForm(false);
+      if (error || !data) {
+        toast({ 
+          title: "Save failed", 
+          description: error?.message || "Failed to save decision. Please try again.", 
+          variant: "destructive" 
+        });
+        return;
+      }
+
+      // Save actor to localStorage for persistence
+      if (typeof window !== "undefined") {
+        localStorage.setItem("last_actor", actor.trim());
+      }
+
+      setDecisions(prev => [mapDecisionRow(data), ...prev]);
+      toast({ title: "Decision logged", description: `Logged ${actionType} for ${startupName}` });
+
+      // Reset form
+      setStartupName("");
+      setSector("");
+      setStage("");
+      setGeo("");
+      setConfidence([70]);
+      setDecisionReason("");
+      setDecisionOutcome("pending");
+      setAttachedDocumentId("none");
+      setShowForm(false);
+    } catch (err) {
+      toast({ 
+        title: "Unexpected error", 
+        description: "An unexpected error occurred. Please try again.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }, [
     activeEventId,
     actor,
@@ -647,25 +695,78 @@ function DecisionLoggerTab({
   ]);
 
   const handleDeleteDecision = useCallback(async (id: string) => {
-    const { error } = await deleteDecision(id);
-    if (error) {
-      toast({ title: "Delete failed", description: "Supabase rejected the delete.", variant: "destructive" });
-      return;
+    setIsDeleting(id);
+    try {
+      const { error } = await deleteDecision(id);
+      if (error) {
+        toast({ 
+          title: "Delete failed", 
+          description: error.message || "Failed to delete decision. Please try again.", 
+          variant: "destructive" 
+        });
+        return;
+      }
+      setDecisions(prev => prev.filter(d => d.id !== id));
+      toast({ title: "Deleted", description: "Decision removed" });
+      setDeleteConfirmId(null);
+    } catch (err) {
+      toast({ 
+        title: "Unexpected error", 
+        description: "An unexpected error occurred. Please try again.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsDeleting(null);
     }
-    setDecisions(prev => prev.filter(d => d.id !== id));
-    toast({ title: "Deleted", description: "Decision removed" });
   }, [toast, setDecisions]);
 
   const handleUpdateOutcome = useCallback(async (id: string, outcome: Decision["outcome"]) => {
-    const { error } = await updateDecision(id, { outcome });
-    if (error) {
-      toast({ title: "Update failed", description: "Supabase rejected the update.", variant: "destructive" });
-      return;
-    }
+    setIsUpdating(id);
+    // Optimistic update
     setDecisions(prev =>
       prev.map(d => (d.id === id ? { ...d, outcome } : d))
     );
-  }, [toast, setDecisions]);
+    try {
+      const { error } = await updateDecision(id, { outcome });
+      if (error) {
+        // Revert on error
+        setDecisions(prev =>
+          prev.map(d => {
+            if (d.id === id) {
+              const originalDecision = decisions.find(od => od.id === id);
+              return originalDecision || d;
+            }
+            return d;
+          })
+        );
+        toast({ 
+          title: "Update failed", 
+          description: error.message || "Failed to update outcome. Please try again.", 
+          variant: "destructive" 
+        });
+        return;
+      }
+      toast({ title: "Updated", description: "Outcome updated successfully" });
+    } catch (err) {
+      // Revert on error
+      setDecisions(prev =>
+        prev.map(d => {
+          if (d.id === id) {
+            const originalDecision = decisions.find(od => od.id === id);
+            return originalDecision || d;
+          }
+          return d;
+        })
+      );
+      toast({ 
+        title: "Unexpected error", 
+        description: "An unexpected error occurred. Please try again.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsUpdating(null);
+    }
+  }, [toast, setDecisions, decisions]);
 
   const handleExport = useCallback(() => {
     const csv = exportDecisionsToCSV(decisions);
@@ -900,8 +1001,15 @@ function DecisionLoggerTab({
               </Button>
             </div>
 
-            <Button onClick={handleSaveDecision} className="w-full">
-              Save Decision
+            <Button onClick={handleSaveDecision} className="w-full" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Decision"
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -977,9 +1085,11 @@ function DecisionLoggerTab({
                     <Select
                       value={d.outcome || "pending"}
                       onValueChange={(v) => handleUpdateOutcome(d.id, v as Decision["outcome"])}
+                      disabled={isUpdating === d.id}
                     >
-                      <SelectTrigger className="w-[100px] h-8">
+                      <SelectTrigger className="w-[100px] h-8" disabled={isUpdating === d.id}>
                         <SelectValue />
+                        {isUpdating === d.id && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">
@@ -1003,9 +1113,14 @@ function DecisionLoggerTab({
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeleteDecision(d.id)}
+                      onClick={() => setDeleteConfirmId(d.id)}
+                      disabled={isDeleting === d.id}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {isDeleting === d.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -1041,6 +1156,27 @@ function DecisionLoggerTab({
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Decision?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the decision record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteConfirmId && handleDeleteDecision(deleteConfirmId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

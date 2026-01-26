@@ -325,11 +325,15 @@ export function calculateDecisionStats(decisions: Decision[]): DecisionStats {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
+  const avgConfidence = decisions.length > 0 && totalConfidence > 0 
+    ? Math.round(totalConfidence / decisions.length) 
+    : 0;
+
   return {
     totalDecisions: decisions.length,
     byAction,
     byOutcome,
-    averageConfidence: Math.round(totalConfidence / decisions.length),
+    averageConfidence: avgConfidence,
     topActors,
   };
 }
@@ -339,20 +343,32 @@ export function calculateDecisionStats(decisions: Decision[]): DecisionStats {
  */
 export function exportDecisionsToCSV(decisions: Decision[]): string {
   const headers = ['ID', 'Timestamp', 'Actor', 'Action', 'Startup', 'Sector', 'Stage', 'Geo', 'Confidence', 'Outcome', 'Notes'];
+  
+  // Escape CSV values properly (handle quotes and commas)
+  const escapeCSV = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+  
   const rows = decisions.map(d => [
-    d.id,
-    d.timestamp,
-    d.actor,
-    d.actionType,
-    d.startupName,
-    d.context.sector || '',
-    d.context.stage || '',
-    d.context.geo || '',
-    d.confidenceScore.toString(),
-    d.outcome || '',
-    d.notes || '',
+    escapeCSV(d.id),
+    escapeCSV(d.timestamp),
+    escapeCSV(d.actor),
+    escapeCSV(d.actionType),
+    escapeCSV(d.startupName),
+    escapeCSV(d.context?.sector || ''),
+    escapeCSV(d.context?.stage || ''),
+    escapeCSV(d.context?.geo || ''),
+    escapeCSV(d.confidenceScore),
+    escapeCSV(d.outcome || ''),
+    escapeCSV(d.notes || ''),
   ]);
   
-  return [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 }
 
