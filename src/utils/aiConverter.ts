@@ -187,14 +187,14 @@ export async function askClaudeAnswer(input: {
   return await response.json();
 }
 
-export async function embedQuery(text: string): Promise<number[]> {
+export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const response = await fetch(`${baseUrl}/embed/query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, input_type: inputType }),
   });
 
   if (!response.ok) {

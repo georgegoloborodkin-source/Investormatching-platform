@@ -2296,7 +2296,7 @@ export default function CIS() {
 
           for (const chunk of chunks) {
             try {
-              const embedding = await embedQuery(chunk);
+              const embedding = await embedQuery(chunk, "document");
               if (!embedding.length) continue;
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
@@ -2354,7 +2354,7 @@ export default function CIS() {
 
       if (semanticMode) {
         try {
-          const embedding = await embedQuery(question);
+          const embedding = await embedQuery(question, "query");
           if (embedding && embedding.length) {
             const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
               query_embedding: embedding,

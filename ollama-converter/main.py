@@ -98,10 +98,13 @@ ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "6"))
 ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "400"))
 
 # Embeddings settings (semantic search)
-EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "openai").lower().strip()
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "voyage").lower().strip()
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
+VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
+VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-lite")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 
 # Ingestion settings
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
@@ -295,6 +298,7 @@ class AskResponse(BaseModel):
 
 class EmbedRequest(BaseModel):
     text: str
+    input_type: Optional[str] = None
 
 class EmbedResponse(BaseModel):
     embedding: List[float]
@@ -2022,6 +2026,18 @@ async def ask_fund(request: AskRequest):
     answer = await call_anthropic_answer(prompt)
     return AskResponse(answer=answer)
 
+def normalize_embedding(embedding: List[float]) -> List[float]:
+    """Ensure embeddings are a fixed size for pgvector."""
+    if not embedding:
+        return []
+    if len(embedding) == EMBEDDING_DIM:
+        return embedding
+    if len(embedding) > EMBEDDING_DIM:
+        return embedding[:EMBEDDING_DIM]
+    # Pad with zeros if smaller than expected
+    return embedding + [0.0] * (EMBEDDING_DIM - len(embedding))
+
+
 async def generate_embedding_openai(text: str) -> List[float]:
     """Generate embedding using OpenAI API."""
     if not OPENAI_API_KEY:
@@ -2057,7 +2073,48 @@ async def generate_embedding_openai(text: str) -> List[float]:
         if not embedding:
             raise HTTPException(status_code=502, detail="No embedding returned from OpenAI.")
         
-        return embedding
+        return normalize_embedding(embedding)
+
+
+async def generate_embedding_voyage(text: str, input_type: str) -> List[float]:
+    """Generate embedding using VoyageAI API."""
+    if not VOYAGE_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="VOYAGE_API_KEY not set. Set it in the server environment to use VoyageAI embeddings."
+        )
+
+    payload = {
+        "model": VOYAGE_EMBEDDING_MODEL,
+        "input": [text],
+        "input_type": input_type,
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://api.voyageai.com/v1/embeddings",
+            headers={
+                "Authorization": f"Bearer {VOYAGE_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+
+        if response.status_code >= 400:
+            error_text = response.text[:400]
+            raise HTTPException(
+                status_code=502,
+                detail=f"VoyageAI embedding API error ({response.status_code}): {error_text}"
+            )
+
+        data = response.json() or {}
+        embedding_data = data.get("data", [{}])[0] if data.get("data") else {}
+        embedding = embedding_data.get("embedding")
+
+        if not embedding:
+            raise HTTPException(status_code=502, detail="No embedding returned from VoyageAI.")
+
+        return normalize_embedding(embedding)
 
 async def generate_embedding_ollama(text: str) -> List[float]:
     """Generate embedding using Ollama."""
@@ -2069,7 +2126,7 @@ async def generate_embedding_ollama(text: str) -> List[float]:
     embedding = response.get("embedding") if isinstance(response, dict) else None
     if not embedding:
         raise HTTPException(status_code=502, detail="No embedding returned from Ollama.")
-    return embedding
+    return normalize_embedding(embedding)
 
 @app.post("/embed/query", response_model=EmbedResponse)
 async def embed_query(request: EmbedRequest):
@@ -2078,14 +2135,23 @@ async def embed_query(request: EmbedRequest):
         raise HTTPException(status_code=400, detail="text is required.")
 
     try:
-        if EMBEDDINGS_PROVIDER == "openai":
+        input_type = (request.input_type or "document").strip().lower()
+        if input_type not in ["document", "query"]:
+            input_type = "document"
+
+        if EMBEDDINGS_PROVIDER == "voyage":
+            embedding = await generate_embedding_voyage(text, input_type)
+        elif EMBEDDINGS_PROVIDER == "openai":
             embedding = await generate_embedding_openai(text)
         elif EMBEDDINGS_PROVIDER == "ollama":
             embedding = await generate_embedding_ollama(text)
         else:
             raise HTTPException(
                 status_code=503,
-                detail=f"EMBEDDINGS_PROVIDER '{EMBEDDINGS_PROVIDER}' not supported. Use 'openai' or 'ollama'."
+                detail=(
+                    f"EMBEDDINGS_PROVIDER '{EMBEDDINGS_PROVIDER}' not supported. "
+                    "Use 'voyage', 'openai', or 'ollama'."
+                )
             )
         
         return EmbedResponse(embedding=embedding)
