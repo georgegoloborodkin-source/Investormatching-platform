@@ -2339,6 +2339,48 @@ export default function CIS() {
     []
   );
 
+  const buildStructuredAnswer = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+      const context = buildClaudeContext(doc, tokens);
+      const lines = context
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const responsibilities = lines
+        .filter((line) => line.startsWith("*") || line.startsWith("-"))
+        .map((line) => line.replace(/^[*-]\s*/, ""));
+      const qualificationsIndex = lines.findIndex((line) => /qualifications/i.test(line));
+      const qualificationLines =
+        qualificationsIndex >= 0
+          ? lines
+              .slice(qualificationsIndex + 1)
+              .filter((line) => line.startsWith("*") || line.startsWith("-"))
+              .map((line) => line.replace(/^[*-]\s*/, ""))
+          : [];
+
+      if (responsibilities.length === 0 && qualificationLines.length === 0) {
+        return `Here is what the document states:\n${context}`;
+      }
+
+      const parts: string[] = [
+        "Here is what the document says (from the provided sources):",
+      ];
+
+      if (responsibilities.length > 0) {
+        parts.push("\nResponsibilities:");
+        responsibilities.forEach((item) => parts.push(`- ${item}`));
+      }
+
+      if (qualificationLines.length > 0) {
+        parts.push("\nQualifications:");
+        qualificationLines.forEach((item) => parts.push(`- ${item}`));
+      }
+
+      return parts.join("\n");
+    },
+    [buildClaudeContext]
+  );
+
   const isDeveloper =
     (import.meta.env.VITE_DEV_MODE as string | undefined) === "true" ||
     (profile?.email && (import.meta.env.VITE_DEV_EMAIL as string | undefined) === profile.email);
@@ -2745,8 +2787,14 @@ export default function CIS() {
           sources,
           decisions: decisionsForClaude,
         });
+        const refusal = /don't have|do not have|limited information|cannot provide|not in the provided sources/i;
+        const fallbackDoc = answerDocs[0];
+        const fallbackText =
+          fallbackDoc && refusal.test(response.answer)
+            ? buildStructuredAnswer(fallbackDoc, claudeTokens)
+            : response.answer;
         createAssistantMessage(
-          `${response.answer}${decisionBlock}${semanticNote}`,
+          `${fallbackText}${decisionBlock}${semanticNote}`,
           threadId,
           docsForClaude.map((doc) => doc.id)
         );
@@ -2761,7 +2809,7 @@ export default function CIS() {
       } catch (error: any) {
         const fallbackDoc = answerDocs[0];
         const fallbackText = fallbackDoc
-          ? buildClaudeContext(fallbackDoc, tokens)
+          ? buildStructuredAnswer(fallbackDoc, tokens)
           : "No relevant sources found.";
         createAssistantMessage(
           `Claude answer failed: ${error?.message || "Could not generate an answer."}\n\n` +
@@ -2779,6 +2827,7 @@ export default function CIS() {
       buildSnippet,
       buildClaudeContext,
       docContainsTokens,
+      buildStructuredAnswer,
       createAssistantMessage,
       decisions,
       scopes,
