@@ -2330,11 +2330,11 @@ export default function CIS() {
           .sort((a, b) => a - b)
           .map((idx) => lines[idx]);
         const joined = matchedLines.join("\n");
-        return joined.length > 3000 ? `${joined.slice(0, 3000)}…` : joined;
+        return joined.length > 1200 ? `${joined.slice(0, 1200)}…` : joined;
       }
 
-      // Fallback: return the first 3000 chars of the document
-      return combined.length > 3000 ? `${combined.slice(0, 3000)}…` : combined;
+      // Fallback: return the first 1200 chars of the document
+      return combined.length > 1200 ? `${combined.slice(0, 1200)}…` : combined;
     },
     []
   );
@@ -2721,12 +2721,13 @@ export default function CIS() {
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
       try {
+        const docsForClaude = docs.slice(0, 3);
         const claudeTokens = question
           .toLowerCase()
           .split(/\W+/)
           .map((t) => t.trim())
           .filter((t) => t.length > 3);
-        const sources = docs.map((doc) => ({
+        const sources = docsForClaude.map((doc) => ({
           title: doc.title,
           file_name: doc.file_name,
           snippet: buildClaudeContext(doc, claudeTokens),
@@ -2745,7 +2746,7 @@ export default function CIS() {
         createAssistantMessage(
           `${response.answer}${decisionBlock}${semanticNote}`,
           threadId,
-          docs.map((doc) => doc.id)
+          docsForClaude.map((doc) => doc.id)
         );
         const estimate = estimateClaudeCost(question);
         persistCostLog({

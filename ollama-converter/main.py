@@ -92,10 +92,10 @@ ANTHROPIC_MODEL_FALLBACKS = [
     "claude-3-opus-20240229",
 ]
 
-# Ask-the-fund settings (keep costs lean)
-ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "700"))
-ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "6"))
-ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "400"))
+# Ask-the-fund settings (keep costs lean + fast)
+ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "400"))
+ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "3"))
+ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "250"))
 
 # Embeddings settings (semantic search)
 EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "voyage").lower().strip()
