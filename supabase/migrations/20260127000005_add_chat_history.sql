@@ -80,13 +80,3 @@ CREATE POLICY "Users can insert org chat messages"
       AND up.id = auth.uid()
     )
   );
-{
-  "cells": [],
-  "metadata": {
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "nbformat": 4,
-  "nbformat_minor": 2
-}
