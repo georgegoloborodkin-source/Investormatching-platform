@@ -1884,7 +1884,6 @@ export default function CIS() {
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [semanticMode, setSemanticMode] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
-  const [claudeApproved, setClaudeApproved] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [costLog, setCostLog] = useState<
     Array<{
@@ -2805,82 +2804,6 @@ export default function CIS() {
     await askFund(question, threadId);
   };
 
-  const handleClaudeAnswer = useCallback(async () => {
-    if (!lastEvidence) {
-      toast({
-        title: "No sources yet",
-        description: "Ask a question first so we have sources to summarize.",
-        variant: "destructive",
-      });
-      return;
-    }
-    // STRICT: Don't call Claude if no sources found
-    if (!lastEvidence.docs || lastEvidence.docs.length === 0) {
-      toast({
-        title: "No sources available",
-        description: "I couldn't find any relevant documents. Upload documents or try a different question.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!claudeApproved) {
-      const estimate = estimateClaudeCost(lastEvidence.question);
-      const confirmed = window.confirm(
-        `This will call Claude and may incur cost (~$${estimate.estCostUsd}). Continue?`
-      );
-      if (!confirmed) return;
-      setClaudeApproved(true);
-    }
-    let threadId = activeThread;
-    if (!threadId) {
-      const newThreadId = `t-${Date.now()}`;
-      setThreads((prev) => [...prev, { id: newThreadId, title: "Claude answer" }]);
-      setActiveThread(newThreadId);
-      threadId = newThreadId;
-    }
-    setIsClaudeLoading(true);
-    try {
-      const tokens = lastEvidence.question
-        .toLowerCase()
-        .split(/\W+/)
-        .map((t) => t.trim())
-        .filter((t) => t.length > 3);
-      const sources = lastEvidence.docs.map((doc) => ({
-        title: doc.title,
-        file_name: doc.file_name,
-        snippet: buildClaudeContext(doc, tokens),
-      }));
-      const decisionsForClaude = lastEvidence.decisions.map((d) => ({
-        startup_name: d.startupName,
-        action_type: d.actionType,
-        outcome: d.outcome ?? null,
-        notes: d.notes ?? null,
-      }));
-      const response = await askClaudeAnswer({
-        question: lastEvidence.question,
-        sources,
-        decisions: decisionsForClaude,
-      });
-      createAssistantMessage(response.answer, threadId);
-      const estimate = estimateClaudeCost(lastEvidence.question);
-      persistCostLog({
-        ts: new Date().toISOString(),
-        question: lastEvidence.question.slice(0, 120),
-        estInputTokens: estimate.estInputTokens,
-        estOutputTokens: estimate.estOutputTokens,
-        estCostUsd: estimate.estCostUsd,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Claude answer failed",
-        description: error.message || "Could not get an answer.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsClaudeLoading(false);
-    }
-  }, [activeThread, askClaudeAnswer, buildSnippet, createAssistantMessage, lastEvidence, toast]);
-
   const createBranch = async (title: string) => {
     const parentId = activeThread || undefined;
     const createdId = await createChatThread(title, parentId || null);
@@ -3143,20 +3066,9 @@ export default function CIS() {
                           />
                           Semantic search (requires VoyageAI API key - optional)
                         </label>
-                        <Button
-                          variant="secondary"
-                          onClick={handleClaudeAnswer}
-                          disabled={isClaudeLoading || !lastEvidence}
-                        >
-                          {isClaudeLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Claude answering
-                            </>
-                          ) : (
-                            "Claude answer (paid)"
-                          )}
-                        </Button>
+                        <div className="text-xs text-muted-foreground">
+                          Claude answers automatically from sources.
+                        </div>
                       </div>
                     </div>
                   </CardContent>
