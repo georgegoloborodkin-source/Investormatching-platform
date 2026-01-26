@@ -172,12 +172,13 @@ export async function askClaudeAnswer(input: {
 }): Promise<{ answer: string }> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
-  const timeoutMs = 20000;
+  // Increased timeout to 70 seconds to match backend (60s) + buffer
+  const timeoutMs = 70000;
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   let response: Response | null = null;
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
   try {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         response = await fetch(`${baseUrl}/ask`, {
           method: "POST",
@@ -190,10 +191,11 @@ export async function askClaudeAnswer(input: {
         break;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-          throw new Error("Claude timed out. Please try again.");
+          throw new Error("Claude request timed out after 70 seconds. The question may be too complex or the API is slow. Please try again with a simpler question.");
         }
-        if (attempt === 0) {
-          await sleep(1000);
+        if (attempt < 2) {
+          // Exponential backoff: 1s, 2s
+          await sleep(1000 * (attempt + 1));
           continue;
         }
         throw error;
@@ -205,7 +207,8 @@ export async function askClaudeAnswer(input: {
 
   if (!response || !response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+    const errorMessage = error.detail || error.message || `HTTP error! status: ${response?.status || 'unknown'}`;
+    throw new Error(errorMessage);
   }
 
   return await response.json();

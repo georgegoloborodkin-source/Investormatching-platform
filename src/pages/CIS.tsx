@@ -3110,11 +3110,21 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
       } catch (error: any) {
-        createAssistantMessage(
-          `Claude answer failed: ${error?.message || "Could not generate an answer."}\n\n` +
-            "Please try again in a moment.",
-          threadId
-        );
+        const errorMsg = error?.message || "Could not generate an answer.";
+        // Provide more helpful error messages
+        let userMessage = `Claude answer failed: ${errorMsg}`;
+        if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
+          userMessage = `The request timed out. This can happen with complex questions or slow API responses.\n\n` +
+            `💡 Suggestions:\n` +
+            `- Try rephrasing your question to be more specific\n` +
+            `- Break down complex questions into smaller parts\n` +
+            `- Check if your documents are relevant to the question\n` +
+            `- Try again in a moment`;
+        } else if (errorMsg.includes("HTTP error")) {
+          userMessage = `API error: ${errorMsg}\n\n` +
+            `Please check your connection and try again.`;
+        }
+        createAssistantMessage(userMessage, threadId);
       } finally {
         setIsClaudeLoading(false);
       }
