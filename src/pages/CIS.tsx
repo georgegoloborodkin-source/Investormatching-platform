@@ -2880,6 +2880,87 @@ export default function CIS() {
     (import.meta.env.VITE_BUILD_STAMP as string | undefined) ||
     (import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA as string | undefined) ||
     "local";
+  const lastTokens = useMemo(() => {
+    if (!lastEvidence?.question) return [];
+    return lastEvidence.question
+      .toLowerCase()
+      .split(/\W+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 3);
+  }, [lastEvidence?.question]);
+
+  const renderAssistantContent = useCallback((text: string) => {
+    const lines = text.split("\n");
+    const blocks: Array<{ type: "p" | "ul" | "h"; content: string | string[] }> = [];
+    let paragraph: string[] = [];
+    let list: string[] = [];
+
+    const flushParagraph = () => {
+      if (paragraph.length) {
+        blocks.push({ type: "p", content: paragraph.join(" ") });
+        paragraph = [];
+      }
+    };
+
+    const flushList = () => {
+      if (list.length) {
+        blocks.push({ type: "ul", content: list });
+        list = [];
+      }
+    };
+
+    lines.forEach((raw) => {
+      const line = raw.trim();
+      if (!line) {
+        flushParagraph();
+        flushList();
+        return;
+      }
+      if (line.endsWith(":") && line.length < 64) {
+        flushParagraph();
+        flushList();
+        blocks.push({ type: "h", content: line.replace(/:$/, "") });
+        return;
+      }
+      if (line.startsWith("- ") || line.startsWith("* ")) {
+        flushParagraph();
+        list.push(line.replace(/^[-*]\s*/, ""));
+        return;
+      }
+      paragraph.push(line);
+    });
+
+    flushParagraph();
+    flushList();
+
+    return (
+      <div className="space-y-2">
+        {blocks.map((block, idx) => {
+          if (block.type === "h") {
+            return (
+              <div key={idx} className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+                {block.content as string}
+              </div>
+            );
+          }
+          if (block.type === "ul") {
+            return (
+              <ul key={idx} className="list-disc pl-5 text-sm text-foreground/90 space-y-1">
+                {(block.content as string[]).map((item, itemIdx) => (
+                  <li key={itemIdx}>{item}</li>
+                ))}
+              </ul>
+            );
+          }
+          return (
+            <p key={idx} className="text-sm text-foreground/90 leading-relaxed">
+              {block.content as string}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -3043,7 +3124,11 @@ export default function CIS() {
                             }`}
                           >
                             <div className="text-xs text-muted-foreground mb-1 uppercase">{m.author}</div>
-                            <div className="text-sm leading-relaxed">{m.text}</div>
+                            {m.author === "assistant" ? (
+                              renderAssistantContent(m.text)
+                            ) : (
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</div>
+                            )}
                             {m.author === "assistant" && (
                               <div className="mt-2">
                                 <Button size="sm" variant="secondary" onClick={() => createBranch("Branch: follow-up")}>
@@ -3069,7 +3154,7 @@ export default function CIS() {
                                   {index + 1}. {doc.title || doc.file_name || "Untitled document"}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {buildSnippet(doc.raw_content ?? null)}
+                                  {buildRelevantSnippet(doc, lastTokens)}
                                 </div>
                               </div>
                               <Button
