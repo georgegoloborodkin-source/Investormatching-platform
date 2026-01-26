@@ -562,10 +562,11 @@ CRITICAL RULES:
 1. ONLY use information from the sources below. Do NOT use general knowledge.
 2. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
 3. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details.
-4. If the sources do NOT contain relevant information about the question topic, you MUST say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+4. If the sources do NOT contain relevant information about the question topic, you MUST say EXACTLY: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
 5. Do NOT answer with information that is tangentially related but doesn't actually address the question.
-6. Cite sources using [1], [2], etc. for every claim.
-7. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
+6. If a source talks about a completely different topic (e.g., trading/ATR when asked about economic growth), you MUST reject it and say you don't have information.
+7. Cite sources using [1], [2], etc. for every claim.
+8. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
 
 Answer style:
 - Use bullet points for responsibilities, qualifications, and scope.

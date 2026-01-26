@@ -2598,16 +2598,18 @@ export default function CIS() {
 
   const docContainsTokens = useCallback(
     (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
-      if (!tokens.length) return true;
+      if (!tokens.length) return false; // No tokens = no match
       const haystack = [
         doc.raw_content || "",
         doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+        doc.title || "",
+        doc.file_name || "",
       ]
         .join(" ")
         .toLowerCase();
-      // Require at least 50% of tokens to match (or at least 2 tokens if question has many)
+      // Require at least 60% of tokens to match (or at least 2 tokens)
       // This prevents false positives from single word matches
-      const minMatches = Math.max(2, Math.ceil(tokens.length * 0.5));
+      const minMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
       const matches = tokens.filter((t) => haystack.includes(t)).length;
       return matches >= minMatches;
     },
@@ -2954,14 +2956,17 @@ export default function CIS() {
           const recentResponse = await recentQuery;
           if (!recentResponse.error && recentResponse.data?.length) {
             const filtered = (recentResponse.data as typeof docs).filter((doc) => {
+              if (!tokens.length) return false;
               const haystack = [
                 doc.raw_content || "",
                 doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+                doc.title || "",
+                doc.file_name || "",
               ]
                 .join(" ")
                 .toLowerCase();
-              // Require at least 50% of tokens to match (or at least 2 tokens)
-              const minMatches = Math.max(2, Math.ceil(tokens.length * 0.5));
+              // Require at least 60% of tokens to match (or at least 2 tokens)
+              const minMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
               const matches = tokens.filter((t) => haystack.includes(t)).length;
               return matches >= minMatches;
             });
@@ -2972,11 +2977,14 @@ export default function CIS() {
         }
       }
 
+      // Extract tokens FIRST for better filtering
       const normalizedQuestion = question.toLowerCase();
+      // Better tokenization that handles Russian/Cyrillic and other languages
       const tokens = normalizedQuestion
-        .split(/\W+/)
+        .split(/[\s\p{P}]+/u) // Unicode-aware split for all languages
         .map((t) => t.trim())
-        .filter((t) => t.length > 3);
+        .filter((t) => t.length > 2); // Lower threshold for non-English
+      
       const decisionMatches = decisions
         .filter((d) => {
           const haystack = [
@@ -2987,6 +2995,7 @@ export default function CIS() {
           ]
             .join(" ")
             .toLowerCase();
+          // Require at least 1 token match for decisions (less strict)
           return tokens.some((t) => haystack.includes(t));
         })
         .slice(0, 5);
@@ -3000,7 +3009,24 @@ export default function CIS() {
         return;
       }
 
-      if (!docs || docs.length === 0) {
+      // STRICT FILTERING: Only keep documents that are actually relevant
+      // Require at least 60% of tokens to match, or minimum 2 tokens
+      const minTokenMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
+      const filteredDocs = (docs || []).filter((doc) => {
+        if (!tokens.length) return false; // No tokens = no match
+        const haystack = [
+          doc.raw_content || "",
+          doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
+          doc.title || "",
+          doc.file_name || "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        const matches = tokens.filter((t) => haystack.includes(t)).length;
+        return matches >= minTokenMatches;
+      });
+
+      if (!filteredDocs || filteredDocs.length === 0) {
         const fallback = decisionMatches.length
           ? `I didn't find matching documents in your uploaded sources, but I found ${decisionMatches.length} related decisions:\n` +
             decisionMatches
@@ -3035,17 +3061,6 @@ export default function CIS() {
         ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
         : "";
 
-      const filteredDocs = docs.filter((doc) => docContainsTokens(doc, tokens));
-      if (filteredDocs.length === 0) {
-        createAssistantMessage(
-          `I couldn’t find relevant documents in your uploaded sources for: "${question}"\n\n` +
-            "Please upload a document that mentions this topic, or refine the question.",
-          threadId
-        );
-        setLastEvidence(null);
-        setChatIsLoading(false);
-        return;
-      }
       const answerDocs = filteredDocs;
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setChatIsLoading(false);
