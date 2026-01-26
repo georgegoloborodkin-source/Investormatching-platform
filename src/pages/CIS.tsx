@@ -2586,13 +2586,6 @@ export default function CIS() {
         return;
       }
 
-      const bullets = docs
-        .map((doc, index) => {
-          const title = doc.title || doc.file_name || "Untitled document";
-          return `${index + 1}. ${title} — ${buildRelevantSnippet(doc, tokens)}`;
-        })
-        .join("\n");
-
       const decisionBlock = decisionMatches.length
         ? `\n\nRelated decisions:\n${decisionMatches
             .map(
@@ -2609,13 +2602,63 @@ export default function CIS() {
         : "";
 
       setLastEvidence({ question, docs, decisions: decisionMatches });
-      createAssistantMessage(
-        `Here are the most relevant sources I found:\n${bullets}${decisionBlock}${semanticNote}\n\nAsk a follow-up or add constraints (sector, stage, time).`,
-        threadId
-      );
       setChatIsLoading(false);
+
+      // Always use Claude for the final answer once sources exist
+      setIsClaudeLoading(true);
+      try {
+        const claudeTokens = question
+          .toLowerCase()
+          .split(/\W+/)
+          .map((t) => t.trim())
+          .filter((t) => t.length > 3);
+        const sources = docs.map((doc) => ({
+          title: doc.title,
+          file_name: doc.file_name,
+          snippet: buildClaudeContext(doc, claudeTokens),
+        }));
+        const decisionsForClaude = decisionMatches.map((d) => ({
+          startup_name: d.startupName,
+          action_type: d.actionType,
+          outcome: d.outcome ?? null,
+          notes: d.notes ?? null,
+        }));
+        const response = await askClaudeAnswer({
+          question,
+          sources,
+          decisions: decisionsForClaude,
+        });
+        createAssistantMessage(`${response.answer}${decisionBlock}${semanticNote}`, threadId);
+        const estimate = estimateClaudeCost(question);
+        persistCostLog({
+          ts: new Date().toISOString(),
+          question: question.slice(0, 120),
+          estInputTokens: estimate.estInputTokens,
+          estOutputTokens: estimate.estOutputTokens,
+          estCostUsd: estimate.estCostUsd,
+        });
+      } catch (error: any) {
+        createAssistantMessage(
+          `Claude answer failed: ${error?.message || "Could not generate an answer."}`,
+          threadId
+        );
+      } finally {
+        setIsClaudeLoading(false);
+      }
     },
-    [activeEventId, ensureActiveEventId, buildSnippet, createAssistantMessage, decisions, scopes, profile, user]
+    [
+      activeEventId,
+      ensureActiveEventId,
+      buildSnippet,
+      buildClaudeContext,
+      createAssistantMessage,
+      decisions,
+      scopes,
+      profile,
+      user,
+      askClaudeAnswer,
+      persistCostLog,
+    ]
   );
 
   const addMessage = async () => {
