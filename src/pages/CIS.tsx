@@ -1885,6 +1885,7 @@ export default function CIS() {
   const [semanticMode, setSemanticMode] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
   const [claudeApproved, setClaudeApproved] = useState(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const [costLog, setCostLog] = useState<
     Array<{
       ts: string;
@@ -2035,6 +2036,50 @@ export default function CIS() {
     }
     setSources((prev) => prev.filter((source) => source.id !== sourceId));
   }, []);
+
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!profile || chatLoaded) return;
+      const eventId = activeEventId || (await ensureActiveEventId());
+      if (!eventId) return;
+      const { data: threadRows } = await supabase
+        .from("chat_threads")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: true });
+      const { data: messageRows } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: true });
+
+      if (threadRows?.length) {
+        const mappedThreads = threadRows.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          parentId: t.parent_id || undefined,
+        }));
+        setThreads(mappedThreads);
+        if (!activeThread) {
+          setActiveThread(mappedThreads[0].id);
+        }
+      }
+
+      if (messageRows?.length) {
+        const mappedMessages = messageRows.map((m: any) => ({
+          id: m.id,
+          author: m.role === "assistant" ? "assistant" : "user",
+          text: m.content,
+          threadId: m.thread_id,
+        }));
+        setMessages(mappedMessages);
+      }
+
+      setChatLoaded(true);
+    };
+
+    void loadChatHistory();
+  }, [profile, chatLoaded, activeEventId, activeThread, ensureActiveEventId]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -2265,23 +2310,31 @@ export default function CIS() {
 
       const lowerTokens = tokens.map((t) => t.toLowerCase());
       const lines = combined.split("\n").map((line) => line.trim()).filter(Boolean);
-      const matchedLines: string[] = [];
+      const matchedIndices: number[] = [];
 
-      for (const line of lines) {
+      lines.forEach((line, idx) => {
         const haystack = line.toLowerCase();
         if (lowerTokens.some((t) => haystack.includes(t))) {
-          matchedLines.push(line);
+          matchedIndices.push(idx);
         }
-      }
+      });
 
-      // If we found matching lines, return them (up to 2000 chars)
-      if (matchedLines.length > 0) {
+      if (matchedIndices.length > 0) {
+        const picked = new Set<number>();
+        matchedIndices.forEach((idx) => {
+          for (let i = idx; i <= Math.min(lines.length - 1, idx + 12); i += 1) {
+            picked.add(i);
+          }
+        });
+        const matchedLines = Array.from(picked)
+          .sort((a, b) => a - b)
+          .map((idx) => lines[idx]);
         const joined = matchedLines.join("\n");
-        return joined.length > 2000 ? `${joined.slice(0, 2000)}…` : joined;
+        return joined.length > 3000 ? `${joined.slice(0, 3000)}…` : joined;
       }
 
-      // Fallback: return the first 2000 chars of the document
-      return combined.length > 2000 ? `${combined.slice(0, 2000)}…` : combined;
+      // Fallback: return the first 3000 chars of the document
+      return combined.length > 3000 ? `${combined.slice(0, 3000)}…` : combined;
     },
     []
   );
@@ -2297,6 +2350,57 @@ export default function CIS() {
       localStorage.setItem("orbit_cost_log", JSON.stringify(updated));
     }
   }, [costLog]);
+
+  const createChatThread = useCallback(
+    async (title: string, parentId?: string | null) => {
+      const eventId = activeEventId || (await ensureActiveEventId());
+      if (!eventId) return null;
+      const userId = profile?.id || user?.id || null;
+      const { data, error } = await supabase
+        .from("chat_threads")
+        .insert({
+          event_id: eventId,
+          title,
+          parent_id: parentId || null,
+          created_by: userId,
+        })
+        .select("id")
+        .single();
+      if (error || !data?.id) {
+        console.error("Failed to create chat thread:", error);
+        return null;
+      }
+      return data.id as string;
+    },
+    [activeEventId, ensureActiveEventId, profile, user]
+  );
+
+  const persistChatMessage = useCallback(
+    async (payload: {
+      threadId: string;
+      role: "user" | "assistant";
+      content: string;
+      model?: string | null;
+      sourceDocIds?: string[] | null;
+    }) => {
+      const eventId = activeEventId || (await ensureActiveEventId());
+      if (!eventId) return;
+      const userId = profile?.id || user?.id || null;
+      const { error } = await supabase.from("chat_messages").insert({
+        event_id: eventId,
+        thread_id: payload.threadId,
+        role: payload.role,
+        content: payload.content,
+        model: payload.model || null,
+        source_doc_ids: payload.sourceDocIds || null,
+        created_by: userId,
+      });
+      if (error) {
+        console.error("Failed to save chat message:", error);
+      }
+    },
+    [activeEventId, ensureActiveEventId, profile, user]
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2382,10 +2486,20 @@ export default function CIS() {
     [chunkText]
   );
 
-  const createAssistantMessage = useCallback((text: string, threadId: string) => {
-    const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setMessages((prev) => [...prev, { id, author: "assistant", text, threadId }]);
-  }, []);
+  const createAssistantMessage = useCallback(
+    (text: string, threadId: string, sourceDocIds?: string[] | null) => {
+      const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setMessages((prev) => [...prev, { id, author: "assistant", text, threadId }]);
+      void persistChatMessage({
+        threadId,
+        role: "assistant",
+        content: text,
+        model: "claude",
+        sourceDocIds: sourceDocIds || null,
+      });
+    },
+    [persistChatMessage]
+  );
 
   const askFund = useCallback(
     async (question: string, threadId: string) => {
@@ -2628,7 +2742,11 @@ export default function CIS() {
           sources,
           decisions: decisionsForClaude,
         });
-        createAssistantMessage(`${response.answer}${decisionBlock}${semanticNote}`, threadId);
+        createAssistantMessage(
+          `${response.answer}${decisionBlock}${semanticNote}`,
+          threadId,
+          docs.map((doc) => doc.id)
+        );
         const estimate = estimateClaudeCost(question);
         persistCostLog({
           ts: new Date().toISOString(),
@@ -2666,7 +2784,8 @@ export default function CIS() {
     if (!input.trim()) return;
     let threadId = activeThread;
     if (!threadId) {
-      const newThreadId = `t-${Date.now()}`;
+      const createdId = await createChatThread("Main thread");
+      const newThreadId = createdId || `t-${Date.now()}`;
       setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
       setActiveThread(newThreadId);
       threadId = newThreadId;
@@ -2674,6 +2793,13 @@ export default function CIS() {
     const question = input.trim();
     const id = `m-${Date.now()}`;
     setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
+    void persistChatMessage({
+      threadId,
+      role: "user",
+      content: question,
+      model: null,
+      sourceDocIds: null,
+    });
     setInput("");
     await askFund(question, threadId);
   };
@@ -2754,9 +2880,10 @@ export default function CIS() {
     }
   }, [activeThread, askClaudeAnswer, buildSnippet, createAssistantMessage, lastEvidence, toast]);
 
-  const createBranch = (title: string) => {
-    const id = `t-${Date.now()}`;
+  const createBranch = async (title: string) => {
     const parentId = activeThread || undefined;
+    const createdId = await createChatThread(title, parentId || null);
+    const id = createdId || `t-${Date.now()}`;
     setThreads((prev) => [...prev, { id, title, parentId }]);
     setActiveThread(id);
   };
@@ -2905,7 +3032,7 @@ export default function CIS() {
                     ) : (
                       <div className="text-xs text-muted-foreground">No threads yet.</div>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => createBranch("New branch")} className="w-full">
+                    <Button size="sm" variant="outline" onClick={() => void createBranch("New branch")} className="w-full">
                       + New branch
                     </Button>
                   </CardContent>

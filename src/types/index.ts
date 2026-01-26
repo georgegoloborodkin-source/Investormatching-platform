@@ -198,6 +198,27 @@ export interface DocumentRecord {
   updated_at: string;
 }
 
+export interface ChatThread {
+  id: string;
+  event_id: string;
+  parent_id: string | null;
+  title: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  event_id: string;
+  thread_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  model: string | null;
+  source_doc_ids: string[] | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface SourceRecord {
   id: string;
   event_id: string;
