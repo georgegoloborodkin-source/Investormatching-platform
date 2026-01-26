@@ -2605,7 +2605,11 @@ export default function CIS() {
       ]
         .join(" ")
         .toLowerCase();
-      return tokens.some((t) => haystack.includes(t));
+      // Require at least 50% of tokens to match (or at least 2 tokens if question has many)
+      // This prevents false positives from single word matches
+      const minMatches = Math.max(2, Math.ceil(tokens.length * 0.5));
+      const matches = tokens.filter((t) => haystack.includes(t)).length;
+      return matches >= minMatches;
     },
     []
   );
@@ -2956,7 +2960,10 @@ export default function CIS() {
               ]
                 .join(" ")
                 .toLowerCase();
-              return tokens.some((t) => haystack.includes(t));
+              // Require at least 50% of tokens to match (or at least 2 tokens)
+              const minMatches = Math.max(2, Math.ceil(tokens.length * 0.5));
+              const matches = tokens.filter((t) => haystack.includes(t)).length;
+              return matches >= minMatches;
             });
             if (filtered.length) {
               docs = filtered.slice(0, 6);
