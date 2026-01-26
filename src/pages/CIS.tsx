@@ -2268,18 +2268,7 @@ export default function CIS() {
 
   const indexDocumentEmbeddings = useCallback(
     async (documentId: string, rawContent?: string | null) => {
-      // Embeddings are OPTIONAL - only generate if OpenAI API key is available
-      // Full-text search works fine without embeddings
-      // This function runs silently in background and never blocks document uploads
       if (!rawContent?.trim()) return;
-      
-      // Check if embeddings are enabled (user can enable semantic search toggle)
-      // For now, we skip embedding generation entirely to avoid errors
-      // Users can enable semantic search later if they add OpenAI API key
-      return;
-      
-      // OLD CODE (disabled - uncomment if you add OpenAI API key):
-      /*
       (async () => {
         try {
           const { data: existing } = await supabase
@@ -2314,7 +2303,6 @@ export default function CIS() {
           // Silent - embeddings are optional, full-text search works fine
         }
       })();
-      */
     },
     [chunkText]
   );
@@ -2865,7 +2853,7 @@ export default function CIS() {
                             checked={semanticMode}
                             onCheckedChange={(val) => setSemanticMode(val === true)}
                           />
-                          Semantic search (requires OpenAI API key - optional)
+                          Semantic search (requires VoyageAI API key - optional)
                         </label>
                         <Button
                           variant="secondary"
