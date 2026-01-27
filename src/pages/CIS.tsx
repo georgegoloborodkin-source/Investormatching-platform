@@ -1544,7 +1544,7 @@ function SourcesTab({
             // Extract PDF content via converter API
             try {
               const conversion = await convertFileWithAI(file);
-              rawContent = conversion.raw_content || conversion.content || null;
+              rawContent = (conversion as any).raw_content || (conversion as any).content || null;
               extractedJson = conversion as unknown as Record<string, any>;
               detectedType = conversion.detectedType || "pdf";
             } catch (err) {
@@ -1591,10 +1591,20 @@ function SourcesTab({
             continue;
           }
 
+          const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
+          if (!docRecord?.id) {
+            toast({
+              title: "Document save failed",
+              description: `Could not save ${file.name} - no ID returned`,
+              variant: "destructive",
+            });
+            continue;
+          }
+
           onDocumentSaved({
-            id: doc.id,
-            title: doc.title || null,
-            storage_path: doc.storage_path || null,
+            id: docRecord.id,
+            title: docRecord.title || null,
+            storage_path: docRecord.storage_path || null,
           });
 
           // Create a source entry for the uploaded file
@@ -1613,9 +1623,9 @@ function SourcesTab({
           }
 
           // Index embeddings if we have content
-          if (rawContent) {
+          if (rawContent && docRecord.id) {
             try {
-              await indexDocumentEmbeddings(doc.id, rawContent);
+              await indexDocumentEmbeddings(docRecord.id, rawContent);
             } catch (embedErr) {
               console.error("Error indexing embeddings:", embedErr);
               // Non-fatal - document is saved
