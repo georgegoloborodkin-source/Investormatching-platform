@@ -594,9 +594,9 @@ function DecisionLoggerTab({
   });
   const [actionType, setActionType] = useState<Decision["actionType"]>("meeting");
   const [startupName, setStartupName] = useState("");
-  const [sector, setSector] = useState("");
-  const [stage, setStage] = useState("");
-  const [geo, setGeo] = useState("");
+  const [sector, setSector] = useState<string>("");
+  const [stage, setStage] = useState<string>("");
+  const [geo, setGeo] = useState<string>("");
   const [confidence, setConfidence] = useState([70]);
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionOutcome, setDecisionOutcome] = useState<Decision["outcome"]>("pending");
@@ -957,27 +957,87 @@ function DecisionLoggerTab({
               </div>
               <div>
                 <Label>Sector</Label>
-                <Input
-                  placeholder="e.g., FinTech, HealthTech"
-                  value={sector}
-                  onChange={(e) => setSector(e.target.value)}
-                />
+                <Select value={sector} onValueChange={setSector}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="FinTech">FinTech</SelectItem>
+                    <SelectItem value="HealthTech">HealthTech</SelectItem>
+                    <SelectItem value="SaaS">SaaS</SelectItem>
+                    <SelectItem value="AI / ML">AI / ML</SelectItem>
+                    <SelectItem value="E-commerce">E-commerce</SelectItem>
+                    <SelectItem value="EdTech">EdTech</SelectItem>
+                    <SelectItem value="PropTech">PropTech</SelectItem>
+                    <SelectItem value="AgriTech">AgriTech</SelectItem>
+                    <SelectItem value="CleanTech">CleanTech</SelectItem>
+                    <SelectItem value="Gaming">Gaming</SelectItem>
+                    <SelectItem value="Media / Content">Media / Content</SelectItem>
+                    <SelectItem value="Logistics">Logistics</SelectItem>
+                    <SelectItem value="Food & Beverage">Food & Beverage</SelectItem>
+                    <SelectItem value="Travel & Tourism">Travel & Tourism</SelectItem>
+                    <SelectItem value="HRTech">HRTech</SelectItem>
+                    <SelectItem value="LegalTech">LegalTech</SelectItem>
+                    <SelectItem value="InsurTech">InsurTech</SelectItem>
+                    <SelectItem value="Space Infrastructure">Space Infrastructure</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Stage</Label>
-                <Input
-                  placeholder="e.g., Seed, Series A"
-                  value={stage}
-                  onChange={(e) => setStage(e.target.value)}
-                />
+                <Select value={stage} onValueChange={setStage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="Pre-Seed">Pre-Seed</SelectItem>
+                    <SelectItem value="Seed">Seed</SelectItem>
+                    <SelectItem value="Series A">Series A</SelectItem>
+                    <SelectItem value="Series B">Series B</SelectItem>
+                    <SelectItem value="Series C">Series C</SelectItem>
+                    <SelectItem value="Series D+">Series D+</SelectItem>
+                    <SelectItem value="Growth">Growth</SelectItem>
+                    <SelectItem value="Bridge">Bridge</SelectItem>
+                    <SelectItem value="Convertible Note">Convertible Note</SelectItem>
+                    <SelectItem value="SAFE">SAFE</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Geography</Label>
-                <Input
-                  placeholder="e.g., Singapore, Indonesia"
-                  value={geo}
-                  onChange={(e) => setGeo(e.target.value)}
-                />
+                <Select value={geo} onValueChange={setGeo}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select geography" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="Singapore">Singapore</SelectItem>
+                    <SelectItem value="Indonesia">Indonesia</SelectItem>
+                    <SelectItem value="Malaysia">Malaysia</SelectItem>
+                    <SelectItem value="Thailand">Thailand</SelectItem>
+                    <SelectItem value="Vietnam">Vietnam</SelectItem>
+                    <SelectItem value="Philippines">Philippines</SelectItem>
+                    <SelectItem value="India">India</SelectItem>
+                    <SelectItem value="China">China</SelectItem>
+                    <SelectItem value="Hong Kong">Hong Kong</SelectItem>
+                    <SelectItem value="Taiwan">Taiwan</SelectItem>
+                    <SelectItem value="South Korea">South Korea</SelectItem>
+                    <SelectItem value="Japan">Japan</SelectItem>
+                    <SelectItem value="Australia">Australia</SelectItem>
+                    <SelectItem value="New Zealand">New Zealand</SelectItem>
+                    <SelectItem value="United States">United States</SelectItem>
+                    <SelectItem value="United Kingdom">United Kingdom</SelectItem>
+                    <SelectItem value="Europe">Europe</SelectItem>
+                    <SelectItem value="Middle East">Middle East</SelectItem>
+                    <SelectItem value="Africa">Africa</SelectItem>
+                    <SelectItem value="Latin America">Latin America</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
