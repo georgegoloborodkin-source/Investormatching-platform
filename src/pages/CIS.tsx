@@ -2527,33 +2527,96 @@ export default function CIS() {
     return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
   }, []);
 
+  const formatTabularContent = useCallback((text: string) => {
+    const rawLines = text.split(/\n/).map((line) => line.replace(/\r/g, ""));
+    const nonEmpty = rawLines.filter((line) => line.trim().length > 0);
+    if (nonEmpty.length < 3) return text;
+
+    const detectSeparator = (line: string) => {
+      const commaCount = (line.match(/,/g) || []).length;
+      const semicolonCount = (line.match(/;/g) || []).length;
+      const tabCount = (line.match(/\t/g) || []).length;
+      if (tabCount > commaCount && tabCount > semicolonCount) return "\t";
+      if (semicolonCount > commaCount) return ";";
+      return ",";
+    };
+
+    const parseCsvLine = (line: string, separator: string) => {
+      const cells: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+        if (char === separator && !inQuotes) {
+          cells.push(current.trim());
+          current = "";
+          continue;
+        }
+        current += char;
+      }
+      cells.push(current.trim());
+      return cells;
+    };
+
+    const separator = detectSeparator(nonEmpty[0]);
+    const parsed = nonEmpty.map((line) => parseCsvLine(line, separator));
+    const counts = parsed.map((row) => row.length).filter((count) => count > 1);
+    if (counts.length < 3) return text;
+
+    const frequency = new Map<number, number>();
+    counts.forEach((count) => frequency.set(count, (frequency.get(count) || 0) + 1));
+    const [targetCols, targetCount] = [...frequency.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (targetCols < 2 || targetCount < 3) return text;
+
+    const tableRows = parsed.filter((row) => row.length === targetCols);
+    if (tableRows.length < 3) return text;
+
+    const maxRows = 25;
+    const rows = tableRows.slice(0, maxRows);
+    const headerRow = rows[0].map((cell, index) => cell || `Column ${index + 1}`);
+    const renderRow = (cells: string[]) => `| ${cells.map((cell) => cell || " ").join(" | ")} |`;
+    const tableLines = [
+      "TABLE (formatted):",
+      renderRow(headerRow),
+      `| ${headerRow.map(() => "---").join(" | ")} |`,
+      ...rows.slice(1).map(renderRow),
+    ];
+    if (tableRows.length > maxRows) {
+      tableLines.push("…(table truncated)");
+    }
+    return tableLines.join("\n");
+  }, []);
+
+  const buildNormalizedDocText = useCallback(
+    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }) => {
+      const raw = doc.raw_content?.trim() ? formatTabularContent(doc.raw_content) : "";
+      const json = doc.extracted_json ? JSON.stringify(doc.extracted_json) : "";
+      return [raw, json].filter(Boolean).join("\n").replace(/\r/g, "").trim();
+    },
+    [formatTabularContent]
+  );
+
   const buildDocSnippet = useCallback(
     (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }) => {
-      if (doc.raw_content?.trim()) {
-        return buildSnippet(doc.raw_content);
-      }
-      if (doc.extracted_json) {
-        try {
-          const jsonText = JSON.stringify(doc.extracted_json);
-          return buildSnippet(jsonText);
-        } catch (err) {
-          return "No preview available.";
-        }
-      }
-      return "No preview available.";
+      const combined = buildNormalizedDocText(doc);
+      if (!combined) return "No preview available.";
+      return buildSnippet(combined);
     },
-    [buildSnippet]
+    [buildSnippet, buildNormalizedDocText]
   );
 
   const buildRelevantSnippet = useCallback(
     (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
-      const combined = [
-        doc.raw_content || "",
-        doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
-      ]
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const combined = buildNormalizedDocText(doc).replace(/\s+/g, " ").trim();
       if (!combined) return "No preview available.";
       const haystack = combined.toLowerCase();
       const match = tokens.find((t) => haystack.includes(t));
@@ -2564,18 +2627,12 @@ export default function CIS() {
       const snippet = combined.slice(start, end).trim();
       return snippet.length > 0 ? `${start > 0 ? "…" : ""}${snippet}${end < combined.length ? "…" : ""}` : buildDocSnippet(doc);
     },
-    [buildDocSnippet]
+    [buildDocSnippet, buildNormalizedDocText]
   );
 
   const buildClaudeContext = useCallback(
     (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
-      const combined = [
-        doc.raw_content || "",
-        doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
-      ]
-        .join("\n")
-        .replace(/\r/g, "")
-        .trim();
+      const combined = buildNormalizedDocText(doc);
       if (!combined) return "No preview available.";
 
       const lowerTokens = tokens.map((t) => t.toLowerCase());
@@ -2593,7 +2650,7 @@ export default function CIS() {
       // Fallback: return the first 2000 chars of the document
       return combined.length > 2000 ? `${combined.slice(0, 2000)}…` : combined;
     },
-    []
+    [buildNormalizedDocText]
   );
 
   const docContainsTokens = useCallback(
