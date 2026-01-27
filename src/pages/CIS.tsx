@@ -2653,6 +2653,20 @@ export default function CIS() {
     [buildNormalizedDocText]
   );
 
+  const formatDecisionMatches = useCallback((matchedDecisions: Decision[]) => {
+    return (
+      "Here are the matching decisions:\n" +
+      matchedDecisions
+        .map(
+          (d, index) =>
+            `${index + 1}. ${d.startupName} — ${d.actionType}${d.outcome ? ` (${d.outcome})` : ""}${
+              d.notes ? ` — ${d.notes}` : ""
+            }`
+        )
+        .join("\n")
+    );
+  }, []);
+
   const docContainsTokens = useCallback(
     (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
       if (!tokens.length) return false; // No tokens = no match
@@ -3002,6 +3016,49 @@ export default function CIS() {
         .split(/[\s\p{P}]+/u) // Unicode-aware split for all languages
         .map((t) => t.trim())
         .filter((t) => t.length > 2); // Lower threshold for non-English
+
+      const decisionIntent =
+        /\b(decision|decisions|outcome|log|logged|approve|approved|reject|rejected|vote|memo|notes|meeting)\b/i.test(
+          question
+        );
+      const decisionStopwords = new Set([
+        "the",
+        "and",
+        "for",
+        "with",
+        "about",
+        "tell",
+        "what",
+        "which",
+        "that",
+        "this",
+        "from",
+        "into",
+        "your",
+        "you",
+        "have",
+        "does",
+        "did",
+        "are",
+        "can",
+        "will",
+        "should",
+        "could",
+        "please",
+        "company",
+        "companies",
+        "decision",
+        "decisions",
+        "meeting",
+        "notes",
+        "table",
+        "document",
+      ]);
+      const decisionTokens = tokens.filter((t) => !decisionStopwords.has(t));
+      const minDecisionMatches = Math.max(
+        1,
+        decisionTokens.length >= 3 ? Math.ceil(decisionTokens.length * 0.5) : 1
+      );
       
       const decisionMatches = decisions
         .filter((d) => {
@@ -3010,11 +3067,13 @@ export default function CIS() {
             d.actionType,
             d.outcome ?? "",
             d.notes ?? "",
+            d.actor ?? "",
           ]
             .join(" ")
             .toLowerCase();
-          // Require at least 1 token match for decisions (less strict)
-          return tokens.some((t) => haystack.includes(t));
+          if (!decisionTokens.length) return false;
+          const matches = decisionTokens.filter((t) => haystack.includes(t)).length;
+          return matches >= minDecisionMatches;
         })
         .slice(0, 5);
 
@@ -3045,17 +3104,10 @@ export default function CIS() {
       });
 
       if (!filteredDocs || filteredDocs.length === 0) {
-        const fallback = decisionMatches.length
-          ? `I didn't find matching documents in your uploaded sources, but I found ${decisionMatches.length} related decisions:\n` +
-            decisionMatches
-              .map(
-                (d, index) =>
-                  `${index + 1}. ${d.startupName} — ${d.actionType}${
-                    d.outcome ? ` (${d.outcome})` : ""
-                  }${d.notes ? ` — ${d.notes}` : ""}`
-              )
-              .join("\n") +
-            "\n\n💡 To get answers about this topic, upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab."
+        const fallback = decisionIntent
+          ? decisionMatches.length
+            ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
+            : `I couldn't find matching decisions for: "${question}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
           : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
         createAssistantMessage(fallback, threadId);
         // Don't set lastEvidence if no docs found - prevents Claude from being called
@@ -3064,7 +3116,7 @@ export default function CIS() {
         return;
       }
 
-      const decisionBlock = decisionMatches.length
+      const decisionBlock = decisionIntent && decisionMatches.length
         ? `\n\nRelated decisions:\n${decisionMatches
             .map(
               (d, index) =>
@@ -3097,12 +3149,14 @@ export default function CIS() {
           file_name: doc.file_name,
           snippet: buildClaudeContext(doc, claudeTokens),
         }));
-        const decisionsForClaude = decisionMatches.map((d) => ({
-          startup_name: d.startupName,
-          action_type: d.actionType,
-          outcome: d.outcome ?? null,
-          notes: d.notes ?? null,
-        }));
+        const decisionsForClaude = decisionIntent
+          ? decisionMatches.map((d) => ({
+              startup_name: d.startupName,
+              action_type: d.actionType,
+              outcome: d.outcome ?? null,
+              notes: d.notes ?? null,
+            }))
+          : [];
         const response = await askClaudeAnswer({
           question,
           sources,
