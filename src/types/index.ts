@@ -227,6 +227,7 @@ export interface SourceRecord {
   external_url: string | null;
   storage_path: string | null;
   tags: string[] | null;
+  notes: string | null;
   status: 'active' | 'archived';
   created_by: string | null;
   created_at: string;

@@ -1206,6 +1206,7 @@ function SourcesTab({
       source_type: SourceRecord["source_type"];
       external_url: string | null;
       tags: string[] | null;
+      notes: string | null;
       status: SourceRecord["status"];
     },
     eventIdOverride?: string | null
@@ -1232,6 +1233,7 @@ function SourcesTab({
   const [sourceType, setSourceType] = useState<SourceRecord["source_type"]>("syndicate");
   const [externalUrl, setExternalUrl] = useState("");
   const [tags, setTags] = useState("");
+  const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [clickUpListId, setClickUpListId] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -1285,11 +1287,13 @@ function SourcesTab({
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
+        notes: notes.trim() || null,
         status: "active",
       });
       setTitle("");
       setExternalUrl("");
       setTags("");
+      setNotes("");
     } catch (error) {
       toast({
         title: "Create failed",
@@ -1299,7 +1303,7 @@ function SourcesTab({
     } finally {
       setIsSaving(false);
     }
-  }, [externalUrl, onCreateSource, sourceType, tags, title, toast]);
+  }, [externalUrl, onCreateSource, sourceType, tags, title, notes, toast]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -1333,6 +1337,7 @@ function SourcesTab({
           source_type: "syndicate",
           external_url: task.url || null,
           tags: tagList.length ? tagList : null,
+        notes: null,
           status: "active",
         }, eventId);
         created += 1;
@@ -1414,6 +1419,7 @@ function SourcesTab({
         source_type: "notes",
         external_url: url.trim(),
         tags: ["google-drive"],
+        notes: null,
         status: "active",
       }, eventId);
       toast({ title: "Drive import complete", description: "Source saved to your library." });
@@ -1735,6 +1741,14 @@ function SourcesTab({
                 placeholder="SEA, fintech, seed"
               />
             </div>
+            <div className="md:col-span-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add context, key points, or reminders..."
+              />
+            </div>
           </div>
           <Button onClick={handleAdd} disabled={isSaving}>
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -1762,6 +1776,9 @@ function SourcesTab({
                   <div className="font-medium">{source.title || "Untitled source"}</div>
                   {source.external_url && (
                     <div className="text-xs text-muted-foreground truncate max-w-[420px]">{source.external_url}</div>
+                  )}
+                  {source.notes && (
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">{source.notes}</div>
                   )}
                   {source.tags && source.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -2239,6 +2256,7 @@ export default function CIS() {
         source_type: SourceRecord["source_type"];
         external_url: string | null;
         tags: string[] | null;
+        notes: string | null;
         status: SourceRecord["status"];
       },
       eventIdOverride?: string | null

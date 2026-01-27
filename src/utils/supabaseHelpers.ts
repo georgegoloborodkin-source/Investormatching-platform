@@ -21,24 +21,31 @@ export async function ensureOrganizationForUser(profile: UserProfile): Promise<S
   }
 
   const fallbackName = profile.full_name || profile.email || "Default Organization";
-  const orgPayload = {
-    name: fallbackName,
-    slug: slugifyOrgName(fallbackName) || `org-${profile.id.slice(0, 8)}`,
-  };
+  const orgSlug = slugifyOrgName(fallbackName) || `org-${profile.id.slice(0, 8)}`;
 
-  const { data: org, error: orgError } = await supabase.from("organizations").insert(orgPayload).select("*").single();
+  // Use RPC to avoid RLS issues during signup
+  const { data: org, error: orgError } = await supabase.rpc("ensure_user_organization", {
+    org_name: fallbackName,
+    org_slug: orgSlug,
+  });
+
   if (orgError || !org) {
     return { data: null, error: orgError };
   }
 
   const { data: updatedProfile, error: profileError } = await supabase
     .from("user_profiles")
-    .update({ organization_id: org.id })
-    .eq("id", profile.id)
     .select("*")
+    .eq("id", profile.id)
     .single();
 
-  return { data: { organization: org, updatedProfile: (updatedProfile as UserProfile) || profile }, error: profileError };
+  return {
+    data: {
+      organization: org,
+      updatedProfile: (updatedProfile as UserProfile) || { ...profile, organization_id: org.id },
+    },
+    error: profileError,
+  };
 }
 
 export async function ensureActiveEventForOrg(orgId: string): Promise<SupabaseResult<Event>> {
@@ -141,6 +148,7 @@ export async function insertDocument(
     extracted_json: Record<string, any>;
     raw_content?: string | null;
     created_by: string | null;
+    folder_id?: string | null;
   }
 ) {
   return supabase
@@ -182,6 +190,7 @@ export async function insertSource(
     external_url: string | null;
     storage_path: string | null;
     tags: string[] | null;
+    notes: string | null;
     status: SourceRecord["status"];
     created_by: string | null;
   }
@@ -400,4 +409,3 @@ export function mapMatchRow(row: any): Match {
     investorId: row.investor_id || undefined,
   };
 }
-
