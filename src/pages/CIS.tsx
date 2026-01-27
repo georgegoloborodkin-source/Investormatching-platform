@@ -1697,12 +1697,14 @@ function SourcesTab({
                   <SelectValue placeholder="Select a list" />
                 </SelectTrigger>
                 <SelectContent>
-                  {clickUpLists.length === 0 ? (
+                  {clickUpLists.filter((list) => list.id).length === 0 ? (
                     <SelectItem value="no-lists" disabled>
                       No lists loaded
                     </SelectItem>
                   ) : (
-                    clickUpLists.map((list) => (
+                    clickUpLists
+                      .filter((list) => list.id)
+                      .map((list) => (
                       <SelectItem key={list.id} value={list.id}>
                         {list.name}
                       </SelectItem>
