@@ -28,6 +28,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -1966,13 +1972,118 @@ function DashboardTab({
 // ============================================================================
 
 function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
-  const analytics = useMemo(() => calculateDecisionEngineAnalytics(decisions), [decisions]);
-  const hasEnoughData = decisions.length >= 5;
+  const [selectedSector, setSelectedSector] = useState<string>("all");
+  const [selectedStage, setSelectedStage] = useState<string>("all");
+  const [selectedPartner, setSelectedPartner] = useState<string>("all");
+
+  // Filter decisions based on selected filters
+  const filteredDecisions = useMemo(() => {
+    return decisions.filter((d) => {
+      if (selectedSector !== "all" && d.context?.sector !== selectedSector) return false;
+      if (selectedStage !== "all" && d.context?.stage !== selectedStage) return false;
+      if (selectedPartner !== "all" && d.actor !== selectedPartner) return false;
+      return true;
+    });
+  }, [decisions, selectedSector, selectedStage, selectedPartner]);
+
+  const analytics = useMemo(() => calculateDecisionEngineAnalytics(filteredDecisions), [filteredDecisions]);
+  const hasEnoughData = filteredDecisions.length >= 5;
+
+  // Get unique values for filters
+  const sectors = useMemo(() => {
+    const unique = new Set(decisions.map((d) => d.context?.sector).filter(Boolean));
+    return Array.from(unique).sort();
+  }, [decisions]);
+
+  const stages = useMemo(() => {
+    const unique = new Set(decisions.map((d) => d.context?.stage).filter(Boolean));
+    return Array.from(unique).sort();
+  }, [decisions]);
+
+  const partners = useMemo(() => {
+    const unique = new Set(decisions.map((d) => d.actor).filter(Boolean));
+    return Array.from(unique).sort();
+  }, [decisions]);
 
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"];
 
   return (
     <div className="space-y-6">
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Filter decisions by sector, stage, or partner</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Sector</Label>
+              <Select value={selectedSector} onValueChange={setSelectedSector}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All sectors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sectors</SelectItem>
+                  {sectors.map((sector) => (
+                    <SelectItem key={sector} value={sector}>
+                      {sector}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Stage</Label>
+              <Select value={selectedStage} onValueChange={setSelectedStage}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All stages" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stages</SelectItem>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage} value={stage}>
+                      {stage}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Partner</Label>
+              <Select value={selectedPartner} onValueChange={setSelectedPartner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All partners" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All partners</SelectItem>
+                  {partners.map((partner) => (
+                    <SelectItem key={partner} value={partner}>
+                      {partner}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {(selectedSector !== "all" || selectedStage !== "all" || selectedPartner !== "all") && (
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedSector("all");
+                  setSelectedStage("all");
+                  setSelectedPartner("all");
+                }}
+              >
+                Clear filters ({filteredDecisions.length} decisions)
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -2007,9 +2118,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               <div className="p-2 bg-blue-500/10 rounded-lg">
                 <BarChart3 className="h-5 w-5 text-blue-600" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-2xl font-bold">{analytics.avgConfidence}%</p>
-                <p className="text-xs text-muted-foreground">Avg Confidence</p>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-xs text-muted-foreground cursor-help">
+                        Avg Confidence
+                        <span className="ml-1">ℹ️</span>
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">
+                        Average confidence score (0-100) you assigned when logging decisions.
+                        <br />
+                        Higher = more certain about the decision.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </CardContent>
@@ -2113,7 +2240,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <BarChart3 className="h-5 w-5" />
                     Stage Conversion Rates
                   </CardTitle>
-                  <CardDescription>Positive rate by stage</CardDescription>
+                  <CardDescription>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help">
+                            Positive rate by stage
+                            <span className="ml-1">ℹ️</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">
+                            Conversion Rate = (Positive Decisions / Total Decisions) × 100%
+                            <br />
+                            Shows what % of decisions in each stage resulted in positive outcomes.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={250}>
