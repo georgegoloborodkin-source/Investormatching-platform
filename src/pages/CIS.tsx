@@ -594,9 +594,9 @@ function DecisionLoggerTab({
   });
   const [actionType, setActionType] = useState<Decision["actionType"]>("meeting");
   const [startupName, setStartupName] = useState("");
-  const [sector, setSector] = useState<string>("");
-  const [stage, setStage] = useState<string>("");
-  const [geo, setGeo] = useState<string>("");
+  const [sector, setSector] = useState<string>("none");
+  const [stage, setStage] = useState<string>("none");
+  const [geo, setGeo] = useState<string>("none");
   const [confidence, setConfidence] = useState([70]);
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionOutcome, setDecisionOutcome] = useState<Decision["outcome"]>("pending");
@@ -619,8 +619,8 @@ function DecisionLoggerTab({
   useEffect(() => {
     if (!draftDecision) return;
     setStartupName(draftDecision.startupName);
-    setSector(draftDecision.sector || "");
-    setStage(draftDecision.stage || "");
+    setSector(draftDecision.sector || "none");
+    setStage(draftDecision.stage || "none");
     setShowForm(true);
     onDraftConsumed();
   }, [draftDecision, onDraftConsumed]);
@@ -658,9 +658,9 @@ function DecisionLoggerTab({
         action_type: actionType,
         startup_name: startupName.trim(),
         context: {
-          sector: sector.trim() || undefined,
-          stage: stage.trim() || undefined,
-          geo: geo.trim() || undefined,
+          sector: sector !== "none" ? sector : undefined,
+          stage: stage !== "none" ? stage : undefined,
+          geo: geo !== "none" ? geo : undefined,
         },
         confidence_score: confidence[0],
         outcome: decisionOutcome || "pending",
@@ -687,9 +687,9 @@ function DecisionLoggerTab({
 
       // Reset form
       setStartupName("");
-      setSector("");
-      setStage("");
-      setGeo("");
+      setSector("none");
+      setStage("none");
+      setGeo("none");
       setConfidence([70]);
       setDecisionReason("");
       setDecisionOutcome("pending");
@@ -808,7 +808,7 @@ function DecisionLoggerTab({
 
   const documentOptions = [
     { id: "all", label: "All documents" },
-    ...documents.map((doc) => ({ id: doc.id, label: doc.title || "Untitled document" })),
+    ...documents.filter((doc) => !!doc.id).map((doc) => ({ id: doc.id, label: doc.title || "Untitled document" })),
   ];
 
   return (
@@ -889,7 +889,7 @@ function DecisionLoggerTab({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All documents</SelectItem>
-            {documents.map((doc) => (
+            {documents.filter((doc) => !!doc.id).map((doc) => (
               <SelectItem key={doc.id} value={doc.id}>
                 {doc.title || doc.id}
               </SelectItem>
@@ -962,7 +962,7 @@ function DecisionLoggerTab({
                     <SelectValue placeholder="Select sector" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     <SelectItem value="FinTech">FinTech</SelectItem>
                     <SelectItem value="HealthTech">HealthTech</SelectItem>
                     <SelectItem value="SaaS">SaaS</SelectItem>
@@ -992,7 +992,7 @@ function DecisionLoggerTab({
                     <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     <SelectItem value="Pre-Seed">Pre-Seed</SelectItem>
                     <SelectItem value="Seed">Seed</SelectItem>
                     <SelectItem value="Series A">Series A</SelectItem>
@@ -1014,7 +1014,7 @@ function DecisionLoggerTab({
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     <SelectItem value="Singapore">Singapore</SelectItem>
                     <SelectItem value="Indonesia">Indonesia</SelectItem>
                     <SelectItem value="Malaysia">Malaysia</SelectItem>
@@ -1074,7 +1074,7 @@ function DecisionLoggerTab({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No document</SelectItem>
-                    {documents.map((doc) => (
+                    {documents.filter((doc) => !!doc.id).map((doc) => (
                       <SelectItem key={doc.id} value={doc.id}>
                         {doc.title || "Untitled document"}
                       </SelectItem>
