@@ -24,6 +24,8 @@ MAX_MODEL_INPUT_CHARS = int(os.environ.get("MAX_MODEL_INPUT_CHARS", "24000"))
 # OCR settings (for scanned/image PDFs)
 OCR_MAX_PAGES = int(os.environ.get("OCR_MAX_PAGES", "5"))
 OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
+# Limit PDF pages to reduce timeouts on large files
+MAX_PDF_PAGES = int(os.environ.get("MAX_PDF_PAGES", "8"))
 
 
 def try_ocr_pdf_bytes(content: bytes) -> str:
@@ -192,11 +194,16 @@ def get_ollama_client() -> "ollama.Client":
     return ollama.Client(host=OLLAMA_HOST)
 
 # CORS middleware to allow frontend requests
+_cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
+if _cors_origins_env.strip() == "*":
+    cors_allow_origins = ["*"]
+else:
+    cors_allow_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    # Dev-friendly: allow any origin to call the local converter API.
-    # If you later deploy this, lock this down to your production domain.
-    allow_origins=["*"],
+    # Allow configured origins; defaults to "*"
+    allow_origins=cors_allow_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1164,7 +1171,8 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
 
             doc = fitz.open(stream=BytesIO(content).getvalue(), filetype="pdf")
             parts = []
-            for i in range(doc.page_count):
+            page_limit = min(doc.page_count, MAX_PDF_PAGES)
+            for i in range(page_limit):
                 page = doc.load_page(i)
                 page_text = page.get_text("text") or ""
                 parts.append(f"\n--- Page {i + 1} ---\n{page_text}")
@@ -1187,7 +1195,9 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             text_content = ""
             
-            for page_num, page in enumerate(pdf_reader.pages):
+            page_limit = min(len(pdf_reader.pages), MAX_PDF_PAGES)
+            for page_num in range(page_limit):
+                page = pdf_reader.pages[page_num]
                 text_content += f"\n--- Page {page_num + 1} ---\n"
                 extracted = page.extract_text()
                 if extracted:
@@ -1206,7 +1216,9 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                 text_content = ""
                 
                 with pdfplumber.open(pdf_file) as pdf:
-                    for page_num, page in enumerate(pdf.pages):
+                    page_limit = min(len(pdf.pages), MAX_PDF_PAGES)
+                    for page_num in range(page_limit):
+                        page = pdf.pages[page_num]
                         text_content += f"\n--- Page {page_num + 1} ---\n"
                         page_text = page.extract_text()
                         if page_text:

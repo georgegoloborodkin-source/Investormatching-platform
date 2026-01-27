@@ -1301,6 +1301,7 @@ function SourcesTab({
       title: string | null;
       source_type: SourceRecord["source_type"];
       external_url: string | null;
+      storage_path?: string | null;
       tags: string[] | null;
       notes: string | null;
       status: SourceRecord["status"];
@@ -1612,7 +1613,8 @@ function SourcesTab({
             await onCreateSource({
               title: file.name || "Uploaded file",
               source_type: "notes",
-              external_url: storagePath ? `storage://${storagePath}` : null,
+              external_url: null,
+              storage_path: storagePath,
               tags: ["local-upload", detectedType || "file"],
               notes: rawContent ? `Content extracted: ${rawContent.length} characters` : null,
               status: "active",
@@ -2801,6 +2803,7 @@ export default function CIS() {
         title: string | null;
         source_type: SourceRecord["source_type"];
         external_url: string | null;
+        storage_path?: string | null;
         tags: string[] | null;
         notes: string | null;
         status: SourceRecord["status"];
@@ -2811,10 +2814,10 @@ export default function CIS() {
       if (!eventId) {
         throw new Error("No active event available.");
       }
-      const userId = profile?.id || user?.id || null;
+      const userId = user?.id || profile?.id || null;
       const { data, error } = await insertSource(eventId, {
         ...payload,
-        storage_path: null,
+        storage_path: payload.storage_path || null,
         created_by: userId,
       });
       if (error || !data) {
