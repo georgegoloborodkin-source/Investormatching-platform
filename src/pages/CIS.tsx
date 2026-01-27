@@ -2361,7 +2361,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             <Card>
               <CardHeader>
                 <CardTitle>Sector Conversion Rates</CardTitle>
-                <CardDescription>Detailed sector performance metrics</CardDescription>
+                <CardDescription>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help">
+                          Detailed sector performance metrics
+                          <span className="ml-1">ℹ️</span>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Conversion Rate = (Positive Decisions / Total Decisions) × 100%
+                          <br />
+                          Shows what % of decisions in each sector resulted in positive outcomes.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
