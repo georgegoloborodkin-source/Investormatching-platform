@@ -3018,9 +3018,7 @@ export default function CIS() {
         .filter((t) => t.length > 2); // Lower threshold for non-English
 
       const decisionIntent =
-        /\b(decision|decisions|outcome|log|logged|approve|approved|reject|rejected|vote|memo|notes|meeting)\b/i.test(
-          question
-        );
+        /\b(decision|decisions|outcome|log|logged|approve|approved|reject|rejected)\b/i.test(question);
       const decisionStopwords = new Set([
         "the",
         "and",
@@ -3060,22 +3058,24 @@ export default function CIS() {
         decisionTokens.length >= 3 ? Math.ceil(decisionTokens.length * 0.5) : 1
       );
       
-      const decisionMatches = decisions
-        .filter((d) => {
-          const haystack = [
-            d.startupName,
-            d.actionType,
-            d.outcome ?? "",
-            d.notes ?? "",
-            d.actor ?? "",
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!decisionTokens.length) return false;
-          const matches = decisionTokens.filter((t) => haystack.includes(t)).length;
-          return matches >= minDecisionMatches;
-        })
-        .slice(0, 5);
+      const decisionMatches = decisionIntent
+        ? decisions
+            .filter((d) => {
+              const haystack = [
+                d.startupName,
+                d.actionType,
+                d.outcome ?? "",
+                d.notes ?? "",
+                d.actor ?? "",
+              ]
+                .join(" ")
+                .toLowerCase();
+              if (!decisionTokens.length) return false;
+              const matches = decisionTokens.filter((t) => haystack.includes(t)).length;
+              return matches >= minDecisionMatches;
+            })
+            .slice(0, 5)
+        : [];
 
       if (error) {
         createAssistantMessage(
