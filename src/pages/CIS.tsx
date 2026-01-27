@@ -59,12 +59,30 @@ import {
   Sparkles,
   Folder,
   Link2,
+  BarChart3,
+  PieChart,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import {
   calculateDecisionStats,
   exportDecisionsToCSV,
   type Decision,
 } from "@/utils/claudeConverter";
+import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
 import type { DocumentRecord, SourceRecord } from "@/types";
 import {
   ensureActiveEventForOrg,
@@ -1948,43 +1966,14 @@ function DashboardTab({
 // ============================================================================
 
 function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
-  const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
-  const uniqueActors = new Set(decisions.map((d) => d.actor).filter(Boolean)).size;
-  const positiveOutcomes = stats.byOutcome.positive || 0;
-  const hasEnoughData = decisions.length >= 20;
+  const analytics = useMemo(() => calculateDecisionEngineAnalytics(decisions), [decisions]);
+  const hasEnoughData = decisions.length >= 5;
 
-  const patternCards = [
-    {
-      title: "Intro Timing Effects",
-      insight: hasEnoughData ? "Derived from decision history (rolling 90d)." : "Not enough data to compute yet.",
-      tag: "Timing",
-      signal: hasEnoughData ? "Live" : "Needs data",
-    },
-    {
-      title: "Partner Attention Drift",
-      insight: hasEnoughData ? "Comparing partner time vs. winning sectors." : "Not enough data to compute yet.",
-      tag: "Behavior",
-      signal: hasEnoughData ? "Live" : "Needs data",
-    },
-    {
-      title: "Peer Signal Reversal",
-      insight: hasEnoughData ? "Tracking pass → invest reversals." : "Not enough data to compute yet.",
-      tag: "Network",
-      signal: hasEnoughData ? "Live" : "Needs data",
-    },
-    {
-      title: "Warm Intro Lift",
-      insight: hasEnoughData ? "Warm vs. cold intro follow‑up rate." : "Not enough data to compute yet.",
-      tag: "Signal",
-      signal: hasEnoughData ? "Live" : "Needs data",
-    },
-  ];
-
-  const graphNodes = ["Founder", "Startup", "Investor", "Partner", "Intro", "Meeting", "Outcome"];
-  const graphEdges = ["Introduced", "Met", "Followed up", "Passed", "Invested"];
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"];
 
   return (
     <div className="space-y-6">
+      {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
@@ -1993,7 +1982,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <Target className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.totalDecisions}</p>
+                <p className="text-2xl font-bold">{analytics.totalDecisions}</p>
                 <p className="text-xs text-muted-foreground">Decisions Logged</p>
               </div>
             </div>
@@ -2006,8 +1995,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <TrendingUp className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.averageConfidence}%</p>
-                <p className="text-xs text-muted-foreground">Avg Confidence</p>
+                <p className="text-2xl font-bold">{analytics.positiveRate}%</p>
+                <p className="text-xs text-muted-foreground">Positive Rate</p>
               </div>
             </div>
           </CardContent>
@@ -2016,11 +2005,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Users className="h-5 w-5 text-blue-600" />
+                <BarChart3 className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{uniqueActors}</p>
-                <p className="text-xs text-muted-foreground">Active Partners</p>
+                <p className="text-2xl font-bold">{analytics.avgConfidence}%</p>
+                <p className="text-xs text-muted-foreground">Avg Confidence</p>
               </div>
             </div>
           </CardContent>
@@ -2032,127 +2021,237 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <Clock className="h-5 w-5 text-orange-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{positiveOutcomes}</p>
-                <p className="text-xs text-muted-foreground">Positive Outcomes</p>
+                <p className="text-2xl font-bold">{analytics.avgDecisionVelocity}</p>
+                <p className="text-xs text-muted-foreground">Avg Velocity (days)</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Undiscovered Pattern Dashboard</CardTitle>
-          <CardDescription>
-            Real edge comes from longitudinal decision data, not complex models.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          {patternCards.map((card) => (
-            <div key={card.title} className="border rounded-lg p-3 bg-muted/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="font-medium">{card.title}</div>
-                <Badge variant="outline">{card.tag}</Badge>
-              </div>
-              <div className="text-sm text-muted-foreground">{card.insight}</div>
-              <div className="text-xs text-muted-foreground">{card.signal}</div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Decision Graph (Phase 1)</CardTitle>
-          <CardDescription>Cheap, structured foundation. No ML required.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <div className="text-sm font-medium mb-2">Nodes</div>
-            <div className="flex flex-wrap gap-2">
-              {graphNodes.map((node) => (
-                <Badge key={node} variant="secondary">
-                  {node}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm font-medium mb-2">Edges</div>
-            <div className="flex flex-wrap gap-2">
-              {graphEdges.map((edge) => (
-                <Badge key={edge} variant="outline">
-                  {edge}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Store every action as an edge. The graph itself becomes the intelligence layer.
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-3">
+      {!hasEnoughData ? (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Phase 1: Decision Graph</CardTitle>
-            <CardDescription>Postgres tables + constraints</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <div>Data: intros, meetings, outcomes</div>
-            <div>Output: cross‑fund pattern visibility</div>
-            <Badge variant="secondary">Cost: near zero</Badge>
+          <CardContent className="pt-6">
+            <div className="text-center py-8">
+              <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium mb-2">Not Enough Data</p>
+              <p className="text-sm text-muted-foreground">
+                You need at least 5 decisions to see analytics. Start logging decisions to unlock insights.
+              </p>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Phase 2: Scored Decisions</CardTitle>
-            <CardDescription>Statistics, not ML</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <div>Data: actor, context, confidence</div>
-            <div>Output: win‑rate by partner/sector</div>
-            <Badge variant="secondary">Cost: low</Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Phase 3: Lightweight Learning</CardTitle>
-            <CardDescription>After 1k+ decisions</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <div>Models: logistic/Bayesian/bandits</div>
-            <div>Output: ranked decisions + alerts</div>
-            <Badge variant="secondary">Cost: &lt;$5k/mo</Badge>
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <>
+          {/* Sector Performance */}
+          {analytics.sectorStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Sector Performance
+                </CardTitle>
+                <CardDescription>Decision breakdown by sector</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analytics.sectorStats.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="sector" angle={-45} textAnchor="end" height={100} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Best Build Path (SaaS)</CardTitle>
-          <CardDescription>Operating system for VC networks, not “chat over files”.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            Start with structured decision capture + strict schemas.
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            Add privacy boundaries by organization and event.
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            Use Claude only for extraction and summarization, not decisions.
-          </div>
-          <Separator />
-          <div className="text-xs">
-            Goal: trust, constraints, and repeatable decisions before advanced ML.
-          </div>
-        </CardContent>
-      </Card>
+          {/* Stage Performance */}
+          {analytics.stageStats.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    Stage Distribution
+                  </CardTitle>
+                  <CardDescription>Decisions by funding stage</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={analytics.stageStats.map((s) => ({
+                          name: s.stage,
+                          value: s.total,
+                        }))}
+                        cx="50%"
+                        cy="50%"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {analytics.stageStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Stage Conversion Rates
+                  </CardTitle>
+                  <CardDescription>Positive rate by stage</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={analytics.stageStats}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="stage" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="conversionRate" fill="#00C49F" name="Conversion Rate %" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Partner Performance */}
+          {analytics.partnerStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Partner Performance
+                </CardTitle>
+                <CardDescription>Decision metrics by partner</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analytics.partnerStats.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="partner" angle={-45} textAnchor="end" height={100} />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#0088FE" name="Total Decisions" />
+                    <Bar yAxisId="right" dataKey="winRate" fill="#00C49F" name="Win Rate %" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Time Series */}
+          {analytics.timeSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Decision Trends Over Time
+                </CardTitle>
+                <CardDescription>Monthly decision volume and outcomes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={analytics.timeSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="decisions" stroke="#0088FE" name="Total Decisions" />
+                    <Line type="monotone" dataKey="positive" stroke="#00C49F" name="Positive" />
+                    <Line type="monotone" dataKey="negative" stroke="#FF8042" name="Negative" />
+                    <Line type="monotone" dataKey="pending" stroke="#8884d8" name="Pending" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Decision Velocity */}
+          {analytics.decisionVelocity.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Decision Velocity Trend
+                </CardTitle>
+                <CardDescription>Average decision time over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={analytics.decisionVelocity}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="avgDays" stroke="#FF8042" name="Avg Days" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sector Conversion Rates Table */}
+          {analytics.sectorStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Sector Conversion Rates</CardTitle>
+                <CardDescription>Detailed sector performance metrics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Sector</th>
+                        <th className="text-right p-2">Total</th>
+                        <th className="text-right p-2">Positive</th>
+                        <th className="text-right p-2">Negative</th>
+                        <th className="text-right p-2">Pending</th>
+                        <th className="text-right p-2">Conversion %</th>
+                        <th className="text-right p-2">Avg Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.sectorStats.map((sector) => (
+                        <tr key={sector.sector} className="border-b">
+                          <td className="p-2 font-medium">{sector.sector}</td>
+                          <td className="text-right p-2">{sector.total}</td>
+                          <td className="text-right p-2 text-green-600">{sector.positive}</td>
+                          <td className="text-right p-2 text-red-600">{sector.negative}</td>
+                          <td className="text-right p-2 text-muted-foreground">{sector.pending}</td>
+                          <td className="text-right p-2 font-medium">{sector.conversionRate}%</td>
+                          <td className="text-right p-2">{sector.avgConfidence}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }
