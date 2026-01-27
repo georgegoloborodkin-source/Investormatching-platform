@@ -79,7 +79,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
 } from "recharts";
@@ -2246,7 +2246,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="sector" angle={-45} textAnchor="end" height={100} />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Legend />
                     <Bar dataKey="positive" fill="#00C49F" name="Positive" />
                     <Bar dataKey="negative" fill="#FF8042" name="Negative" />
@@ -2353,7 +2353,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <XAxis dataKey="partner" angle={-45} textAnchor="end" height={100} />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Legend />
                     <Bar yAxisId="left" dataKey="totalDecisions" fill="#0088FE" name="Total Decisions" />
                     <Bar yAxisId="right" dataKey="winRate" fill="#00C49F" name="Win Rate %" />
@@ -2379,7 +2379,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="decisions" stroke="#0088FE" name="Total Decisions" />
                     <Line type="monotone" dataKey="positive" stroke="#00C49F" name="Positive" />
@@ -2407,7 +2407,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="avgDays" stroke="#FF8042" name="Avg Days" />
                   </LineChart>
