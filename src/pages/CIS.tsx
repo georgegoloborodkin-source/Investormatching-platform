@@ -1597,6 +1597,21 @@ function SourcesTab({
             storage_path: doc.storage_path || null,
           });
 
+          // Create a source entry for the uploaded file
+          try {
+            await onCreateSource({
+              title: file.name || "Uploaded file",
+              source_type: "notes",
+              external_url: storagePath ? `storage://${storagePath}` : null,
+              tags: ["local-upload", detectedType || "file"],
+              notes: rawContent ? `Content extracted: ${rawContent.length} characters` : null,
+              status: "active",
+            }, eventId);
+          } catch (sourceErr) {
+            console.error("Error creating source:", sourceErr);
+            // Non-fatal - document is saved, source creation can fail
+          }
+
           // Index embeddings if we have content
           if (rawContent) {
             try {
