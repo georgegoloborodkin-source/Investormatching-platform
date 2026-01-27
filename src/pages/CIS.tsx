@@ -1519,37 +1519,65 @@ function SourcesTab({
         let successCount = 0;
 
         for (const file of files) {
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
-          const path = `${eventId}/${Date.now()}-${safeName}`;
-          const { error: uploadError } = await supabase.storage
-            .from("cis-documents")
-            .upload(path, file, { upsert: true });
-          if (uploadError) {
-            toast({
-              title: "Upload failed",
-              description: uploadError.message || `Could not upload ${file.name}`,
-              variant: "destructive",
-            });
-            continue;
-          }
+          // Better sanitization: replace spaces and special chars, keep extension
+          const ext = file.name.includes(".") ? file.name.substring(file.name.lastIndexOf(".")) : "";
+          const baseName = file.name.replace(ext, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
+          const safeName = `${baseName}${ext}`;
+          const timestamp = Date.now();
+          const path = `${eventId}/${timestamp}-${safeName}`;
 
+          // Try to extract content first (for PDFs and other files)
           let rawContent: string | null = null;
+          let extractedJson: Record<string, any> = {};
+          let detectedType: string | null = file.type || "file";
+
           if (isTextFile(file)) {
+            // Read text files directly
             try {
               const text = await readFileText(file);
               rawContent = text.length > MAX_IMPORT_CHARS ? `${text.slice(0, MAX_IMPORT_CHARS)}…` : text;
             } catch (err) {
+              console.error("Error reading text file:", err);
               rawContent = null;
+            }
+          } else if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+            // Extract PDF content via converter API
+            try {
+              const conversion = await convertFileWithAI(file);
+              rawContent = conversion.raw_content || conversion.content || null;
+              extractedJson = conversion as unknown as Record<string, any>;
+              detectedType = conversion.detectedType || "pdf";
+            } catch (err) {
+              console.error("Error converting PDF:", err);
+              // Continue without content - will store file reference
             }
           }
 
+          // Try to upload to storage (optional - don't fail if this fails)
+          let storagePath: string | null = null;
+          try {
+            const { error: uploadError } = await supabase.storage
+              .from("cis-documents")
+              .upload(path, file, { upsert: true });
+            if (!uploadError) {
+              storagePath = path;
+            } else {
+              console.warn("Storage upload failed (non-fatal):", uploadError.message);
+              // Continue without storage - document will still be saved
+            }
+          } catch (storageErr) {
+            console.warn("Storage upload error (non-fatal):", storageErr);
+            // Continue without storage
+          }
+
+          // Save document record (even if storage upload failed)
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: file.name || "Uploaded file",
             source_type: "upload",
             file_name: file.name || null,
-            storage_path: path,
-            detected_type: file.type || "file",
-            extracted_json: {},
+            storage_path: storagePath,
+            detected_type: detectedType,
+            extracted_json: extractedJson,
             raw_content: rawContent,
             created_by: currentUserId || null,
           });
@@ -1569,8 +1597,14 @@ function SourcesTab({
             storage_path: doc.storage_path || null,
           });
 
+          // Index embeddings if we have content
           if (rawContent) {
-            await indexDocumentEmbeddings(doc.id, rawContent);
+            try {
+              await indexDocumentEmbeddings(doc.id, rawContent);
+            } catch (embedErr) {
+              console.error("Error indexing embeddings:", embedErr);
+              // Non-fatal - document is saved
+            }
           }
 
           successCount += 1;
@@ -1582,6 +1616,12 @@ function SourcesTab({
             description: `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}.`,
           });
         }
+      } catch (err) {
+        toast({
+          title: "Upload error",
+          description: err instanceof Error ? err.message : "An unexpected error occurred.",
+          variant: "destructive",
+        });
       } finally {
         setIsUploadingLocal(false);
         e.target.value = "";
