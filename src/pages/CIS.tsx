@@ -1342,6 +1342,7 @@ function SourcesTab({
   const [driveUrl, setDriveUrl] = useState("");
   const [isImportingClickUp, setIsImportingClickUp] = useState(false);
   const [isImportingDrive, setIsImportingDrive] = useState(false);
+  const [isUploadingLocal, setIsUploadingLocal] = useState(false);
   const [autoExtract, setAutoExtract] = useState(true);
   const MAX_IMPORT_CHARS = 24000;
   const canImport = Boolean(activeEventId);
@@ -1478,6 +1479,116 @@ function SourcesTab({
       setIsLoadingLists(false);
     }
   }, [clickUpTeamId, toast]);
+
+  const readFileText = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read file"));
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.readAsText(file);
+    });
+
+  const isTextFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    return (
+      file.type.startsWith("text/") ||
+      name.endsWith(".txt") ||
+      name.endsWith(".md") ||
+      name.endsWith(".csv") ||
+      name.endsWith(".json")
+    );
+  };
+
+  const handleLocalUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? []);
+      if (!files.length) return;
+
+      const eventId = activeEventId || (await ensureActiveEventId());
+      if (!eventId) {
+        toast({
+          title: "No active event",
+          description: "Create or activate an event before uploading.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setIsUploadingLocal(true);
+      try {
+        let successCount = 0;
+
+        for (const file of files) {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
+          const path = `${eventId}/${Date.now()}-${safeName}`;
+          const { error: uploadError } = await supabase.storage
+            .from("cis-documents")
+            .upload(path, file, { upsert: true });
+          if (uploadError) {
+            toast({
+              title: "Upload failed",
+              description: uploadError.message || `Could not upload ${file.name}`,
+              variant: "destructive",
+            });
+            continue;
+          }
+
+          let rawContent: string | null = null;
+          if (isTextFile(file)) {
+            try {
+              const text = await readFileText(file);
+              rawContent = text.length > MAX_IMPORT_CHARS ? `${text.slice(0, MAX_IMPORT_CHARS)}…` : text;
+            } catch (err) {
+              rawContent = null;
+            }
+          }
+
+          const { data: doc, error: docError } = await insertDocument(eventId, {
+            title: file.name || "Uploaded file",
+            source_type: "upload",
+            file_name: file.name || null,
+            storage_path: path,
+            detected_type: file.type || "file",
+            extracted_json: {},
+            raw_content: rawContent,
+            created_by: currentUserId || null,
+          });
+
+          if (docError || !doc) {
+            toast({
+              title: "Document save failed",
+              description: docError?.message || `Could not save ${file.name}`,
+              variant: "destructive",
+            });
+            continue;
+          }
+
+          onDocumentSaved({
+            id: doc.id,
+            title: doc.title || null,
+            storage_path: doc.storage_path || null,
+          });
+
+          if (rawContent) {
+            await indexDocumentEmbeddings(doc.id, rawContent);
+          }
+
+          successCount += 1;
+        }
+
+        if (successCount > 0) {
+          toast({
+            title: "Upload complete",
+            description: `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}.`,
+          });
+        }
+      } finally {
+        setIsUploadingLocal(false);
+        e.target.value = "";
+      }
+    },
+    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onDocumentSaved, toast]
+  );
 
   const importDriveUrl = useCallback(async (url: string) => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -1751,6 +1862,25 @@ function SourcesTab({
           </div>
           <p className="text-xs text-muted-foreground">
             Uses server-side token. Ask admin to set CLICKUP_API_TOKEN in the converter service.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Local Upload</CardTitle>
+          <CardDescription>Upload files from your computer into Sources.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            type="file"
+            multiple
+            disabled={!canImport || isUploadingLocal}
+            onChange={handleLocalUpload}
+            accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
+          />
+          <p className="text-xs text-muted-foreground">
+            Text files (.txt, .md, .csv, .json) are indexed for search. Other files are stored and can be referenced later.
           </p>
         </CardContent>
       </Card>
