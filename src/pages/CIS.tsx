@@ -597,6 +597,7 @@ function DecisionLoggerTab({
   const [sector, setSector] = useState<string>("none");
   const [stage, setStage] = useState<string>("none");
   const [geo, setGeo] = useState<string>("none");
+  const [geoCustom, setGeoCustom] = useState("");
   const [confidence, setConfidence] = useState([70]);
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionOutcome, setDecisionOutcome] = useState<Decision["outcome"]>("pending");
@@ -651,6 +652,7 @@ function DecisionLoggerTab({
     }
 
     setIsSaving(true);
+    const normalizedGeo = geo === "custom" ? geoCustom.trim() : geo;
     try {
       const { data, error } = await insertDecision(activeEventId, {
         actor_id: currentUserId, // Use actual user ID when available
@@ -660,7 +662,7 @@ function DecisionLoggerTab({
         context: {
           sector: sector !== "none" ? sector : undefined,
           stage: stage !== "none" ? stage : undefined,
-          geo: geo !== "none" ? geo : undefined,
+          geo: normalizedGeo && normalizedGeo !== "none" ? normalizedGeo : undefined,
         },
         confidence_score: confidence[0],
         outcome: decisionOutcome || "pending",
@@ -690,6 +692,7 @@ function DecisionLoggerTab({
       setSector("none");
       setStage("none");
       setGeo("none");
+      setGeoCustom("");
       setConfidence([70]);
       setDecisionReason("");
       setDecisionOutcome("pending");
@@ -1036,8 +1039,17 @@ function DecisionLoggerTab({
                     <SelectItem value="Africa">Africa</SelectItem>
                     <SelectItem value="Latin America">Latin America</SelectItem>
                     <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="custom">Add new...</SelectItem>
                   </SelectContent>
                 </Select>
+                {geo === "custom" && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Type a country or region"
+                    value={geoCustom}
+                    onChange={(e) => setGeoCustom(e.target.value)}
+                  />
+                )}
               </div>
             </div>
 
@@ -1697,13 +1709,13 @@ function SourcesTab({
                   <SelectValue placeholder="Select a list" />
                 </SelectTrigger>
                 <SelectContent>
-                  {clickUpLists.filter((list) => list.id).length === 0 ? (
+                  {clickUpLists.filter((list) => list.id && list.id.trim().length > 0).length === 0 ? (
                     <SelectItem value="no-lists" disabled>
                       No lists loaded
                     </SelectItem>
                   ) : (
                     clickUpLists
-                      .filter((list) => list.id)
+                      .filter((list) => list.id && list.id.trim().length > 0)
                       .map((list) => (
                       <SelectItem key={list.id} value={list.id}>
                         {list.name}
@@ -2053,17 +2065,32 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
   // Get unique values for filters
   const sectors = useMemo(() => {
-    const unique = new Set(decisions.map((d) => d.context?.sector).filter(Boolean));
+    const unique = new Set(
+      decisions
+        .map((d) => d.context?.sector)
+        .filter((value): value is string => !!value && value.trim().length > 0)
+        .map((value) => value.trim())
+    );
     return Array.from(unique).sort();
   }, [decisions]);
 
   const stages = useMemo(() => {
-    const unique = new Set(decisions.map((d) => d.context?.stage).filter(Boolean));
+    const unique = new Set(
+      decisions
+        .map((d) => d.context?.stage)
+        .filter((value): value is string => !!value && value.trim().length > 0)
+        .map((value) => value.trim())
+    );
     return Array.from(unique).sort();
   }, [decisions]);
 
   const partners = useMemo(() => {
-    const unique = new Set(decisions.map((d) => d.actor).filter(Boolean));
+    const unique = new Set(
+      decisions
+        .map((d) => d.actor)
+        .filter((value): value is string => !!value && value.trim().length > 0)
+        .map((value) => value.trim())
+    );
     return Array.from(unique).sort();
   }, [decisions]);
 
