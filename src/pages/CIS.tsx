@@ -2934,47 +2934,63 @@ export default function CIS() {
 
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!profile || chatLoaded) return;
+      if (!profile) return;
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
-      const { data: threadRows } = await supabase
-        .from("chat_threads")
-        .select("*")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: true });
-      const { data: messageRows } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: true });
+      
+      try {
+        const { data: threadRows } = await supabase
+          .from("chat_threads")
+          .select("*")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true });
+        const { data: messageRows } = await supabase
+          .from("chat_messages")
+          .select("*")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true });
 
-      if (threadRows?.length) {
-        const mappedThreads = threadRows.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          parentId: t.parent_id || undefined,
-        }));
-        setThreads(mappedThreads);
-        if (!activeThread) {
-          setActiveThread(mappedThreads[0].id);
+        if (threadRows?.length) {
+          const mappedThreads = threadRows.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            parentId: t.parent_id || undefined,
+          }));
+          setThreads(mappedThreads);
+          const currentThreadId = activeThread || mappedThreads[0]?.id;
+          if (currentThreadId && !activeThread) {
+            setActiveThread(currentThreadId);
+          }
+          
+          // Load messages for the active thread
+          if (currentThreadId && messageRows?.length) {
+            const threadMessages = messageRows
+              .filter((m: any) => m.thread_id === currentThreadId)
+              .map((m: any) => ({
+                id: m.id,
+                author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+                text: m.content,
+                threadId: m.thread_id,
+              }));
+            setMessages(threadMessages);
+          }
+        } else if (messageRows?.length) {
+          // If no threads but messages exist, load all messages
+          const mappedMessages = messageRows.map((m: any) => ({
+            id: m.id,
+            author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+            text: m.content,
+            threadId: m.thread_id,
+          }));
+          setMessages(mappedMessages);
         }
+      } catch (error) {
+        console.error("Failed to load chat history:", error);
       }
-
-      if (messageRows?.length) {
-        const mappedMessages = messageRows.map((m: any) => ({
-          id: m.id,
-          author: m.role === "assistant" ? "assistant" : "user",
-          text: m.content,
-          threadId: m.thread_id,
-        }));
-        setMessages(mappedMessages);
-      }
-
-      setChatLoaded(true);
     };
 
     void loadChatHistory();
-  }, [profile, chatLoaded, activeEventId, activeThread, ensureActiveEventId]);
+  }, [profile, activeEventId, activeThread, ensureActiveEventId]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -3990,6 +4006,14 @@ export default function CIS() {
         setChatIsLoading(false);
         setIsClaudeLoading(true);
         const streamer = createStreamingAssistantMessage(threadId);
+        let streamCompleted = false;
+        const streamTimeout = setTimeout(() => {
+          if (!streamCompleted) {
+            console.error("Meta-question stream timeout");
+            streamer.setError("Request timed out. Please try again.");
+            setIsClaudeLoading(false);
+          }
+        }, 75000);
         try {
           // Answer meta-questions with general knowledge (streaming)
           await askClaudeAnswerStream(
@@ -4002,11 +4026,18 @@ export default function CIS() {
               streamer.appendChunk(chunk);
             },
             (error) => {
+              streamCompleted = true;
+              clearTimeout(streamTimeout);
               streamer.setError(error.message || "Failed to answer. Please try again.");
+              setIsClaudeLoading(false);
             }
           );
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
           streamer.finalize();
         } catch (err) {
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
           streamer.setError(err instanceof Error ? err.message : "Failed to answer. Please try again.");
         } finally {
           setIsClaudeLoading(false);
