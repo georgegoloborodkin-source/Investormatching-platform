@@ -3525,6 +3525,34 @@ export default function CIS() {
         .split(/[\s\p{P}]+/u)
         .map((t) => t.trim())
         .filter((t) => t.length > 2);
+      const contentStopwords = new Set([
+        "what",
+        "about",
+        "know",
+        "tell",
+        "me",
+        "the",
+        "and",
+        "for",
+        "with",
+        "his",
+        "her",
+        "their",
+        "there",
+        "this",
+        "that",
+        "these",
+        "those",
+        "who",
+        "when",
+        "where",
+        "why",
+        "how",
+        "company",
+        "startup",
+        "business",
+      ]);
+      const contentTokens = tokens.filter((t) => !contentStopwords.has(t));
       const isFollowUpQuery = (() => {
         const q = normalizedQuestion;
         const hasPronoun = /\b(it|its|they|them|their|he|his|she|her|there|that|those|these)\b/i.test(q);
@@ -3643,7 +3671,7 @@ export default function CIS() {
         }
 
         // Final fallback: client-side scan of recent docs using raw + extracted JSON
-        if (!docs.length && !error && tokens.length > 0) {
+        if (!docs.length && !error && contentTokens.length > 0) {
           let recentQuery = supabase
             .from("documents")
             .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
@@ -3659,7 +3687,7 @@ export default function CIS() {
           if (timedOut) return;
           if (!recentResponse.error && recentResponse.data?.length) {
             const filtered = (recentResponse.data as typeof docs).filter((doc) => {
-              if (!tokens.length) return false;
+              if (!contentTokens.length) return false;
               const haystack = [
                 doc.raw_content || "",
                 doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
@@ -3668,10 +3696,15 @@ export default function CIS() {
               ]
                 .join(" ")
                 .toLowerCase();
-              // Require at least 60% of tokens to match (or at least 2 tokens)
-              const minMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
-              const matches = tokens.filter((t) => haystack.includes(t)).length;
-              return matches >= minMatches;
+              // Require at least 60% of tokens to match (or at least 1 if short)
+              const minMatches = contentTokens.length <= 2
+                ? 1
+                : Math.max(2, Math.ceil(contentTokens.length * 0.6));
+              const matches = contentTokens.filter((t) => haystack.includes(t)).length;
+              const hasStrongMatch =
+                contentTokens.length <= 6 &&
+                contentTokens.some((t) => t.length >= 4 && haystack.includes(t));
+              return matches >= minMatches || hasStrongMatch;
             });
             if (filtered.length) {
               docs = filtered.slice(0, 6);
@@ -3751,10 +3784,12 @@ export default function CIS() {
       }
 
       // STRICT FILTERING: Only keep documents that are actually relevant
-      // Require at least 60% of tokens to match, or minimum 2 tokens
-      const minTokenMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
+      // Allow strong matches for short, entity-like queries
+      const minTokenMatches = contentTokens.length <= 2
+        ? 1
+        : Math.max(2, Math.ceil(contentTokens.length * 0.6));
       const filteredDocs = (docs || []).filter((doc) => {
-        if (!tokens.length) return false; // No tokens = no match
+        if (!contentTokens.length) return false; // No tokens = no match
         const haystack = [
           doc.raw_content || "",
           doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
@@ -3763,8 +3798,11 @@ export default function CIS() {
         ]
           .join(" ")
           .toLowerCase();
-        const matches = tokens.filter((t) => haystack.includes(t)).length;
-        return matches >= minTokenMatches;
+        const matches = contentTokens.filter((t) => haystack.includes(t)).length;
+        const hasStrongMatch =
+          contentTokens.length <= 6 &&
+          contentTokens.some((t) => t.length >= 4 && haystack.includes(t));
+        return matches >= minTokenMatches || hasStrongMatch;
       });
 
       if (!filteredDocs || filteredDocs.length === 0) {
