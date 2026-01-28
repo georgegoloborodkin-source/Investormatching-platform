@@ -3544,9 +3544,9 @@ export default function CIS() {
       let currentText = "";
       let messageIndex = -1;
       
-      // Create placeholder message with thinking indicator
+      // Create placeholder message with thinking indicator (dots)
       setMessages((prev) => {
-        const newMessages = [...prev, { id, author: "assistant" as const, text: "🤔", threadId, isStreaming: true }];
+        const newMessages = [...prev, { id, author: "assistant" as const, text: "...", threadId, isStreaming: true }];
         messageIndex = newMessages.length - 1;
         return newMessages;
       });
@@ -3989,19 +3989,25 @@ export default function CIS() {
         }
         setChatIsLoading(false);
         setIsClaudeLoading(true);
+        const streamer = createStreamingAssistantMessage(threadId);
         try {
-          // Answer meta-questions with general knowledge
-          const response = await askClaudeAnswer({
-            question,
-            sources: [],
-            decisions: [],
-          });
-          createAssistantMessage(response.answer, threadId);
-        } catch (err) {
-          createAssistantMessage(
-            err instanceof Error ? err.message : "Failed to answer. Please try again.",
-            threadId
+          // Answer meta-questions with general knowledge (streaming)
+          await askClaudeAnswerStream(
+            {
+              question,
+              sources: [],
+              decisions: [],
+            },
+            (chunk) => {
+              streamer.appendChunk(chunk);
+            },
+            (error) => {
+              streamer.setError(error.message || "Failed to answer. Please try again.");
+            }
           );
+          streamer.finalize();
+        } catch (err) {
+          streamer.setError(err instanceof Error ? err.message : "Failed to answer. Please try again.");
         } finally {
           setIsClaudeLoading(false);
         }
@@ -4222,14 +4228,20 @@ export default function CIS() {
         sourceDocIds: null,
       });
       setInput("");
-      await askFund(question, threadId);
-    } catch (err) {
-      setChatIsLoading(false);
-      createAssistantMessage(
-        err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.",
-        activeThread || `t-${Date.now()}`
-      );
-    }
+      setChatIsLoading(true);
+      try {
+        await askFund(question, threadId);
+      } catch (err) {
+        console.error("Chat error:", err);
+        const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
+        createAssistantMessage(
+          `❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
+          threadId
+        );
+      } finally {
+        setChatIsLoading(false);
+        setIsClaudeLoading(false);
+      }
   };
 
   // Removed createBranch - no longer needed
@@ -4496,9 +4508,19 @@ export default function CIS() {
                               >
                                 {m.author === "assistant" ? (
                                   <div className="prose prose-sm dark:prose-invert max-w-none">
-                                    {renderAssistantContent(m.text)}
-                                    {m.isStreaming && (
-                                      <span className="inline-block w-2 h-5 ml-1 bg-primary animate-pulse" />
+                                    {m.isStreaming && m.text === "..." ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="animate-pulse">.</span>
+                                        <span className="animate-pulse delay-75">.</span>
+                                        <span className="animate-pulse delay-150">.</span>
+                                      </span>
+                                    ) : (
+                                      <>
+                                        {renderAssistantContent(m.text)}
+                                        {m.isStreaming && (
+                                          <span className="inline-block w-2 h-5 ml-1 bg-primary animate-pulse" />
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 ) : (
