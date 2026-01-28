@@ -4201,21 +4201,28 @@ export default function CIS() {
             decisions: decisionsForClaude,
           },
           (chunk) => {
-            fullAnswer += chunk;
-            streamer.appendChunk(chunk);
+            if (!streamCompleted) {
+              fullAnswer += chunk;
+              streamer.appendChunk(chunk);
+            }
           },
           (error) => {
-            streamCompleted = true;
-            clearTimeout(streamTimeout);
-            streamer.setError(error.message || "Claude answer failed. Please try again.");
-            setIsClaudeLoading(false);
+            if (!streamCompleted) {
+              streamCompleted = true;
+              clearTimeout(streamTimeout);
+              streamer.setError(error.message || "Claude answer failed. Please try again.");
+              setIsClaudeLoading(false);
+            }
           }
         );
-        streamCompleted = true;
-        clearTimeout(streamTimeout);
-        // Append decision block and semantic note after streaming completes
-        streamer.appendChunk(decisionBlock + semanticNote);
-        streamer.finalize();
+        // Only finalize if stream completed successfully
+        if (!streamCompleted) {
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
+          // Append decision block and semantic note after streaming completes
+          streamer.appendChunk(decisionBlock + semanticNote);
+          streamer.finalize();
+        }
         const estimate = estimateClaudeCost(question);
         persistCostLog({
           ts: new Date().toISOString(),

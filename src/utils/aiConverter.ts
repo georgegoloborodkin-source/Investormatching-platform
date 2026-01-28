@@ -253,9 +253,16 @@ export async function askClaudeAnswerStream(
     }
 
     let buffer = "";
+    let hasReceivedData = false;
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        // If stream ended without any data, it's an error
+        if (!hasReceivedData) {
+          onError?.(new Error("Stream ended without data. The server may have encountered an error."));
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
@@ -263,12 +270,14 @@ export async function askClaudeAnswerStream(
 
       for (const line of lines) {
         if (line.startsWith("data: ")) {
+          hasReceivedData = true;
           try {
             const data = JSON.parse(line.slice(6));
             if (data.text) {
               onChunk(data.text);
             } else if (data.error) {
-              throw new Error(data.error);
+              onError?.(new Error(data.error));
+              return;
             }
           } catch (e) {
             if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
