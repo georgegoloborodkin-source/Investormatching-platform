@@ -2797,6 +2797,7 @@ export default function CIS() {
     }>;
     decisions: Decision[];
   } | null>(null);
+  const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const embeddingsDisabledRef = useRef(false);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
@@ -3501,6 +3502,8 @@ export default function CIS() {
         return;
       }
 
+      const previousEvidence = lastEvidence;
+      const previousEvidenceThreadId = lastEvidenceThreadId;
       setChatIsLoading(true);
       // Reset evidence for new prompt to avoid showing previous sources
       setLastEvidence(null);
@@ -3522,6 +3525,13 @@ export default function CIS() {
         .split(/[\s\p{P}]+/u)
         .map((t) => t.trim())
         .filter((t) => t.length > 2);
+      const isFollowUpQuery = (() => {
+        const q = normalizedQuestion;
+        const hasPronoun = /\b(it|its|they|them|their|he|his|she|her|there|that|those|these)\b/i.test(q);
+        const hasFollowUpCue = /\b(what about|and what|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden)\b/i.test(q);
+        const isShort = q.split(/\s+/).length <= 12;
+        return (hasPronoun || hasFollowUpCue) && isShort;
+      })();
       let docs: Array<{
         id: string;
         title: string | null;
@@ -3758,6 +3768,54 @@ export default function CIS() {
       });
 
       if (!filteredDocs || filteredDocs.length === 0) {
+        if (
+          isFollowUpQuery &&
+          previousEvidence &&
+          previousEvidence.docs.length > 0 &&
+          previousEvidenceThreadId === threadId
+        ) {
+          const answerDocs = previousEvidence.docs.slice(0, 3);
+          setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
+          setLastEvidenceThreadId(threadId);
+          setChatIsLoading(false);
+          window.clearTimeout(timeoutId);
+          // Use Claude with the prior sources
+          setIsClaudeLoading(true);
+          try {
+            const claudeTokens = question
+              .toLowerCase()
+              .split(/\W+/)
+              .map((t) => t.trim())
+              .filter((t) => t.length > 3);
+            const sources = answerDocs.map((doc) => ({
+              title: doc.title,
+              file_name: doc.file_name,
+              snippet: buildClaudeContext(doc, claudeTokens),
+            }));
+            const decisionsForClaude = decisionIntent
+              ? decisionMatches.map((d) => ({
+                  startup_name: d.startupName,
+                  action_type: d.actionType,
+                  outcome: d.outcome ?? null,
+                  notes: d.notes ?? null,
+                }))
+              : [];
+            const response = await askClaudeAnswer({
+              question,
+              sources,
+              decisions: decisionsForClaude,
+            });
+            createAssistantMessage(response.answer, threadId, response.source_doc_ids || null);
+          } catch (err) {
+            createAssistantMessage(
+              err instanceof Error ? err.message : "Claude answer failed. Please try again.",
+              threadId
+            );
+          } finally {
+            setIsClaudeLoading(false);
+          }
+          return;
+        }
         const fallback = decisionIntent
           ? decisionMatches.length
             ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
@@ -3788,6 +3846,7 @@ export default function CIS() {
 
       const answerDocs = filteredDocs.slice(0, 3);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
+      setLastEvidenceThreadId(threadId);
       setChatIsLoading(false);
       window.clearTimeout(timeoutId);
 
