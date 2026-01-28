@@ -625,6 +625,34 @@ async def call_anthropic(prompt: str) -> str:
         detail=f"Claude API error: {last_error or 'Unknown error. All models failed.'}"
     )
 
+def is_meta_question(question: str) -> bool:
+    """
+    Detect if question is about capabilities/system (meta) vs document content.
+    Meta questions should be answered with general knowledge.
+    """
+    q_lower = question.lower().strip()
+    meta_patterns = [
+        "what can you do",
+        "what could you do",
+        "what are you",
+        "what do you do",
+        "how do you work",
+        "what is your purpose",
+        "what are your capabilities",
+        "what can you help",
+        "how can you help",
+        "what features",
+        "what functionality",
+        "what is orbit ai",
+        "who are you",
+        "introduce yourself",
+        "what is this",
+        "what is this system",
+        "what is this platform",
+    ]
+    return any(pattern in q_lower for pattern in meta_patterns)
+
+
 def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision]) -> str:
     safe_sources = (sources or [])[:ASK_MAX_SOURCES]
     source_lines: List[str] = []
@@ -645,8 +673,29 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
 
     sources_block = "\n\n".join(source_lines) if source_lines else "No sources available."
     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
+    
+    is_meta = is_meta_question(question)
+    
+    if is_meta:
+        # Meta questions: answer with general knowledge about Orbit AI capabilities
+        return f"""You are Orbit AI, a VC intelligence system built for investment teams. Answer this question about your capabilities and features.
 
-    return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
+Question:
+{question}
+
+Answer based on what Orbit AI can do:
+- Answer questions about uploaded documents (pitch decks, memos, meeting notes)
+- Extract structured information from unstructured documents
+- Track investment decisions and outcomes
+- Provide insights from your fund's knowledge base
+- Search across all uploaded sources semantically
+- Help with due diligence by finding relevant information quickly
+
+Be helpful and specific. Explain what you can do and how you help investment teams.
+"""
+    else:
+        # Document questions: use sources only
+        return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
 
 CRITICAL RULES:
 1. ONLY use information from the sources below. Do NOT use general knowledge.

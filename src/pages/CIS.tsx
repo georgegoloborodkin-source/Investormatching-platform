@@ -3894,6 +3894,57 @@ export default function CIS() {
         return matches >= minTokenMatches || hasStrongMatch;
       });
 
+      // Check if this is a meta-question (about capabilities/system)
+      const isMetaQuestion = (() => {
+        const q = normalizedQuestion;
+        const metaPatterns = [
+          "what can you do",
+          "what could you do",
+          "what are you",
+          "what do you do",
+          "how do you work",
+          "what is your purpose",
+          "what are your capabilities",
+          "what can you help",
+          "how can you help",
+          "what features",
+          "what functionality",
+          "what is orbit ai",
+          "who are you",
+          "introduce yourself",
+          "what is this",
+          "what is this system",
+          "what is this platform",
+        ];
+        return metaPatterns.some(pattern => q.includes(pattern));
+      })();
+
+      // For meta-questions, answer even without sources
+      if (isMetaQuestion && (!filteredDocs || filteredDocs.length === 0)) {
+        if (searchTimeoutId !== null) {
+          window.clearTimeout(searchTimeoutId);
+        }
+        setChatIsLoading(false);
+        setIsClaudeLoading(true);
+        try {
+          // Answer meta-questions with general knowledge
+          const response = await askClaudeAnswer({
+            question,
+            sources: [],
+            decisions: [],
+          });
+          createAssistantMessage(response.answer, threadId);
+        } catch (err) {
+          createAssistantMessage(
+            err instanceof Error ? err.message : "Failed to answer. Please try again.",
+            threadId
+          );
+        } finally {
+          setIsClaudeLoading(false);
+        }
+        return;
+      }
+
       if (!filteredDocs || filteredDocs.length === 0) {
         if (
           isFollowUpQuery &&
