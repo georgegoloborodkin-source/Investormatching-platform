@@ -265,6 +265,7 @@ class ConversionResponse(BaseModel):
     confidence: float
     warnings: List[str] = []
     errors: List[str] = []
+    raw_content: Optional[str] = None
 
 class FileValidationResponse(BaseModel):
     isValid: bool
@@ -1925,6 +1926,8 @@ async def convert_file(file: UploadFile = File(...), dataType: Optional[str] = N
             format=file_ext
         )
         conversion_result = await convert_data(request)
+        # Include extracted text for downstream indexing (truncate to control payload size)
+        conversion_result.raw_content = text_content[:MAX_MODEL_INPUT_CHARS]
 
         # Validate critical identifiers, but don't hard-fail if optional fields are missing.
         row_errors = validate_structured_rows(

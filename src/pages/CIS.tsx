@@ -1545,7 +1545,7 @@ function SourcesTab({
             // Extract PDF content via converter API
             try {
               const conversion = await convertFileWithAI(file);
-              rawContent = (conversion as any).raw_content || (conversion as any).content || null;
+              rawContent = conversion.raw_content ?? null;
               extractedJson = conversion as unknown as Record<string, any>;
               detectedType = conversion.detectedType || "pdf";
             } catch (err) {

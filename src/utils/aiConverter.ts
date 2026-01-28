@@ -64,6 +64,7 @@ export interface AIConversionResponse {
   confidence: number;
   warnings: string[];
   errors: string[];
+  raw_content?: string | null;
 }
 
 export interface AskFundSource {
@@ -157,6 +158,7 @@ export async function convertWithAI(
       confidence: result.confidence,
       warnings: result.warnings,
       errors: result.errors,
+      raw_content: result.raw_content ?? null,
     };
   } catch (error) {
     throw new Error(
@@ -323,6 +325,7 @@ export async function convertFileWithAI(
       confidence: result.confidence,
       warnings: result.warnings,
       errors: result.errors,
+      raw_content: result.raw_content ?? null,
     };
   } catch (error) {
     const baseUrl = resolvedBaseUrl ?? "(unresolved)";
