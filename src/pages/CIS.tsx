@@ -3691,7 +3691,7 @@ export default function CIS() {
           .from("documents")
           .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
           .eq("event_id", eventId)
-          .textSearch("raw_content", question, { type: "websearch", config: "english" })
+          .textSearch("raw_content", question.replace(/[^\w\s-]/g, ' ').trim(), { type: "websearch", config: "english" })
           .order("created_at", { ascending: false })
           .limit(6);
         
