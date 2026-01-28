@@ -167,12 +167,22 @@ PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
 ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
+
+# Known invalid models to exclude
+INVALID_MODELS = {"claude-3-5-sonnet-20241022"}
+
+# Filter out invalid models from env var if set
+if ANTHROPIC_MODEL in INVALID_MODELS:
+    ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620"
+
 ANTHROPIC_MODEL_FALLBACKS = [
-    ANTHROPIC_MODEL,
-    "claude-3-5-sonnet-20240620",
-    "claude-3-5-haiku-20241022",
-    "claude-3-haiku-20240307",
-    "claude-3-opus-20240229",
+    m for m in [
+        ANTHROPIC_MODEL,
+        "claude-3-5-sonnet-20240620",
+        "claude-3-5-haiku-20241022",
+        "claude-3-haiku-20240307",
+        "claude-3-opus-20240229",
+    ] if m not in INVALID_MODELS
 ]
 
 # Ask-the-fund settings (keep costs lean + fast)
