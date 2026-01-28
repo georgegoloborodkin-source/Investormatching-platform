@@ -3433,9 +3433,17 @@ export default function CIS() {
       }
 
       setChatIsLoading(true);
+      // Reset evidence for new prompt to avoid showing previous sources
+      setLastEvidence(null);
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
       const currentUserId = profile?.id || user?.id || null;
+      const normalizedQuestion = question.toLowerCase();
+      // Unicode-aware tokenization (supports non-English)
+      const tokens = normalizedQuestion
+        .split(/[\s\p{P}]+/u)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 2);
       let docs: Array<{
         id: string;
         title: string | null;
@@ -3576,14 +3584,6 @@ export default function CIS() {
         }
       }
 
-      // Extract tokens FIRST for better filtering
-      const normalizedQuestion = question.toLowerCase();
-      // Better tokenization that handles Russian/Cyrillic and other languages
-      const tokens = normalizedQuestion
-        .split(/[\s\p{P}]+/u) // Unicode-aware split for all languages
-        .map((t) => t.trim())
-        .filter((t) => t.length > 2); // Lower threshold for non-English
-
       const decisionIntent =
         /\b(decision|decisions|outcome|log|logged|approve|approved|reject|rejected)\b/i.test(question);
       const decisionStopwords = new Set([
@@ -3698,14 +3698,14 @@ export default function CIS() {
         ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
         : "";
 
-      const answerDocs = filteredDocs;
+      const answerDocs = filteredDocs.slice(0, 3);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setChatIsLoading(false);
 
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
       try {
-        const docsForClaude = answerDocs.slice(0, 3);
+        const docsForClaude = answerDocs;
         const claudeTokens = question
           .toLowerCase()
           .split(/\W+/)
