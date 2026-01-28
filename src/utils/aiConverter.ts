@@ -272,7 +272,7 @@ export async function convertFileWithAI(
         method: "POST",
         body: formData,
       },
-      30000
+      60000
     );
 
     if (!response.ok) {

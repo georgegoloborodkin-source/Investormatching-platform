@@ -1502,13 +1502,24 @@ function SourcesTab({
   };
 
   const extractPdfTextClientSide = async (file: File) => {
-    const pdfjs: any = await new Function(
-      "u",
-      "return import(u)"
-    )("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.mjs");
-    // Avoid worker/CORS issues in production by disabling the worker
+    const loadPdfJs = () =>
+      new Promise<any>((resolve, reject) => {
+        if ((window as any).pdfjsLib) {
+          resolve((window as any).pdfjsLib);
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        script.async = true;
+        script.onload = () => resolve((window as any).pdfjsLib);
+        script.onerror = () => reject(new Error("Failed to load PDF.js"));
+        document.head.appendChild(script);
+      });
+
+    const pdfjs: any = await loadPdfJs();
     pdfjs.GlobalWorkerOptions.workerSrc =
-      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs";
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    // Avoid worker/CORS issues in production by disabling the worker
     pdfjs.disableWorker = true;
     const buffer = await file.arrayBuffer();
     const loadingTask = pdfjs.getDocument({ data: buffer });
