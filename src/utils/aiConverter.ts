@@ -218,13 +218,17 @@ export async function askClaudeAnswer(input: {
 
 export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
-  const response = await fetch(`${baseUrl}/embed/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetchWithTimeout(
+    `${baseUrl}/embed/query`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text, input_type: inputType }),
     },
-    body: JSON.stringify({ text, input_type: inputType }),
-  });
+    15000
+  );
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -262,10 +266,14 @@ export async function convertFileWithAI(
 
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
-    const response = await fetch(`${baseUrl}/convert-file`, {
-      method: "POST",
-      body: formData,
-    });
+    const response = await fetchWithTimeout(
+      `${baseUrl}/convert-file`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      30000
+    );
 
     if (!response.ok) {
       const error = await response.json();

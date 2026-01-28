@@ -3435,6 +3435,15 @@ export default function CIS() {
       setChatIsLoading(true);
       // Reset evidence for new prompt to avoid showing previous sources
       setLastEvidence(null);
+      let timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        setChatIsLoading(false);
+        createAssistantMessage(
+          "Search is taking too long. Please try a more specific query or disable semantic search.",
+          threadId
+        );
+      }, 20000);
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
       const currentUserId = profile?.id || user?.id || null;
@@ -3456,15 +3465,19 @@ export default function CIS() {
       let error: { message?: string } | null = null;
       let semanticFailed = false;
 
-      if (semanticMode) {
+      const canSemantic = semanticMode && tokens.length >= 2;
+
+      if (canSemantic) {
         try {
           const embedding = await embedQuery(question, "query");
+          if (timedOut) return;
           if (embedding && embedding.length) {
             const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
               query_embedding: embedding,
               match_count: 6,
               filter_event_id: eventId,
             });
+            if (timedOut) return;
             if (!matchError && matches?.length) {
               const ids = matches.map((m: any) => m.document_id);
               let docQuery = supabase
@@ -3477,6 +3490,7 @@ export default function CIS() {
                 docQuery = docQuery.neq("created_by", currentUserId);
               }
               const { data: docRows, error: docError } = await docQuery;
+              if (timedOut) return;
               if (docError) {
                 error = docError as { message?: string };
               } else if (docRows?.length) {
@@ -3511,6 +3525,7 @@ export default function CIS() {
         }
         
         const response = await responseQuery;
+        if (timedOut) return;
         docs = (response.data || []) as typeof docs;
         
         // If still no results, try keyword search with individual terms
@@ -3537,6 +3552,7 @@ export default function CIS() {
             }
             
             const keywordResponse = await keywordQuery;
+            if (timedOut) return;
             if (keywordResponse.data?.length) {
               docs = (keywordResponse.data || []) as typeof docs;
             }
@@ -3561,6 +3577,7 @@ export default function CIS() {
             recentQuery = recentQuery.neq("created_by", currentUserId);
           }
           const recentResponse = await recentQuery;
+          if (timedOut) return;
           if (!recentResponse.error && recentResponse.data?.length) {
             const filtered = (recentResponse.data as typeof docs).filter((doc) => {
               if (!tokens.length) return false;
@@ -3645,6 +3662,7 @@ export default function CIS() {
         : [];
 
       if (error) {
+        window.clearTimeout(timeoutId);
         createAssistantMessage(
           `Search failed: ${error.message || "Could not query documents."}`,
           threadId
@@ -3676,6 +3694,7 @@ export default function CIS() {
             ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
             : `I couldn't find matching decisions for: "${question}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
           : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
+        window.clearTimeout(timeoutId);
         createAssistantMessage(fallback, threadId);
         // Don't set lastEvidence if no docs found - prevents Claude from being called
         setLastEvidence(null);
@@ -3701,6 +3720,7 @@ export default function CIS() {
       const answerDocs = filteredDocs.slice(0, 3);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setChatIsLoading(false);
+      window.clearTimeout(timeoutId);
 
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
