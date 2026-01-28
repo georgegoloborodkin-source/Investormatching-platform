@@ -68,7 +68,7 @@ Return the extracted text in a clear, structured format."""
             url = get_anthropic_api_url()
             
             payload = {
-                "model": "claude-3-5-sonnet-20241022",  # Claude 3.5 Sonnet with vision
+                "model": "claude-3-5-sonnet-20240620",  # Claude 3.5 Sonnet with vision
                 "max_tokens": 4096,
                 "messages": [
                     {
