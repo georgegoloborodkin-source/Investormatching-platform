@@ -3580,13 +3580,20 @@ export default function CIS() {
       if (canSemantic) {
         try {
           // Add timeout to embedding query (15s max)
-          const embeddingPromise = embedQuery(question, "query");
-          const embeddingTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Embedding timeout")), 15000)
-          );
-          const embedding = await Promise.race([embeddingPromise, embeddingTimeout]) as number[];
+          let embedding: number[] | null = null;
+          try {
+            const embeddingPromise = embedQuery(question, "query");
+            const embeddingTimeout = new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error("Embedding timeout")), 15000)
+            );
+            embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
+          } catch (embedErr) {
+            // Embedding timeout or error - skip semantic search, use full-text instead
+            semanticFailed = true;
+            embedding = null;
+          }
           if (timedOut) return;
-          if (embedding && embedding.length) {
+          if (embedding && embedding.length > 0) {
             const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
               query_embedding: embedding,
               match_count: 6,
