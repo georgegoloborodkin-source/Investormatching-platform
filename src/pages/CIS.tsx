@@ -1502,11 +1502,14 @@ function SourcesTab({
   };
 
   const extractPdfTextClientSide = async (file: File) => {
-    const pdfjs = await import(
-      /* @vite-ignore */ "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.mjs"
-    );
+    const pdfjs: any = await new Function(
+      "u",
+      "return import(u)"
+    )("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.mjs");
+    // Avoid worker/CORS issues in production by disabling the worker
     pdfjs.GlobalWorkerOptions.workerSrc =
       "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs";
+    pdfjs.disableWorker = true;
     const buffer = await file.arrayBuffer();
     const loadingTask = pdfjs.getDocument({ data: buffer });
     const pdf = await loadingTask.promise;
@@ -1564,23 +1567,33 @@ function SourcesTab({
               console.error("Error reading text file:", err);
               rawContent = null;
             }
-          } else if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-            // Extract PDF content via converter API
+          } else {
+            // For non-text files, try converter API (PDF/DOCX/XLSX/etc.)
             try {
               const conversion = await convertFileWithAI(file);
               rawContent = conversion.raw_content ?? null;
               extractedJson = conversion as unknown as Record<string, any>;
-              detectedType = conversion.detectedType || "pdf";
+              detectedType = conversion.detectedType || detectedType;
             } catch (err) {
-              console.error("Error converting PDF:", err);
+              console.error("Error converting file:", err);
               // Continue without content - will store file reference
             }
-            if (!rawContent) {
+
+            // If PDF and still no text, try client-side fallback
+            if (!rawContent && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
               try {
                 rawContent = await extractPdfTextClientSide(file);
               } catch (err) {
                 console.error("Client-side PDF extraction failed:", err);
               }
+            }
+            if (!rawContent) {
+              toast({
+                title: "No text extracted",
+                description:
+                  "We couldn't extract text from this file. If it's a PDF, redeploy the converter with CORS_ALLOW_ORIGINS or try a text-based file.",
+                variant: "destructive",
+              });
             }
           }
 
