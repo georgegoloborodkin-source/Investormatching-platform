@@ -3360,23 +3360,65 @@ export default function CIS() {
       model?: string | null;
       sourceDocIds?: string[] | null;
     }) => {
-      const eventId = activeEventId || (await ensureActiveEventId());
-      if (!eventId) return;
-      const userId = profile?.id || user?.id || null;
-      const { error } = await supabase.from("chat_messages").insert({
-        event_id: eventId,
-        thread_id: payload.threadId,
-        role: payload.role,
-        content: payload.content,
-        model: payload.model || null,
-        source_doc_ids: payload.sourceDocIds || null,
-        created_by: userId,
-      });
-      if (error) {
-        console.error("Failed to save chat message:", error);
+      try {
+        const eventId = activeEventId || (await ensureActiveEventId());
+        if (!eventId) return;
+        const userId = profile?.id || user?.id || null;
+        
+        // Ensure thread exists (create if it doesn't)
+        let threadId = payload.threadId;
+        if (!threadId || !threadId.startsWith('t-')) {
+          // Create a new thread if threadId is invalid
+          const newThreadId = await createChatThread("Chat", null);
+          if (newThreadId) {
+            threadId = newThreadId;
+          } else {
+            // Fallback: use a temporary ID (won't persist but won't crash)
+            threadId = `t-${Date.now()}`;
+          }
+        }
+        
+        // Retry logic for network failures
+        let lastError: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const { error } = await supabase.from("chat_messages").insert({
+              event_id: eventId,
+              thread_id: threadId,
+              role: payload.role,
+              content: payload.content,
+              model: payload.model || null,
+              source_doc_ids: payload.sourceDocIds || null,
+              created_by: userId,
+            });
+            if (!error) {
+              return; // Success
+            }
+            lastError = error;
+            // Don't retry on RLS/auth errors
+            if (error.code === '42501' || error.code === 'PGRST116') {
+              break;
+            }
+          } catch (err) {
+            lastError = err;
+            // Retry on network errors
+            if (attempt < 2 && (err instanceof TypeError || err instanceof Error)) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              continue;
+            }
+            break;
+          }
+        }
+        
+        if (lastError) {
+          console.error("Failed to save chat message after retries:", lastError);
+        }
+      } catch (err) {
+        console.error("Failed to save chat message:", err);
+        // Silently fail - don't block chat functionality
       }
     },
-    [activeEventId, ensureActiveEventId, profile, user]
+    [activeEventId, ensureActiveEventId, profile, user, createChatThread]
   );
 
   useEffect(() => {
@@ -3660,7 +3702,13 @@ export default function CIS() {
           responseQuery = responseQuery.neq("created_by", currentUserId);
         }
         
-        const response = await responseQuery;
+        let response;
+        try {
+          response = await responseQuery;
+        } catch (queryErr) {
+          console.warn("Document query failed:", queryErr);
+          response = { data: [], error: queryErr };
+        }
         if (timedOut) return;
         docs = (response.data || []) as typeof docs;
         
