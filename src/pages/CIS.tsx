@@ -4099,18 +4099,25 @@ export default function CIS() {
                 decisions: decisionsForClaude,
               },
               (chunk) => {
-                streamer.appendChunk(chunk);
+                if (!streamCompleted) {
+                  streamer.appendChunk(chunk);
+                }
               },
               (error) => {
-                streamCompleted = true;
-                clearTimeout(streamTimeout);
-                streamer.setError(error.message || "Claude answer failed. Please try again.");
-                setIsClaudeLoading(false);
+                if (!streamCompleted) {
+                  streamCompleted = true;
+                  clearTimeout(streamTimeout);
+                  streamer.setError(error.message || "Claude answer failed. Please try again.");
+                  setIsClaudeLoading(false);
+                }
               }
             );
-            streamCompleted = true;
-            clearTimeout(streamTimeout);
-            streamer.finalize();
+            // Only finalize if stream completed successfully
+            if (!streamCompleted) {
+              streamCompleted = true;
+              clearTimeout(streamTimeout);
+              streamer.finalize();
+            }
           } catch (err) {
             streamCompleted = true;
             clearTimeout(streamTimeout);
