@@ -4063,6 +4063,14 @@ export default function CIS() {
           // Use Claude with the prior sources
           setIsClaudeLoading(true);
           const streamer = createStreamingAssistantMessage(threadId);
+          let streamCompleted = false;
+          const streamTimeout = setTimeout(() => {
+            if (!streamCompleted) {
+              console.error("Follow-up stream timeout");
+              streamer.setError("Request timed out. Please try again.");
+              setIsClaudeLoading(false);
+            }
+          }, 75000);
           try {
             const claudeTokens = question
               .toLowerCase()
@@ -4092,11 +4100,18 @@ export default function CIS() {
                 streamer.appendChunk(chunk);
               },
               (error) => {
+                streamCompleted = true;
+                clearTimeout(streamTimeout);
                 streamer.setError(error.message || "Claude answer failed. Please try again.");
+                setIsClaudeLoading(false);
               }
             );
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
             streamer.finalize();
           } catch (err) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
             streamer.setError(err instanceof Error ? err.message : "Claude answer failed. Please try again.");
           } finally {
             setIsClaudeLoading(false);
@@ -4146,6 +4161,17 @@ export default function CIS() {
       setIsClaudeLoading(true);
       const streamer = createStreamingAssistantMessage(threadId, answerDocs.map((doc) => doc.id));
       let fullAnswer = "";
+      let streamCompleted = false;
+      
+      // Add timeout to prevent infinite hanging
+      const streamTimeout = setTimeout(() => {
+        if (!streamCompleted) {
+          console.error("Stream timeout - no response after 75 seconds");
+          streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
+          setIsClaudeLoading(false);
+        }
+      }, 75000);
+      
       try {
         const docsForClaude = answerDocs;
         const claudeTokens = question
@@ -4177,9 +4203,14 @@ export default function CIS() {
             streamer.appendChunk(chunk);
           },
           (error) => {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
             streamer.setError(error.message || "Claude answer failed. Please try again.");
+            setIsClaudeLoading(false);
           }
         );
+        streamCompleted = true;
+        clearTimeout(streamTimeout);
         // Append decision block and semantic note after streaming completes
         streamer.appendChunk(decisionBlock + semanticNote);
         streamer.finalize();
@@ -4192,6 +4223,8 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
       } catch (error: any) {
+        streamCompleted = true;
+        clearTimeout(streamTimeout);
         const errorMsg = error?.message || "Could not generate an answer.";
         // Provide more helpful error messages
         let userMessage = `Claude answer failed: ${errorMsg}`;
