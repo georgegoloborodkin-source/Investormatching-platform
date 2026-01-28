@@ -195,7 +195,27 @@ export async function insertSource(
     created_by: string | null;
   }
 ) {
-  return supabase.from("sources").insert({ event_id: eventId, ...payload }).select("*").single();
+  const basePayload = { event_id: eventId, ...payload };
+  const insertResult = await supabase.from("sources").insert(basePayload).select("*").single();
+
+  // Backwards-compatible retry: older databases may not have notes/storage_path yet.
+  if (insertResult.error) {
+    const message = insertResult.error.message || "";
+    const missingNotes = message.includes("notes") && message.includes("column");
+    const missingStoragePath = message.includes("storage_path") && message.includes("column");
+    if (missingNotes || missingStoragePath) {
+      const fallbackPayload: Record<string, any> = { ...basePayload };
+      if (missingNotes) {
+        delete fallbackPayload.notes;
+      }
+      if (missingStoragePath) {
+        delete fallbackPayload.storage_path;
+      }
+      return supabase.from("sources").insert(fallbackPayload).select("*").single();
+    }
+  }
+
+  return insertResult;
 }
 
 export async function deleteSource(sourceId: string) {
