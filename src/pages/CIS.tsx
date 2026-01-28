@@ -104,7 +104,7 @@ import {
   deleteSource,
   getDocumentById,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswer, askClaudeAnswerStream, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
