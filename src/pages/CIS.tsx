@@ -1346,6 +1346,7 @@ function SourcesTab({
   const [isUploadingLocal, setIsUploadingLocal] = useState(false);
   const [autoExtract, setAutoExtract] = useState(true);
   const MAX_IMPORT_CHARS = 24000;
+  const MAX_PDF_PAGES = 6;
   const canImport = Boolean(activeEventId);
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
@@ -1500,6 +1501,28 @@ function SourcesTab({
     );
   };
 
+  const extractPdfTextClientSide = async (file: File) => {
+    const pdfjs = await import(
+      /* @vite-ignore */ "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.mjs"
+    );
+    pdfjs.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs";
+    const buffer = await file.arrayBuffer();
+    const loadingTask = pdfjs.getDocument({ data: buffer });
+    const pdf = await loadingTask.promise;
+    const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
+    let text = "";
+    for (let i = 1; i <= pageLimit; i += 1) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = (content.items as Array<{ str?: string }>)
+        .map((item) => item.str || "")
+        .join(" ");
+      text += `\n--- Page ${i} ---\n${strings}`;
+    }
+    return text.trim();
+  };
+
   const handleLocalUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files ?? []);
@@ -1551,6 +1574,13 @@ function SourcesTab({
             } catch (err) {
               console.error("Error converting PDF:", err);
               // Continue without content - will store file reference
+            }
+            if (!rawContent) {
+              try {
+                rawContent = await extractPdfTextClientSide(file);
+              } catch (err) {
+                console.error("Client-side PDF extraction failed:", err);
+              }
             }
           }
 
