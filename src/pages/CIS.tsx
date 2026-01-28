@@ -4200,7 +4200,7 @@ export default function CIS() {
       scopes,
       profile,
       user,
-      askClaudeAnswer,
+      askClaudeAnswerStream,
       persistCostLog,
     ]
   );
@@ -4208,40 +4208,39 @@ export default function CIS() {
   const addMessage = async () => {
     if (chatIsLoading) return;
     if (!input.trim()) return;
+    let threadId = activeThread;
+    if (!threadId) {
+      const createdId = await createChatThread("Main thread");
+      const newThreadId = createdId || `t-${Date.now()}`;
+      setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
+      setActiveThread(newThreadId);
+      threadId = newThreadId;
+    }
+    const question = input.trim();
+    const id = `m-${Date.now()}`;
+    setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
+    void persistChatMessage({
+      threadId,
+      role: "user",
+      content: question,
+      model: null,
+      sourceDocIds: null,
+    });
+    setInput("");
+    setChatIsLoading(true);
     try {
-      let threadId = activeThread;
-      if (!threadId) {
-        const createdId = await createChatThread("Main thread");
-        const newThreadId = createdId || `t-${Date.now()}`;
-        setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
-        setActiveThread(newThreadId);
-        threadId = newThreadId;
-      }
-      const question = input.trim();
-      const id = `m-${Date.now()}`;
-      setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
-      void persistChatMessage({
-        threadId,
-        role: "user",
-        content: question,
-        model: null,
-        sourceDocIds: null,
-      });
-      setInput("");
-      setChatIsLoading(true);
-      try {
-        await askFund(question, threadId);
-      } catch (err) {
-        console.error("Chat error:", err);
-        const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
-        createAssistantMessage(
-          `❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
-          threadId
-        );
-      } finally {
-        setChatIsLoading(false);
-        setIsClaudeLoading(false);
-      }
+      await askFund(question, threadId);
+    } catch (err) {
+      console.error("Chat error:", err);
+      const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
+      createAssistantMessage(
+        `❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
+        threadId
+      );
+    } finally {
+      setChatIsLoading(false);
+      setIsClaudeLoading(false);
+    }
   };
 
   // Removed createBranch - no longer needed
