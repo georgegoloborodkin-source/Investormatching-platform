@@ -3721,24 +3721,34 @@ export default function CIS() {
             .slice(0, 3); // Use top 3 keywords
           
           if (keywords.length > 0) {
-            let keywordQuery = supabase
-              .from("documents")
-              .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
-              .eq("event_id", eventId)
-              .or(keywords.map((k) => `raw_content.ilike.%${k}%`).join(","))
-              .order("created_at", { ascending: false })
-              .limit(6);
-            
-            if (myDocsSelected && !teamDocsSelected && currentUserId) {
-              keywordQuery = keywordQuery.eq("created_by", currentUserId);
-            } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
-              keywordQuery = keywordQuery.neq("created_by", currentUserId);
-            }
-            
-            const keywordResponse = await keywordQuery;
-            if (timedOut) return;
-            if (keywordResponse.data?.length) {
-              docs = (keywordResponse.data || []) as typeof docs;
+            try {
+              let keywordQuery = supabase
+                .from("documents")
+                .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+                .eq("event_id", eventId);
+              
+              // Build OR conditions safely
+              const orConditions = keywords.map((k) => `raw_content.ilike.%${k}%`).join(",");
+              if (orConditions) {
+                keywordQuery = keywordQuery.or(orConditions);
+              }
+              
+              keywordQuery = keywordQuery.order("created_at", { ascending: false }).limit(6);
+              
+              if (myDocsSelected && !teamDocsSelected && currentUserId) {
+                keywordQuery = keywordQuery.eq("created_by", currentUserId);
+              } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+                keywordQuery = keywordQuery.neq("created_by", currentUserId);
+              }
+              
+              const keywordResponse = await keywordQuery;
+              if (timedOut) return;
+              if (keywordResponse.data?.length) {
+                docs = (keywordResponse.data || []) as typeof docs;
+              }
+            } catch (keywordErr) {
+              console.warn("Keyword search failed:", keywordErr);
+              // Continue without keyword results
             }
           }
         }
