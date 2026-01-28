@@ -2934,7 +2934,7 @@ export default function CIS() {
 
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!profile) return;
+      if (!profile || chatLoaded) return; // Only load once
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
       
@@ -2984,13 +2984,15 @@ export default function CIS() {
           }));
           setMessages(mappedMessages);
         }
+        setChatLoaded(true);
       } catch (error) {
         console.error("Failed to load chat history:", error);
+        setChatLoaded(true); // Set to true even on error to prevent retries
       }
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, activeThread, ensureActiveEventId]);
+  }, [profile, activeEventId, ensureActiveEventId, chatLoaded, activeThread]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
