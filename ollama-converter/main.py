@@ -2315,7 +2315,15 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                     
                     if response.status_code >= 400:
                         error_text = await response.aread()
-                        yield json.dumps({"error": f"Claude API error ({response.status_code}): {error_text[:200].decode()}"})
+                        error_str = error_text[:200].decode() if isinstance(error_text, bytes) else str(error_text)[:200]
+                        # If it's a 404 for model not found, try next model instead of failing
+                        if response.status_code == 404 and ("not_found_error" in error_str.lower() or "model:" in error_str.lower()):
+                            if model_name == model_list[-1]:  # Last model
+                                yield json.dumps({"error": f"Claude API error ({response.status_code}): All models failed. Please check your API access. Error: {error_str}"})
+                                return
+                            # Skip this invalid model and try next one
+                            continue
+                        yield json.dumps({"error": f"Claude API error ({response.status_code}): {error_str}"})
                         return
 
                     async for line in response.aiter_lines():
