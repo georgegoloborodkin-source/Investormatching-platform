@@ -3267,11 +3267,12 @@ export default function CIS() {
       if (startIdx >= 0) {
         const slice = lines.slice(startIdx, startIdx + 40);
         const joined = slice.join("\n");
-        return joined.length > 2000 ? `${joined.slice(0, 2000)}…` : joined;
+        // Reduced from 2000 to 1000 chars for faster responses (less tokens)
+        return joined.length > 1000 ? `${joined.slice(0, 1000)}…` : joined;
       }
 
-      // Fallback: return the first 2000 chars of the document
-      return combined.length > 2000 ? `${combined.slice(0, 2000)}…` : combined;
+      // Fallback: return the first 1000 chars of the document (reduced for speed)
+      return combined.length > 1000 ? `${combined.slice(0, 1000)}…` : combined;
     },
     [buildNormalizedDocText]
   );

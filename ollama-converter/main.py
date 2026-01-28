@@ -177,7 +177,9 @@ ANTHROPIC_MODEL_FALLBACKS = [
 # Ask-the-fund settings (keep costs lean + fast)
 ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "400"))
 ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "3"))
-ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "250"))
+ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "150"))  # Reduced from 250 for faster responses
+# Use Haiku for simple questions (3-5x faster, 75% cheaper)
+USE_HAIKU_FOR_SIMPLE = os.getenv("USE_HAIKU_FOR_SIMPLE", "true").lower() == "true"
 
 # Embeddings settings (semantic search)
 EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "voyage").lower().strip()
@@ -672,7 +674,40 @@ Decision history (optional context):
 Remember: If the answer isn't in the sources above, you MUST say you don't have that information. Never make up answers.
 """
 
-async def call_anthropic_answer(prompt: str) -> str:
+# Fast model for simple questions (3-5x faster)
+HAIKU_MODEL = "claude-3-5-haiku-20241022"
+
+def is_simple_question(question: str, sources: List[AskSource]) -> bool:
+    """
+    Detect if question is simple enough for Haiku (3-5x faster).
+    Simple = short question, few sources, straightforward answer expected.
+    """
+    # Simple heuristics:
+    # 1. Short question (< 15 words)
+    word_count = len(question.split())
+    if word_count > 15:
+        return False
+    
+    # 2. Few sources (1-2)
+    if len(sources) > 2:
+        return False
+    
+    # 3. Not asking for analysis/comparison
+    complex_keywords = ["compare", "analyze", "why", "explain", "evaluate", "assess", "strategy"]
+    question_lower = question.lower()
+    if any(kw in question_lower for kw in complex_keywords):
+        return False
+    
+    # 4. Asking for facts (what, who, when, where, how much)
+    simple_patterns = ["what is", "what are", "who is", "when", "where", "how much", "how many", "tell me about"]
+    if any(pattern in question_lower for pattern in simple_patterns):
+        return True
+    
+    # Default: use Sonnet for better quality
+    return False
+
+
+async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None) -> str:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=503,
@@ -687,12 +722,18 @@ async def call_anthropic_answer(prompt: str) -> str:
     url = get_anthropic_api_url()
     default_url = "https://api.anthropic.com/v1/messages"
 
+    # Choose model based on question complexity (Haiku is 3-5x faster)
+    use_haiku = question and sources and is_simple_question(question, sources)
+    model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
+    # Reduce max_tokens for simple questions (faster generation)
+    max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
+    
     last_error: Optional[str] = None
     async with httpx.AsyncClient(timeout=60.0) as client:
-        for model_name in [m for m in ANTHROPIC_MODEL_FALLBACKS if m]:
+        for model_name in [m for m in model_list if m]:
             payload = {
                 "model": model_name,
-                "max_tokens": ASK_MAX_TOKENS,
+                "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "system": "You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from provided sources only. Never use general knowledge. If information isn't in the sources, say so explicitly. Always cite sources with [1], [2], etc.",
                 "messages": [
@@ -2168,7 +2209,7 @@ async def ask_fund(request: AskRequest):
         raise HTTPException(status_code=400, detail="question is required.")
 
     prompt = build_answer_prompt(question, request.sources, request.decisions)
-    answer = await call_anthropic_answer(prompt)
+    answer = await call_anthropic_answer(prompt, question=question, sources=request.sources)
     return AskResponse(answer=answer)
 
 def normalize_embedding(embedding: List[float]) -> List[float]:
