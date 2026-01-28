@@ -3508,7 +3508,9 @@ export default function CIS() {
       // Reset evidence for new prompt to avoid showing previous sources
       setLastEvidence(null);
       let timedOut = false;
-      const timeoutId = window.setTimeout(() => {
+      let searchTimeoutId: number | null = null;
+      // Increased timeout to 90 seconds (20s for search + 70s for Claude)
+      const searchTimeoutId_temp = window.setTimeout(() => {
         timedOut = true;
         setChatIsLoading(false);
         createAssistantMessage(
@@ -3516,6 +3518,7 @@ export default function CIS() {
           threadId
         );
       }, 20000);
+      searchTimeoutId = searchTimeoutId_temp;
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
       const currentUserId = profile?.id || user?.id || null;
@@ -3576,7 +3579,12 @@ export default function CIS() {
 
       if (canSemantic) {
         try {
-          const embedding = await embedQuery(question, "query");
+          // Add timeout to embedding query (15s max)
+          const embeddingPromise = embedQuery(question, "query");
+          const embeddingTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Embedding timeout")), 15000)
+          );
+          const embedding = await Promise.race([embeddingPromise, embeddingTimeout]) as number[];
           if (timedOut) return;
           if (embedding && embedding.length) {
             const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
@@ -3774,7 +3782,9 @@ export default function CIS() {
         : [];
 
       if (error) {
-        window.clearTimeout(timeoutId);
+        if (searchTimeoutId !== null) {
+          window.clearTimeout(searchTimeoutId);
+        }
         createAssistantMessage(
           `Search failed: ${error.message || "Could not query documents."}`,
           threadId
@@ -3816,7 +3826,10 @@ export default function CIS() {
           setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
           setLastEvidenceThreadId(threadId);
           setChatIsLoading(false);
-          window.clearTimeout(timeoutId);
+          // Clear search timeout - Claude has its own 70s timeout
+          if (searchTimeoutId !== null) {
+            window.clearTimeout(searchTimeoutId);
+          }
           // Use Claude with the prior sources
           setIsClaudeLoading(true);
           try {
@@ -3859,7 +3872,9 @@ export default function CIS() {
             ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
             : `I couldn't find matching decisions for: "${question}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
           : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
-        window.clearTimeout(timeoutId);
+        if (searchTimeoutId !== null) {
+          window.clearTimeout(searchTimeoutId);
+        }
         createAssistantMessage(fallback, threadId);
         // Don't set lastEvidence if no docs found - prevents Claude from being called
         setLastEvidence(null);
@@ -3886,7 +3901,10 @@ export default function CIS() {
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setLastEvidenceThreadId(threadId);
       setChatIsLoading(false);
-      window.clearTimeout(timeoutId);
+      // Clear search timeout - Claude has its own 70s timeout
+      if (searchTimeoutId !== null) {
+        window.clearTimeout(searchTimeoutId);
+      }
 
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
@@ -3935,15 +3953,24 @@ export default function CIS() {
         // Provide more helpful error messages
         let userMessage = `Claude answer failed: ${errorMsg}`;
         if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
-          userMessage = `The request timed out. This can happen with complex questions or slow API responses.\n\n` +
-            `💡 Suggestions:\n` +
-            `- Try rephrasing your question to be more specific\n` +
-            `- Break down complex questions into smaller parts\n` +
-            `- Check if your documents are relevant to the question\n` +
-            `- Try again in a moment`;
-        } else if (errorMsg.includes("HTTP error")) {
-          userMessage = `API error: ${errorMsg}\n\n` +
-            `Please check your connection and try again.`;
+          userMessage = `The request timed out after 70 seconds. This can happen with:\n\n` +
+            `• Complex questions requiring deep analysis\n` +
+            `• Large documents with lots of context\n` +
+            `• Slow API responses\n\n` +
+            `💡 **Try:**\n` +
+            `• Rephrasing your question to be more specific\n` +
+            `• Breaking complex questions into smaller parts\n` +
+            `• Asking about specific companies/topics (e.g., "Giga Energy intern responsibilities")\n` +
+            `• Checking if your documents contain the information\n` +
+            `• Trying again in a moment`;
+        } else if (errorMsg.includes("HTTP error") || errorMsg.includes("Failed to fetch")) {
+          userMessage = `Network error: ${errorMsg}\n\n` +
+            `💡 **Check:**\n` +
+            `• Your internet connection\n` +
+            `• If the API service is available\n` +
+            `• Try again in a moment`;
+        } else if (errorMsg.includes("AbortError") || errorMsg.includes("aborted")) {
+          userMessage = `Request was cancelled. Please try again.`;
         }
         createAssistantMessage(userMessage, threadId);
       } finally {
