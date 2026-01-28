@@ -216,6 +216,80 @@ export async function askClaudeAnswer(input: {
   return await response.json();
 }
 
+export async function askClaudeAnswerStream(
+  input: {
+    question: string;
+    sources: AskFundSource[];
+    decisions: AskFundDecision[];
+  },
+  onChunk: (text: string) => void,
+  onError?: (error: Error) => void
+): Promise<void> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutMs = 70000;
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${baseUrl}/ask/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) {
+      throw new Error("No response body");
+    }
+
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.text) {
+              onChunk(data.text);
+            } else if (data.error) {
+              throw new Error(data.error);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+              onError?.(e);
+              return;
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      onError?.(new Error("Request timed out after 70 seconds."));
+    } else {
+      onError?.(error instanceof Error ? error : new Error("Unknown error"));
+    }
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const response = await fetchWithTimeout(

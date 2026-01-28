@@ -5,8 +5,9 @@ Converts unstructured data (text, CSV, JSON, etc.) into structured Startup/Inves
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, AsyncGenerator
 import ollama
 import os
 import httpx
@@ -14,6 +15,7 @@ import json
 import re
 from io import StringIO
 import csv
+import asyncio
 
 app = FastAPI(title="Ollama Data Converter API")
 
@@ -2251,6 +2253,83 @@ async def list_clickup_lists(request: ClickUpListsRequest):
 
     return ClickUpListsResponse(lists=lists)
 
+async def stream_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None) -> AsyncGenerator[str, None]:
+    """
+    Stream Claude's response token by token for ChatGPT-like experience.
+    """
+    if not ANTHROPIC_API_KEY:
+        yield json.dumps({"error": "ANTHROPIC_API_KEY not set"})
+        return
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+    }
+    url = get_anthropic_api_url()
+    default_url = "https://api.anthropic.com/v1/messages"
+
+    # Choose model based on question complexity
+    use_haiku = question and sources and is_simple_question(question, sources)
+    model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
+    max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model_name in [m for m in model_list if m]:
+            payload = {
+                "model": model_name,
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+                "stream": True,  # Enable streaming
+                "system": "You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from provided sources only. Never use general knowledge. If information isn't in the sources, say so explicitly. Always cite sources with [1], [2], etc.",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+            }
+
+            try:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    if response.status_code == 404 and url != default_url:
+                        async with client.stream("POST", default_url, headers=headers, json=payload) as retry_response:
+                            async for line in retry_response.aiter_lines():
+                                if line.startswith("data: "):
+                                    data_str = line[6:]
+                                    if data_str == "[DONE]":
+                                        return
+                                    try:
+                                        data = json.loads(data_str)
+                                        if "delta" in data and "text" in data["delta"]:
+                                            yield json.dumps({"text": data["delta"]["text"]})
+                                    except json.JSONDecodeError:
+                                        continue
+                        return
+                    
+                    if response.status_code >= 400:
+                        error_text = await response.aread()
+                        yield json.dumps({"error": f"Claude API error ({response.status_code}): {error_text[:200].decode()}"})
+                        return
+
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                return
+                            try:
+                                data = json.loads(data_str)
+                                if "delta" in data and "text" in data["delta"]:
+                                    yield json.dumps({"text": data["delta"]["text"]})
+                                elif "error" in data:
+                                    yield json.dumps({"error": str(data["error"])})
+                                    return
+                            except json.JSONDecodeError:
+                                continue
+                    return  # Success
+            except Exception as e:
+                if model_name == model_list[-1]:  # Last model, yield error
+                    yield json.dumps({"error": f"All models failed: {str(e)}"})
+                continue
+
+
 @app.post("/ask", response_model=AskResponse)
 async def ask_fund(request: AskRequest):
     question = (request.question or "").strip()
@@ -2260,6 +2339,33 @@ async def ask_fund(request: AskRequest):
     prompt = build_answer_prompt(question, request.sources, request.decisions)
     answer = await call_anthropic_answer(prompt, question=question, sources=request.sources)
     return AskResponse(answer=answer)
+
+
+@app.post("/ask/stream")
+async def ask_fund_stream(request: AskRequest):
+    """
+    Streaming endpoint for ChatGPT-like gradual text typing.
+    Returns Server-Sent Events (SSE) stream.
+    """
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required.")
+
+    prompt = build_answer_prompt(question, request.sources, request.decisions)
+    
+    async def generate():
+        async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources):
+            yield f"data: {chunk}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 def normalize_embedding(embedding: List[float]) -> List[float]:
     """Ensure embeddings are a fixed size for pgvector."""

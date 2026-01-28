@@ -104,7 +104,7 @@ import {
   deleteSource,
   getDocumentById,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswer, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswer, askClaudeAnswerStream, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -113,7 +113,7 @@ import { supabase } from "@/integrations/supabase/client";
 // ============================================================================
 
 type ScopeItem = { id: string; label: string; checked: boolean; type: "portfolio" | "deal" | "thread" | "global" };
-type Message = { id: string; author: "user" | "assistant"; text: string; threadId: string };
+type Message = { id: string; author: "user" | "assistant"; text: string; threadId: string; isStreaming?: boolean };
 type Thread = { id: string; title: string; parentId?: string };
 type KnowledgeObject = {
   id: string;
@@ -3538,6 +3538,69 @@ export default function CIS() {
     [persistChatMessage]
   );
 
+  const createStreamingAssistantMessage = useCallback(
+    (threadId: string, sourceDocIds?: string[] | null) => {
+      const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      let currentText = "";
+      let messageIndex = -1;
+      
+      // Create placeholder message with thinking indicator
+      setMessages((prev) => {
+        const newMessages = [...prev, { id, author: "assistant" as const, text: "🤔", threadId, isStreaming: true }];
+        messageIndex = newMessages.length - 1;
+        return newMessages;
+      });
+
+      // Auto-scroll when thinking
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 100);
+
+      return {
+        appendChunk: (chunk: string) => {
+          currentText += chunk;
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (messageIndex >= 0 && messageIndex < updated.length) {
+              updated[messageIndex] = { ...updated[messageIndex], text: currentText, isStreaming: true };
+            }
+            return updated;
+          });
+          // Auto-scroll as text streams
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+          }, 50);
+        },
+        finalize: () => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (messageIndex >= 0 && messageIndex < updated.length) {
+              updated[messageIndex] = { ...updated[messageIndex], text: currentText, isStreaming: false };
+            }
+            return updated;
+          });
+          void persistChatMessage({
+            threadId,
+            role: "assistant",
+            content: currentText,
+            model: "claude",
+            sourceDocIds: sourceDocIds || null,
+          });
+        },
+        setError: (error: string) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (messageIndex >= 0 && messageIndex < updated.length) {
+              updated[messageIndex] = { ...updated[messageIndex], text: error, isStreaming: false };
+            }
+            return updated;
+          });
+        },
+      };
+    },
+    [persistChatMessage]
+  );
+
   // Auto-scroll when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -3962,6 +4025,7 @@ export default function CIS() {
           }
           // Use Claude with the prior sources
           setIsClaudeLoading(true);
+          const streamer = createStreamingAssistantMessage(threadId);
           try {
             const claudeTokens = question
               .toLowerCase()
@@ -3981,17 +4045,22 @@ export default function CIS() {
                   notes: d.notes ?? null,
                 }))
               : [];
-            const response = await askClaudeAnswer({
-              question,
-              sources,
-              decisions: decisionsForClaude,
-            });
-            createAssistantMessage(response.answer, threadId, response.source_doc_ids || null);
-          } catch (err) {
-            createAssistantMessage(
-              err instanceof Error ? err.message : "Claude answer failed. Please try again.",
-              threadId
+            await askClaudeAnswerStream(
+              {
+                question,
+                sources,
+                decisions: decisionsForClaude,
+              },
+              (chunk) => {
+                streamer.appendChunk(chunk);
+              },
+              (error) => {
+                streamer.setError(error.message || "Claude answer failed. Please try again.");
+              }
             );
+            streamer.finalize();
+          } catch (err) {
+            streamer.setError(err instanceof Error ? err.message : "Claude answer failed. Please try again.");
           } finally {
             setIsClaudeLoading(false);
           }
@@ -4421,6 +4490,9 @@ export default function CIS() {
                                 {m.author === "assistant" ? (
                                   <div className="prose prose-sm dark:prose-invert max-w-none">
                                     {renderAssistantContent(m.text)}
+                                    {m.isStreaming && (
+                                      <span className="inline-block w-2 h-5 ml-1 bg-primary animate-pulse" />
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</div>
