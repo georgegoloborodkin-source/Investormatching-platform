@@ -3931,26 +3931,34 @@ export default function CIS() {
   const addMessage = async () => {
     if (chatIsLoading) return;
     if (!input.trim()) return;
-    let threadId = activeThread;
-    if (!threadId) {
-      const createdId = await createChatThread("Main thread");
-      const newThreadId = createdId || `t-${Date.now()}`;
-      setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
-      setActiveThread(newThreadId);
-      threadId = newThreadId;
+    try {
+      let threadId = activeThread;
+      if (!threadId) {
+        const createdId = await createChatThread("Main thread");
+        const newThreadId = createdId || `t-${Date.now()}`;
+        setThreads((prev) => [...prev, { id: newThreadId, title: "Main thread" }]);
+        setActiveThread(newThreadId);
+        threadId = newThreadId;
+      }
+      const question = input.trim();
+      const id = `m-${Date.now()}`;
+      setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
+      void persistChatMessage({
+        threadId,
+        role: "user",
+        content: question,
+        model: null,
+        sourceDocIds: null,
+      });
+      setInput("");
+      await askFund(question, threadId);
+    } catch (err) {
+      setChatIsLoading(false);
+      createAssistantMessage(
+        err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.",
+        activeThread || `t-${Date.now()}`
+      );
     }
-    const question = input.trim();
-    const id = `m-${Date.now()}`;
-    setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
-    void persistChatMessage({
-      threadId,
-      role: "user",
-      content: question,
-      model: null,
-      sourceDocIds: null,
-    });
-    setInput("");
-    await askFund(question, threadId);
   };
 
   const createBranch = async (title: string) => {
