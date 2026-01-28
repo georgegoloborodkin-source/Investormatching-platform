@@ -4107,6 +4107,8 @@ export default function CIS() {
 
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
+      const streamer = createStreamingAssistantMessage(threadId, answerDocs.map((doc) => doc.id));
+      let fullAnswer = "";
       try {
         const docsForClaude = answerDocs;
         const claudeTokens = question
@@ -4127,18 +4129,23 @@ export default function CIS() {
               notes: d.notes ?? null,
             }))
           : [];
-        const response = await askClaudeAnswer({
-          question,
-          sources,
-          decisions: decisionsForClaude,
-        });
-        // Trust Claude's answer - if it says no info, don't try to extract random content
-        // The buildStructuredAnswer fallback was causing irrelevant "Responsibilities" sections
-        createAssistantMessage(
-          `${response.answer}${decisionBlock}${semanticNote}`,
-          threadId,
-          docsForClaude.map((doc) => doc.id)
+        await askClaudeAnswerStream(
+          {
+            question,
+            sources,
+            decisions: decisionsForClaude,
+          },
+          (chunk) => {
+            fullAnswer += chunk;
+            streamer.appendChunk(chunk);
+          },
+          (error) => {
+            streamer.setError(error.message || "Claude answer failed. Please try again.");
+          }
         );
+        // Append decision block and semantic note after streaming completes
+        streamer.appendChunk(decisionBlock + semanticNote);
+        streamer.finalize();
         const estimate = estimateClaudeCost(question);
         persistCostLog({
           ts: new Date().toISOString(),
@@ -4171,7 +4178,7 @@ export default function CIS() {
         } else if (errorMsg.includes("AbortError") || errorMsg.includes("aborted")) {
           userMessage = `Request was cancelled. Please try again.`;
         }
-        createAssistantMessage(userMessage, threadId);
+        streamer.setError(userMessage);
       } finally {
         setIsClaudeLoading(false);
       }
