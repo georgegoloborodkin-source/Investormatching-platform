@@ -2800,6 +2800,8 @@ export default function CIS() {
   const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const embeddingsDisabledRef = useRef(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
@@ -3486,9 +3488,20 @@ export default function CIS() {
         model: "claude",
         sourceDocIds: sourceDocIds || null,
       });
+      // Auto-scroll to bottom after message is added
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 100);
     },
     [persistChatMessage]
   );
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [messages]);
 
   const askFund = useCallback(
     async (question: string, threadId: string) => {
@@ -4034,13 +4047,7 @@ export default function CIS() {
     }
   };
 
-  const createBranch = async (title: string) => {
-    const parentId = activeThread || undefined;
-    const createdId = await createChatThread(title, parentId || null);
-    const id = createdId || `t-${Date.now()}`;
-    setThreads((prev) => [...prev, { id, title, parentId }]);
-    setActiveThread(id);
-  };
+  // Removed createBranch - no longer needed
 
   const toggleScope = (id: string, checked: boolean) => {
     setScopes((prev) => prev.map((s) => (s.id === id ? { ...s, checked } : s)));
@@ -4257,133 +4264,134 @@ export default function CIS() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Threads (Branching)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {threads.length > 0 ? (
-                      <ThreadTree threads={threads} active={activeThread} onSelect={setActiveThread} />
-                    ) : (
-                      <div className="text-xs text-muted-foreground">No threads yet.</div>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => void createBranch("New branch")} className="w-full">
-                      + New branch
-                    </Button>
-                  </CardContent>
-                </Card>
               </div>
 
               {/* Center: Chat */}
-              <div className="col-span-12 lg:col-span-6 space-y-3">
-                <Card className="h-full">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Branching Chat</CardTitle>
+              <div className="col-span-12 lg:col-span-9 space-y-3">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="pb-3 border-b">
+                    <CardTitle className="text-lg font-semibold">Chat</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="border rounded-md p-3 h-[420px] overflow-auto space-y-3 bg-muted/20">
+                  <CardContent className="flex-1 flex flex-col p-0">
+                    <div 
+                      ref={chatContainerRef}
+                      className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-gradient-to-b from-background to-muted/20"
+                      style={{ maxHeight: "calc(100vh - 300px)", minHeight: "500px" }}
+                    >
                       {scopedMessages.length === 0 ? (
-                        <div className="text-sm text-muted-foreground text-center py-10">
-                          No messages yet. Start the first question to build the memory trail.
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center space-y-2">
+                            <div className="text-lg font-medium text-muted-foreground">Start a conversation</div>
+                            <div className="text-sm text-muted-foreground">Ask questions about your documents</div>
+                          </div>
                         </div>
                       ) : (
-                        scopedMessages.map((m) => (
-                          <div
-                            key={m.id}
-                            className={`p-3 rounded-md border ${
-                              m.author === "user" ? "bg-primary/10 border-primary/30" : "bg-card"
-                            }`}
-                          >
-                            <div className="text-xs text-muted-foreground mb-1 uppercase">{m.author}</div>
-                            {m.author === "assistant" ? (
-                              renderAssistantContent(m.text)
-                            ) : (
-                              <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</div>
-                            )}
-                            {m.author === "assistant" && (
-                              <div className="mt-2">
-                                <Button size="sm" variant="secondary" onClick={() => createBranch("Branch: follow-up")}>
-                                  Branch
-                                </Button>
+                        <>
+                          {scopedMessages.map((m, index) => (
+                            <div
+                              key={m.id}
+                              className={`flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                                m.author === "user" ? "justify-end" : "justify-start"
+                              }`}
+                              style={{ animationDelay: `${index * 50}ms` }}
+                            >
+                              {m.author === "assistant" && (
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                  </svg>
+                                </div>
+                              )}
+                              <div
+                                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
+                                  m.author === "user"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card border border-border/50"
+                                }`}
+                              >
+                                {m.author === "assistant" ? (
+                                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                                    {renderAssistantContent(m.text)}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        ))
+                              {m.author === "user" && (
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <div ref={messagesEndRef} />
+                        </>
                       )}
                     </div>
 
                     {lastEvidence && lastEvidence.docs.length > 0 && (
-                      <div className="border rounded-md p-3 bg-muted/10 space-y-2">
-                        <div className="text-xs font-semibold uppercase text-muted-foreground">
+                      <div className="border-t bg-muted/30 px-4 py-3 space-y-2">
+                        <div className="text-xs font-semibold text-muted-foreground mb-2">
                           Sources Used
                         </div>
-                        <div className="space-y-2">
-                          {lastEvidence.docs.map((doc, index) => (
-                            <div key={doc.id} className="flex items-start justify-between gap-2 text-sm">
-                              <div>
-                                <div className="font-medium">
-                                  {index + 1}. {doc.title || doc.file_name || "Untitled document"}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {buildRelevantSnippet(doc, lastTokens)}
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenDocument(doc.id)}
-                              >
-                                View
-                              </Button>
-                            </div>
+                        <div className="flex flex-wrap gap-2">
+                          {lastEvidence.docs.slice(0, 3).map((doc, index) => (
+                            <Button
+                              key={doc.id}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-auto py-1.5 px-3"
+                              onClick={() => handleOpenDocument(doc.id)}
+                            >
+                              {index + 1}. {doc.title || doc.file_name || "Untitled"}
+                            </Button>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    <div className="space-y-2">
-                      <Textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask a question or continue the branch..."
-                        className="min-h-[80px]"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                            addMessage();
-                          }
-                        }}
-                      />
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          {chatIsLoading ? "Searching fund memory..." : "Ctrl+Enter to send"}
-                        </span>
-                        <div className="flex gap-2">
-                          <Button variant="outline" onClick={() => createBranch("What-if branch")}>
-                            New Branch
-                          </Button>
-                          <Button onClick={addMessage} disabled={chatIsLoading}>
-                            {chatIsLoading ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Searching
-                              </>
-                            ) : (
-                              "Send"
-                            )}
-                          </Button>
-                        </div>
+                    <div className="border-t p-4 bg-background">
+                      <div className="flex gap-2 items-end">
+                        <Textarea
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder="Ask a question..."
+                          className="min-h-[60px] max-h-[200px] resize-none"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
+                              e.preventDefault();
+                              addMessage();
+                            }
+                          }}
+                        />
+                        <Button 
+                          onClick={addMessage} 
+                          disabled={chatIsLoading || !input.trim()}
+                          size="lg"
+                          className="h-[60px] px-6"
+                        >
+                          {chatIsLoading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                          )}
+                        </Button>
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-muted-foreground">
+                          {chatIsLoading ? "Searching..." : "Press Enter to send"}
+                        </span>
                         <label className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Checkbox
                             checked={semanticMode}
                             onCheckedChange={(val) => setSemanticMode(val === true)}
                           />
-                          Semantic search (requires VoyageAI API key - optional)
+                          Semantic search
                         </label>
-                        <div className="text-xs text-muted-foreground">
-                          Claude answers automatically from sources.
-                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -4428,9 +4436,9 @@ export default function CIS() {
                     <div className="text-xs">
                       <strong>Tips:</strong>
                       <ul className="list-disc list-inside space-y-1 mt-1">
-                        <li>Branch to explore alternatives</li>
-                        <li>Untick scope to exclude sources</li>
-                        <li>Evidence shows Knowledge Objects</li>
+                        <li>Ask specific questions about your documents</li>
+                        <li>Use semantic search for better results</li>
+                        <li>Check sources used for references</li>
                       </ul>
                     </div>
                   </CardContent>
