@@ -26,6 +26,86 @@ OCR_MAX_PAGES = int(os.environ.get("OCR_MAX_PAGES", "5"))
 OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
 # Limit PDF pages to reduce timeouts on large files
 MAX_PDF_PAGES = int(os.environ.get("MAX_PDF_PAGES", "8"))
+# Claude Vision API for complex PDFs (uses existing ANTHROPIC_API_KEY)
+# Parallel processing settings
+MAX_PARALLEL_PAGES = int(os.environ.get("MAX_PARALLEL_PAGES", "10"))
+
+
+async def extract_with_claude_vision(page_images: List[bytes]) -> str:
+    """
+    Use Claude 3.5 Sonnet Vision to extract text from PDF page images.
+    Best for: Scanned PDFs, complex layouts, tables with merged cells.
+    Uses existing ANTHROPIC_API_KEY.
+    """
+    if not ANTHROPIC_API_KEY:
+        return None
+    
+    import base64
+    
+    parts = []
+    for idx, img_bytes in enumerate(page_images, start=1):
+        try:
+            # Convert image bytes to base64
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            
+            prompt = """Extract all text from this document page. Preserve:
+- Table structure (use markdown tables if possible)
+- Headers and footers
+- Multi-column layouts
+- Bullet points and numbered lists
+- All numbers, dates, and proper nouns
+
+Return the extracted text in a clear, structured format."""
+            
+            # Use Claude Vision API
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            }
+            url = get_anthropic_api_url()
+            
+            payload = {
+                "model": "claude-3-5-sonnet-20241022",  # Claude 3.5 Sonnet with vision
+                "max_tokens": 4096,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": img_base64
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                res = await client.post(url, headers=headers, json=payload)
+                res.raise_for_status()
+                data = res.json()
+                content = data.get("content", [])
+                if isinstance(content, list) and content:
+                    page_text = content[0].get("text", "") if content[0].get("type") == "text" else ""
+                else:
+                    page_text = str(content) if content else ""
+                
+                if page_text:
+                    parts.append(f"\n--- Page {idx} (Claude Vision) ---\n{page_text}")
+        except Exception as e:
+            print(f"Claude Vision extraction failed for page {idx}: {e}")
+            parts.append(f"\n--- Page {idx} (Claude Vision failed: {e}) ---\n")
+    
+    return "\n".join(parts).strip() if parts else None
 
 
 def try_ocr_pdf_bytes(content: bytes) -> str:
@@ -1164,19 +1244,37 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                 detail=f'File has ".pdf" extension but does not look like a valid PDF (missing %PDF header). First bytes (hex): {head_hex}'
             )
 
-        # 1) Try PyMuPDF first (often more robust than PyPDF2/pdfplumber on quirky PDFs)
+        # 1) Try PyMuPDF first with PARALLEL processing (often more robust than PyPDF2/pdfplumber on quirky PDFs)
         pymupdf_error = None
         try:
             import fitz  # PyMuPDF
             from io import BytesIO
+            import concurrent.futures
 
             doc = fitz.open(stream=BytesIO(content).getvalue(), filetype="pdf")
-            parts = []
             page_limit = min(doc.page_count, MAX_PDF_PAGES)
-            for i in range(page_limit):
-                page = doc.load_page(i)
-                page_text = page.get_text("text") or ""
-                parts.append(f"\n--- Page {i + 1} ---\n{page_text}")
+            
+            # Parallel page extraction for speed (using thread pool since PyMuPDF is sync)
+            import concurrent.futures
+            
+            def extract_page_sync(i: int) -> str:
+                try:
+                    page = doc.load_page(i)
+                    page_text = page.get_text("text") or ""
+                    return f"\n--- Page {i + 1} ---\n{page_text}"
+                except Exception as e:
+                    return f"\n--- Page {i + 1} (error: {e}) ---\n"
+            
+            # Process pages in parallel using ThreadPoolExecutor
+            parts = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_PAGES) as executor:
+                futures = [executor.submit(extract_page_sync, i) for i in range(page_limit)]
+                for future in concurrent.futures.as_completed(futures):
+                    parts.append(future.result())
+            
+            # Sort parts by page number to maintain order
+            parts.sort(key=lambda x: int(re.search(r'Page (\d+)', x).group(1)) if re.search(r'Page (\d+)', x) else 0)
+            
             text_content = "\n".join(parts).strip()
         except Exception as e:
             pymupdf_error = e
@@ -1185,6 +1283,30 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         # If PyMuPDF extracted real text, we're done.
         if text_content and len(text_content.strip()) >= 50:
             return file_ext, text_content
+        
+        # 2) If PyMuPDF extracted <50 chars, likely scanned/image PDF - try Claude Vision
+        if text_content and len(text_content.strip()) < 50 and ANTHROPIC_API_KEY:
+            try:
+                import fitz  # PyMuPDF
+                from io import BytesIO
+                
+                doc = fitz.open(stream=BytesIO(content).getvalue(), filetype="pdf")
+                page_limit = min(doc.page_count, MAX_PDF_PAGES, 10)  # Limit for vision API cost
+                
+                # Convert pages to images for Claude Vision
+                page_images = []
+                for i in range(page_limit):
+                    page = doc.load_page(i)
+                    # Render page as PNG (300 DPI for good quality)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                    page_images.append(pix.tobytes("png"))
+                
+                claude_text = await extract_with_claude_vision(page_images)
+                if claude_text and len(claude_text.strip()) >= 50:
+                    return file_ext, claude_text
+            except Exception as claude_error:
+                print(f"Claude Vision fallback failed: {claude_error}")
+                # Continue to next fallback
 
         # Try PyPDF2 first, but fall back to pdfplumber on ANY failure (PyPDF2 can throw UnicodeDecodeError on some PDFs)
         py_pdf2_error = None
