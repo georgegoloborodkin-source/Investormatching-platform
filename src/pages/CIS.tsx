@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -2798,6 +2798,7 @@ export default function CIS() {
     decisions: Decision[];
   } | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
+  const embeddingsDisabledRef = useRef(false);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
@@ -3376,6 +3377,7 @@ export default function CIS() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    embeddingsDisabledRef.current = localStorage.getItem("disable_embeddings") === "true";
     const existing = localStorage.getItem("orbit_cost_log");
     if (existing) {
       try {
@@ -3417,8 +3419,19 @@ export default function CIS() {
     return chunks;
   }, []);
 
+  const disableEmbeddings = useCallback((reason?: string) => {
+    embeddingsDisabledRef.current = true;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("disable_embeddings", "true");
+    }
+    if (reason) {
+      console.warn("Embeddings disabled:", reason);
+    }
+  }, []);
+
   const indexDocumentEmbeddings = useCallback(
     async (documentId: string, rawContent?: string | null) => {
+      if (embeddingsDisabledRef.current) return;
       if (!rawContent?.trim()) return;
       (async () => {
         try {
@@ -3444,18 +3457,20 @@ export default function CIS() {
                 embedding,
               });
               if (error) {
-                // Silent - embeddings are optional
+                disableEmbeddings(error.message || "Embedding insert failed");
+                return;
               }
             } catch (chunkErr) {
-              // Silent - embeddings are optional
+              disableEmbeddings(chunkErr instanceof Error ? chunkErr.message : "Embedding error");
+              return;
             }
           }
         } catch (err) {
-          // Silent - embeddings are optional, full-text search works fine
+          disableEmbeddings(err instanceof Error ? err.message : "Embedding setup failed");
         }
       })();
     },
-    [chunkText]
+    [chunkText, disableEmbeddings]
   );
 
   const createAssistantMessage = useCallback(
