@@ -290,7 +290,14 @@ export async function askClaudeAnswerStream(
           if (line.startsWith("data: ")) {
             hasReceivedData = true;
             try {
-              const data = JSON.parse(line.slice(6));
+              const dataStr = line.slice(6).trim();
+              if (!dataStr) {
+                continue;
+              }
+              if (dataStr === "[DONE]") {
+                return;
+              }
+              const data = JSON.parse(dataStr);
               if (data.text) {
                 onChunk(data.text);
               } else if (data.error) {
