@@ -3826,6 +3826,9 @@ export default function CIS() {
 
   useEffect(() => {
     let cancelled = false;
+    let documentsChannel: ReturnType<typeof supabase.channel> | null = null;
+    let decisionsChannel: ReturnType<typeof supabase.channel> | null = null;
+
     const loadDecisions = async () => {
       if (!profile) return;
       // Sync decisions from Supabase
@@ -3888,13 +3891,120 @@ export default function CIS() {
         return { ...source, tags };
       });
       setSources(normalizedSources as SourceRecord[]);
+
+      // Set up real-time subscriptions for documents
+      documentsChannel = supabase
+        .channel(`documents:${event.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "documents",
+            filter: `event_id=eq.${event.id}`,
+          },
+          (payload) => {
+            if (cancelled) return;
+            console.log("Document change:", payload.eventType, payload.new || payload.old);
+            
+            if (payload.eventType === "INSERT" && payload.new) {
+              const newDoc = payload.new as any;
+              setDocuments((prev) => {
+                // Check if already exists to avoid duplicates
+                if (prev.some((d) => d.id === newDoc.id)) return prev;
+                return [
+                  {
+                    id: newDoc.id,
+                    title: newDoc.title,
+                    storage_path: newDoc.storage_path || null,
+                  },
+                  ...prev,
+                ];
+              });
+              toast({
+                title: "New document added",
+                description: `${newDoc.title || "Untitled"} was added by a team member.`,
+              });
+            } else if (payload.eventType === "UPDATE" && payload.new) {
+              const updatedDoc = payload.new as any;
+              setDocuments((prev) =>
+                prev.map((d) =>
+                  d.id === updatedDoc.id
+                    ? {
+                        id: updatedDoc.id,
+                        title: updatedDoc.title,
+                        storage_path: updatedDoc.storage_path || null,
+                      }
+                    : d
+                )
+              );
+            } else if (payload.eventType === "DELETE" && payload.old) {
+              const deletedDoc = payload.old as any;
+              setDocuments((prev) => prev.filter((d) => d.id !== deletedDoc.id));
+              toast({
+                title: "Document removed",
+                description: "A document was deleted by a team member.",
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      // Set up real-time subscriptions for decisions
+      decisionsChannel = supabase
+        .channel(`decisions:${event.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "decisions",
+            filter: `event_id=eq.${event.id}`,
+          },
+          (payload) => {
+            if (cancelled) return;
+            console.log("Decision change:", payload.eventType, payload.new || payload.old);
+            
+            if (payload.eventType === "INSERT" && payload.new) {
+              const newDecision = payload.new as any;
+              setDecisions((prev) => {
+                // Check if already exists to avoid duplicates
+                if (prev.some((d) => d.id === newDecision.id)) return prev;
+                return [mapDecisionRow(newDecision), ...prev];
+              });
+              toast({
+                title: "New decision logged",
+                description: `${newDecision.startup_name || "Unknown"} decision was logged by a team member.`,
+              });
+            } else if (payload.eventType === "UPDATE" && payload.new) {
+              const updatedDecision = payload.new as any;
+              setDecisions((prev) =>
+                prev.map((d) => (d.id === updatedDecision.id ? mapDecisionRow(updatedDecision) : d))
+              );
+            } else if (payload.eventType === "DELETE" && payload.old) {
+              const deletedDecision = payload.old as any;
+              setDecisions((prev) => prev.filter((d) => d.id !== deletedDecision.id));
+              toast({
+                title: "Decision removed",
+                description: "A decision was deleted by a team member.",
+              });
+            }
+          }
+        )
+        .subscribe();
     };
 
     loadDecisions();
     return () => {
       cancelled = true;
+      if (documentsChannel) {
+        supabase.removeChannel(documentsChannel);
+      }
+      if (decisionsChannel) {
+        supabase.removeChannel(decisionsChannel);
+      }
     };
-  }, [profile]);
+  }, [profile, toast]);
 
   const buildSnippet = useCallback((text: string | null) => {
     if (!text) return "No preview available.";
