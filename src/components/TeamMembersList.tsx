@@ -39,12 +39,6 @@ export function TeamMembersList() {
   const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
   const orgId = profile?.organization_id;
 
-  useEffect(() => {
-    if (isMD && orgId) {
-      loadTeamMembers();
-    }
-  }, [isMD, orgId, loadTeamMembers]);
-
   const loadTeamMembers = useCallback(async () => {
     if (!orgId) {
       setTeamMembers([]);
