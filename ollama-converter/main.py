@@ -707,7 +707,11 @@ def is_meta_question(question: str) -> bool:
     return any(pattern in q_lower for pattern in meta_patterns)
 
 
-def has_question_overlap(question: str, sources: List[AskSource]) -> bool:
+def has_question_overlap(
+    question: str,
+    sources: List[AskSource],
+    previous_messages: List[ChatMessage] | None = None,
+) -> bool:
     """
     Return True if any meaningful keyword from the question appears in the sources.
     This is a lightweight guard to avoid hallucinations when sources are unrelated.
@@ -715,6 +719,12 @@ def has_question_overlap(question: str, sources: List[AskSource]) -> bool:
     if not sources:
         return False
     q_tokens = [t for t in re.split(r"\W+", (question or "").lower()) if len(t) > 3]
+    if previous_messages:
+        for msg in previous_messages[-5:]:
+            q_tokens.extend(
+                [t for t in re.split(r"\W+", (msg.content or "").lower()) if len(t) > 3]
+            )
+    q_tokens = list(dict.fromkeys(q_tokens))
     if not q_tokens:
         return False
     source_text = " ".join([(s.snippet or "") for s in sources]).lower()
@@ -722,13 +732,18 @@ def has_question_overlap(question: str, sources: List[AskSource]) -> bool:
 
 
 def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision], previous_messages: List[ChatMessage] = None) -> str:
+    is_meta = is_meta_question(question)
+    is_comprehensive = is_comprehensive_question(question)
     safe_sources = (sources or [])[:ASK_MAX_SOURCES]
+    max_snippet_chars = ASK_MAX_SNIPPET_CHARS
+    if is_comprehensive:
+        max_snippet_chars = max(ASK_MAX_SNIPPET_CHARS, 600)
     source_lines: List[str] = []
     for idx, src in enumerate(safe_sources, start=1):
         title = src.title or src.file_name or f"Source {idx}"
         snippet = (src.snippet or "").strip()
-        if len(snippet) > ASK_MAX_SNIPPET_CHARS:
-            snippet = snippet[:ASK_MAX_SNIPPET_CHARS] + "…"
+        if len(snippet) > max_snippet_chars:
+            snippet = snippet[:max_snippet_chars] + "…"
         source_lines.append(f"[{idx}] {title}\n{snippet}")
 
     decision_lines: List[str] = []
@@ -753,8 +768,7 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
             conversation_lines.append(f"{role_label}: {msg.content}")
         conversation_context = "\n\nPrevious conversation context:\n" + "\n".join(conversation_lines)
     
-    is_meta = is_meta_question(question)
-    is_comprehensive = is_comprehensive_question(question)
+    
     is_raw_text = is_raw_text_request(question)
     
     if is_meta:
@@ -2360,9 +2374,13 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     default_url = "https://api.anthropic.com/v1/messages"
 
     # Choose model based on question complexity
-    use_haiku = question and sources and is_simple_question(question, sources)
+    is_comprehensive = is_comprehensive_question(question)
+    use_haiku = question and sources and is_simple_question(question, sources) and not is_comprehensive
     model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
-    max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
+    if is_comprehensive:
+        max_tokens = max(ASK_MAX_TOKENS, 800)
+    else:
+        max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         for model_name in [m for m in model_list if m]:
@@ -2435,7 +2453,9 @@ async def ask_fund(request: AskRequest):
         raise HTTPException(status_code=400, detail="question is required.")
 
     no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-    if not is_meta_question(question) and not has_question_overlap(question, request.sources or []):
+    if not is_meta_question(question) and not has_question_overlap(
+        question, request.sources or [], request.previous_messages or []
+    ):
         return AskResponse(answer=no_info_message)
 
     prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
@@ -2455,7 +2475,9 @@ async def ask_fund_stream(request: AskRequest):
             raise HTTPException(status_code=400, detail="question is required.")
 
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-        if not is_meta_question(question) and not has_question_overlap(question, request.sources or []):
+        if not is_meta_question(question) and not has_question_overlap(
+            question, request.sources or [], request.previous_messages or []
+        ):
             async def generate_empty():
                 yield f"data: {json.dumps({'text': no_info_message})}\n\n"
                 yield "data: [DONE]\n\n"

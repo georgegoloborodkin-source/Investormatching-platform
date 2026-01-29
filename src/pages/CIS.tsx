@@ -3301,7 +3301,11 @@ export default function CIS() {
   );
 
   const buildClaudeContext = useCallback(
-    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+    (
+      doc: { raw_content: string | null; extracted_json?: Record<string, any> | null },
+      tokens: string[],
+      isComprehensive: boolean = false
+    ) => {
       const combined = buildNormalizedDocText(doc);
       if (!combined) return "No preview available.";
 
@@ -3312,14 +3316,15 @@ export default function CIS() {
       );
 
       if (startIdx >= 0) {
-        const slice = lines.slice(startIdx, startIdx + 40);
+        const slice = lines.slice(startIdx, startIdx + (isComprehensive ? 80 : 40));
         const joined = slice.join("\n");
-        // Reduced from 2000 to 1000 chars for faster responses (less tokens)
-        return joined.length > 1000 ? `${joined.slice(0, 1000)}…` : joined;
+        const limit = isComprehensive ? 2500 : 1000;
+        return joined.length > limit ? `${joined.slice(0, limit)}…` : joined;
       }
 
-      // Fallback: return the first 1000 chars of the document (reduced for speed)
-      return combined.length > 1000 ? `${combined.slice(0, 1000)}…` : combined;
+      // Fallback: return the first chunk of the document
+      const limit = isComprehensive ? 2500 : 1000;
+      return combined.length > limit ? `${combined.slice(0, limit)}…` : combined;
     },
     [buildNormalizedDocText]
   );
@@ -3720,6 +3725,10 @@ export default function CIS() {
         "business",
       ]);
       const contentTokens = tokens.filter((t) => !contentStopwords.has(t));
+      const isComprehensiveQuestion =
+        /\b(all you know|everything|comprehensive|detailed|full|complete|tell me all|what do you know|what can you tell me|summarize|overview)\b/i.test(
+          question
+        );
       const isFollowUpQuery = (() => {
         const q = normalizedQuestion;
         const hasPronoun = /\b(it|its|they|them|their|he|his|she|her|there|that|those|these)\b/i.test(q);
@@ -4049,7 +4058,7 @@ export default function CIS() {
             .filter((m) => m.threadId === threadId)
             .slice(-10)
             .map((m) => ({
-              role: m.author === "assistant" ? "assistant" : "user",
+              role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
               content: m.text,
             }));
           await askClaudeAnswerStream(
@@ -4117,7 +4126,7 @@ export default function CIS() {
             const sources = answerDocs.map((doc) => ({
               title: doc.title,
               file_name: doc.file_name,
-              snippet: buildClaudeContext(doc, claudeTokens),
+              snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion),
             }));
             const decisionsForClaude = decisionIntent
               ? decisionMatches.map((d) => ({
@@ -4133,7 +4142,7 @@ export default function CIS() {
               .filter((m) => m.threadId === threadId)
               .slice(-10) // Last 10 messages for context
               .map((m) => ({
-                role: m.author === "assistant" ? "assistant" : "user",
+                role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
                 content: m.text,
               }));
             
@@ -4204,7 +4213,6 @@ export default function CIS() {
         : "";
 
       // For comprehensive questions, use more sources (up to 5)
-      const isComprehensiveQuestion = /\b(all you know|everything|comprehensive|detailed|full|complete|tell me all|what do you know|what can you tell me|summarize|overview)\b/i.test(question);
       const maxDocs = isComprehensiveQuestion ? 5 : 3;
       const answerDocs = filteredDocs.slice(0, maxDocs);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
@@ -4240,7 +4248,7 @@ export default function CIS() {
         const sources = docsForClaude.map((doc) => ({
           title: doc.title,
           file_name: doc.file_name,
-          snippet: buildClaudeContext(doc, claudeTokens),
+          snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion),
         }));
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({
@@ -4256,7 +4264,7 @@ export default function CIS() {
           .filter((m) => m.threadId === threadId)
           .slice(-10) // Last 10 messages for context
           .map((m) => ({
-            role: m.author === "assistant" ? "assistant" : "user",
+            role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
             content: m.text,
           }));
         
