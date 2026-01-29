@@ -2934,7 +2934,7 @@ export default function CIS() {
 
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!profile || chatLoaded) return; // Only load once
+      if (!profile) return;
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
       
@@ -2962,8 +2962,8 @@ export default function CIS() {
             setActiveThread(currentThreadId);
           }
           
-          // Load messages for the active thread (only if messages array is empty to prevent overwriting)
-          if (currentThreadId && messageRows?.length && messages.length === 0) {
+          // Load messages for the active thread (reload when thread changes)
+          if (currentThreadId && messageRows?.length) {
             const threadMessages = messageRows
               .filter((m: any) => m.thread_id === currentThreadId)
               .map((m: any) => ({
@@ -2974,8 +2974,8 @@ export default function CIS() {
               }));
             setMessages(threadMessages);
           }
-        } else if (messageRows?.length && messages.length === 0) {
-          // If no threads but messages exist, load all messages (only if empty)
+        } else if (messageRows?.length) {
+          // If no threads but messages exist, load all messages
           const mappedMessages = messageRows.map((m: any) => ({
             id: m.id,
             author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
@@ -2992,7 +2992,7 @@ export default function CIS() {
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, ensureActiveEventId, chatLoaded]);
+  }, [profile, activeEventId, activeThread, ensureActiveEventId]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
