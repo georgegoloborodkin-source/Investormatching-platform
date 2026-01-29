@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,10 +43,9 @@ export function TeamMembersList() {
     if (isMD && orgId) {
       loadTeamMembers();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMD, orgId]);
+  }, [isMD, orgId, loadTeamMembers]);
 
-  const loadTeamMembers = async () => {
+  const loadTeamMembers = useCallback(async () => {
     if (!orgId) {
       setTeamMembers([]);
       setLoading(false);
@@ -165,15 +164,9 @@ export function TeamMembersList() {
     );
   }
 
-  const mdMembers = useMemo(() => 
-    teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer"),
-    [teamMembers]
-  );
-  
-  const regularMembers = useMemo(() => 
-    teamMembers.filter((m) => m.role === "team_member"),
-    [teamMembers]
-  );
+  // Calculate members directly - no need for useMemo here as filtering is cheap
+  const mdMembers = teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer");
+  const regularMembers = teamMembers.filter((m) => m.role === "team_member");
 
   return (
     <>
