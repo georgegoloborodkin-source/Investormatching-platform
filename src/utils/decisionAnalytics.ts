@@ -83,6 +83,14 @@ export interface ConfidenceBucket {
   avgConfidence: number;
 }
 
+export interface AgeBucket {
+  range: string;
+  count: number;
+  positive: number;
+  negative: number;
+  pending: number;
+}
+
 export interface OutcomeByStage {
   stage: string;
   total: number;
@@ -120,9 +128,11 @@ export interface DecisionEngineAnalytics {
   timeSeries: TimeSeriesData[];
   cumulativeSeries: CumulativeSeriesData[];
   confidenceBuckets: ConfidenceBucket[];
+  ageBuckets: AgeBucket[];
   outcomeByStage: OutcomeByStage[];
   geoStats: GeoStats[];
   recencyStats: RecencyStats;
+  outcomeRateSeries: Array<{ date: string; positiveRate: number; total: number }>;
   totalDecisions: number;
   avgConfidence: number;
   positiveRate: number;
@@ -145,6 +155,7 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
       timeSeries: [],
       cumulativeSeries: [],
       confidenceBuckets: [],
+      ageBuckets: [],
       outcomeByStage: [],
       geoStats: [],
       recencyStats: {
@@ -154,6 +165,7 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
         prev30: 0,
         momentumPct: 0,
       },
+      outcomeRateSeries: [],
       totalDecisions: 0,
       avgConfidence: 0,
       positiveRate: 0,
@@ -361,6 +373,31 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     };
   });
 
+  // Decision age buckets (days since decision)
+  const ageRanges = [
+    { label: "0-7d", min: 0, max: 7 },
+    { label: "8-30d", min: 8, max: 30 },
+    { label: "31-90d", min: 31, max: 90 },
+    { label: "91-180d", min: 91, max: 180 },
+    { label: "181d+", min: 181, max: Number.MAX_SAFE_INTEGER },
+  ];
+  const ageBuckets: AgeBucket[] = ageRanges.map((bucket) => {
+    const bucketDecisions = decisions.filter((d) => {
+      const ageDays = Math.floor((Date.now() - new Date(d.timestamp).getTime()) / 86400000);
+      return ageDays >= bucket.min && ageDays <= bucket.max;
+    });
+    const positive = bucketDecisions.filter((d) => d.outcome === "positive").length;
+    const negative = bucketDecisions.filter((d) => d.outcome === "negative").length;
+    const pending = bucketDecisions.length - positive - negative;
+    return {
+      range: bucket.label,
+      count: bucketDecisions.length,
+      positive,
+      negative,
+      pending,
+    };
+  });
+
   // Decision velocity over time (monthly buckets)
   const velocityMap = new Map<string, { days: number[]; count: number }>();
   decisions.forEach((d) => {
@@ -404,6 +441,12 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-12); // Last 12 months
+
+  const outcomeRateSeries = timeSeries.map((row) => ({
+    date: row.date,
+    positiveRate: row.decisions ? Math.round((row.positive / row.decisions) * 100) : 0,
+    total: row.decisions,
+  }));
 
   const cumulativeSeries: CumulativeSeriesData[] = [];
   let runningTotal = 0;
@@ -450,9 +493,11 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     timeSeries,
     cumulativeSeries,
     confidenceBuckets,
+    ageBuckets,
     outcomeByStage,
     geoStats,
     recencyStats,
+    outcomeRateSeries,
     totalDecisions,
     avgConfidence,
     positiveRate,

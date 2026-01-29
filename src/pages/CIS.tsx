@@ -2797,6 +2797,33 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Decision Age Distribution */}
+          {analytics.ageBuckets.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Decision Age Distribution
+                </CardTitle>
+                <CardDescription>Volume and outcome mix by decision age</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={analytics.ageBuckets}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="range" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Outcome by Stage */}
           {analytics.outcomeByStage.length > 0 && (
             <Card>
@@ -2905,6 +2932,32 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Partner Win Rate */}
+          {analytics.partnerStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Partner Win Rate
+                </CardTitle>
+                <CardDescription>Win rate by partner (top 10 by volume)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={analytics.partnerStats.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="winRate" fill="#00C49F" name="Win Rate %" />
+                    <Bar dataKey="totalDecisions" fill="#8884d8" name="Decisions" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Decision Velocity */}
           {analytics.decisionVelocity.length > 0 && (
             <Card>
@@ -2924,6 +2977,31 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="avgDays" stroke="#FF8042" name="Avg Days" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Outcome Rate Trend */}
+          {analytics.outcomeRateSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Positive Rate Trend
+                </CardTitle>
+                <CardDescription>Monthly positive rate across decisions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={analytics.outcomeRateSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#00C49F" name="Positive Rate %" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
