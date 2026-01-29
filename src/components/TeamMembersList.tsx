@@ -43,10 +43,15 @@ export function TeamMembersList() {
     if (isMD && orgId) {
       loadTeamMembers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMD, orgId]);
 
   const loadTeamMembers = async () => {
-    if (!orgId) return;
+    if (!orgId) {
+      setTeamMembers([]);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -57,15 +62,24 @@ export function TeamMembersList() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        throw error;
+        console.error("Supabase error loading team members:", error);
+        // Don't throw - just set empty array and show error
+        setTeamMembers([]);
+        toast({
+          title: "Failed to load team members",
+          description: error.message || "Please check your permissions or try refreshing.",
+          variant: "destructive",
+        });
+        return;
       }
 
       setTeamMembers((data as TeamMember[]) || []);
     } catch (err: any) {
-      console.error("Error loading team members:", err);
+      console.error("Unexpected error loading team members:", err);
+      setTeamMembers([]);
       toast({
         title: "Failed to load team members",
-        description: err.message || "Please try again.",
+        description: err?.message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -154,9 +168,9 @@ export function TeamMembersList() {
   const mdMembers = teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer");
   const regularMembers = teamMembers.filter((m) => m.role === "team_member");
   
-  // Debug: Log all members to console
+  // Debug: Log all members to console (only in development)
   useEffect(() => {
-    if (teamMembers.length > 0) {
+    if (process.env.NODE_ENV === 'development' && teamMembers.length > 0) {
       console.log("Team Members:", teamMembers);
       console.log("MD Members:", mdMembers);
       console.log("Regular Members:", regularMembers);

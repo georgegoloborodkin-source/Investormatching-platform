@@ -2404,7 +2404,7 @@ function OnboardingTab({
       {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
         <>
           <TeamInvitationForm />
-          <TeamMembersList />
+          {profile?.organization_id && <TeamMembersList />}
         </>
       )}
 
