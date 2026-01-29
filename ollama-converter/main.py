@@ -289,17 +289,21 @@ def get_ollama_client() -> "ollama.Client":
 # CORS middleware to allow frontend requests
 _cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
 if _cors_origins_env.strip() == "*":
+    # For "*", we need to allow all origins explicitly
     cors_allow_origins = ["*"]
+    allow_credentials = False
 else:
     cors_allow_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    allow_credentials = True
 
 app.add_middleware(
     CORSMiddleware,
     # Allow configured origins; defaults to "*"
-    allow_origins=cors_allow_origins,
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_origins=cors_allow_origins if cors_allow_origins != ["*"] else ["*"],
+    allow_credentials=allow_credentials,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Data models
@@ -2387,25 +2391,50 @@ async def ask_fund_stream(request: AskRequest):
     Streaming endpoint for ChatGPT-like gradual text typing.
     Returns Server-Sent Events (SSE) stream.
     """
-    question = (request.question or "").strip()
-    if not question:
-        raise HTTPException(status_code=400, detail="question is required.")
+    try:
+        question = (request.question or "").strip()
+        if not question:
+            raise HTTPException(status_code=400, detail="question is required.")
 
-    prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
-    
-    async def generate():
-        async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources):
-            yield f"data: {chunk}\n\n"
-    
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
-        }
-    )
+        # Handle previous_messages safely (default to empty list if None)
+        previous_messages = request.previous_messages or []
+        
+        prompt = build_answer_prompt(question, request.sources or [], request.decisions or [], previous_messages)
+        
+        async def generate():
+            try:
+                async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or []):
+                    yield f"data: {chunk}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                import traceback
+                error_trace = traceback.format_exc()
+                print(f"Stream generation error: {error_trace}")
+                error_msg = str(e)[:500]  # Limit error message length
+                yield f'data: {{"error": "{error_msg}"}}\n\n'
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "Access-Control-Allow-Origin": "*",  # Explicit CORS header for streaming
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Stream endpoint error: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Streaming error: {str(e)[:200]}"
+        )
 
 def normalize_embedding(embedding: List[float]) -> List[float]:
     """Ensure embeddings are a fixed size for pgvector."""
