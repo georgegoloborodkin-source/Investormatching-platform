@@ -707,6 +707,20 @@ def is_meta_question(question: str) -> bool:
     return any(pattern in q_lower for pattern in meta_patterns)
 
 
+def has_question_overlap(question: str, sources: List[AskSource]) -> bool:
+    """
+    Return True if any meaningful keyword from the question appears in the sources.
+    This is a lightweight guard to avoid hallucinations when sources are unrelated.
+    """
+    if not sources:
+        return False
+    q_tokens = [t for t in re.split(r"\W+", (question or "").lower()) if len(t) > 3]
+    if not q_tokens:
+        return False
+    source_text = " ".join([(s.snippet or "") for s in sources]).lower()
+    return any(token in source_text for token in q_tokens)
+
+
 def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision], previous_messages: List[ChatMessage] = None) -> str:
     safe_sources = (sources or [])[:ASK_MAX_SOURCES]
     source_lines: List[str] = []
@@ -2420,6 +2434,10 @@ async def ask_fund(request: AskRequest):
     if not question:
         raise HTTPException(status_code=400, detail="question is required.")
 
+    no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+    if not is_meta_question(question) and not has_question_overlap(question, request.sources or []):
+        return AskResponse(answer=no_info_message)
+
     prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
     answer = await call_anthropic_answer(prompt, question=question, sources=request.sources)
     return AskResponse(answer=answer)
@@ -2435,6 +2453,24 @@ async def ask_fund_stream(request: AskRequest):
         question = (request.question or "").strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required.")
+
+        no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+        if not is_meta_question(question) and not has_question_overlap(question, request.sources or []):
+            async def generate_empty():
+                yield f"data: {json.dumps({'text': no_info_message})}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(
+                generate_empty(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                },
+            )
 
         # Handle previous_messages safely (default to empty list if None)
         previous_messages = request.previous_messages or []
