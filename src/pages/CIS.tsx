@@ -2323,6 +2323,38 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
   const analytics = useMemo(() => calculateDecisionEngineAnalytics(filteredDecisions), [filteredDecisions]);
   const hasEnoughData = filteredDecisions.length >= 5;
 
+  const partnerOutcomeSeries = useMemo(
+    () =>
+      analytics.partnerStats.map((p) => ({
+        partner: p.partner,
+        positive: p.positiveOutcomes,
+        negative: p.negativeOutcomes,
+        pending: p.pendingOutcomes,
+        avgDecisionVelocity: p.avgDecisionVelocity,
+      })),
+    [analytics.partnerStats]
+  );
+
+  const actionConversionSeries = useMemo(
+    () =>
+      analytics.actionTypeStats.map((a) => ({
+        action: a.action,
+        conversionRate: a.total ? Math.round((a.positive / a.total) * 100) : 0,
+        total: a.total,
+      })),
+    [analytics.actionTypeStats]
+  );
+
+  const confidenceRateSeries = useMemo(
+    () =>
+      analytics.confidenceBuckets.map((b) => ({
+        range: b.range,
+        positiveRate: b.count ? Math.round((b.positive / b.count) * 100) : 0,
+        total: b.count,
+      })),
+    [analytics.confidenceBuckets]
+  );
+
   // Get unique values for filters
   const sectors = useMemo(() => {
     const unique = new Set(
@@ -2709,6 +2741,58 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Partner Outcome Mix */}
+          {partnerOutcomeSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Partner Outcome Mix
+                </CardTitle>
+                <CardDescription>Outcome breakdown by partner (top 10)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Decision Velocity by Partner */}
+          {partnerOutcomeSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Decision Velocity by Partner
+                </CardTitle>
+                <CardDescription>Average decision cycle length (days)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="avgDecisionVelocity" fill="#FFBB28" name="Avg Days" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Outcome & Confidence */}
           {analytics.outcomeStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
@@ -2932,6 +3016,32 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Action Type Conversion Rate */}
+          {actionConversionSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Action Type Conversion Rate
+                </CardTitle>
+                <CardDescription>Positive rate by action type</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={actionConversionSeries.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="conversionRate" fill="#00C49F" name="Positive Rate %" />
+                    <Bar dataKey="total" fill="#8884d8" name="Decisions" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Partner Win Rate */}
           {analytics.partnerStats.length > 0 && (
             <Card>
@@ -3027,6 +3137,32 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="cumulativeDecisions" stroke="#00C49F" name="Cumulative Decisions" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Confidence vs Positive Rate */}
+          {confidenceRateSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Confidence vs Positive Rate
+                </CardTitle>
+                <CardDescription>How confidence bands correlate with outcomes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={confidenceRateSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="range" />
+                    <YAxis />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#00C49F" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="total" stroke="#8884d8" name="Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
