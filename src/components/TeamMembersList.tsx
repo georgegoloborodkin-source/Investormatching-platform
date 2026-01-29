@@ -165,17 +165,15 @@ export function TeamMembersList() {
     );
   }
 
-  const mdMembers = teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer");
-  const regularMembers = teamMembers.filter((m) => m.role === "team_member");
+  const mdMembers = useMemo(() => 
+    teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer"),
+    [teamMembers]
+  );
   
-  // Debug: Log all members to console (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && teamMembers.length > 0) {
-      console.log("Team Members:", teamMembers);
-      console.log("MD Members:", mdMembers);
-      console.log("Regular Members:", regularMembers);
-    }
-  }, [teamMembers, mdMembers, regularMembers]);
+  const regularMembers = useMemo(() => 
+    teamMembers.filter((m) => m.role === "team_member"),
+    [teamMembers]
+  );
 
   return (
     <>
