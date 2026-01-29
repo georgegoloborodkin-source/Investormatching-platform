@@ -727,7 +727,12 @@ def has_question_overlap(
     q_tokens = list(dict.fromkeys(q_tokens))
     if not q_tokens:
         return False
-    source_text = " ".join([(s.snippet or "") for s in sources]).lower()
+    source_text = " ".join(
+        [
+            f"{s.title or ''} {s.file_name or ''} {s.snippet or ''}".strip()
+            for s in sources
+        ]
+    ).lower()
     return any(token in source_text for token in q_tokens)
 
 

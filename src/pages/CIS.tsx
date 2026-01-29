@@ -3354,9 +3354,9 @@ export default function CIS() {
       ]
         .join(" ")
         .toLowerCase();
-      // Require at least 60% of tokens to match (or at least 2 tokens)
-      // This prevents false positives from single word matches
-      const minMatches = Math.max(2, Math.ceil(tokens.length * 0.6));
+      // Require at least 60% of tokens to match.
+      // For short queries (1-2 tokens), allow a single match.
+      const minMatches = tokens.length <= 2 ? 1 : Math.max(2, Math.ceil(tokens.length * 0.6));
       const matches = tokens.filter((t) => haystack.includes(t)).length;
       return matches >= minMatches;
     },
@@ -3644,6 +3644,13 @@ export default function CIS() {
               updated[messageIndex] = { ...updated[messageIndex], text: error, isStreaming: false };
             }
             return updated;
+          });
+          void persistChatMessage({
+            threadId,
+            role: "assistant",
+            content: error,
+            model: "claude",
+            sourceDocIds: sourceDocIds || null,
           });
         },
       };
