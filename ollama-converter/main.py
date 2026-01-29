@@ -663,6 +663,22 @@ def is_comprehensive_question(question: str) -> bool:
     ]
     return any(pattern in q_lower for pattern in comprehensive_patterns)
 
+def is_raw_text_request(question: str) -> bool:
+    """Detect if user is asking for raw/exact text from sources."""
+    q_lower = question.lower()
+    raw_patterns = [
+        "raw text",
+        "exact text",
+        "verbatim",
+        "just text",
+        "full text",
+        "show the text",
+        "give me the text",
+        "original text",
+        "word for word",
+    ]
+    return any(pattern in q_lower for pattern in raw_patterns)
+
 def is_meta_question(question: str) -> bool:
     """
     Detect if question is about capabilities/system (meta) vs document content.
@@ -725,6 +741,7 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
     
     is_meta = is_meta_question(question)
     is_comprehensive = is_comprehensive_question(question)
+    is_raw_text = is_raw_text_request(question)
     
     if is_meta:
         # Meta questions: answer with general knowledge about Orbit AI capabilities
@@ -748,6 +765,9 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         comprehensive_instruction = ""
         if is_comprehensive:
             comprehensive_instruction = "\n\nIMPORTANT: The user is asking for a COMPREHENSIVE answer. Provide ALL available information from the sources about this topic. Be thorough, detailed, and include all relevant details. Don't summarize - provide a complete overview covering all aspects mentioned in the sources."
+        raw_text_instruction = ""
+        if is_raw_text:
+            raw_text_instruction = "\n\nIMPORTANT: The user is asking for RAW/EXACT TEXT. Provide the source snippets verbatim (no paraphrasing). If the text is truncated, say so explicitly. Preserve formatting and line breaks when possible."
         
         return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
 
@@ -760,12 +780,14 @@ CRITICAL RULES:
 6. If a source talks about a completely different topic (e.g., trading/ATR when asked about economic growth), you MUST reject it and say you don't have information.
 7. Cite sources using [1], [2], etc. for every claim.
 8. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
-9. Use the conversation context below to understand what the user has already asked about, and provide answers that build on previous questions when relevant.{comprehensive_instruction}
+9. Use the conversation context below to understand what the user has already asked about, and provide answers that build on previous questions when relevant.
+10. If the question is unclear, use the conversation context to infer the likely intent. If still unclear, ask a brief clarifying question.{comprehensive_instruction}{raw_text_instruction}
 
 Answer style:
 - Use bullet points for responsibilities, qualifications, and scope.
 - Prefer completeness over brevity when sources list multiple items.
 - For comprehensive questions, organize information into clear sections (e.g., Company Overview, Business Model, Financials, Team, etc.).
+- For raw text requests, return verbatim snippets with source labels and no paraphrasing.
 
 Question:
 {question}
