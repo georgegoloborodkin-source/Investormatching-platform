@@ -103,7 +103,10 @@ END;
 $$;
 
 -- RPC: Join fund by invitation code
-CREATE OR REPLACE FUNCTION public.join_fund_by_code(invitation_code text)
+-- Drop existing function first to allow parameter name change
+DROP FUNCTION IF EXISTS public.join_fund_by_code(text);
+
+CREATE OR REPLACE FUNCTION public.join_fund_by_code(code_param text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -120,7 +123,7 @@ BEGIN
   -- Find organization by code
   SELECT * INTO org_record
   FROM organizations
-  WHERE organizations.invitation_code = UPPER(join_fund_by_code.invitation_code);
+  WHERE organizations.invitation_code = UPPER(code_param);
 
   IF org_record IS NULL THEN
     RAISE EXCEPTION 'invalid invitation code';
