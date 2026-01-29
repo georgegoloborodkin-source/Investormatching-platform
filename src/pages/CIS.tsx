@@ -4168,7 +4168,10 @@ export default function CIS() {
         return;
       }
 
-      if (!filteredDocs || filteredDocs.length === 0) {
+      const lowSignalFollowUp =
+        isFollowUpQuery && contentTokens.length <= 1;
+
+      if (!filteredDocs || filteredDocs.length === 0 || lowSignalFollowUp) {
         if (
           isFollowUpQuery &&
           previousEvidence &&
