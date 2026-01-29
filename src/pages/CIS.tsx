@@ -91,6 +91,7 @@ import {
 import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
 import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
 import { TeamInvitationForm } from "@/components/TeamInvitationForm";
+import { TeamMembersList } from "@/components/TeamMembersList";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -2401,7 +2402,10 @@ function OnboardingTab({
       </Card>
 
       {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
-        <TeamInvitationForm />
+        <>
+          <TeamInvitationForm />
+          <TeamMembersList />
+        </>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -5260,15 +5264,17 @@ export default function CIS() {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
+          <TabsList className={`grid w-full ${(profile?.role === "managing_partner" || profile?.role === "organizer") ? "grid-cols-6" : "grid-cols-5"} lg:w-auto lg:inline-flex`}>
             <TabsTrigger value="chat" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Intelligence Chat
             </TabsTrigger>
-            <TabsTrigger value="onboarding" className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              Onboarding
-            </TabsTrigger>
+            {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+              <TabsTrigger value="onboarding" className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Onboarding
+              </TabsTrigger>
+            )}
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               Dashboard
