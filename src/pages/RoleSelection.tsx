@@ -1,64 +1,63 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Briefcase, Users } from "lucide-react";
+import { Briefcase, Users, AlertCircle, CheckCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getClickUpLists } from "@/utils/ingestionClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+type OnboardingStep = "role_selection" | "fund_creation" | "team_member_waiting";
+
+function slugifyOrgName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 50);
+}
 
 export default function RoleSelection() {
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const [step, setStep] = useState<OnboardingStep>("role_selection");
   const [isSaving, setIsSaving] = useState(false);
-  const [clickUpTeamId, setClickUpTeamId] = useState("");
-  const [clickUpLists, setClickUpLists] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedListId, setSelectedListId] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("clickup_list_id") || "";
-  });
-  const [isLoadingLists, setIsLoadingLists] = useState(false);
-  const [clickUpLink, setClickUpLink] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("clickup_list_url") || "";
-  });
+  
+  // Fund creation form state
+  const [fundName, setFundName] = useState("");
+  const [fundType, setFundType] = useState<string>("vc");
+  const [website, setWebsite] = useState("");
 
-  const parseClickUpListId = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const match = trimmed.match(/list\/(\d+)/i) || trimmed.match(/\/l\/(\d+)/i);
-    if (match?.[1]) return match[1];
-    if (/^\d+$/.test(trimmed)) return trimmed;
-    return null;
-  };
+  // Check if user came from invitation link
+  const invitationToken = searchParams.get("token");
 
-  const handleLoadLists = async () => {
-    if (!clickUpTeamId.trim()) {
-      toast({
-        title: "Missing team ID",
-        description: "Enter your ClickUp team ID to load lists.",
-        variant: "destructive",
-      });
+  useEffect(() => {
+    // If user has invitation token, redirect to invitation acceptance
+    if (invitationToken) {
+      navigate(`/invite/${invitationToken}`);
       return;
     }
-    setIsLoadingLists(true);
-    try {
-      const response = await getClickUpLists(clickUpTeamId.trim());
-      setClickUpLists(response.lists || []);
-    } catch (error: any) {
-      toast({
-        title: "Failed to load ClickUp lists",
-        description: error.message || "Please verify your team ID and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingLists(false);
+
+    // If user already has organization, redirect to app
+    if (profile?.organization_id) {
+      navigate("/");
+      return;
     }
-  };
+
+    // If user already selected role but no org, show appropriate step
+    if (profile?.role === "managing_partner" && !profile?.organization_id) {
+      setStep("fund_creation");
+    } else if (profile?.role === "team_member" && !profile?.organization_id) {
+      setStep("team_member_waiting");
+    }
+  }, [profile, invitationToken, navigate]);
 
   const handleRoleSelect = async (role: "managing_partner" | "team_member") => {
     if (!user || !profile) {
@@ -72,13 +71,7 @@ export default function RoleSelection() {
 
     setIsSaving(true);
     try {
-      const listId = selectedListId || parseClickUpListId(clickUpLink);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("clickup_list_url", clickUpLink.trim());
-        if (listId) {
-          localStorage.setItem("clickup_list_id", listId);
-        }
-      }
+      // Update role
       const { error } = await supabase
         .from("user_profiles")
         .update({ role })
@@ -90,14 +83,12 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      toast({
-        title: "Role updated!",
-        description: `You are now set as ${role === "managing_partner" ? "Managing Partner" : "Team Member"}.`,
-      });
-
-      // Small delay to ensure profile is refreshed
-      await new Promise(resolve => setTimeout(resolve, 300));
-      navigate("/");
+      // Navigate to appropriate step
+      if (role === "managing_partner") {
+        setStep("fund_creation");
+      } else {
+        setStep("team_member_waiting");
+      }
     } catch (error: any) {
       console.error("Error updating role:", error);
       toast({
@@ -110,8 +101,172 @@ export default function RoleSelection() {
     }
   };
 
+  const handleCreateFund = async () => {
+    if (!user || !profile) {
+      toast({
+        title: "Error",
+        description: "Please sign in again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!fundName.trim()) {
+      toast({
+        title: "Fund name required",
+        description: "Please enter your fund name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const fundSlug = slugifyOrgName(fundName) || `fund-${user.id.slice(0, 8)}`;
+      
+      const { data, error } = await supabase.rpc("create_fund_for_md", {
+        fund_name: fundName.trim(),
+        fund_slug: fundSlug,
+        fund_type: fundType || null,
+        website: website.trim() || null,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      await refreshProfile();
+
+      toast({
+        title: "Fund created!",
+        description: `Welcome to ${fundName}. You can now invite your team.`,
+      });
+
+      // Redirect to app
+      navigate("/");
+    } catch (error: any) {
+      console.error("Error creating fund:", error);
+      toast({
+        title: "Failed to create fund",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (step === "fund_creation") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Create Your Fund</CardTitle>
+            <CardDescription className="text-base">
+              Set up your VC fund organization
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fund-name">Fund Name *</Label>
+              <Input
+                id="fund-name"
+                placeholder="e.g., Orbit Ventures"
+                value={fundName}
+                onChange={(e) => setFundName(e.target.value)}
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fund-type">Fund Type</Label>
+              <Select value={fundType} onValueChange={setFundType} disabled={isSaving}>
+                <SelectTrigger id="fund-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vc">Venture Capital</SelectItem>
+                  <SelectItem value="angel">Angel Fund</SelectItem>
+                  <SelectItem value="syndicate">Syndicate</SelectItem>
+                  <SelectItem value="family_office">Family Office</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="website">Website (optional)</Label>
+              <Input
+                id="website"
+                type="url"
+                placeholder="https://yourfund.com"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                disabled={isSaving}
+              />
+            </div>
+
+            <Button
+              onClick={handleCreateFund}
+              disabled={isSaving || !fundName.trim()}
+              className="w-full"
+            >
+              {isSaving ? "Creating..." : "Create Fund"}
+            </Button>
+
+            <Button
+              variant="ghost"
+              onClick={() => setStep("role_selection")}
+              disabled={isSaving}
+              className="w-full"
+            >
+              Back
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (step === "team_member_waiting") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Waiting for Invitation</CardTitle>
+            <CardDescription className="text-base">
+              You need an invitation from a Managing Partner to join a fund
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Team members cannot create their own fund. Please ask your Managing Partner
+                to send you an invitation link.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Once you receive an invitation email, click the link to join your fund's workspace.
+              </p>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => setStep("role_selection")}
+              className="w-full"
+            >
+              Change Role
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-muted/30">
+    <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome to Orbit AI</CardTitle>
@@ -120,54 +275,6 @@ export default function RoleSelection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="text-sm font-medium">Optional: Connect ClickUp</div>
-            <div className="grid gap-2 md:grid-cols-3">
-              <Input
-                placeholder="ClickUp team ID"
-                value={clickUpTeamId}
-                onChange={(e) => setClickUpTeamId(e.target.value)}
-                disabled={isSaving || isLoadingLists}
-              />
-              <Button
-                variant="outline"
-                onClick={handleLoadLists}
-                disabled={isSaving || isLoadingLists}
-              >
-                {isLoadingLists ? "Loading lists..." : "Load Lists"}
-              </Button>
-              <Select
-                value={selectedListId}
-                onValueChange={(value) => {
-                  setSelectedListId(value);
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem("clickup_list_id", value);
-                  }
-                }}
-                disabled={isSaving || isLoadingLists || clickUpLists.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a ClickUp list" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clickUpLists.map((list) => (
-                    <SelectItem key={list.id} value={list.id}>
-                      {list.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input
-              placeholder="Or paste ClickUp list URL/ID (optional)"
-              value={clickUpLink}
-              onChange={(e) => setClickUpLink(e.target.value)}
-              disabled={isSaving}
-            />
-            <div className="text-xs text-muted-foreground">
-              We’ll use this list for ingestion later. You can change it in Sources.
-            </div>
-          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Button
               variant="outline"
@@ -179,7 +286,7 @@ export default function RoleSelection() {
               <div className="text-center">
                 <div className="font-semibold text-lg">Managing Partner</div>
                 <div className="text-sm text-muted-foreground mt-1">
-                  Full access to all features and team management
+                  Create your fund and invite your team
                 </div>
               </div>
             </Button>
@@ -194,7 +301,7 @@ export default function RoleSelection() {
               <div className="text-center">
                 <div className="font-semibold text-lg">Team Member</div>
                 <div className="text-sm text-muted-foreground mt-1">
-                  Access to decision logging and document management
+                  Join via invitation from your fund
                 </div>
               </div>
             </Button>

@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import AuthCallback from "./pages/AuthCallback";
 import RoleSelection from "./pages/RoleSelection";
+import InviteAcceptance from "./pages/InviteAcceptance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,14 @@ const App = () => (
               element={
                 <ProtectedRoute requireAuth>
                   <RoleSelection />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invite/:token"
+              element={
+                <ProtectedRoute requireAuth>
+                  <InviteAcceptance />
                 </ProtectedRoute>
               }
             />

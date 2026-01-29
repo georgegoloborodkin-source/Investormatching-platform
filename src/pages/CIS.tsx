@@ -90,6 +90,7 @@ import {
 } from "@/utils/claudeConverter";
 import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
 import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
+import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -2398,6 +2399,10 @@ function OnboardingTab({
           ))}
         </CardContent>
       </Card>
+
+      {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+        <TeamInvitationForm />
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
