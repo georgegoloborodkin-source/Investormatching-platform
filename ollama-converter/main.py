@@ -817,6 +817,9 @@ CRITICAL RULES:
 10. If the question is unclear, use the conversation context to infer the likely intent. If still unclear, ask a brief clarifying question.{comprehensive_instruction}{raw_text_instruction}
 
 Answer style:
+- Default to VC-friendly structure when enough information exists, but skip sections that lack evidence.
+- Suggested sections (use only if supported by sources): Company Overview, Problem, Solution, Business Model, Traction, Financials, Team, Market, Risks, Use of Funds, Go-to-Market.
+- If information is sparse, answer in concise bullets focused on the available facts.
 - Use bullet points for responsibilities, qualifications, and scope.
 - Prefer completeness over brevity when sources list multiple items.
 - For comprehensive questions, organize information into clear sections (e.g., Company Overview, Business Model, Financials, Team, etc.).
