@@ -228,7 +228,11 @@ export async function askClaudeAnswerStream(
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
   const timeoutMs = 70000;
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  let timeoutFired = false;
+  const timeout = window.setTimeout(() => {
+    timeoutFired = true;
+    controller.abort();
+  }, timeoutMs);
 
   try {
     const response = await fetch(`${baseUrl}/ask/stream`, {
@@ -254,43 +258,63 @@ export async function askClaudeAnswerStream(
 
     let buffer = "";
     let hasReceivedData = false;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        // If stream ended without any data, it's an error
-        if (!hasReceivedData) {
-          onError?.(new Error("Stream ended without data. The server may have encountered an error."));
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          // If stream ended without any data, it's an error
+          if (!hasReceivedData && !timeoutFired) {
+            onError?.(new Error("Stream ended without data. The server may have encountered an error."));
+          }
+          break;
         }
-        break;
-      }
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+        // Check if timeout fired during read
+        if (timeoutFired) {
+          reader.cancel();
+          onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+          return;
+        }
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          hasReceivedData = true;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.text) {
-              onChunk(data.text);
-            } else if (data.error) {
-              onError?.(new Error(data.error));
-              return;
-            }
-          } catch (e) {
-            if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
-              onError?.(e);
-              return;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            hasReceivedData = true;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) {
+                onChunk(data.text);
+              } else if (data.error) {
+                onError?.(new Error(data.error));
+                return;
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+                onError?.(e);
+                return;
+              }
             }
           }
         }
       }
+    } catch (readError) {
+      // If timeout fired, we already handled it above
+      if (!timeoutFired) {
+        if (readError instanceof DOMException && readError.name === "AbortError") {
+          onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+        } else {
+          onError?.(readError instanceof Error ? readError : new Error("Stream read error"));
+        }
+      }
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      onError?.(new Error("Request timed out after 70 seconds."));
+    if (timeoutFired) {
+      onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+    } else if (error instanceof DOMException && error.name === "AbortError") {
+      onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
     } else {
       onError?.(error instanceof Error ? error : new Error("Unknown error"));
     }

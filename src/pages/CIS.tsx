@@ -4217,7 +4217,9 @@ export default function CIS() {
             if (!streamCompleted) {
               streamCompleted = true;
               clearTimeout(streamTimeout);
-              streamer.setError(error.message || "Claude answer failed. Please try again.");
+              const errorMsg = error.message || "Claude answer failed. Please try again.";
+              console.error("Stream error:", errorMsg);
+              streamer.setError(errorMsg);
               setIsClaudeLoading(false);
             }
           }
