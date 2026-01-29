@@ -736,13 +736,27 @@ def has_question_overlap(
     return any(token in source_text for token in q_tokens)
 
 
-def resolve_pronoun_context(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
+def resolve_followup_context(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
     """
     If the question is vague (e.g., contains "it"), prepend last user topic to improve clarity.
     """
     if not question or not previous_messages:
         return question
     q_lower = question.lower()
+    affirmative_only = q_lower.strip() in {
+        "yes",
+        "yes please",
+        "please",
+        "ok",
+        "okay",
+        "sure",
+        "go ahead",
+    }
+    if affirmative_only:
+        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+        if last_user:
+            return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
+        return question
     if " it " not in f" {q_lower} " and " it?" not in q_lower and " it." not in q_lower:
         return question
     last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
@@ -2476,7 +2490,7 @@ async def ask_fund(request: AskRequest):
         raise HTTPException(status_code=400, detail="question is required.")
 
     no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-    resolved_question = resolve_pronoun_context(question, request.previous_messages or [])
+    resolved_question = resolve_followup_context(question, request.previous_messages or [])
     if not is_meta_question(resolved_question) and not has_question_overlap(
         resolved_question, request.sources or [], request.previous_messages or []
     ):
@@ -2499,7 +2513,7 @@ async def ask_fund_stream(request: AskRequest):
             raise HTTPException(status_code=400, detail="question is required.")
 
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-        resolved_question = resolve_pronoun_context(question, request.previous_messages or [])
+        resolved_question = resolve_followup_context(question, request.previous_messages or [])
         if not is_meta_question(resolved_question) and not has_question_overlap(
             resolved_question, request.sources or [], request.previous_messages or []
         ):
