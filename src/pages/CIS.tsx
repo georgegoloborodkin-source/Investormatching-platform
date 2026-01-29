@@ -89,7 +89,7 @@ import {
   type Decision,
 } from "@/utils/claudeConverter";
 import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
-import type { DocumentRecord, SourceRecord } from "@/types";
+import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -2294,6 +2294,146 @@ function DashboardTab({
             ) : (
               "No sources yet."
             )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ONBOARDING TAB
+// ============================================================================
+
+function OnboardingTab({
+  profile,
+  sources,
+  documents,
+  decisions,
+  onNavigate,
+}: {
+  profile: UserProfile | null;
+  sources: SourceRecord[];
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  decisions: Decision[];
+  onNavigate: (tab: string) => void;
+}) {
+  const orgLinked = Boolean(profile?.organization_id);
+  const hasSources = sources.length > 0;
+  const hasDocuments = documents.length > 0;
+  const hasDecisions = decisions.length > 0;
+
+  const steps = [
+    {
+      title: "Fund profile & access",
+      status: orgLinked,
+      description: "Confirm organization is linked and team access is scoped to your fund.",
+      action: () => onNavigate("overview"),
+      actionLabel: "View Org Overview",
+    },
+    {
+      title: "Sync fund sources",
+      status: hasSources,
+      description: "Connect ClickUp or Google Drive, or upload files into Sources.",
+      action: () => onNavigate("sources"),
+      actionLabel: "Open Sources",
+    },
+    {
+      title: "Index key documents",
+      status: hasDocuments,
+      description: "Upload IC notes, memos, LPAs, portfolio updates, and meeting notes.",
+      action: () => onNavigate("sources"),
+      actionLabel: "Add Documents",
+    },
+    {
+      title: "Log decisions",
+      status: hasDecisions,
+      description: "Record investment decisions with confidence, stage, and rationale.",
+      action: () => onNavigate("decisions"),
+      actionLabel: "Open Decision Logger",
+    },
+    {
+      title: "Review analytics",
+      status: decisions.length >= 5,
+      description: "Unlock Decision Engine analytics with at least 5 decisions.",
+      action: () => onNavigate("dashboard"),
+      actionLabel: "Open Decision Engine",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Tier 2 VC Fund Onboarding
+          </CardTitle>
+          <CardDescription>
+            Recommended onboarding flow for VC teams. Complete the steps below to unlock full
+            intelligence and analytics.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {steps.map((step) => (
+            <div key={step.title} className="flex items-start justify-between gap-4 border rounded-md p-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {step.status ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="font-medium">{step.title}</span>
+                  <Badge variant={step.status ? "default" : "secondary"} className="text-xs">
+                    {step.status ? "Complete" : "Pending"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{step.description}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={step.action}>
+                {step.actionLabel}
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Recommended Fund Data</CardTitle>
+            <CardDescription>Prioritize these sources for strong answers.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <ul className="list-disc pl-4 space-y-1">
+              <li>IC memos, diligence notes, and investment theses</li>
+              <li>Portfolio updates, KPIs, and board decks</li>
+              <li>LPAs, fund overview, and mandate documents</li>
+              <li>Partner meeting notes and email summaries</li>
+              <li>CRM exports, deal flow logs, and pipeline snapshots</li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sync Guidance</CardTitle>
+            <CardDescription>Fastest path to a live knowledge base.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-1">
+              <div className="font-medium text-foreground">Google Drive</div>
+              <p>Import key docs directly from Drive to keep investment materials current.</p>
+            </div>
+            <div className="space-y-1">
+              <div className="font-medium text-foreground">ClickUp</div>
+              <p>Sync pipeline tasks and IC checklists for real-time deal visibility.</p>
+            </div>
+            <div className="space-y-1">
+              <div className="font-medium text-foreground">Manual Uploads</div>
+              <p>Upload PDFs, spreadsheets, and memos for immediate indexing.</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -5115,10 +5255,14 @@ export default function CIS() {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
             <TabsTrigger value="chat" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Intelligence Chat
+            </TabsTrigger>
+            <TabsTrigger value="onboarding" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Onboarding
             </TabsTrigger>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -5137,6 +5281,17 @@ export default function CIS() {
               Decision Engine
             </TabsTrigger>
           </TabsList>
+
+          {/* Onboarding Tab */}
+          <TabsContent value="onboarding">
+            <OnboardingTab
+              profile={profile}
+              sources={sources}
+              documents={documents}
+              decisions={decisions}
+              onNavigate={setActiveTab}
+            />
+          </TabsContent>
 
           {/* Chat Tab */}
           <TabsContent value="chat" className="space-y-4">
