@@ -2775,6 +2775,7 @@ export default function CIS() {
   const [semanticMode, setSemanticMode] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [costLog, setCostLog] = useState<
     Array<{
       ts: string;
@@ -2932,6 +2933,7 @@ export default function CIS() {
     setSources((prev) => prev.filter((source) => source.id !== sourceId));
   }, []);
 
+  // Load chat history on initial mount and when switching threads
   useEffect(() => {
     const loadChatHistory = async () => {
       if (!profile) return;
@@ -2957,15 +2959,23 @@ export default function CIS() {
             parentId: t.parent_id || undefined,
           }));
           setThreads(mappedThreads);
-          const currentThreadId = activeThread || mappedThreads[0]?.id;
-          if (currentThreadId && !activeThread) {
-            setActiveThread(currentThreadId);
+          
+          // On initial load, set activeThread to first thread if not set
+          if (isInitialLoad && !activeThread && mappedThreads[0]?.id) {
+            setActiveThread(mappedThreads[0].id);
+            setIsInitialLoad(false);
+            // Don't load messages yet - let the next effect run handle it
+            setChatLoaded(true);
+            return;
           }
           
-          // Load messages for the active thread (reload when thread changes)
-          if (currentThreadId && messageRows?.length) {
+          // Determine which thread to use: activeThread if set, otherwise first thread
+          const targetThreadId = activeThread || mappedThreads[0]?.id;
+          
+          // Load messages for the target thread
+          if (targetThreadId && messageRows?.length) {
             const threadMessages = messageRows
-              .filter((m: any) => m.thread_id === currentThreadId)
+              .filter((m: any) => m.thread_id === targetThreadId)
               .map((m: any) => ({
                 id: m.id,
                 author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
@@ -2973,6 +2983,18 @@ export default function CIS() {
                 threadId: m.thread_id,
               }));
             setMessages(threadMessages);
+          } else if (messageRows?.length && !targetThreadId) {
+            // If no thread matches, load all messages (shouldn't happen, but fallback)
+            const mappedMessages = messageRows.map((m: any) => ({
+              id: m.id,
+              author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+              text: m.content,
+              threadId: m.thread_id,
+            }));
+            setMessages(mappedMessages);
+          } else {
+            // No messages found - clear messages array
+            setMessages([]);
           }
         } else if (messageRows?.length) {
           // If no threads but messages exist, load all messages
@@ -2983,16 +3005,21 @@ export default function CIS() {
             threadId: m.thread_id,
           }));
           setMessages(mappedMessages);
+        } else {
+          // No threads and no messages - ensure empty state
+          setMessages([]);
         }
         setChatLoaded(true);
+        setIsInitialLoad(false);
       } catch (error) {
         console.error("Failed to load chat history:", error);
         setChatLoaded(true); // Set to true even on error to prevent retries
+        setIsInitialLoad(false);
       }
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, activeThread, ensureActiveEventId]);
+  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
