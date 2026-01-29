@@ -157,7 +157,7 @@ export default function RoleSelection() {
     setIsSaving(true);
     try {
       const { data, error } = await supabase.rpc("join_fund_by_code", {
-        invitation_code: invitationCode.trim().toUpperCase(),
+        code_param: invitationCode.trim().toUpperCase(),
       });
 
       if (error) {
