@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,20 @@ export function TeamMembersList() {
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const hasLoadedRef = useRef(false);
 
   const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
   const orgId = profile?.organization_id;
 
-  const loadTeamMembers = useCallback(async () => {
+  useEffect(() => {
+    // Only load once when component mounts and conditions are met
+    if (isMD && orgId && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadTeamMembers();
+    }
+  }, [isMD, orgId]);
+
+  const loadTeamMembers = async () => {
     if (!orgId) {
       setTeamMembers([]);
       setLoading(false);
@@ -56,13 +65,15 @@ export function TeamMembersList() {
 
       if (error) {
         console.error("Supabase error loading team members:", error);
-        // Don't throw - just set empty array and show error
         setTeamMembers([]);
-        toast({
-          title: "Failed to load team members",
-          description: error.message || "Please check your permissions or try refreshing.",
-          variant: "destructive",
-        });
+        // Defer toast to avoid render issues
+        setTimeout(() => {
+          toast({
+            title: "Failed to load team members",
+            description: error.message || "Please check your permissions or try refreshing.",
+            variant: "destructive",
+          });
+        }, 0);
         return;
       }
 
@@ -70,11 +81,13 @@ export function TeamMembersList() {
     } catch (err: any) {
       console.error("Unexpected error loading team members:", err);
       setTeamMembers([]);
-      toast({
-        title: "Failed to load team members",
-        description: err?.message || "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
+      setTimeout(() => {
+        toast({
+          title: "Failed to load team members",
+          description: err?.message || "An unexpected error occurred. Please try again.",
+          variant: "destructive",
+        });
+      }, 0);
     } finally {
       setLoading(false);
     }
@@ -179,7 +192,10 @@ export function TeamMembersList() {
             <Button
               variant="outline"
               size="sm"
-              onClick={loadTeamMembers}
+              onClick={() => {
+                hasLoadedRef.current = false;
+                loadTeamMembers();
+              }}
               disabled={loading}
             >
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
@@ -293,7 +309,7 @@ export function TeamMembersList() {
               ) : (
                 <Alert>
                   <AlertDescription>
-                    No investment team members yet. Share your invitation code (FUND-4211) with team members to invite them.
+                    No investment team members yet. Share your invitation code with team members to invite them.
                   </AlertDescription>
                 </Alert>
               )}
