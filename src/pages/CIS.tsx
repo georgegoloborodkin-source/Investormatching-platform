@@ -143,6 +143,15 @@ const initialScopes: ScopeItem[] = [
 
 const initialThreads: Thread[] = [];
 const initialMessages: Message[] = [];
+const LOCAL_CHAT_CACHE_KEY = "orbit_chat_cache";
+
+type LocalChatMessage = {
+  id: string;
+  threadId: string;
+  author: "assistant" | "user";
+  text: string;
+  ts: string;
+};
 const initialKOs: KnowledgeObject[] = [];
 
 let googlePickerReady = false;
@@ -2806,6 +2815,23 @@ export default function CIS() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
+
+  const readLocalChatCache = useCallback((): LocalChatMessage[] => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem(LOCAL_CHAT_CACHE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const writeLocalChatCache = useCallback((items: LocalChatMessage[]) => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(LOCAL_CHAT_CACHE_KEY, JSON.stringify(items));
+  }, []);
   const [sources, setSources] = useState<SourceRecord[]>([]);
   const [draftDecision, setDraftDecision] = useState<{
     startupName: string;
@@ -2940,6 +2966,30 @@ export default function CIS() {
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
       
+      const mergeLocalMessages = (threadId: string, loadedMessages: Message[]) => {
+        const cache = readLocalChatCache();
+        if (!cache.length) return loadedMessages;
+        const otherThreads = cache.filter((m) => m.threadId !== threadId);
+        const threadCache = cache.filter((m) => m.threadId === threadId);
+        const existingKeys = new Set(loadedMessages.map((m) => `${m.author}|${m.text}`));
+        const merged = [...loadedMessages];
+        const remaining: LocalChatMessage[] = [];
+        for (const localMsg of threadCache) {
+          const key = `${localMsg.author}|${localMsg.text}`;
+          if (!existingKeys.has(key)) {
+            merged.push({
+              id: localMsg.id,
+              author: localMsg.author,
+              text: localMsg.text,
+              threadId: localMsg.threadId,
+            });
+            remaining.push(localMsg);
+          }
+        }
+        writeLocalChatCache([...otherThreads, ...remaining]);
+        return merged;
+      };
+
       try {
         const { data: threadRows } = await supabase
           .from("chat_threads")
@@ -2980,7 +3030,7 @@ export default function CIS() {
                 text: m.content,
                 threadId: m.thread_id,
               }));
-            setMessages(threadMessages);
+            setMessages(mergeLocalMessages(targetThreadId, threadMessages));
           } else if (messageRows?.length && !targetThreadId) {
             // If no thread matches, load all messages (shouldn't happen, but fallback)
             const mappedMessages = messageRows.map((m: any) => ({
@@ -2992,7 +3042,11 @@ export default function CIS() {
             setMessages(mappedMessages);
           } else {
             // No messages found for this thread - clear messages array
-            setMessages([]);
+            if (targetThreadId) {
+              setMessages(mergeLocalMessages(targetThreadId, []));
+            } else {
+              setMessages([]);
+            }
           }
         } else if (messageRows?.length) {
           // If no threads but messages exist, load all messages
@@ -3019,7 +3073,7 @@ export default function CIS() {
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad]);
+  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, readLocalChatCache, writeLocalChatCache]);
 
   const getGoogleAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -3344,7 +3398,15 @@ export default function CIS() {
   }, []);
 
   const docContainsTokens = useCallback(
-    (doc: { raw_content: string | null; extracted_json?: Record<string, any> | null }, tokens: string[]) => {
+    (
+      doc: {
+        raw_content: string | null;
+        extracted_json?: Record<string, any> | null;
+        title?: string | null;
+        file_name?: string | null;
+      },
+      tokens: string[]
+    ) => {
       if (!tokens.length) return false; // No tokens = no match
       const haystack = [
         doc.raw_content || "",
@@ -3417,8 +3479,7 @@ export default function CIS() {
         
         // Ensure thread exists (create if it doesn't)
         let threadId = payload.threadId;
-        if (!threadId || !threadId.startsWith('t-')) {
-          // Create a new thread if threadId is invalid
+        if (!threadId) {
           const newThreadId = await createChatThread("Chat", null);
           if (newThreadId) {
             threadId = newThreadId;
@@ -3462,13 +3523,22 @@ export default function CIS() {
         
         if (lastError) {
           console.error("Failed to save chat message after retries:", lastError);
+          const cached = readLocalChatCache();
+          const localMessage: LocalChatMessage = {
+            id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            threadId,
+            author: payload.role,
+            text: payload.content,
+            ts: new Date().toISOString(),
+          };
+          writeLocalChatCache([localMessage, ...cached].slice(0, 200));
         }
       } catch (err) {
         console.error("Failed to save chat message:", err);
         // Silently fail - don't block chat functionality
       }
     },
-    [activeEventId, ensureActiveEventId, profile, user, createChatThread]
+    [activeEventId, ensureActiveEventId, profile, user, createChatThread, readLocalChatCache, writeLocalChatCache]
   );
 
   useEffect(() => {
