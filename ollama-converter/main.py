@@ -645,6 +645,24 @@ async def call_anthropic(prompt: str) -> str:
         detail=f"Claude API error: {last_error or 'Unknown error. All models failed.'}"
     )
 
+def is_comprehensive_question(question: str) -> bool:
+    """Detect if user wants a comprehensive answer (all you know, everything, detailed, etc.)"""
+    q_lower = question.lower()
+    comprehensive_patterns = [
+        "all you know",
+        "everything",
+        "comprehensive",
+        "detailed",
+        "full",
+        "complete",
+        "tell me all",
+        "what do you know",
+        "what can you tell me",
+        "summarize",
+        "overview",
+    ]
+    return any(pattern in q_lower for pattern in comprehensive_patterns)
+
 def is_meta_question(question: str) -> bool:
     """
     Detect if question is about capabilities/system (meta) vs document content.
