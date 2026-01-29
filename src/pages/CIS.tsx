@@ -4157,7 +4157,10 @@ export default function CIS() {
         ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
         : "";
 
-      const answerDocs = filteredDocs.slice(0, 3);
+      // For comprehensive questions, use more sources (up to 5)
+      const isComprehensiveQuestion = /\b(all you know|everything|comprehensive|detailed|full|complete|tell me all|what do you know|what can you tell me|summarize|overview)\b/i.test(question);
+      const maxDocs = isComprehensiveQuestion ? 5 : 3;
+      const answerDocs = filteredDocs.slice(0, maxDocs);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setLastEvidenceThreadId(threadId);
       setChatIsLoading(false);
@@ -4201,11 +4204,22 @@ export default function CIS() {
               notes: d.notes ?? null,
             }))
           : [];
+        
+        // Get previous messages from this thread for context
+        const threadMessages = messages
+          .filter((m) => m.threadId === threadId)
+          .slice(-10) // Last 10 messages for context
+          .map((m) => ({
+            role: m.author === "assistant" ? "assistant" : "user",
+            content: m.text,
+          }));
+        
         await askClaudeAnswerStream(
           {
             question,
             sources,
             decisions: decisionsForClaude,
+            previousMessages: threadMessages,
           },
           (chunk) => {
             if (!streamCompleted) {

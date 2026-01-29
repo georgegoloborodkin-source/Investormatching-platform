@@ -389,10 +389,15 @@ class AskDecision(BaseModel):
     outcome: Optional[str] = None
     notes: Optional[str] = None
 
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class AskRequest(BaseModel):
     question: str
     sources: List[AskSource] = []
     decisions: List[AskDecision] = []
+    previous_messages: List[ChatMessage] = []
 
 class AskResponse(BaseModel):
     answer: str
@@ -664,7 +669,7 @@ def is_meta_question(question: str) -> bool:
     return any(pattern in q_lower for pattern in meta_patterns)
 
 
-def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision]) -> str:
+def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision], previous_messages: List[ChatMessage] = None) -> str:
     safe_sources = (sources or [])[:ASK_MAX_SOURCES]
     source_lines: List[str] = []
     for idx, src in enumerate(safe_sources, start=1):
@@ -685,7 +690,19 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
     sources_block = "\n\n".join(source_lines) if source_lines else "No sources available."
     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
     
+    # Build conversation history context
+    conversation_context = ""
+    if previous_messages and len(previous_messages) > 0:
+        # Include last 5 messages for context (to avoid token limits)
+        recent_messages = previous_messages[-5:]
+        conversation_lines = []
+        for msg in recent_messages:
+            role_label = "User" if msg.role == "user" else "Assistant"
+            conversation_lines.append(f"{role_label}: {msg.content}")
+        conversation_context = "\n\nPrevious conversation context:\n" + "\n".join(conversation_lines)
+    
     is_meta = is_meta_question(question)
+    is_comprehensive = is_comprehensive_question(question)
     
     if is_meta:
         # Meta questions: answer with general knowledge about Orbit AI capabilities
@@ -706,6 +723,10 @@ Be helpful and specific. Explain what you can do and how you help investment tea
 """
     else:
         # Document questions: use sources only
+        comprehensive_instruction = ""
+        if is_comprehensive:
+            comprehensive_instruction = "\n\nIMPORTANT: The user is asking for a COMPREHENSIVE answer. Provide ALL available information from the sources about this topic. Be thorough, detailed, and include all relevant details. Don't summarize - provide a complete overview covering all aspects mentioned in the sources."
+        
         return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
 
 CRITICAL RULES:
@@ -717,10 +738,12 @@ CRITICAL RULES:
 6. If a source talks about a completely different topic (e.g., trading/ATR when asked about economic growth), you MUST reject it and say you don't have information.
 7. Cite sources using [1], [2], etc. for every claim.
 8. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
+9. Use the conversation context below to understand what the user has already asked about, and provide answers that build on previous questions when relevant.{comprehensive_instruction}
 
 Answer style:
 - Use bullet points for responsibilities, qualifications, and scope.
 - Prefer completeness over brevity when sources list multiple items.
+- For comprehensive questions, organize information into clear sections (e.g., Company Overview, Business Model, Financials, Team, etc.).
 
 Question:
 {question}
@@ -729,7 +752,7 @@ Sources:
 {sources_block}
 
 Decision history (optional context):
-{decisions_block}
+{decisions_block}{conversation_context}
 
 Remember: If the answer isn't in the sources above, you MUST say you don't have that information. Never make up answers.
 """
@@ -2353,7 +2376,7 @@ async def ask_fund(request: AskRequest):
     if not question:
         raise HTTPException(status_code=400, detail="question is required.")
 
-    prompt = build_answer_prompt(question, request.sources, request.decisions)
+    prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
     answer = await call_anthropic_answer(prompt, question=question, sources=request.sources)
     return AskResponse(answer=answer)
 
@@ -2368,7 +2391,7 @@ async def ask_fund_stream(request: AskRequest):
     if not question:
         raise HTTPException(status_code=400, detail="question is required.")
 
-    prompt = build_answer_prompt(question, request.sources, request.decisions)
+    prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
     
     async def generate():
         async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources):

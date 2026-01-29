@@ -80,6 +80,11 @@ export interface AskFundDecision {
   notes?: string | null;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 /**
  * Convert unstructured data using the converter API
  */
@@ -221,6 +226,7 @@ export async function askClaudeAnswerStream(
     question: string;
     sources: AskFundSource[];
     decisions: AskFundDecision[];
+    previousMessages?: ChatMessage[];
   },
   onChunk: (text: string) => void,
   onError?: (error: Error) => void
