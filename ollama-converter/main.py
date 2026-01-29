@@ -2540,6 +2540,8 @@ async def ask_fund_stream(request: AskRequest):
         
         async def generate():
             try:
+                # Send an initial ping so the client doesn't think the stream is empty
+                yield f"data: {json.dumps({'ping': True})}\n\n"
                 async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or []):
                     yield f"data: {chunk}\n\n"
                 yield "data: [DONE]\n\n"
