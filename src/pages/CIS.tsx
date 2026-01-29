@@ -2960,17 +2960,15 @@ export default function CIS() {
           }));
           setThreads(mappedThreads);
           
+          // Determine which thread to use: activeThread if set, otherwise first thread
+          let targetThreadId = activeThread || mappedThreads[0]?.id;
+          
           // On initial load, set activeThread to first thread if not set
           if (isInitialLoad && !activeThread && mappedThreads[0]?.id) {
-            setActiveThread(mappedThreads[0].id);
+            targetThreadId = mappedThreads[0].id;
+            setActiveThread(targetThreadId);
             setIsInitialLoad(false);
-            // Don't load messages yet - let the next effect run handle it
-            setChatLoaded(true);
-            return;
           }
-          
-          // Determine which thread to use: activeThread if set, otherwise first thread
-          const targetThreadId = activeThread || mappedThreads[0]?.id;
           
           // Load messages for the target thread
           if (targetThreadId && messageRows?.length) {
@@ -2993,7 +2991,7 @@ export default function CIS() {
             }));
             setMessages(mappedMessages);
           } else {
-            // No messages found - clear messages array
+            // No messages found for this thread - clear messages array
             setMessages([]);
           }
         } else if (messageRows?.length) {
@@ -3010,7 +3008,9 @@ export default function CIS() {
           setMessages([]);
         }
         setChatLoaded(true);
-        setIsInitialLoad(false);
+        if (isInitialLoad) {
+          setIsInitialLoad(false);
+        }
       } catch (error) {
         console.error("Failed to load chat history:", error);
         setChatLoaded(true); // Set to true even on error to prevent retries
