@@ -4224,13 +4224,18 @@ export default function CIS() {
             }
           }
         );
-        // Only finalize if stream completed successfully
-        if (!streamCompleted) {
+        // Only finalize if stream completed successfully (no error was called)
+        if (!streamCompleted && fullAnswer.length > 0) {
           streamCompleted = true;
           clearTimeout(streamTimeout);
           // Append decision block and semantic note after streaming completes
           streamer.appendChunk(decisionBlock + semanticNote);
           streamer.finalize();
+        } else if (!streamCompleted) {
+          // Stream completed but no data received - ensure timeout is cleared
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
+          setIsClaudeLoading(false);
         }
         const estimate = estimateClaudeCost(question);
         persistCostLog({
