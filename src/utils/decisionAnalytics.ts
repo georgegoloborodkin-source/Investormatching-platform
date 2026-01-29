@@ -31,6 +31,30 @@ export interface PartnerStats {
   avgDecisionVelocity: number; // days from first meeting to decision
 }
 
+export interface OutcomeStats {
+  outcome: string;
+  total: number;
+  avgConfidence: number;
+}
+
+export interface ActionTypeStats {
+  action: string;
+  total: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  avgConfidence: number;
+}
+
+export interface StartupStats {
+  startupName: string;
+  total: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  avgConfidence: number;
+}
+
 export interface DecisionVelocity {
   date: string;
   avgDays: number;
@@ -45,12 +69,60 @@ export interface TimeSeriesData {
   pending: number;
 }
 
+export interface CumulativeSeriesData {
+  date: string;
+  cumulativeDecisions: number;
+}
+
+export interface ConfidenceBucket {
+  range: string;
+  count: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  avgConfidence: number;
+}
+
+export interface OutcomeByStage {
+  stage: string;
+  total: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  positiveRate: number;
+}
+
+export interface GeoStats {
+  geo: string;
+  total: number;
+  positive: number;
+  negative: number;
+  pending: number;
+  avgConfidence: number;
+}
+
+export interface RecencyStats {
+  last7: number;
+  last30: number;
+  last90: number;
+  prev30: number;
+  momentumPct: number;
+}
+
 export interface DecisionEngineAnalytics {
   sectorStats: SectorStats[];
   stageStats: StageStats[];
   partnerStats: PartnerStats[];
+  outcomeStats: OutcomeStats[];
+  actionTypeStats: ActionTypeStats[];
+  startupStats: StartupStats[];
   decisionVelocity: DecisionVelocity[];
   timeSeries: TimeSeriesData[];
+  cumulativeSeries: CumulativeSeriesData[];
+  confidenceBuckets: ConfidenceBucket[];
+  outcomeByStage: OutcomeByStage[];
+  geoStats: GeoStats[];
+  recencyStats: RecencyStats;
   totalDecisions: number;
   avgConfidence: number;
   positiveRate: number;
@@ -66,8 +138,22 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
       sectorStats: [],
       stageStats: [],
       partnerStats: [],
+      outcomeStats: [],
+      actionTypeStats: [],
+      startupStats: [],
       decisionVelocity: [],
       timeSeries: [],
+      cumulativeSeries: [],
+      confidenceBuckets: [],
+      outcomeByStage: [],
+      geoStats: [],
+      recencyStats: {
+        last7: 0,
+        last30: 0,
+        last90: 0,
+        prev30: 0,
+        momentumPct: 0,
+      },
       totalDecisions: 0,
       avgConfidence: 0,
       positiveRate: 0,
@@ -159,6 +245,122 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     };
   }).sort((a, b) => b.totalDecisions - a.totalDecisions);
 
+  // Outcome stats
+  const outcomeMap = new Map<string, { total: number; confidenceSum: number }>();
+  decisions.forEach((d) => {
+    const outcome = d.outcome || "pending";
+    const stats = outcomeMap.get(outcome) || { total: 0, confidenceSum: 0 };
+    stats.total++;
+    stats.confidenceSum += d.confidenceScore;
+    outcomeMap.set(outcome, stats);
+  });
+  const outcomeStats: OutcomeStats[] = Array.from(outcomeMap.entries()).map(([outcome, stats]) => ({
+    outcome,
+    total: stats.total,
+    avgConfidence: stats.total > 0 ? Math.round(stats.confidenceSum / stats.total) : 0,
+  }));
+
+  // Action type stats
+  const actionMap = new Map<string, { total: number; positive: number; negative: number; pending: number; confidenceSum: number }>();
+  decisions.forEach((d) => {
+    const action = d.actionType || "Unknown";
+    const stats = actionMap.get(action) || { total: 0, positive: 0, negative: 0, pending: 0, confidenceSum: 0 };
+    stats.total++;
+    if (d.outcome === "positive") stats.positive++;
+    else if (d.outcome === "negative") stats.negative++;
+    else stats.pending++;
+    stats.confidenceSum += d.confidenceScore;
+    actionMap.set(action, stats);
+  });
+  const actionTypeStats: ActionTypeStats[] = Array.from(actionMap.entries()).map(([action, stats]) => ({
+    action,
+    total: stats.total,
+    positive: stats.positive,
+    negative: stats.negative,
+    pending: stats.pending,
+    avgConfidence: stats.total > 0 ? Math.round(stats.confidenceSum / stats.total) : 0,
+  })).sort((a, b) => b.total - a.total);
+
+  // Startup stats
+  const startupMap = new Map<string, { total: number; positive: number; negative: number; pending: number; confidenceSum: number }>();
+  decisions.forEach((d) => {
+    const name = d.startupName || "Unknown";
+    const stats = startupMap.get(name) || { total: 0, positive: 0, negative: 0, pending: 0, confidenceSum: 0 };
+    stats.total++;
+    if (d.outcome === "positive") stats.positive++;
+    else if (d.outcome === "negative") stats.negative++;
+    else stats.pending++;
+    stats.confidenceSum += d.confidenceScore;
+    startupMap.set(name, stats);
+  });
+  const startupStats: StartupStats[] = Array.from(startupMap.entries()).map(([startupName, stats]) => ({
+    startupName,
+    total: stats.total,
+    positive: stats.positive,
+    negative: stats.negative,
+    pending: stats.pending,
+    avgConfidence: stats.total > 0 ? Math.round(stats.confidenceSum / stats.total) : 0,
+  })).sort((a, b) => b.total - a.total);
+
+  // Geo stats
+  const geoMap = new Map<string, { total: number; positive: number; negative: number; pending: number; confidenceSum: number }>();
+  decisions.forEach((d) => {
+    const geo = d.context?.geo || "Unknown";
+    const stats = geoMap.get(geo) || { total: 0, positive: 0, negative: 0, pending: 0, confidenceSum: 0 };
+    stats.total++;
+    if (d.outcome === "positive") stats.positive++;
+    else if (d.outcome === "negative") stats.negative++;
+    else stats.pending++;
+    stats.confidenceSum += d.confidenceScore;
+    geoMap.set(geo, stats);
+  });
+  const geoStats: GeoStats[] = Array.from(geoMap.entries()).map(([geo, stats]) => ({
+    geo,
+    total: stats.total,
+    positive: stats.positive,
+    negative: stats.negative,
+    pending: stats.pending,
+    avgConfidence: stats.total > 0 ? Math.round(stats.confidenceSum / stats.total) : 0,
+  })).sort((a, b) => b.total - a.total);
+
+  // Outcome by stage (stacked)
+  const outcomeByStage: OutcomeByStage[] = stageStats.map((stage) => ({
+    stage: stage.stage,
+    total: stage.total,
+    positive: stage.positive,
+    negative: stage.negative,
+    pending: stage.pending,
+    positiveRate: stage.conversionRate,
+  }));
+
+  // Confidence buckets
+  const buckets = [
+    { label: "0-20", min: 0, max: 20 },
+    { label: "21-40", min: 21, max: 40 },
+    { label: "41-60", min: 41, max: 60 },
+    { label: "61-80", min: 61, max: 80 },
+    { label: "81-100", min: 81, max: 100 },
+  ];
+  const confidenceBuckets: ConfidenceBucket[] = buckets.map((bucket) => {
+    const bucketDecisions = decisions.filter(
+      (d) => d.confidenceScore >= bucket.min && d.confidenceScore <= bucket.max
+    );
+    const positive = bucketDecisions.filter((d) => d.outcome === "positive").length;
+    const negative = bucketDecisions.filter((d) => d.outcome === "negative").length;
+    const pending = bucketDecisions.length - positive - negative;
+    const avgConfidence = bucketDecisions.length
+      ? Math.round(bucketDecisions.reduce((sum, d) => sum + d.confidenceScore, 0) / bucketDecisions.length)
+      : 0;
+    return {
+      range: bucket.label,
+      count: bucketDecisions.length,
+      positive,
+      negative,
+      pending,
+      avgConfidence,
+    };
+  });
+
   // Decision velocity over time (monthly buckets)
   const velocityMap = new Map<string, { days: number[]; count: number }>();
   decisions.forEach((d) => {
@@ -203,6 +405,13 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-12); // Last 12 months
 
+  const cumulativeSeries: CumulativeSeriesData[] = [];
+  let runningTotal = 0;
+  timeSeries.forEach((row) => {
+    runningTotal += row.decisions;
+    cumulativeSeries.push({ date: row.date, cumulativeDecisions: runningTotal });
+  });
+
   // Overall stats
   const totalDecisions = decisions.length;
   const avgConfidence = Math.round(
@@ -217,12 +426,33 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     ? Math.round((Math.max(...decisionDates) - Math.min(...decisionDates)) / (1000 * 60 * 60 * 24) / totalDecisions)
     : 0;
 
+  // Recency stats
+  const now = Date.now();
+  const days = (ms: number) => Math.floor(ms / (1000 * 60 * 60 * 24));
+  const last7 = decisions.filter((d) => now - new Date(d.timestamp).getTime() <= 7 * 86400000).length;
+  const last30 = decisions.filter((d) => now - new Date(d.timestamp).getTime() <= 30 * 86400000).length;
+  const last90 = decisions.filter((d) => now - new Date(d.timestamp).getTime() <= 90 * 86400000).length;
+  const prev30 = decisions.filter((d) => {
+    const ageDays = days(now - new Date(d.timestamp).getTime());
+    return ageDays > 30 && ageDays <= 60;
+  }).length;
+  const momentumPct = prev30 > 0 ? Math.round(((last30 - prev30) / prev30) * 100) : (last30 > 0 ? 100 : 0);
+  const recencyStats: RecencyStats = { last7, last30, last90, prev30, momentumPct };
+
   return {
     sectorStats,
     stageStats,
     partnerStats,
+    outcomeStats,
+    actionTypeStats,
+    startupStats,
     decisionVelocity,
     timeSeries,
+    cumulativeSeries,
+    confidenceBuckets,
+    outcomeByStage,
+    geoStats,
+    recencyStats,
     totalDecisions,
     avgConfidence,
     positiveRate,

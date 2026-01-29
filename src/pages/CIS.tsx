@@ -2505,6 +2505,63 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
         </Card>
       </div>
 
+      {hasEnoughData && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{analytics.recencyStats.last7}</p>
+                  <p className="text-xs text-muted-foreground">Decisions (7d)</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{analytics.recencyStats.last30}</p>
+                  <p className="text-xs text-muted-foreground">Decisions (30d)</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/10 rounded-lg">
+                  <BarChart3 className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{analytics.recencyStats.last90}</p>
+                  <p className="text-xs text-muted-foreground">Decisions (90d)</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-500/10 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{analytics.recencyStats.momentumPct}%</p>
+                  <p className="text-xs text-muted-foreground">30d Momentum</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {!hasEnoughData ? (
         <Card>
           <CardContent className="pt-6">
@@ -2652,6 +2709,147 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Outcome & Confidence */}
+          {analytics.outcomeStats.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    Outcome Mix
+                  </CardTitle>
+                  <CardDescription>Overall outcome distribution</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={analytics.outcomeStats.map((o) => ({
+                          name: o.outcome,
+                          value: o.total,
+                        }))}
+                        cx="50%"
+                        cy="50%"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={90}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {analytics.outcomeStats.map((entry, index) => (
+                          <Cell key={`outcome-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Confidence by Outcome
+                  </CardTitle>
+                  <CardDescription>Average confidence score per outcome</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={analytics.outcomeStats}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="outcome" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="avgConfidence" fill="#0088FE" name="Avg Confidence %" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Confidence Distribution */}
+          {analytics.confidenceBuckets.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Confidence Distribution
+                </CardTitle>
+                <CardDescription>Decision volume by confidence band</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={analytics.confidenceBuckets}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="range" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Outcome by Stage */}
+          {analytics.outcomeByStage.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Outcome by Stage
+                </CardTitle>
+                <CardDescription>Stage-level outcome mix</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={analytics.outcomeByStage}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="stage" angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Geo Focus */}
+          {analytics.geoStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Geo Focus
+                </CardTitle>
+                <CardDescription>Decision volume by geography</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={analytics.geoStats.slice(0, 12)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="geo" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="total" fill="#0088FE" name="Total Decisions" />
+                    <Bar dataKey="avgConfidence" fill="#82ca9d" name="Avg Confidence" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Time Series */}
           {analytics.timeSeries.length > 0 && (
             <Card>
@@ -2680,6 +2878,33 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
 
+          {/* Action Type Mix */}
+          {analytics.actionTypeStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Action Type Mix
+                </CardTitle>
+                <CardDescription>Outcomes by decision action</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analytics.actionTypeStats.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Decision Velocity */}
           {analytics.decisionVelocity.length > 0 && (
             <Card>
@@ -2701,6 +2926,69 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <Line type="monotone" dataKey="avgDays" stroke="#FF8042" name="Avg Days" />
                   </LineChart>
                 </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Cumulative Decisions */}
+          {analytics.cumulativeSeries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Cumulative Decisions
+                </CardTitle>
+                <CardDescription>Total decisions over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={analytics.cumulativeSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#00C49F" name="Cumulative Decisions" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top Startups */}
+          {analytics.startupStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Startups by Decision Volume</CardTitle>
+                <CardDescription>Most discussed companies and outcomes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Startup</th>
+                        <th className="text-right p-2">Total</th>
+                        <th className="text-right p-2">Positive</th>
+                        <th className="text-right p-2">Negative</th>
+                        <th className="text-right p-2">Pending</th>
+                        <th className="text-right p-2">Avg Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.startupStats.slice(0, 10).map((startup) => (
+                        <tr key={startup.startupName} className="border-b">
+                          <td className="p-2 font-medium">{startup.startupName}</td>
+                          <td className="text-right p-2">{startup.total}</td>
+                          <td className="text-right p-2 text-green-600">{startup.positive}</td>
+                          <td className="text-right p-2 text-red-600">{startup.negative}</td>
+                          <td className="text-right p-2 text-muted-foreground">{startup.pending}</td>
+                          <td className="text-right p-2">{startup.avgConfidence}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
