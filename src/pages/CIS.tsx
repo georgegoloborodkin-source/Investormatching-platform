@@ -4018,11 +4018,19 @@ export default function CIS() {
         }, 75000);
         try {
           // Answer meta-questions with general knowledge (streaming)
+          const threadMessages = messages
+            .filter((m) => m.threadId === threadId)
+            .slice(-10)
+            .map((m) => ({
+              role: m.author === "assistant" ? "assistant" : "user",
+              content: m.text,
+            }));
           await askClaudeAnswerStream(
             {
               question,
               sources: [],
               decisions: [],
+              previousMessages: threadMessages,
             },
             (chunk) => {
               streamer.appendChunk(chunk);
@@ -4092,11 +4100,22 @@ export default function CIS() {
                   notes: d.notes ?? null,
                 }))
               : [];
+            
+            // Get previous messages from this thread for context
+            const threadMessages = messages
+              .filter((m) => m.threadId === threadId)
+              .slice(-10) // Last 10 messages for context
+              .map((m) => ({
+                role: m.author === "assistant" ? "assistant" : "user",
+                content: m.text,
+              }));
+            
             await askClaudeAnswerStream(
               {
                 question,
                 sources,
                 decisions: decisionsForClaude,
+                previousMessages: threadMessages,
               },
               (chunk) => {
                 if (!streamCompleted) {
