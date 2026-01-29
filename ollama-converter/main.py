@@ -287,20 +287,20 @@ def get_ollama_client() -> "ollama.Client":
     return ollama.Client(host=OLLAMA_HOST)
 
 # CORS middleware to allow frontend requests
+# FastAPI CORSMiddleware doesn't support ["*"] with allow_credentials=False
+# So we use a list of common origins or allow all by using None
 _cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
 if _cors_origins_env.strip() == "*":
-    # For "*", we need to allow all origins explicitly
-    cors_allow_origins = ["*"]
-    allow_credentials = False
+    # Use None to allow all origins (FastAPI's way)
+    cors_allow_origins = None
 else:
     cors_allow_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
-    allow_credentials = True
 
 app.add_middleware(
     CORSMiddleware,
-    # Allow configured origins; defaults to "*"
-    allow_origins=cors_allow_origins if cors_allow_origins != ["*"] else ["*"],
-    allow_credentials=allow_credentials,
+    # None means allow all origins, otherwise use the list
+    allow_origins=cors_allow_origins if cors_allow_origins else ["*"],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
