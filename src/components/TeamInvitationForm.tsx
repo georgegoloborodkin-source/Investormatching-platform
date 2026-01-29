@@ -1,159 +1,117 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Mail, Copy, CheckCircle } from "lucide-react";
+import { Key, Copy, CheckCircle, Users } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function TeamInvitationForm() {
   const { profile } = useAuth();
   const { toast } = useToast();
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"team_member" | "organizer">("team_member");
-  const [isSending, setIsSending] = useState(false);
-  const [invitationLink, setInvitationLink] = useState<string | null>(null);
+  const [invitationCode, setInvitationCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
   const orgId = profile?.organization_id;
 
-  if (!isMD || !orgId) {
-    return null;
-  }
-
-  const handleSendInvitation = async () => {
-    if (!email.trim()) {
-      toast({
-        title: "Email required",
-        description: "Please enter an email address.",
-        variant: "destructive",
-      });
-      return;
+  useEffect(() => {
+    if (isMD && orgId) {
+      loadInvitationCode();
     }
+  }, [isMD, orgId]);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast({
-        title: "Invalid email",
-        description: "Please enter a valid email address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSending(true);
+  const loadInvitationCode = async () => {
+    if (!orgId) return;
+    
+    setLoading(true);
     try {
-      // Create invitation
       const { data, error } = await supabase
-        .from("invitations")
-        .insert({
-          organization_id: orgId,
-          invited_by: profile.id,
-          email: email.trim().toLowerCase(),
-          role: role,
-        })
-        .select("token")
+        .from("organizations")
+        .select("invitation_code")
+        .eq("id", orgId)
         .single();
 
       if (error) {
         throw error;
       }
 
-      // Generate invitation link
-      const baseUrl = window.location.origin;
-      const link = `${baseUrl}/invite/${data.token}`;
-      setInvitationLink(link);
-
-      toast({
-        title: "Invitation created!",
-        description: "Copy the link below to send to your team member.",
-      });
-
-      setEmail("");
+      setInvitationCode(data?.invitation_code || null);
     } catch (err: any) {
-      console.error("Error creating invitation:", err);
+      console.error("Error loading invitation code:", err);
       toast({
-        title: "Failed to create invitation",
+        title: "Failed to load invitation code",
         description: err.message || "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsSending(false);
+      setLoading(false);
     }
   };
 
   const copyToClipboard = async () => {
-    if (!invitationLink) return;
-    await navigator.clipboard.writeText(invitationLink);
+    if (!invitationCode) return;
+    await navigator.clipboard.writeText(invitationCode);
     setCopied(true);
     toast({
       title: "Copied!",
-      description: "Invitation link copied to clipboard.",
+      description: "Invitation code copied to clipboard.",
     });
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (!isMD || !orgId) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Invitation Code</CardTitle>
+          <CardDescription>Loading...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Invite Team Members</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Invite Your Team
+        </CardTitle>
         <CardDescription>
-          Send invitations to team members to join your fund
+          Share this invitation code with your investment team members
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="invite-email">Email Address</Label>
-          <Input
-            id="invite-email"
-            type="email"
-            placeholder="team.member@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isSending}
-          />
-        </div>
+        {invitationCode ? (
+          <>
+            <Alert>
+              <Key className="h-4 w-4" />
+              <AlertDescription>
+                Team members should select "Investment Team Member" during signup and enter this code.
+              </AlertDescription>
+            </Alert>
 
-        <div className="space-y-2">
-          <Label htmlFor="invite-role">Role</Label>
-          <Select value={role} onValueChange={(v) => setRole(v as typeof role)} disabled={isSending}>
-            <SelectTrigger id="invite-role">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="team_member">Team Member</SelectItem>
-              <SelectItem value="organizer">Organizer</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button
-          onClick={handleSendInvitation}
-          disabled={isSending || !email.trim()}
-          className="w-full"
-        >
-          {isSending ? "Creating..." : "Create Invitation Link"}
-        </Button>
-
-        {invitationLink && (
-          <Alert>
-            <Mail className="h-4 w-4" />
-            <AlertDescription className="space-y-2">
-              <p className="font-medium">Invitation link created!</p>
+            <div className="space-y-2">
+              <Label>Your Fund's Invitation Code</Label>
               <div className="flex gap-2">
                 <Input
-                  value={invitationLink}
+                  value={invitationCode}
                   readOnly
-                  className="font-mono text-xs"
+                  className="font-mono text-xl text-center font-bold tracking-wider"
                 />
                 <Button
-                  size="sm"
                   variant="outline"
                   onClick={copyToClipboard}
+                  className="min-w-[100px]"
                 >
                   {copied ? (
                     <>
@@ -169,8 +127,14 @@ export function TeamInvitationForm() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Send this link to {email || "the team member"}. They can click it to join your fund.
+                Share this code via email, Slack, or any communication channel. Team members will enter it when they sign up.
               </p>
+            </div>
+          </>
+        ) : (
+          <Alert variant="destructive">
+            <AlertDescription>
+              No invitation code found. Please contact support if this persists.
             </AlertDescription>
           </Alert>
         )}
