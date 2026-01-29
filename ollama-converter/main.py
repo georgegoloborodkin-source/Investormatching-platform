@@ -736,6 +736,21 @@ def has_question_overlap(
     return any(token in source_text for token in q_tokens)
 
 
+def resolve_pronoun_context(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
+    """
+    If the question is vague (e.g., contains "it"), prepend last user topic to improve clarity.
+    """
+    if not question or not previous_messages:
+        return question
+    q_lower = question.lower()
+    if " it " not in f" {q_lower} " and " it?" not in q_lower and " it." not in q_lower:
+        return question
+    last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+    if not last_user:
+        return question
+    return f"{last_user}\n\nFollow-up question: {question}"
+
+
 def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision], previous_messages: List[ChatMessage] = None) -> str:
     is_meta = is_meta_question(question)
     is_comprehensive = is_comprehensive_question(question)
@@ -2461,13 +2476,14 @@ async def ask_fund(request: AskRequest):
         raise HTTPException(status_code=400, detail="question is required.")
 
     no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-    if not is_meta_question(question) and not has_question_overlap(
-        question, request.sources or [], request.previous_messages or []
+    resolved_question = resolve_pronoun_context(question, request.previous_messages or [])
+    if not is_meta_question(resolved_question) and not has_question_overlap(
+        resolved_question, request.sources or [], request.previous_messages or []
     ):
         return AskResponse(answer=no_info_message)
 
-    prompt = build_answer_prompt(question, request.sources, request.decisions, request.previous_messages)
-    answer = await call_anthropic_answer(prompt, question=question, sources=request.sources)
+    prompt = build_answer_prompt(resolved_question, request.sources, request.decisions, request.previous_messages)
+    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources)
     return AskResponse(answer=answer)
 
 
@@ -2483,8 +2499,9 @@ async def ask_fund_stream(request: AskRequest):
             raise HTTPException(status_code=400, detail="question is required.")
 
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-        if not is_meta_question(question) and not has_question_overlap(
-            question, request.sources or [], request.previous_messages or []
+        resolved_question = resolve_pronoun_context(question, request.previous_messages or [])
+        if not is_meta_question(resolved_question) and not has_question_overlap(
+            resolved_question, request.sources or [], request.previous_messages or []
         ):
             async def generate_empty():
                 yield f"data: {json.dumps({'text': no_info_message})}\n\n"
@@ -2505,7 +2522,7 @@ async def ask_fund_stream(request: AskRequest):
         # Handle previous_messages safely (default to empty list if None)
         previous_messages = request.previous_messages or []
         
-        prompt = build_answer_prompt(question, request.sources or [], request.decisions or [], previous_messages)
+        prompt = build_answer_prompt(resolved_question, request.sources or [], request.decisions or [], previous_messages)
         
         async def generate():
             try:
