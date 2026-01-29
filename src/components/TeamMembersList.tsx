@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Users, Mail, Calendar, UserX, Shield } from "lucide-react";
+import { Users, Mail, Calendar, UserX, Shield, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -153,18 +153,40 @@ export function TeamMembersList() {
 
   const mdMembers = teamMembers.filter((m) => m.role === "managing_partner" || m.role === "organizer");
   const regularMembers = teamMembers.filter((m) => m.role === "team_member");
+  
+  // Debug: Log all members to console
+  useEffect(() => {
+    if (teamMembers.length > 0) {
+      console.log("Team Members:", teamMembers);
+      console.log("MD Members:", mdMembers);
+      console.log("Regular Members:", regularMembers);
+    }
+  }, [teamMembers, mdMembers, regularMembers]);
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Team Members ({teamMembers.length})
-          </CardTitle>
-          <CardDescription>
-            Manage your investment team members and their access
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Team Members ({teamMembers.length})
+              </CardTitle>
+              <CardDescription>
+                Manage your investment team members and their access
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadTeamMembers}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {teamMembers.length === 0 ? (
@@ -217,7 +239,7 @@ export function TeamMembersList() {
                 </div>
               )}
 
-              {regularMembers.length > 0 && (
+              {regularMembers.length > 0 ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Users className="h-4 w-4" />
@@ -269,6 +291,12 @@ export function TeamMembersList() {
                     ))}
                   </div>
                 </div>
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    No investment team members yet. Share your invitation code (FUND-4211) with team members to invite them.
+                  </AlertDescription>
+                </Alert>
               )}
             </>
           )}
