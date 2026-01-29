@@ -120,7 +120,7 @@ BEGIN
   -- Find organization by code
   SELECT * INTO org_record
   FROM organizations
-  WHERE invitation_code = UPPER(invitation_code);
+  WHERE organizations.invitation_code = UPPER(join_fund_by_code.invitation_code);
 
   IF org_record IS NULL THEN
     RAISE EXCEPTION 'invalid invitation code';
