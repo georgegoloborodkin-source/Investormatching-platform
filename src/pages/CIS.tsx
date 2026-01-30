@@ -596,6 +596,7 @@ function DecisionLoggerTab({
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [viewingDecision, setViewingDecision] = useState<Decision | null>(null);
 
   // Form state
   const [actor, setActor] = useState(() => {
@@ -1184,6 +1185,14 @@ function DecisionLoggerTab({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{d.confidenceScore}%</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setViewingDecision(d)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      View
+                    </Button>
                     {doc?.storage_path && (
                       <Button
                         size="sm"
@@ -1240,6 +1249,123 @@ function DecisionLoggerTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Decision View Dialog */}
+      <Dialog open={!!viewingDecision} onOpenChange={(open) => !open && setViewingDecision(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Decision Details</DialogTitle>
+            <DialogDescription>
+              Full information about this decision
+            </DialogDescription>
+          </DialogHeader>
+          {viewingDecision && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Startup Name</Label>
+                  <p className="font-medium">{viewingDecision.startupName}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Actor</Label>
+                  <p className="font-medium">{viewingDecision.actor}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Action Type</Label>
+                  <Badge variant="outline">{viewingDecision.actionType}</Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Confidence Score</Label>
+                  <p className="font-medium">{viewingDecision.confidenceScore}%</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Outcome</Label>
+                  <Badge 
+                    variant={
+                      viewingDecision.outcome === "positive" ? "default" :
+                      viewingDecision.outcome === "negative" ? "destructive" :
+                      "secondary"
+                    }
+                  >
+                    {viewingDecision.outcome || "Pending"}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Date</Label>
+                  <p className="font-medium">{new Date(viewingDecision.timestamp).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {viewingDecision.context && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Context</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {viewingDecision.context.sector && viewingDecision.context.sector !== "none" && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Sector:</span>
+                        <p className="font-medium">{viewingDecision.context.sector}</p>
+                      </div>
+                    )}
+                    {viewingDecision.context.stage && viewingDecision.context.stage !== "none" && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Stage:</span>
+                        <p className="font-medium">{viewingDecision.context.stage}</p>
+                      </div>
+                    )}
+                    {viewingDecision.context.geo && viewingDecision.context.geo !== "none" && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Geography:</span>
+                        <p className="font-medium">{viewingDecision.context.geo}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {viewingDecision.notes && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Reason / Notes</Label>
+                  <p className="mt-1 text-sm whitespace-pre-wrap">{viewingDecision.notes}</p>
+                </div>
+              )}
+
+              {viewingDecision.documentId && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Attached Document</Label>
+                  {(() => {
+                    const attachedDoc = documents.find((doc) => doc.id === viewingDecision.documentId);
+                    return attachedDoc ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="text-sm font-medium">{attachedDoc.title || "Untitled document"}</p>
+                        {attachedDoc.storage_path && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              onOpenDocument(attachedDoc.id);
+                              setViewingDecision(null);
+                            }}
+                          >
+                            Open
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Document not found</p>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setViewingDecision(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Top Actors */}
       {stats.topActors.length > 0 && (
@@ -3937,13 +4063,23 @@ export default function CIS() {
             
             if (payload.eventType === "INSERT" && payload.new) {
               const newDoc = payload.new as any;
+              // Clean up title if it looks like a storage path
+              const cleanTitle = (title: string | null): string | null => {
+                if (!title) return null;
+                // Remove file extension and random IDs
+                const cleaned = title.replace(/\.[^/.]+$/, "").replace(/-\w{8,}$/, "").trim();
+                if (!cleaned || cleaned.toLowerCase() === "document") {
+                  return "Uploaded document";
+                }
+                return cleaned;
+              };
               setDocuments((prev) => {
                 // Check if already exists to avoid duplicates
                 if (prev.some((d) => d.id === newDoc.id)) return prev;
                 return [
                   {
                     id: newDoc.id,
-                    title: newDoc.title,
+                    title: cleanTitle(newDoc.title) || newDoc.title || "Untitled document",
                     storage_path: newDoc.storage_path || null,
                   },
                   ...prev,
@@ -3951,7 +4087,7 @@ export default function CIS() {
               });
               toast({
                 title: "New document added",
-                description: `${newDoc.title || "Untitled"} was added by a team member.`,
+                description: `${cleanTitle(newDoc.title) || newDoc.title || "Untitled"} was added by a team member.`,
               });
             } else if (payload.eventType === "UPDATE" && payload.new) {
               const updatedDoc = payload.new as any;
