@@ -64,10 +64,10 @@ export function SimpleMatchingTable({
     });
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'bg-success text-success-foreground';
-    if (score >= 60) return 'bg-primary text-primary-foreground';
-    if (score >= 40) return 'bg-warning text-warning-foreground';
-    return 'bg-destructive text-destructive-foreground';
+    if (score >= 80) return 'border-[#FFED00] text-[#FFED00] bg-transparent';
+    if (score >= 60) return 'border-white text-white bg-transparent';
+    if (score >= 40) return 'border-white/70 text-white/70 bg-transparent';
+    return 'border-white/50 text-white/50 bg-transparent';
   };
 
   const getTargetStatus = (match: Match) => {
@@ -109,10 +109,10 @@ export function SimpleMatchingTable({
 
   if (matches.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-lg p-8 text-center">
-        <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-        <h3 className="text-lg font-medium mb-2">No matches generated yet</h3>
-        <p className="text-muted-foreground">
+      <div className="border-2 border-white bg-transparent rounded-lg p-8 text-center">
+        <Filter className="h-12 w-12 mx-auto mb-4 text-white/50 opacity-50" />
+        <h3 className="text-lg font-mono font-bold mb-2 text-white">No matches generated yet</h3>
+        <p className="text-white/70 font-mono">
           Add startups and investors, then click "Generate Matches" to create your matchmaking schedule.
         </p>
       </div>
@@ -120,35 +120,36 @@ export function SimpleMatchingTable({
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="p-4 border-b border-border bg-table-header">
+    <div className="border-2 border-white bg-transparent rounded-lg overflow-hidden">
+      <div className="p-4 border-b-2 border-white">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Matchmaking Schedule</h2>
+          <h2 className="text-lg font-mono font-black uppercase tracking-tight text-white">Matchmaking Schedule</h2>
           <div className="flex items-center gap-2">
             <Select
               value={startupFilter}
               onValueChange={(val) => setStartupFilter(val)}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 border-2 border-white bg-transparent text-white">
                 <SelectValue placeholder="Filter by startup" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All startups</SelectItem>
+              <SelectContent className="bg-[#050505] border-2 border-white">
+                <SelectItem value="all" className="text-white">All startups</SelectItem>
                 {startups.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
+                  <SelectItem key={s.id} value={s.id} className="text-white">
                     {s.companyName}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-white font-mono">
               <Checkbox
                 checked={showCompleted}
                 onCheckedChange={(checked) => setShowCompleted(checked === true)}
+                className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
               />
               Show completed
             </label>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-white/70 font-mono">
               {matches.filter(m => m.completed).length} / {matches.length} completed
             </span>
           </div>
@@ -157,37 +158,37 @@ export function SimpleMatchingTable({
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-table-header border-b border-table-border">
+          <thead className="border-b-2 border-white">
             <tr>
-              <th className="text-left p-3 w-12">Done</th>
+              <th className="text-left p-3 w-12 text-white font-mono font-bold">Done</th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('startupName')}
               >
                 <div className="flex items-center gap-1">
                   Startup
-                  <ArrowUpDown className="h-3 w-3" />
+                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
                 </div>
               </th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('targetName')}
               >
                 <div className="flex items-center gap-1">
                   Partner
-                  <ArrowUpDown className="h-3 w-3" />
+                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
                 </div>
               </th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('compatibilityScore')}
               >
                 <div className="flex items-center gap-1">
                   Score
-                  <ArrowUpDown className="h-3 w-3" />
+                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
                 </div>
               </th>
-              <th className="text-left p-3">Lock</th>
+              <th className="text-left p-3 text-white font-mono font-bold">Lock</th>
             </tr>
           </thead>
           <tbody>
@@ -199,16 +200,16 @@ export function SimpleMatchingTable({
               return (
                 <tr 
                   key={match.id} 
-                  className={`border-b border-table-border hover:bg-table-row-hover transition-colors ${
+                  className={`border-b border-white/30 hover:bg-[#FFED00]/5 transition-colors ${
                     match.completed ? 'opacity-60' : ''
-                  } ${isTargetUnavailable ? 'bg-destructive/10' : ''}`}
+                  } ${isTargetUnavailable ? 'bg-white/5' : ''}`}
                 >
                   <td className="p-3">
                     <Checkbox
                       checked={match.completed}
                       onCheckedChange={() => onToggleCompleted(match.id)}
                       disabled={isTargetUnavailable}
-                      className="data-[state=checked]:bg-success data-[state=checked]:border-success"
+                      className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
                     />
                   </td>
                   <td className="p-3">
@@ -217,14 +218,14 @@ export function SimpleMatchingTable({
                       onValueChange={(value) => handleStartupChange(match.id, value)}
                       disabled={match.completed}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-2 border-white bg-transparent text-white">
                         <SelectValue placeholder="Select startup" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-[#050505] border-2 border-white">
                         {startups
                           .filter(s => s.availabilityStatus === 'present')
                           .map((startup) => (
-                            <SelectItem key={startup.id} value={startup.id}>
+                            <SelectItem key={startup.id} value={startup.id} className="text-white">
                               {startup.companyName}
                             </SelectItem>
                           ))}
@@ -233,19 +234,19 @@ export function SimpleMatchingTable({
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">{displayName}</span>
-                      <Badge variant="outline" className="text-xs capitalize">
+                      <span className="text-sm text-white font-mono">{displayName}</span>
+                      <Badge variant="outline" className="text-xs capitalize border-white text-white bg-transparent font-mono">
                         {match.targetType || 'investor'}
                       </Badge>
                       {isTargetUnavailable && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-white/50 text-white/50 bg-transparent font-mono">
                           Unavailable
                         </Badge>
                       )}
                     </div>
                   </td>
                   <td className="p-3">
-                    <Badge className={getScoreColor(match.compatibilityScore)}>
+                    <Badge variant="outline" className={getScoreColor(match.compatibilityScore) + " font-mono"}>
                       {match.compatibilityScore}%
                     </Badge>
                   </td>
@@ -254,12 +255,12 @@ export function SimpleMatchingTable({
                       variant="ghost"
                       size="sm"
                       onClick={() => onToggleLocked(match.id)}
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 text-white hover:text-[#FFED00] hover:bg-white/10"
                     >
                       {match.locked ? (
-                        <Lock className="h-4 w-4 text-warning" />
+                        <Lock className="h-4 w-4 text-[#FFED00]" />
                       ) : (
-                        <Unlock className="h-4 w-4 text-muted-foreground" />
+                        <Unlock className="h-4 w-4 text-white/50" />
                       )}
                     </Button>
                   </td>

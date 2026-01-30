@@ -74,42 +74,42 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Startup Meetings Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+              <Building2 className="h-5 w-5 text-[#FFED00]" />
               Startup Meeting Overview
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-white">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead className="text-center">Completed</TableHead>
-                  <TableHead className="text-center">Upcoming</TableHead>
+                <TableRow className="border-b-2 border-white hover:bg-transparent">
+                  <TableHead className="text-white font-mono font-bold">Company</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Total</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Completed</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Upcoming</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {startupMeetingCounts.map((startup) => (
-                  <TableRow key={startup.id}>
-                    <TableCell>
+                  <TableRow key={startup.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                    <TableCell className="text-white">
                       <div>
-                        <div className="font-medium">{startup.companyName}</div>
-                        <div className="text-sm text-muted-foreground">{startup.industry}</div>
+                        <div className="font-mono font-bold">{startup.companyName}</div>
+                        <div className="text-sm text-white/70 font-mono">{startup.industry}</div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline">{startup.totalMeetings}</Badge>
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{startup.totalMeetings}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                         {startup.completedMeetings}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary">{startup.upcomingMeetings}</Badge>
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{startup.upcomingMeetings}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -119,36 +119,36 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         </Card>
 
         {/* Investor Meetings Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+              <Users className="h-5 w-5 text-[#FFED00]" />
               Investor Meeting Overview
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-white">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Firm</TableHead>
-                  <TableHead className="text-center">Used</TableHead>
-                  <TableHead className="text-center">Available</TableHead>
-                  <TableHead className="text-center">Completed</TableHead>
+                <TableRow className="border-b-2 border-white hover:bg-transparent">
+                  <TableHead className="text-white font-mono font-bold">Firm</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Used</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Available</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Completed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {investorMeetingCounts.map((investor) => (
-                  <TableRow key={investor.id}>
-                    <TableCell>
+                  <TableRow key={investor.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                    <TableCell className="text-white">
                       <div>
-                        <div className="font-medium">{investor.firmName}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-mono font-bold">{investor.firmName}</div>
+                        <div className="text-sm text-white/70 font-mono">
                           Investment member: {investor.memberName}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-white/70 font-mono">
                           {investor.totalSlots} total slots
                           {investor.tableNumber && (
-                            <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
+                            <span className="ml-2 px-1.5 py-0.5 border border-[#FFED00] text-[#FFED00] bg-transparent text-xs rounded font-mono">
                               Table {investor.tableNumber}
                             </span>
                           )}
@@ -156,17 +156,15 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline">{investor.slotsUsed}</Badge>
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{investor.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge 
-                        variant={investor.slotsAvailable > 0 ? "secondary" : "destructive"}
-                      >
+                      <Badge variant="outline" className={investor.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {investor.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                         {investor.completedMeetings}
                       </Badge>
                     </TableCell>
@@ -178,46 +176,44 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         </Card>
 
         {/* Mentor Meetings Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5" />
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+              <GraduationCap className="h-5 w-5 text-[#FFED00]" />
               Mentor Meeting Overview
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-white">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Mentor</TableHead>
-                  <TableHead className="text-center">Used</TableHead>
-                  <TableHead className="text-center">Available</TableHead>
-                  <TableHead className="text-center">Completed</TableHead>
+                <TableRow className="border-b-2 border-white hover:bg-transparent">
+                  <TableHead className="text-white font-mono font-bold">Mentor</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Used</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Available</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Completed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {mentorMeetingCounts.map((mentor) => (
-                  <TableRow key={mentor.id}>
-                    <TableCell>
+                  <TableRow key={mentor.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                    <TableCell className="text-white">
                       <div>
-                        <div className="font-medium">{mentor.fullName}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-mono font-bold">{mentor.fullName}</div>
+                        <div className="text-sm text-white/70 font-mono">
                           {mentor.totalSlots} total slots
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline">{mentor.slotsUsed}</Badge>
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{mentor.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge 
-                        variant={mentor.slotsAvailable > 0 ? "secondary" : "destructive"}
-                      >
+                      <Badge variant="outline" className={mentor.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {mentor.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                         {mentor.completedMeetings}
                       </Badge>
                     </TableCell>
@@ -229,49 +225,47 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         </Card>
 
         {/* Corporate Meetings Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BriefcaseBusiness className="h-5 w-5" />
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+              <BriefcaseBusiness className="h-5 w-5 text-[#FFED00]" />
               Corporate Meeting Overview
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-white">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Corporate</TableHead>
-                  <TableHead className="text-center">Used</TableHead>
-                  <TableHead className="text-center">Available</TableHead>
-                  <TableHead className="text-center">Completed</TableHead>
+                <TableRow className="border-b-2 border-white hover:bg-transparent">
+                  <TableHead className="text-white font-mono font-bold">Corporate</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Used</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Available</TableHead>
+                  <TableHead className="text-center text-white font-mono font-bold">Completed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {corporateMeetingCounts.map((corp) => (
-                  <TableRow key={corp.id}>
-                    <TableCell>
+                  <TableRow key={corp.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                    <TableCell className="text-white">
                       <div>
-                        <div className="font-medium">{corp.firmName}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-mono font-bold">{corp.firmName}</div>
+                        <div className="text-sm text-white/70 font-mono">
                           Contact: {corp.contactName}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-white/70 font-mono">
                           {corp.totalSlots} total slots
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline">{corp.slotsUsed}</Badge>
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{corp.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge 
-                        variant={corp.slotsAvailable > 0 ? "secondary" : "destructive"}
-                      >
+                      <Badge variant="outline" className={corp.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {corp.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                         {corp.completedMeetings}
                       </Badge>
                     </TableCell>
