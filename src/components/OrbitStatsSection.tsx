@@ -33,13 +33,15 @@ const stats = [
 
 export function OrbitStatsSection() {
   return (
-    <section className="orbit-void relative overflow-hidden border-2 border-white bg-black text-white">
+    <section className="orbit-void relative overflow-hidden border-2 border-white bg-[#050505] text-white">
       <div className="relative z-10 px-6 py-8 md:px-10 md:py-12">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
             <p className="orbit-stat-label">MARKET INTELLIGENCE</p>
             <h2 className="orbit-stat-heading max-w-xl">
-              An emerging-market signal stack for decisive capital.
+              An{" "}
+              <span className="orbit-accent-text">EMERGING</span> market signal stack for{" "}
+              <span className="orbit-accent-text">FRONTIER</span> capital.
             </h2>
           </div>
           <button className="orbit-accent-button group">
@@ -63,7 +65,7 @@ export function OrbitStatsSection() {
                 <span className="text-xs text-white/70">LIVE</span>
               </div>
               <div className="space-y-3">
-                <div className="orbit-stat-number group-hover:text-[#EAFF00]">
+                <div className="orbit-stat-number group-hover:text-[#FFED00]">
                   {stat.value}
                 </div>
                 <p className="orbit-stat-title">{stat.title}</p>

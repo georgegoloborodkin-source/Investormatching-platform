@@ -261,7 +261,7 @@
   .orbit-accent-button {
     @apply inline-flex items-center gap-2 border-2 border-white px-4 py-2;
     background: transparent;
-    color: #eaff00;
+    color: #ffed00;
     font-family: Inter, "Helvetica Now Display", "Helvetica Neue", Arial, sans-serif;
     font-weight: 700;
     letter-spacing: 0.15em;
@@ -270,10 +270,10 @@
 
   .orbit-accent-button:hover {
     color: #ffffff;
-    border-color: #eaff00;
+    border-color: #ffed00;
   }
 
   .orbit-accent-text {
-    color: inherit;
+    color: #ffed00;
   }
 }
