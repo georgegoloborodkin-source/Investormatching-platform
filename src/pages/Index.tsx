@@ -846,8 +846,7 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
         {/* Parallax Background Layers */}
         <div
           className="fixed inset-0 opacity-5 pointer-events-none"
