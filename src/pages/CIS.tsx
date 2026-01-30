@@ -1141,14 +1141,14 @@ function DecisionLoggerTab({
         </CardHeader>
         <CardContent>
           <div className="mb-4">
-            <Label className="text-xs text-muted-foreground">Filter by document</Label>
+            <Label className="text-xs text-white/70 font-mono font-bold">Filter by document</Label>
             <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-              <SelectTrigger className="mt-1">
+              <SelectTrigger className="mt-1 border-2 border-white bg-transparent text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-[#050505] border-2 border-white">
                 {documentOptions.map((doc) => (
-                  <SelectItem key={doc.id} value={doc.id}>
+                  <SelectItem key={doc.id} value={doc.id} className="text-white">
                     {doc.label}
                   </SelectItem>
                 ))}
@@ -1156,9 +1156,9 @@ function DecisionLoggerTab({
             </Select>
           </div>
           {filteredDecisions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No decisions logged yet</p>
+            <div className="text-center py-8 text-white/70 font-mono">
+              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50 text-white/50" />
+              <p className="font-bold">No decisions logged yet</p>
               <p className="text-sm">Start logging decisions to build your pattern database</p>
             </div>
           ) : (
@@ -1168,31 +1168,32 @@ function DecisionLoggerTab({
                 return (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-3 border-2 border-white rounded-lg hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors bg-transparent"
                 >
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
                       {d.actionType}
                     </Badge>
                     <div>
-                      <p className="font-medium">{d.startupName}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="font-mono font-bold text-white">{d.startupName}</p>
+                      <p className="text-xs text-white/70 font-mono">
                         {d.actor} • {new Date(d.timestamp).toLocaleDateString()}
                         {d.context.sector && ` • ${d.context.sector}`}
                       </p>
                       {doc && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-white/70 font-mono">
                           Source: {doc.title || "Document"}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{d.confidenceScore}%</span>
+                    <span className="text-sm text-white/70 font-mono">{d.confidenceScore}%</span>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => setViewingDecision(d)}
+                      className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       View
@@ -1202,6 +1203,7 @@ function DecisionLoggerTab({
                         size="sm"
                         variant="outline"
                         onClick={() => onOpenDocument(doc.id)}
+                        className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
                       >
                         View source
                       </Button>
@@ -1211,27 +1213,27 @@ function DecisionLoggerTab({
                       onValueChange={(v) => handleUpdateOutcome(d.id, v as Decision["outcome"])}
                       disabled={isUpdating === d.id}
                     >
-                      <SelectTrigger className="w-[100px] h-8" disabled={isUpdating === d.id}>
+                      <SelectTrigger className="w-[100px] h-8 border-2 border-white bg-transparent text-white" disabled={isUpdating === d.id}>
                         <SelectValue />
                         {isUpdating === d.id && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">
+                      <SelectContent className="bg-[#050505] border-2 border-white">
+                        <SelectItem value="pending" className="text-white">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Pending
-                            <span className="text-xs text-muted-foreground ml-1">(No outcome yet)</span>
+                            <span className="text-xs text-white/50 ml-1 font-mono">(No outcome yet)</span>
                           </span>
                         </SelectItem>
-                        <SelectItem value="positive">
-                          <span className="flex items-center gap-1 text-green-600">
+                        <SelectItem value="positive" className="text-white">
+                          <span className="flex items-center gap-1 text-[#FFED00]">
                             <CheckCircle className="h-3 w-3" /> Positive
-                            <span className="text-xs text-muted-foreground ml-1">(Success)</span>
+                            <span className="text-xs text-white/50 ml-1 font-mono">(Success)</span>
                           </span>
                         </SelectItem>
-                        <SelectItem value="negative">
-                          <span className="flex items-center gap-1 text-red-600">
+                        <SelectItem value="negative" className="text-white">
+                          <span className="flex items-center gap-1 text-white/70">
                             <AlertTriangle className="h-3 w-3" /> Negative
-                            <span className="text-xs text-muted-foreground ml-1">(Passed/Declined)</span>
+                            <span className="text-xs text-white/50 ml-1 font-mono">(Passed/Declined)</span>
                           </span>
                         </SelectItem>
                       </SelectContent>
@@ -1239,7 +1241,7 @@ function DecisionLoggerTab({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
                       onClick={() => setDeleteConfirmId(d.id)}
                       disabled={isDeleting === d.id}
                     >
@@ -1270,29 +1272,30 @@ function DecisionLoggerTab({
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Startup Name</Label>
-                  <p className="font-medium">{viewingDecision.startupName}</p>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Startup Name</Label>
+                  <p className="font-mono font-bold text-white">{viewingDecision.startupName}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Actor</Label>
-                  <p className="font-medium">{viewingDecision.actor}</p>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Actor</Label>
+                  <p className="font-mono font-bold text-white">{viewingDecision.actor}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Action Type</Label>
-                  <Badge variant="outline">{viewingDecision.actionType}</Badge>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Action Type</Label>
+                  <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{viewingDecision.actionType}</Badge>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Confidence Score</Label>
-                  <p className="font-medium">{viewingDecision.confidenceScore}%</p>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Confidence Score</Label>
+                  <p className="font-mono font-bold text-white">{viewingDecision.confidenceScore}%</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Outcome</Label>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Outcome</Label>
                   <div className="flex items-center gap-2">
                     <Badge 
-                      variant={
-                        viewingDecision.outcome === "positive" ? "default" :
-                        viewingDecision.outcome === "negative" ? "destructive" :
-                        "secondary"
+                      variant="outline"
+                      className={
+                        viewingDecision.outcome === "positive" ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" :
+                        viewingDecision.outcome === "negative" ? "border-white/50 text-white/50 bg-transparent font-mono" :
+                        "border-white text-white bg-transparent font-mono"
                       }
                     >
                       {viewingDecision.outcome || "Pending"}
@@ -1300,10 +1303,10 @@ function DecisionLoggerTab({
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="text-xs text-muted-foreground cursor-help">ℹ️</span>
+                          <span className="text-xs text-white/70 cursor-help font-mono">ℹ️</span>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          <p className="text-xs">
+                        <TooltipContent className="max-w-xs bg-[#050505] border-2 border-white text-white">
+                          <p className="text-xs font-mono">
                             <strong>Pending:</strong> Decision is still in progress, no outcome yet<br/>
                             <strong>Positive:</strong> Decision led to a positive result (e.g., investment, partnership)<br/>
                             <strong>Negative:</strong> Decision led to a negative result (e.g., passed, declined)
@@ -1314,31 +1317,31 @@ function DecisionLoggerTab({
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Date</Label>
-                  <p className="font-medium">{new Date(viewingDecision.timestamp).toLocaleString()}</p>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Date</Label>
+                  <p className="font-mono font-bold text-white">{new Date(viewingDecision.timestamp).toLocaleString()}</p>
                 </div>
               </div>
 
               {viewingDecision.context && (
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Context</Label>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Context</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {viewingDecision.context.sector && viewingDecision.context.sector !== "none" && (
                       <div>
-                        <span className="text-xs text-muted-foreground">Sector:</span>
-                        <p className="font-medium">{viewingDecision.context.sector}</p>
+                        <span className="text-xs text-white/70 font-mono">Sector:</span>
+                        <p className="font-mono font-bold text-white">{viewingDecision.context.sector}</p>
                       </div>
                     )}
                     {viewingDecision.context.stage && viewingDecision.context.stage !== "none" && (
                       <div>
-                        <span className="text-xs text-muted-foreground">Stage:</span>
-                        <p className="font-medium">{viewingDecision.context.stage}</p>
+                        <span className="text-xs text-white/70 font-mono">Stage:</span>
+                        <p className="font-mono font-bold text-white">{viewingDecision.context.stage}</p>
                       </div>
                     )}
                     {viewingDecision.context.geo && viewingDecision.context.geo !== "none" && (
                       <div>
-                        <span className="text-xs text-muted-foreground">Geography:</span>
-                        <p className="font-medium">{viewingDecision.context.geo}</p>
+                        <span className="text-xs text-white/70 font-mono">Geography:</span>
+                        <p className="font-mono font-bold text-white">{viewingDecision.context.geo}</p>
                       </div>
                     )}
                   </div>
@@ -1346,11 +1349,11 @@ function DecisionLoggerTab({
               )}
 
               <div>
-                <Label className="text-xs text-muted-foreground">Reason / Notes</Label>
+                <Label className="text-xs text-white/70 font-mono font-bold">Reason / Notes</Label>
                 {viewingDecision.notes ? (
-                  <p className="mt-1 text-sm whitespace-pre-wrap">{viewingDecision.notes}</p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap text-white font-mono">{viewingDecision.notes}</p>
                 ) : (
-                  <p className="mt-1 text-sm text-muted-foreground italic">No reason or notes provided</p>
+                  <p className="mt-1 text-sm text-white/50 italic font-mono">No reason or notes provided</p>
                 )}
               </div>
 
@@ -1382,8 +1385,8 @@ function DecisionLoggerTab({
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setViewingDecision(null)}>
+              <div className="flex justify-end gap-2 pt-4 border-t border-white/30">
+                <Button variant="outline" onClick={() => setViewingDecision(null)} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                   Close
                 </Button>
               </div>
@@ -1398,17 +1401,17 @@ function DecisionLoggerTab({
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Decision Makers</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-white">
             <div className="space-y-2">
               {stats.topActors.map((a, i) => (
-                <div key={a.actor} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                <div key={a.actor} className="flex items-center justify-between p-2 border-2 border-white rounded hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">#{i + 1}</span>
-                    <span className="font-medium">{a.actor}</span>
+                    <span className="text-sm font-mono font-bold text-white/70">#{i + 1}</span>
+                    <span className="font-mono font-bold text-white">{a.actor}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span>{a.count} decisions</span>
-                    <Badge variant={a.winRate > 50 ? "default" : "secondary"}>
+                  <div className="flex items-center gap-3 text-sm font-mono">
+                    <span className="text-white/70">{a.count} decisions</span>
+                    <Badge variant="outline" className={a.winRate > 50 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white text-white bg-transparent font-mono"}>
                       {a.winRate}% win rate
                     </Badge>
                   </div>
@@ -2303,64 +2306,68 @@ function SourcesTab({
             <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
             Auto-extract and log decision after import
           </label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-white/70 font-mono">
             Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
           </p>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Source Library</CardTitle>
           <CardDescription className="text-white/70 font-mono">Track syndicates, company decks, and notes in one place.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 text-white">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Title</Label>
+              <Label className="text-white font-mono font-bold">Title</Label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Syndicate: Astor Ventures"
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div>
-              <Label>Source Type</Label>
+              <Label className="text-white font-mono font-bold">Source Type</Label>
               <Select value={sourceType} onValueChange={(value) => setSourceType(value as SourceRecord["source_type"])}>
-                <SelectTrigger>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="syndicate">Syndicate</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
-                  <SelectItem value="deck">Deck</SelectItem>
-                  <SelectItem value="notes">Notes</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectItem value="syndicate" className="text-white">Syndicate</SelectItem>
+                  <SelectItem value="company" className="text-white">Company</SelectItem>
+                  <SelectItem value="deck" className="text-white">Deck</SelectItem>
+                  <SelectItem value="notes" className="text-white">Notes</SelectItem>
+                  <SelectItem value="other" className="text-white">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>External URL (optional)</Label>
+              <Label className="text-white font-mono font-bold">External URL (optional)</Label>
               <Input
                 value={externalUrl}
                 onChange={(e) => setExternalUrl(e.target.value)}
                 placeholder="https://docs.google.com/..."
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div>
-              <Label>Tags (comma separated)</Label>
+              <Label className="text-white font-mono font-bold">Tags (comma separated)</Label>
               <Input
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="SEA, fintech, seed"
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div className="md:col-span-2">
-              <Label>Notes (optional)</Label>
+              <Label className="text-white font-mono font-bold">Notes (optional)</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add context, key points, or reminders..."
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
               />
             </div>
           </div>
@@ -2371,25 +2378,25 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Tracked Sources</CardTitle>
           <CardDescription className="text-white/70 font-mono">{sources.length} items</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 text-white">
           {sources.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No sources yet. Add your first syndicate or company source.</div>
+            <div className="text-sm text-white/70 font-mono">No sources yet. Add your first syndicate or company source.</div>
           ) : (
             sources.map((source) => (
-              <div key={source.id} className="flex items-center justify-between gap-3 border rounded-md p-3">
+              <div key={source.id} className="flex items-center justify-between gap-3 border-2 border-white rounded-md p-3 hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{source.source_type}</Badge>
-                    {source.status !== "active" && <Badge variant="secondary">{source.status}</Badge>}
+                    <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{source.source_type}</Badge>
+                    {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-transparent font-mono">{source.status}</Badge>}
                   </div>
-                  <div className="font-medium">{source.title || "Untitled source"}</div>
+                  <div className="font-mono font-bold text-white">{source.title || "Untitled source"}</div>
                   {source.external_url && (
-                    <div className="text-xs text-muted-foreground truncate max-w-[420px]">{source.external_url}</div>
+                    <div className="text-xs text-white/70 font-mono truncate max-w-[420px]">{source.external_url}</div>
                   )}
                   {(() => {
                     // Find document for this source to show uploader
@@ -2399,7 +2406,7 @@ function SourcesTab({
                     );
                     if (relatedDoc && (relatedDoc.uploader_email || relatedDoc.uploader_name)) {
                       return (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-white/70 font-mono">
                           Uploaded by: {relatedDoc.uploader_name || relatedDoc.uploader_email}
                         </div>
                       );
@@ -2407,12 +2414,12 @@ function SourcesTab({
                     return null;
                   })()}
                   {source.notes && (
-                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">{source.notes}</div>
+                    <div className="text-sm text-white/70 font-mono whitespace-pre-wrap">{source.notes}</div>
                   )}
                   {source.tags && source.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {source.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
+                        <Badge key={tag} variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
                           {tag}
                         </Badge>
                       ))}
@@ -2421,15 +2428,15 @@ function SourcesTab({
                 </div>
                 <div className="flex items-center gap-2">
                   {source.external_url && (
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="outline" size="sm" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                       <a href={source.external_url} target="_blank" rel="noreferrer">
                         <Link2 className="h-4 w-4 mr-1" />
                         Open
                       </a>
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)}>
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-white/10">
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -2462,54 +2469,54 @@ function DashboardTab({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <ClipboardList className="h-5 w-5 text-primary" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.totalDecisions}</p>
-                <p className="text-xs text-muted-foreground">Decisions</p>
+                <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <FileText className="h-5 w-5 text-blue-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <FileText className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{documents.length}</p>
-                <p className="text-xs text-muted-foreground">Documents</p>
+                <p className="text-2xl font-mono font-black">{documents.length}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Documents</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <Folder className="h-5 w-5 text-green-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Folder className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{sources.length}</p>
-                <p className="text-xs text-muted-foreground">Sources</p>
+                <p className="text-2xl font-mono font-black">{sources.length}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Sources</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/10 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-amber-600" />
+              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
+                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.byOutcome.positive || 0}</p>
-                <p className="text-xs text-muted-foreground">Positive</p>
+                <p className="text-2xl font-mono font-black">{stats.byOutcome.positive || 0}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive</p>
               </div>
             </div>
           </CardContent>
@@ -2524,9 +2531,9 @@ function DashboardTab({
           <CardContent className="text-sm text-white/70 font-mono">
             {latestDecision ? (
               <div className="space-y-1">
-                <div className="font-medium text-foreground">{latestDecision.startupName}</div>
-                <div>{latestDecision.actionType} {latestDecision.outcome ? `(${latestDecision.outcome})` : ""}</div>
-                {latestDecision.notes && <div>{latestDecision.notes}</div>}
+                <div className="font-mono font-bold text-white">{latestDecision.startupName}</div>
+                <div className="font-mono">{latestDecision.actionType} {latestDecision.outcome ? `(${latestDecision.outcome})` : ""}</div>
+                {latestDecision.notes && <div className="font-mono">{latestDecision.notes}</div>}
               </div>
             ) : (
               "No decisions yet."
@@ -2541,10 +2548,10 @@ function DashboardTab({
           <CardContent className="text-sm text-white/70 font-mono">
             {latestDocument ? (
               <div className="space-y-1">
-                <div className="font-medium text-foreground">
+                <div className="font-mono font-bold text-white">
                   {latestDocument.title || "Untitled document"}
                 </div>
-                <div className="text-xs">Stored in CIS documents</div>
+                <div className="text-xs font-mono">Stored in CIS documents</div>
               </div>
             ) : (
               "No documents yet."
@@ -2559,8 +2566,8 @@ function DashboardTab({
           <CardContent className="text-sm text-white/70 font-mono">
             {latestSource ? (
               <div className="space-y-1">
-                <div className="font-medium text-foreground">{latestSource.title || "Untitled source"}</div>
-                <div className="text-xs">{latestSource.source_type}</div>
+                <div className="font-mono font-bold text-white">{latestSource.title || "Untitled source"}</div>
+                <div className="text-xs font-mono">{latestSource.source_type}</div>
               </div>
             ) : (
               "No sources yet."
@@ -2679,12 +2686,12 @@ function OnboardingTab({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recommended Fund Data</CardTitle>
-            <CardDescription>Prioritize these sources for strong answers.</CardDescription>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Recommended Fund Data</CardTitle>
+            <CardDescription className="text-white/70 font-mono">Prioritize these sources for strong answers.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <CardContent className="space-y-2 text-sm text-white/70 font-mono">
             <ul className="list-disc pl-4 space-y-1">
               <li>IC memos, diligence notes, and investment theses</li>
               <li>Portfolio updates, KPIs, and board decks</li>
@@ -2695,22 +2702,22 @@ function OnboardingTab({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Sync Guidance</CardTitle>
-            <CardDescription>Fastest path to a live knowledge base.</CardDescription>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Sync Guidance</CardTitle>
+            <CardDescription className="text-white/70 font-mono">Fastest path to a live knowledge base.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <CardContent className="space-y-2 text-sm text-white/70 font-mono">
             <div className="space-y-1">
-              <div className="font-medium text-foreground">Google Drive</div>
+              <div className="font-mono font-bold text-white">Google Drive</div>
               <p>Import key docs directly from Drive to keep investment materials current.</p>
             </div>
             <div className="space-y-1">
-              <div className="font-medium text-foreground">ClickUp</div>
+              <div className="font-mono font-bold text-white">ClickUp</div>
               <p>Sync pipeline tasks and IC checklists for real-time deal visibility.</p>
             </div>
             <div className="space-y-1">
-              <div className="font-medium text-foreground">Manual Uploads</div>
+              <div className="font-mono font-bold text-white">Manual Uploads</div>
               <p>Upload PDFs, spreadsheets, and memos for immediate indexing.</p>
             </div>
           </CardContent>
