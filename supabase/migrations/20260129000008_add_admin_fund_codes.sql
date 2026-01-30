@@ -311,11 +311,11 @@ $$;
 GRANT EXECUTE ON FUNCTION public.join_fund_by_code(text) TO authenticated;
 
 -- Helper function for slugify (if not exists)
-CREATE OR REPLACE FUNCTION slugify(text)
+CREATE OR REPLACE FUNCTION slugify(input_text text)
 RETURNS text
 LANGUAGE sql
 AS $$
-  SELECT LOWER(REGEXP_REPLACE(REGEXP_REPLACE(text, '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'));
+  SELECT LOWER(REGEXP_REPLACE(REGEXP_REPLACE(input_text, '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'));
 $$;
 
 -- Add comment
