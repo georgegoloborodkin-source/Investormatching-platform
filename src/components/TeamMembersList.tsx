@@ -113,7 +113,8 @@ export function TeamMembersList() {
         description: `${memberToRemove.full_name || memberToRemove.email} has been removed from your fund.`,
       });
 
-      // Reload team members
+      // Reload team members - reset the ref to force reload
+      hasLoadedRef.current = false;
       await loadTeamMembers();
       setShowRemoveDialog(false);
       setMemberToRemove(null);

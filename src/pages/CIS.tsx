@@ -67,6 +67,7 @@ import {
   Link2,
   BarChart3,
   PieChart,
+  Eye,
 } from "lucide-react";
 import {
   BarChart,
@@ -1637,9 +1638,23 @@ function SourcesTab({
             // Continue without storage
           }
 
+          // Extract a better title from file name (remove extension, clean up)
+          const getDocumentTitle = (fileName: string | null): string => {
+            if (!fileName) return "Uploaded document";
+            // Remove file extension
+            const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+            // Remove random IDs like "document-1tWiD79w" -> "document"
+            const cleaned = nameWithoutExt.replace(/-\w{8,}$/, "").trim();
+            // If it's just "document" or empty, use a better default
+            if (!cleaned || cleaned.toLowerCase() === "document") {
+              return "Uploaded document";
+            }
+            return cleaned;
+          };
+
           // Save document record (even if storage upload failed)
           const { data: doc, error: docError } = await insertDocument(eventId, {
-            title: file.name || "Uploaded file",
+            title: getDocumentTitle(file.name),
             source_type: "upload",
             file_name: file.name || null,
             storage_path: storagePath,
@@ -1676,8 +1691,18 @@ function SourcesTab({
 
           // Create a source entry for the uploaded file
           try {
+            // Use the same cleaned title logic
+            const getDocumentTitle = (fileName: string | null): string => {
+              if (!fileName) return "Uploaded document";
+              const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+              const cleaned = nameWithoutExt.replace(/-\w{8,}$/, "").trim();
+              if (!cleaned || cleaned.toLowerCase() === "document") {
+                return "Uploaded document";
+              }
+              return cleaned;
+            };
             await onCreateSource({
-              title: file.name || "Uploaded file",
+              title: getDocumentTitle(file.name),
               source_type: "notes",
               external_url: null,
               storage_path: storagePath,
