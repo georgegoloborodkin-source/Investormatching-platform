@@ -961,80 +961,80 @@ function DecisionLoggerTab({
                 />
               </div>
               <div>
-                <Label>Outcome</Label>
+                <Label className="text-white font-mono font-bold">Outcome</Label>
                 <Select
                   value={decisionOutcome || "pending"}
                   onValueChange={(v) => setDecisionOutcome(v as Decision["outcome"])}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="positive">Positive</SelectItem>
-                    <SelectItem value="negative">Negative</SelectItem>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="pending" className="text-white">Pending</SelectItem>
+                    <SelectItem value="positive" className="text-white">Positive</SelectItem>
+                    <SelectItem value="negative" className="text-white">Negative</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Sector</Label>
+                <Label className="text-white font-mono font-bold">Sector</Label>
                 <Select value={sector} onValueChange={setSector}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue placeholder="Select sector" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="FinTech">FinTech</SelectItem>
-                    <SelectItem value="HealthTech">HealthTech</SelectItem>
-                    <SelectItem value="SaaS">SaaS</SelectItem>
-                    <SelectItem value="AI / ML">AI / ML</SelectItem>
-                    <SelectItem value="E-commerce">E-commerce</SelectItem>
-                    <SelectItem value="EdTech">EdTech</SelectItem>
-                    <SelectItem value="PropTech">PropTech</SelectItem>
-                    <SelectItem value="AgriTech">AgriTech</SelectItem>
-                    <SelectItem value="CleanTech">CleanTech</SelectItem>
-                    <SelectItem value="Gaming">Gaming</SelectItem>
-                    <SelectItem value="Media / Content">Media / Content</SelectItem>
-                    <SelectItem value="Logistics">Logistics</SelectItem>
-                    <SelectItem value="Food & Beverage">Food & Beverage</SelectItem>
-                    <SelectItem value="Travel & Tourism">Travel & Tourism</SelectItem>
-                    <SelectItem value="HRTech">HRTech</SelectItem>
-                    <SelectItem value="LegalTech">LegalTech</SelectItem>
-                    <SelectItem value="InsurTech">InsurTech</SelectItem>
-                    <SelectItem value="Space Infrastructure">Space Infrastructure</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="none" className="text-white">None</SelectItem>
+                    <SelectItem value="FinTech" className="text-white">FinTech</SelectItem>
+                    <SelectItem value="HealthTech" className="text-white">HealthTech</SelectItem>
+                    <SelectItem value="SaaS" className="text-white">SaaS</SelectItem>
+                    <SelectItem value="AI / ML" className="text-white">AI / ML</SelectItem>
+                    <SelectItem value="E-commerce" className="text-white">E-commerce</SelectItem>
+                    <SelectItem value="EdTech" className="text-white">EdTech</SelectItem>
+                    <SelectItem value="PropTech" className="text-white">PropTech</SelectItem>
+                    <SelectItem value="AgriTech" className="text-white">AgriTech</SelectItem>
+                    <SelectItem value="CleanTech" className="text-white">CleanTech</SelectItem>
+                    <SelectItem value="Gaming" className="text-white">Gaming</SelectItem>
+                    <SelectItem value="Media / Content" className="text-white">Media / Content</SelectItem>
+                    <SelectItem value="Logistics" className="text-white">Logistics</SelectItem>
+                    <SelectItem value="Food & Beverage" className="text-white">Food & Beverage</SelectItem>
+                    <SelectItem value="Travel & Tourism" className="text-white">Travel & Tourism</SelectItem>
+                    <SelectItem value="HRTech" className="text-white">HRTech</SelectItem>
+                    <SelectItem value="LegalTech" className="text-white">LegalTech</SelectItem>
+                    <SelectItem value="InsurTech" className="text-white">InsurTech</SelectItem>
+                    <SelectItem value="Space Infrastructure" className="text-white">Space Infrastructure</SelectItem>
+                    <SelectItem value="Other" className="text-white">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Stage</Label>
+                <Label className="text-white font-mono font-bold">Stage</Label>
                 <Select value={stage} onValueChange={setStage}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="Pre-Seed">Pre-Seed</SelectItem>
-                    <SelectItem value="Seed">Seed</SelectItem>
-                    <SelectItem value="Series A">Series A</SelectItem>
-                    <SelectItem value="Series B">Series B</SelectItem>
-                    <SelectItem value="Series C">Series C</SelectItem>
-                    <SelectItem value="Series D+">Series D+</SelectItem>
-                    <SelectItem value="Growth">Growth</SelectItem>
-                    <SelectItem value="Bridge">Bridge</SelectItem>
-                    <SelectItem value="Convertible Note">Convertible Note</SelectItem>
-                    <SelectItem value="SAFE">SAFE</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="none" className="text-white">None</SelectItem>
+                    <SelectItem value="Pre-Seed" className="text-white">Pre-Seed</SelectItem>
+                    <SelectItem value="Seed" className="text-white">Seed</SelectItem>
+                    <SelectItem value="Series A" className="text-white">Series A</SelectItem>
+                    <SelectItem value="Series B" className="text-white">Series B</SelectItem>
+                    <SelectItem value="Series C" className="text-white">Series C</SelectItem>
+                    <SelectItem value="Series D+" className="text-white">Series D+</SelectItem>
+                    <SelectItem value="Growth" className="text-white">Growth</SelectItem>
+                    <SelectItem value="Bridge" className="text-white">Bridge</SelectItem>
+                    <SelectItem value="Convertible Note" className="text-white">Convertible Note</SelectItem>
+                    <SelectItem value="SAFE" className="text-white">SAFE</SelectItem>
+                    <SelectItem value="Other" className="text-white">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Geography</Label>
+                <Label className="text-white font-mono font-bold">Geography</Label>
                 <Select value={geo} onValueChange={setGeo}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
                     <SelectItem value="none">None</SelectItem>
                     <SelectItem value="Singapore">Singapore</SelectItem>
                     <SelectItem value="Indonesia">Indonesia</SelectItem>
@@ -1112,7 +1112,7 @@ function DecisionLoggerTab({
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" onClick={onOpenConverter}>
+              <Button variant="outline" onClick={onOpenConverter} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                 Upload new
               </Button>
             </div>
@@ -2183,15 +2183,16 @@ function SourcesTab({
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <Label>ClickUp Team ID</Label>
+              <Label className="text-white font-mono font-bold">ClickUp Team ID</Label>
               <Input
                 value={clickUpTeamId}
                 onChange={(e) => setClickUpTeamId(e.target.value)}
                 placeholder="e.g., 1234567"
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div>
-              <Label>Available Lists</Label>
+              <Label className="text-white font-mono font-bold">Available Lists</Label>
               <Select
                 value={selectedListId}
                 onValueChange={(value) => {
@@ -2199,19 +2200,19 @@ function SourcesTab({
                   setClickUpListId(value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                   <SelectValue placeholder="Select a list" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#050505] border-2 border-white">
                   {clickUpLists.filter((list) => list.id && list.id.trim().length > 0).length === 0 ? (
-                    <SelectItem value="no-lists" disabled>
+                    <SelectItem value="no-lists" disabled className="text-white/50">
                       No lists loaded
                     </SelectItem>
                   ) : (
                     clickUpLists
                       .filter((list) => list.id && list.id.trim().length > 0)
                       .map((list) => (
-                      <SelectItem key={list.id} value={list.id}>
+                      <SelectItem key={list.id} value={list.id} className="text-white">
                         {list.name}
                       </SelectItem>
                     ))
@@ -2229,11 +2230,12 @@ function SourcesTab({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <Label>ClickUp List ID (manual)</Label>
+              <Label className="text-white font-mono font-bold">ClickUp List ID (manual)</Label>
               <Input
                 value={clickUpListId}
                 onChange={(e) => setClickUpListId(e.target.value)}
                 placeholder="e.g., 90120481234"
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div className="flex items-end">
@@ -2243,7 +2245,7 @@ function SourcesTab({
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-white/70 font-mono">
             Uses server-side token. Ask admin to set CLICKUP_API_TOKEN in the converter service.
           </p>
         </CardContent>
@@ -2262,7 +2264,7 @@ function SourcesTab({
             onChange={handleLocalUpload}
             accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-white/70 font-mono">
             Text files (.txt, .md, .csv, .json) are indexed for search. Other files are stored and can be referenced later.
           </p>
         </CardContent>
