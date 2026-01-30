@@ -1447,6 +1447,7 @@ function DecisionLoggerTab({
 
 function SourcesTab({
   sources,
+  documents,
   onCreateSource,
   onDeleteSource,
   getGoogleAccessToken,
@@ -1458,6 +1459,13 @@ function SourcesTab({
   indexDocumentEmbeddings,
 }: {
   sources: SourceRecord[];
+  documents: Array<{
+    id: string;
+    title: string | null;
+    storage_path: string | null;
+    uploader_name?: string | null;
+    uploader_email?: string | null;
+  }>;
   onCreateSource: (
     payload: {
       title: string | null;
@@ -6000,6 +6008,7 @@ export default function CIS() {
           <TabsContent value="sources">
             <SourcesTab
               sources={sources}
+              documents={documents}
               onCreateSource={handleCreateSource}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
