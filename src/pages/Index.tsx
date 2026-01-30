@@ -870,6 +870,11 @@ const Index = () => {
             <Link to="/cis">
               <Button variant="outline">Switch to CIS prototype</Button>
             </Link>
+            <Link to="/orbit-stats">
+              <Button variant="outline" className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80">
+                Orbit Stats
+              </Button>
+            </Link>
             <Button onClick={handleSaveData} variant="outline">
               <Save className="h-4 w-4 mr-2" />
               Save Data
