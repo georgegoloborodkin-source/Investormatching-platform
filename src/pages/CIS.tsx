@@ -3992,6 +3992,58 @@ export default function CIS() {
           }
         )
         .subscribe();
+
+      // Set up real-time subscription for sources
+      sourcesChannel = supabase
+        .channel(`sources:${event.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "sources",
+            filter: `event_id=eq.${event.id}`,
+          },
+          (payload) => {
+            if (cancelled) return;
+            console.log("Source change:", payload.eventType, payload.new || payload.old);
+            
+            if (payload.eventType === "INSERT" && payload.new) {
+              const newSource = payload.new as any;
+              const tags = Array.isArray(newSource.tags)
+                ? newSource.tags
+                : typeof newSource.tags === "string"
+                ? newSource.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+                : null;
+              setSources((prev) => {
+                if (prev.some((s) => s.id === newSource.id)) return prev;
+                return [{ ...newSource, tags } as SourceRecord, ...prev];
+              });
+              toast({
+                title: "New source added",
+                description: `${newSource.title || "Untitled"} was added by a team member.`,
+              });
+            } else if (payload.eventType === "UPDATE" && payload.new) {
+              const updatedSource = payload.new as any;
+              const tags = Array.isArray(updatedSource.tags)
+                ? updatedSource.tags
+                : typeof updatedSource.tags === "string"
+                ? updatedSource.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+                : null;
+              setSources((prev) =>
+                prev.map((s) => (s.id === updatedSource.id ? { ...updatedSource, tags } as SourceRecord : s))
+              );
+            } else if (payload.eventType === "DELETE" && payload.old) {
+              const deletedSource = payload.old as any;
+              setSources((prev) => prev.filter((s) => s.id !== deletedSource.id));
+              toast({
+                title: "Source removed",
+                description: "A source was deleted by a team member.",
+              });
+            }
+          }
+        )
+        .subscribe();
     };
 
     loadDecisions();
@@ -4002,6 +4054,9 @@ export default function CIS() {
       }
       if (decisionsChannel) {
         supabase.removeChannel(decisionsChannel);
+      }
+      if (sourcesChannel) {
+        supabase.removeChannel(sourcesChannel);
       }
     };
   }, [profile, toast]);
