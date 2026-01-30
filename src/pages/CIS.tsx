@@ -3589,7 +3589,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <RechartsTooltip />
                     <Legend />
                     <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
-                    <Line type="monotone" dataKey="total" stroke="#8884d8" name="Decisions" />
+                    <Line type="monotone" dataKey="total" stroke="#FFFFFF" name="Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
