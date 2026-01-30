@@ -276,35 +276,35 @@ export function EditableSchedule({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Investment Team Call Schedule</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h2 className="text-2xl font-mono font-black uppercase tracking-tight text-white">Investment Team Call Schedule</h2>
+          <p className="text-sm text-white/70 font-mono mt-1">
             View meetings by time slot. Each card shows which team member needs to call which startup.
           </p>
         </div>
-        <Button variant="outline" onClick={autoFixConflicts}>
+        <Button variant="outline" onClick={autoFixConflicts} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
           Auto-fix conflicts
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+            <Phone className="h-5 w-5 text-[#FFED00]" />
             Call Sheet (by investment member)
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 text-white">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="flex-1">
-              <Label>Investment team member</Label>
+              <Label className="text-white font-mono font-bold">Investment team member</Label>
                 <Select value={memberFocus} onValueChange={setMemberFocus}>
-                <SelectTrigger className="mt-1">
+                <SelectTrigger className="mt-1 border-2 border-white bg-transparent text-white">
                     <SelectValue placeholder="Select member to focus" />
                 </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={MEMBER_ALL}>All members</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value={MEMBER_ALL} className="text-white">All members</SelectItem>
                   {memberOptions.map((m) => (
-                    <SelectItem key={m} value={m}>
+                    <SelectItem key={m} value={m} className="text-white">
                       {m}
                     </SelectItem>
                   ))}
@@ -312,10 +312,10 @@ export function EditableSchedule({
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus}>
+              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50">
                 Export CSV
               </Button>
-              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus}>
+              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50">
                 Export .ics
               </Button>
             </div>
@@ -324,19 +324,19 @@ export function EditableSchedule({
             {!isAllMembers && (
             <div className="space-y-2">
               {callSheetSorted.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No calls for this member.</div>
+                <div className="text-sm text-white/70 font-mono">No calls for this member.</div>
               ) : (
                 <div className="space-y-1">
                   {callSheetSorted.map((m) => {
                     const slot = timeSlots.find((t) => t.label === m.timeSlot);
                     const inv = investors.find((i) => i.id === m.investorId);
                     return (
-                      <div key={m.id} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
-                        <div className="text-muted-foreground">
+                      <div key={m.id} className="flex items-center justify-between text-sm border-2 border-white rounded-md px-3 py-2 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
+                        <div className="text-white/70 font-mono">
                           {slot ? `${slot.startTime}-${slot.endTime}` : m.slotTime} • {m.timeSlot}
                         </div>
-                        <div className="font-medium">{m.startupName}</div>
-                        <div className="text-muted-foreground">
+                        <div className="font-mono font-bold text-white">{m.startupName}</div>
+                        <div className="text-white/70 font-mono">
                           {inv?.firmName}
                           {inv?.tableNumber ? ` (Table ${inv.tableNumber})` : ""}
                         </div>
@@ -355,39 +355,40 @@ export function EditableSchedule({
           const slotMatches = groupedMatches[timeSlot.label] || [];
           
           return (
-            <Card key={timeSlot.id} className="overflow-hidden border-2">
-              <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2">
-                <CardTitle className="text-lg flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow-sm">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    <span className="font-bold text-blue-900">{timeSlot.startTime} - {timeSlot.endTime}</span>
+            <Card key={timeSlot.id} className="overflow-hidden border-2 border-white bg-transparent">
+              <CardHeader className="pb-3 border-b-2 border-white">
+                <CardTitle className="text-lg flex items-center gap-3 text-white">
+                  <div className="flex items-center gap-2 bg-transparent border-2 border-white px-3 py-1.5 rounded-lg">
+                    <Clock className="h-5 w-5 text-[#FFED00]" />
+                    <span className="font-mono font-bold text-white">{timeSlot.startTime} - {timeSlot.endTime}</span>
                   </div>
-                  <span className="text-muted-foreground font-normal">({timeSlot.label})</span>
+                  <span className="text-white/70 font-mono">({timeSlot.label})</span>
                   <div className="ml-auto flex items-center gap-3">
                     {conflictBySlot[timeSlot.label] > 0 && (
-                      <Badge variant="destructive">
+                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                         {conflictBySlot[timeSlot.label]} conflict{conflictBySlot[timeSlot.label] !== 1 ? "s" : ""}
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
-                      <Label className="text-sm font-medium">Slot Done</Label>
+                      <Label className="text-sm font-mono font-bold text-white">Slot Done</Label>
                       <Switch
                         checked={!!timeSlot.isDone}
                         onCheckedChange={(checked) => handleToggleSlotDone(timeSlot.id, checked)}
+                        className="data-[state=checked]:bg-[#FFED00]"
                       />
                     </div>
                     <Badge 
-                      variant={timeSlot.isDone ? "destructive" : "default"}
-                      className={timeSlot.isDone ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
+                      variant="outline"
+                      className={timeSlot.isDone ? "border-white/50 text-white/50 bg-transparent font-mono" : "border-[#FFED00] text-[#FFED00] bg-transparent font-mono"}
                     >
                       {timeSlot.isDone ? "Completed" : `${slotMatches.length} call${slotMatches.length !== 1 ? 's' : ''}`}
                     </Badge>
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4">
+              <CardContent className="p-4 text-white">
                 {slotMatches.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-white/70 font-mono">
                     No meetings scheduled for this slot
                   </div>
                 ) : (
@@ -401,12 +402,12 @@ export function EditableSchedule({
                     return (
                       <div
                         key={match.id}
-                        className={`p-4 border rounded-lg transition-all ${
+                        className={`p-4 border-2 rounded-lg transition-all ${
                           match.completed 
-                            ? 'bg-green-50 border-green-200 opacity-75' 
+                            ? 'bg-transparent border-[#FFED00]/50 opacity-75' 
                             : match.locked
-                            ? 'bg-orange-50 border-orange-200 border-2'
-                            : 'bg-card hover:bg-accent/50'
+                            ? 'bg-transparent border-[#FFED00]'
+                            : 'bg-transparent border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5'
                         }`}
                       >
                         {isEditing ? (
