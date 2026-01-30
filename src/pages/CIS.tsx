@@ -5664,48 +5664,60 @@ export default function CIS() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
+      {/* Parallax Background */}
+      <div
+        className="fixed inset-0 opacity-5 pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(255, 237, 0, 0.2) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 237, 0, 0.2) 1px, transparent 1px)
+          `,
+          backgroundSize: "50px 50px",
+        }}
+      />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b-2 border-white pb-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Brain className="h-7 w-7 text-primary" />
-              Company Intelligence System
+            <h1 className="text-3xl font-black font-mono flex items-center gap-2 text-white tracking-tight">
+              <Brain className="h-7 w-7 text-[#FFED00]" />
+              COMPANY INTELLIGENCE SYSTEM
             </h1>
-            <p className="text-sm text-muted-foreground">
-              AI-powered document extraction, decision tracking, and knowledge management
+            <p className="text-xs text-white/70 uppercase tracking-wider font-semibold mt-1">
+              AI-POWERED DOCUMENT EXTRACTION, DECISION TRACKING, AND KNOWLEDGE MANAGEMENT
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="border rounded-md px-3 py-2 text-xs text-muted-foreground">
-              <div className="font-medium text-foreground">
-                {profile?.full_name || profile?.email || "Signed-in user"}
+            <div className="border-2 border-white bg-transparent rounded-none px-3 py-2 text-xs text-white/70">
+              <div className="font-bold text-white uppercase tracking-wider">
+                {profile?.full_name || profile?.email || "SIGNED-IN USER"}
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{profile?.role || "member"}</Badge>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge className="bg-[#FFED00] text-black font-bold">{profile?.role?.toUpperCase() || "MEMBER"}</Badge>
                 {profile?.organization_id ? (
-                  <span className="truncate">Org: {profile.organization_id}</span>
+                  <span className="truncate text-white/50">ORG: {profile.organization_id.slice(0, 8)}...</span>
                 ) : (
-                  <span>Org: pending</span>
+                  <span className="text-white/50">ORG: PENDING</span>
                 )}
               </div>
-              <div className="mt-1 text-[10px] text-muted-foreground">
-                Build: {buildStamp}
+              <div className="mt-1 text-[10px] text-white/40 uppercase tracking-wider">
+                BUILD: {buildStamp}
               </div>
             </div>
             {(profile?.role as string) === "admin" && (
-              <Button variant="outline" asChild>
+              <Button variant="outline" asChild className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
                 <Link to="/admin">
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Panel
                 </Link>
               </Button>
             )}
-            <Button variant="outline" onClick={signOut}>
+            <Button variant="outline" onClick={signOut} className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
               Log out
             </Button>
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
               <a href="/">← Back to Matchmaking</a>
             </Button>
           </div>
