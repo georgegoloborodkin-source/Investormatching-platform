@@ -92,6 +92,7 @@ import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
 import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
 import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import { TeamMembersList } from "@/components/TeamMembersList";
+import { SyncStatus } from "@/components/SyncStatus";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -2405,6 +2406,7 @@ function OnboardingTab({
         <>
           <TeamInvitationForm />
           {profile?.organization_id && <TeamMembersList />}
+          {profile?.organization_id && <SyncStatus />}
         </>
       )}
 
