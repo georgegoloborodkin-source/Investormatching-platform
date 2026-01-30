@@ -94,6 +94,8 @@ import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
 import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import { TeamMembersList } from "@/components/TeamMembersList";
 import { SyncStatus } from "@/components/SyncStatus";
+import { Link } from "react-router-dom";
+import { Shield } from "lucide-react";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -5680,6 +5682,14 @@ export default function CIS() {
                 Build: {buildStamp}
               </div>
             </div>
+            {profile?.role === "admin" && (
+              <Button variant="outline" asChild>
+                <Link to="/admin">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin Panel
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" onClick={signOut}>
               Log out
             </Button>

@@ -45,9 +45,8 @@ export default function RoleSelection() {
     }
 
     // If user already selected role but no org, show appropriate step
-    if (profile?.role === "managing_partner" && !profile?.organization_id) {
-      setStep("fund_creation");
-    } else if (profile?.role === "team_member" && !profile?.organization_id) {
+    // Both MDs and team members enter codes now
+    if ((profile?.role === "managing_partner" || profile?.role === "team_member") && !profile?.organization_id) {
       setStep("code_entry");
     }
   }, [profile, navigate]);
@@ -76,12 +75,8 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      // Navigate to appropriate step
-      if (role === "managing_partner") {
-        setStep("fund_creation");
-      } else {
-        setStep("code_entry");
-      }
+      // Both MDs and team members enter codes
+      setStep("code_entry");
     } catch (error: any) {
       console.error("Error updating role:", error);
       toast({
@@ -95,60 +90,15 @@ export default function RoleSelection() {
   };
 
   const handleCreateFund = async () => {
-    if (!user || !profile) {
-      toast({
-        title: "Error",
-        description: "Please sign in again.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!fundName.trim()) {
-      toast({
-        title: "Fund name required",
-        description: "Please enter your fund name.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const fundSlug = slugifyOrgName(fundName) || `fund-${user.id.slice(0, 8)}`;
-      
-      const { data, error } = await supabase.rpc("create_fund_for_md", {
-        fund_name: fundName.trim(),
-        fund_slug: fundSlug,
-        fund_type: fundType || null,
-        website: website.trim() || null,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      setCreatedInvitationCode(data?.invitation_code || data?.organization?.invitation_code || null);
-      await refreshProfile();
-
-      setStep("fund_created");
-    } catch (error: any) {
-      console.error("Error creating fund:", error);
-      toast({
-        title: "Failed to create fund",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    // MDs now enter fund code (created by admin), not create fund directly
+    setStep("code_entry");
   };
 
   const handleJoinFund = async () => {
     if (!invitationCode.trim()) {
       toast({
         title: "Code required",
-        description: "Please enter the invitation code.",
+        description: "Please enter the fund code.",
         variant: "destructive",
       });
       return;
@@ -156,6 +106,8 @@ export default function RoleSelection() {
 
     setIsSaving(true);
     try {
+      // For MDs: use fund code to create/join fund
+      // For team members: use invitation code to join
       const { data, error } = await supabase.rpc("join_fund_by_code", {
         code_param: invitationCode.trim().toUpperCase(),
       });
@@ -166,18 +118,31 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      toast({
-        title: "Welcome!",
-        description: `You've joined ${data?.organization?.name || "the fund"}.`,
-      });
-
-      // Redirect to app
-      navigate("/");
+      if (profile?.role === "managing_partner") {
+        // MD created/joined fund
+        setCreatedInvitationCode(data?.invitation_code || data?.organization?.invitation_code || null);
+        if (data?.message === "Fund created successfully") {
+          setStep("fund_created");
+        } else {
+          toast({
+            title: "Welcome!",
+            description: `You've joined ${data?.organization?.name || "the fund"}.`,
+          });
+          navigate("/");
+        }
+      } else {
+        // Team member joined
+        toast({
+          title: "Welcome!",
+          description: `You've joined ${data?.organization?.name || "the fund"}.`,
+        });
+        navigate("/");
+      }
     } catch (error: any) {
       console.error("Error joining fund:", error);
       toast({
         title: "Failed to join fund",
-        description: error.message || "Invalid invitation code. Please check and try again.",
+        description: error.message || "Invalid fund code. Please check and try again.",
         variant: "destructive",
       });
     } finally {
@@ -241,97 +206,35 @@ export default function RoleSelection() {
     );
   }
 
-  if (step === "fund_creation") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Create Your Fund</CardTitle>
-            <CardDescription className="text-base">
-              Set up your VC fund organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fund-name">Fund Name *</Label>
-              <Input
-                id="fund-name"
-                placeholder="e.g., Orbit Ventures"
-                value={fundName}
-                onChange={(e) => setFundName(e.target.value)}
-                disabled={isSaving}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fund-type">Fund Type</Label>
-              <Select value={fundType} onValueChange={setFundType} disabled={isSaving}>
-                <SelectTrigger id="fund-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vc">Venture Capital</SelectItem>
-                  <SelectItem value="angel">Angel Fund</SelectItem>
-                  <SelectItem value="syndicate">Syndicate</SelectItem>
-                  <SelectItem value="family_office">Family Office</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="website">Website (optional)</Label>
-              <Input
-                id="website"
-                type="url"
-                placeholder="https://yourfund.com"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                disabled={isSaving}
-              />
-            </div>
-
-            <Button
-              onClick={handleCreateFund}
-              disabled={isSaving || !fundName.trim()}
-              className="w-full"
-            >
-              {isSaving ? "Creating..." : "Create Fund"}
-            </Button>
-
-            <Button
-              variant="ghost"
-              onClick={() => setStep("role_selection")}
-              disabled={isSaving}
-              className="w-full"
-            >
-              Back
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   if (step === "code_entry") {
     return (
       <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
         <Card className="w-full max-w-2xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Join Your Fund</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              {profile?.role === "managing_partner" ? "Enter Fund Code" : "Join Your Fund"}
+            </CardTitle>
             <CardDescription className="text-base">
-              Enter the invitation code from your Managing Partner
+              {profile?.role === "managing_partner" 
+                ? "Enter the fund code provided by admin to create or join your fund"
+                : "Enter the invitation code from your Managing Partner"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert>
               <Key className="h-4 w-4" />
               <AlertDescription>
-                Ask your Managing Partner for the invitation code (e.g., ORBIT-1234)
+                {profile?.role === "managing_partner"
+                  ? "Contact admin to get your fund code (e.g., ORBIT-1234). First MD to use it creates the fund."
+                  : "Ask your Managing Partner for the invitation code (e.g., ORBIT-1234)"}
               </AlertDescription>
             </Alert>
 
             <div className="space-y-2">
-              <Label htmlFor="invitation-code">Invitation Code</Label>
+              <Label htmlFor="invitation-code">
+                {profile?.role === "managing_partner" ? "Fund Code" : "Invitation Code"}
+              </Label>
               <Input
                 id="invitation-code"
                 placeholder="ORBIT-1234"
@@ -347,7 +250,11 @@ export default function RoleSelection() {
               disabled={isSaving || !invitationCode.trim()}
               className="w-full"
             >
-              {isSaving ? "Joining..." : "Join Fund"}
+              {isSaving 
+                ? "Processing..." 
+                : profile?.role === "managing_partner" 
+                  ? "Create/Join Fund" 
+                  : "Join Fund"}
             </Button>
 
             <Button

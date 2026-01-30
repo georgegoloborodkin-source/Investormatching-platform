@@ -12,6 +12,7 @@ import Profile from "./pages/Profile";
 import AuthCallback from "./pages/AuthCallback";
 import RoleSelection from "./pages/RoleSelection";
 import InviteAcceptance from "./pages/InviteAcceptance";
+import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,14 @@ const App = () => (
               element={
                 <ProtectedRoute requireAuth>
                   <InviteAcceptance />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requireAuth>
+                  <AdminPanel />
                 </ProtectedRoute>
               }
             />
