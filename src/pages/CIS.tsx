@@ -1215,16 +1215,19 @@ function DecisionLoggerTab({
                         <SelectItem value="pending">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Pending
+                            <span className="text-xs text-muted-foreground ml-1">(No outcome yet)</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="positive">
                           <span className="flex items-center gap-1 text-green-600">
                             <CheckCircle className="h-3 w-3" /> Positive
+                            <span className="text-xs text-muted-foreground ml-1">(Success)</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="negative">
                           <span className="flex items-center gap-1 text-red-600">
                             <AlertTriangle className="h-3 w-3" /> Negative
+                            <span className="text-xs text-muted-foreground ml-1">(Passed/Declined)</span>
                           </span>
                         </SelectItem>
                       </SelectContent>
@@ -1280,15 +1283,31 @@ function DecisionLoggerTab({
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Outcome</Label>
-                  <Badge 
-                    variant={
-                      viewingDecision.outcome === "positive" ? "default" :
-                      viewingDecision.outcome === "negative" ? "destructive" :
-                      "secondary"
-                    }
-                  >
-                    {viewingDecision.outcome || "Pending"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={
+                        viewingDecision.outcome === "positive" ? "default" :
+                        viewingDecision.outcome === "negative" ? "destructive" :
+                        "secondary"
+                      }
+                    >
+                      {viewingDecision.outcome || "Pending"}
+                    </Badge>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xs text-muted-foreground cursor-help">ℹ️</span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">
+                            <strong>Pending:</strong> Decision is still in progress, no outcome yet<br/>
+                            <strong>Positive:</strong> Decision led to a positive result (e.g., investment, partnership)<br/>
+                            <strong>Negative:</strong> Decision led to a negative result (e.g., passed, declined)
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Date</Label>
@@ -1322,12 +1341,14 @@ function DecisionLoggerTab({
                 </div>
               )}
 
-              {viewingDecision.notes && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Reason / Notes</Label>
+              <div>
+                <Label className="text-xs text-muted-foreground">Reason / Notes</Label>
+                {viewingDecision.notes ? (
                   <p className="mt-1 text-sm whitespace-pre-wrap">{viewingDecision.notes}</p>
-                </div>
-              )}
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground italic">No reason or notes provided</p>
+                )}
+              </div>
 
               {viewingDecision.documentId && (
                 <div>
@@ -1905,8 +1926,22 @@ function SourcesTab({
       }
       const result = await ingestGoogleDrive(url.trim(), accessToken);
       console.log("Drive import result:", { title: result.title, hasContent: !!result.content, hasRaw: !!result.raw_content });
+      
+      // Clean up title like we do for local uploads
+      const cleanTitle = (title: string | null | undefined): string => {
+        if (!title) return "Google Drive document";
+        // Remove file extension
+        const nameWithoutExt = title.replace(/\.[^/.]+$/, "");
+        // Remove random IDs like "document-14KsWrLy"
+        const cleaned = nameWithoutExt.replace(/-\w{8,}$/, "").replace(/^notes\s+/i, "").trim();
+        if (!cleaned || cleaned.toLowerCase() === "document") {
+          return "Google Drive document";
+        }
+        return cleaned;
+      };
+      
       await onCreateSource({
-        title: result.title || "Google Drive source",
+        title: cleanTitle(result.title),
         source_type: "notes",
         external_url: url.trim(),
         tags: ["google-drive"],
@@ -1956,8 +1991,19 @@ function SourcesTab({
       // But if auto-logged didn't create one, create it here
       if (!autoLogged) {
         try {
+          // Clean title for document too
+          const cleanTitle = (title: string | null | undefined): string => {
+            if (!title) return "Google Drive document";
+            const nameWithoutExt = title.replace(/\.[^/.]+$/, "");
+            const cleaned = nameWithoutExt.replace(/-\w{8,}$/, "").replace(/^notes\s+/i, "").trim();
+            if (!cleaned || cleaned.toLowerCase() === "document") {
+              return "Google Drive document";
+            }
+            return cleaned;
+          };
+          
           const { data: doc, error: docError } = await insertDocument(eventId, {
-            title: result.title || "Google Drive import",
+            title: cleanTitle(result.title),
             source_type: "api",
             file_name: result.title || null,
             storage_path: null,

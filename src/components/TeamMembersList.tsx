@@ -98,14 +98,20 @@ export function TeamMembersList() {
 
     try {
       // Remove user from organization (set organization_id to null)
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("user_profiles")
         .update({ organization_id: null })
         .eq("id", memberToRemove.id)
-        .eq("organization_id", orgId);
+        .eq("organization_id", orgId)
+        .select();
 
       if (error) {
         throw error;
+      }
+
+      // Verify the update actually happened
+      if (!data || data.length === 0) {
+        throw new Error("Update did not affect any rows. The user may have already been removed or you don't have permission.");
       }
 
       toast({
@@ -122,7 +128,7 @@ export function TeamMembersList() {
       console.error("Error removing team member:", err);
       toast({
         title: "Failed to remove team member",
-        description: err.message || "Please try again.",
+        description: err.message || "Please try again. If the issue persists, check your permissions.",
         variant: "destructive",
       });
     }
