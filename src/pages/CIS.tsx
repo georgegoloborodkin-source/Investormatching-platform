@@ -198,13 +198,13 @@ function ThreadTree({ threads, active, onSelect }: { threads: Thread[]; active: 
     return (
       <div
         key={t.id}
-        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-muted transition-colors ${
-          active === t.id ? "bg-muted border-l-2 border-primary" : ""
+        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer border-2 border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-colors bg-transparent ${
+          active === t.id ? "border-[#FFED00] bg-[#FFED00]/10" : ""
         }`}
         style={{ paddingLeft: `${12 + level * 16}px` }}
         onClick={() => onSelect(t.id)}
       >
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-xs text-white/70 font-mono">
           {level === 0 ? "▸" : "└"}
         </span>
         <span className={`text-sm ${active === t.id ? "font-semibold" : ""}`}>{t.title}</span>
@@ -884,7 +884,7 @@ function DecisionLoggerTab({
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.topActors.length}</p>
-                <p className="text-xs text-muted-foreground">Active Actors</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Active Actors</p>
               </div>
             </div>
           </CardContent>
@@ -3125,14 +3125,14 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     </TooltipProvider>
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-white">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={analytics.stageStats}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="stage" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                      <XAxis dataKey="stage" stroke="#FFFFFF" />
+                      <YAxis stroke="#FFFFFF" />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                      <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                       <Bar dataKey="conversionRate" fill="#FFED00" name="Conversion Rate %" />
                     </BarChart>
                   </ResponsiveContainer>
