@@ -167,6 +167,7 @@ export async function getDocumentById(documentId: string) {
 }
 
 export async function getDocumentsByEvent(eventId: string) {
+  // Join with user_profiles to get uploader info
   return supabase
     .from("documents")
     .select("*")

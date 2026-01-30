@@ -1927,18 +1927,55 @@ function SourcesTab({
       const result = await ingestGoogleDrive(url.trim(), accessToken);
       console.log("Drive import result:", { title: result.title, hasContent: !!result.content, hasRaw: !!result.raw_content });
       
-      // Clean up title like we do for local uploads
-      const cleanTitle = (title: string | null | undefined): string => {
-        if (!title) return "Google Drive document";
-        // Remove file extension
-        const nameWithoutExt = title.replace(/\.[^/.]+$/, "");
-        // Remove random IDs like "document-14KsWrLy"
-        const cleaned = nameWithoutExt.replace(/-\w{8,}$/, "").replace(/^notes\s+/i, "").trim();
-        if (!cleaned || cleaned.toLowerCase() === "document") {
-          return "Google Drive document";
+      // Extract better title from Google Drive
+      const extractTitleFromGoogleDrive = (title: string | null | undefined, content: string | null | undefined, url: string): string => {
+        // First, try to extract from content (look for first heading or title)
+        if (content) {
+          // Look for markdown-style headings
+          const headingMatch = content.match(/^#+\s+(.+)$/m);
+          if (headingMatch && headingMatch[1]) {
+            const extracted = headingMatch[1].trim();
+            if (extracted.length > 3 && extracted.length < 100) {
+              return extracted;
+            }
+          }
+          // Look for first line that looks like a title (capitalized, short)
+          const lines = content.split('\n').filter(l => l.trim().length > 0);
+          for (const line of lines.slice(0, 5)) {
+            const trimmed = line.trim();
+            if (trimmed.length > 5 && trimmed.length < 80 && /^[A-Z]/.test(trimmed)) {
+              // Check if it's not just a sentence
+              if (!trimmed.includes('.') || trimmed.split('.').length <= 2) {
+                return trimmed;
+              }
+            }
+          }
         }
-        return cleaned;
+        
+        // Try to extract from URL (Google Docs URLs sometimes have the doc name)
+        const urlMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (urlMatch) {
+          // Can't get name from ID, but we can try the title
+        }
+        
+        // Clean up the provided title
+        if (title) {
+          const nameWithoutExt = title.replace(/\.[^/.]+$/, "");
+          const cleaned = nameWithoutExt
+            .replace(/-\w{8,}$/, "") // Remove random IDs
+            .replace(/^notes\s+/i, "") // Remove "notes" prefix
+            .replace(/^google\s+drive\s+document$/i, "") // Remove generic text
+            .trim();
+          if (cleaned && cleaned.toLowerCase() !== "document" && cleaned.length > 3) {
+            return cleaned;
+          }
+        }
+        
+        // Fallback: try to use URL to suggest a name
+        return "Google Drive Document";
       };
+      
+      const cleanTitle = extractTitleFromGoogleDrive(result.title, result.raw_content || result.content, url.trim());
       
       await onCreateSource({
         title: cleanTitle(result.title),
