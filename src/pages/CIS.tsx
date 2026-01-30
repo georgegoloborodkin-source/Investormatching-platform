@@ -2372,6 +2372,21 @@ function SourcesTab({
                   {source.external_url && (
                     <div className="text-xs text-muted-foreground truncate max-w-[420px]">{source.external_url}</div>
                   )}
+                  {(() => {
+                    // Find document for this source to show uploader
+                    const relatedDoc = documents.find((d: any) => 
+                      d.storage_path === source.storage_path || 
+                      d.title === source.title
+                    );
+                    if (relatedDoc && (relatedDoc.uploader_email || relatedDoc.uploader_name)) {
+                      return (
+                        <div className="text-xs text-muted-foreground">
+                          Uploaded by: {relatedDoc.uploader_name || relatedDoc.uploader_email}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   {source.notes && (
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">{source.notes}</div>
                   )}
