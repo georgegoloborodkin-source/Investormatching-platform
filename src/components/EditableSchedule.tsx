@@ -413,7 +413,7 @@ export function EditableSchedule({
                         {isEditing ? (
                           <div className="space-y-4">
                             <div className="space-y-2">
-                              <Label>Startup</Label>
+                              <Label className="text-white font-mono font-bold">Startup</Label>
                               <Select
                                 value={editForm.startupId}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, startupId: value }))}
