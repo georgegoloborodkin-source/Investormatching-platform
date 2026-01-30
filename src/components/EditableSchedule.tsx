@@ -418,12 +418,12 @@ export function EditableSchedule({
                                 value={editForm.startupId}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, startupId: value }))}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                                   <SelectValue placeholder="Select startup" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-[#050505] border-2 border-white">
                                   {startups.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>
+                                    <SelectItem key={s.id} value={s.id} className="text-white">
                                       {s.companyName}
                                     </SelectItem>
                                   ))}
@@ -432,17 +432,17 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="space-y-2">
-                              <Label>Investor</Label>
+                              <Label className="text-white font-mono font-bold">Investor</Label>
                               <Select
                                 value={editForm.investorId}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, investorId: value }))}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                                   <SelectValue placeholder="Select investor" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-[#050505] border-2 border-white">
                                   {investors.map(i => (
-                                    <SelectItem key={i.id} value={i.id}>
+                                    <SelectItem key={i.id} value={i.id} className="text-white">
                                       {i.firmName} ({i.memberName})
                                     </SelectItem>
                                   ))}
@@ -451,17 +451,17 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="space-y-2">
-                              <Label>Time Slot</Label>
+                              <Label className="text-white font-mono font-bold">Time Slot</Label>
                               <Select
                                 value={editForm.timeSlot}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, timeSlot: value }))}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                                   <SelectValue placeholder="Select time slot" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-[#050505] border-2 border-white">
                                   {timeSlots.map(ts => (
-                                    <SelectItem key={ts.id} value={ts.label}>
+                                    <SelectItem key={ts.id} value={ts.label} className="text-white">
                                       {ts.label} ({ts.startTime} - {ts.endTime})
                                     </SelectItem>
                                   ))}
@@ -470,11 +470,11 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleSaveEdit}>
+                              <Button size="sm" onClick={handleSaveEdit} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]">
                                 <Save className="h-4 w-4 mr-2" />
                                 Save
                               </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                                 <X className="h-4 w-4 mr-2" />
                                 Cancel
                               </Button>
@@ -483,20 +483,20 @@ export function EditableSchedule({
                         ) : (
                           <div className="space-y-3">
                             {/* Investment Team Member Call Info - Prominent */}
-                            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
+                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#FFED00] transition-all">
                               <div className="flex items-center gap-2 mb-2">
-                                <Phone className="h-4 w-4 text-indigo-600" />
-                                <span className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">Call Assignment</span>
+                                <Phone className="h-4 w-4 text-[#FFED00]" />
+                                <span className="text-xs font-mono font-bold text-[#FFED00] uppercase tracking-wide">Call Assignment</span>
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                                  <span className="font-semibold text-base">{investor?.memberName || 'Unknown Member'}</span>
+                                  <Building2 className="h-4 w-4 text-white/70" />
+                                  <span className="font-mono font-bold text-base text-white">{investor?.memberName || 'Unknown Member'}</span>
                                 </div>
-                                <div className="text-sm text-muted-foreground pl-6">
-                                  from <span className="font-medium">{investor?.firmName || 'Unknown Firm'}</span>
+                                <div className="text-sm text-white/70 font-mono pl-6">
+                                  from <span className="font-bold">{investor?.firmName || 'Unknown Firm'}</span>
                                   {investor?.tableNumber && (
-                                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded font-medium">
+                                    <span className="ml-2 px-2 py-0.5 border border-[#FFED00] text-[#FFED00] bg-transparent text-xs rounded font-mono font-bold">
                                       Table {investor.tableNumber}
                                     </span>
                                   )}
@@ -505,32 +505,32 @@ export function EditableSchedule({
                             </div>
 
                             {/* Startup to Call */}
-                            <div className="bg-white p-3 rounded-lg border-2 border-primary/20">
-                              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Startup to Call</div>
-                              <div className="font-bold text-lg text-primary">
+                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#FFED00] transition-all">
+                              <div className="text-xs font-mono font-bold text-white/70 uppercase tracking-wide mb-1">Startup to Call</div>
+                              <div className="font-mono font-black text-lg text-white">
                                 {match.startupName}
                               </div>
                               {startup && (
-                                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                                  <div>Industry: <span className="font-medium">{startup.industry}</span></div>
-                                  <div>Stage: <span className="font-medium">{startup.fundingStage}</span> • Target: <span className="font-medium">${(startup.fundingTarget / 1000000).toFixed(1)}M</span></div>
+                                <div className="text-xs text-white/70 font-mono mt-1 space-y-0.5">
+                                  <div>Industry: <span className="font-bold">{startup.industry}</span></div>
+                                  <div>Stage: <span className="font-bold">{startup.fundingStage}</span> • Target: <span className="font-bold">${(startup.fundingTarget / 1000000).toFixed(1)}M</span></div>
                                 </div>
                               )}
                             </div>
 
-                            <div className="flex items-start justify-between pt-2 border-t">
+                            <div className="flex items-start justify-between pt-2 border-t border-white/30">
                               <div className="flex gap-2 flex-wrap">
-                                <Badge className={`text-xs ${attendanceStatus.color}`}>
+                                <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                                   Match Score: {match.compatibilityScore}%
                                 </Badge>
                                 {match.locked && (
-                                  <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
+                                  <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                                     <Lock className="h-3 w-3 mr-1" />
                                     Locked
                                   </Badge>
                                 )}
                                 {match.completed && (
-                                  <Badge variant="outline" className="text-xs bg-green-100 text-green-800 border-green-200">
+                                  <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
                                     <CheckCircle className="h-3 w-3 mr-1" />
                                     Completed
                                   </Badge>
@@ -541,7 +541,7 @@ export function EditableSchedule({
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => onToggleCompleted(match.id)}
-                                  className={match.completed ? "text-green-600" : ""}
+                                  className={match.completed ? "text-[#FFED00] hover:bg-white/10" : "text-white hover:text-[#FFED00] hover:bg-white/10"}
                                 >
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
