@@ -73,7 +73,7 @@ export function Header({
               variant="outline" 
               size="sm" 
               onClick={onImportData}
-              className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all"
+              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold"
             >
               <Upload className="h-4 w-4 mr-2" />
               Import CSV
@@ -83,7 +83,7 @@ export function Header({
               size="sm" 
               onClick={onGenerateMatches}
               disabled={isRematching || !hasData}
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
               {isRematching ? 'Generating...' : 'Generate Matches'}
@@ -94,7 +94,7 @@ export function Header({
               size="sm" 
               onClick={onExport}
               disabled={!hasData}
-              className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all"
+              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4 mr-2" />
               Export
@@ -102,14 +102,14 @@ export function Header({
 
             {user ? (
               <Link to="/profile">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-[#FFED00]">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-[#FFED00] font-bold">
                   <User className="h-4 w-4 mr-2" />
                   {profile?.full_name || user.email?.split('@')[0] || 'Profile'}
                 </Button>
               </Link>
             ) : (
               <Link to="/login">
-                <Button variant="outline" size="sm" className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00]">
+                <Button variant="outline" size="sm" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                   <LogIn className="h-4 w-4 mr-2" />
                   Sign In
                 </Button>

@@ -89,30 +89,30 @@ export function ParticipantManagement({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Startups Management */}
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
           <div className="flex items-center justify-between">
-            <CardTitle>Startups ({startups.length})</CardTitle>
-            <Button onClick={onAddStartup} size="sm">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Startups ({startups.length})</CardTitle>
+            <Button onClick={onAddStartup} size="sm" className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
               <Plus className="h-4 w-4 mr-2" />
               Add Startup
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {startups.map((startup) => (
-              <div key={startup.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+              <div key={startup.id} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{startup.companyName}</h4>
+                  <h4 className="font-mono font-bold truncate text-white">{startup.companyName}</h4>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    <Badge variant="outline" className="text-xs">{startup.industry}</Badge>
-                    <Badge variant="secondary" className="text-xs">{startup.fundingStage}</Badge>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs border-white text-white bg-transparent">{startup.industry}</Badge>
+                    <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent">{startup.fundingStage}</Badge>
+                    <Badge variant="outline" className="text-xs border-white text-white bg-transparent">
                       ${(startup.fundingTarget / 1000000).toFixed(1)}M
                     </Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     {startup.geoMarkets.join(", ")}
                   </div>
                 </div>
@@ -121,6 +121,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditStartup(startup)}
+                    className="text-white hover:text-[#FFED00] hover:bg-white/10"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -128,7 +129,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteStartup(startup.id, startup.companyName)}
-                    className="text-destructive hover:text-destructive"
+                    className="text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -140,35 +141,35 @@ export function ParticipantManagement({
       </Card>
 
       {/* Investors Management */}
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
           <div className="flex items-center justify-between">
-            <CardTitle>Investors ({investors.length})</CardTitle>
-            <Button onClick={onAddInvestor} size="sm">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Investors ({investors.length})</CardTitle>
+            <Button onClick={onAddInvestor} size="sm" className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
               <Plus className="h-4 w-4 mr-2" />
               Add Investor
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {investors.map((investor) => (
-              <div key={investor.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+              <div key={investor.id} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{investor.firmName}</h4>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <h4 className="font-mono font-bold truncate text-white">{investor.firmName}</h4>
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     Investment member: {investor.memberName}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {investor.industryPreferences.map((industry) => (
-                      <Badge key={industry} variant="outline" className="text-xs">{industry}</Badge>
+                      <Badge key={industry} variant="outline" className="text-xs border-white text-white bg-transparent">{industry}</Badge>
                     ))}
-                    <Badge variant="secondary" className="text-xs">{investor.totalSlots} slots</Badge>
+                    <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent">{investor.totalSlots} slots</Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div className="text-xs text-white/70 mt-1 font-mono">
                     ${(investor.minTicketSize / 1000000).toFixed(1)}M - ${(investor.maxTicketSize / 1000000).toFixed(1)}M
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div className="text-xs text-white/70 truncate font-mono">
                     {investor.geoFocus.join(", ")}
                   </div>
                 </div>
@@ -177,6 +178,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditInvestor(investor)}
+                    className="text-white hover:text-[#FFED00] hover:bg-white/10"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -184,7 +186,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteInvestor(investor.id, investor.firmName)}
-                    className="text-destructive hover:text-destructive"
+                    className="text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -196,35 +198,35 @@ export function ParticipantManagement({
       </Card>
 
       {/* Mentors Management */}
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
           <div className="flex items-center justify-between">
-            <CardTitle>Mentors ({mentors.length})</CardTitle>
-            <Button onClick={onAddMentor} size="sm">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Mentors ({mentors.length})</CardTitle>
+            <Button onClick={onAddMentor} size="sm" className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
               <Plus className="h-4 w-4 mr-2" />
               Add Mentor
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {mentors.map((mentor) => (
-              <div key={mentor.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+              <div key={mentor.id} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{mentor.fullName}</h4>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <h4 className="font-mono font-bold truncate text-white">{mentor.fullName}</h4>
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     {mentor.email}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {mentor.expertiseAreas.slice(0, 3).map((area) => (
-                      <Badge key={area} variant="outline" className="text-xs">{area}</Badge>
+                      <Badge key={area} variant="outline" className="text-xs border-white text-white bg-transparent">{area}</Badge>
                     ))}
                     {mentor.expertiseAreas.length > 3 && (
-                      <Badge variant="outline" className="text-xs">+{mentor.expertiseAreas.length - 3}</Badge>
+                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent">+{mentor.expertiseAreas.length - 3}</Badge>
                     )}
-                    <Badge variant="secondary" className="text-xs">{mentor.totalSlots} slots</Badge>
+                    <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent">{mentor.totalSlots} slots</Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     {mentor.geoFocus.join(", ")}
                   </div>
                 </div>
@@ -233,6 +235,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditMentor(mentor)}
+                    className="text-white hover:text-[#FFED00] hover:bg-white/10"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -240,7 +243,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteMentor(mentor.id, mentor.fullName)}
-                    className="text-destructive hover:text-destructive"
+                    className="text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -252,35 +255,35 @@ export function ParticipantManagement({
       </Card>
 
       {/* Corporates Management */}
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
           <div className="flex items-center justify-between">
-            <CardTitle>Corporates ({corporates.length})</CardTitle>
-            <Button onClick={onAddCorporate} size="sm">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Corporates ({corporates.length})</CardTitle>
+            <Button onClick={onAddCorporate} size="sm" className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
               <Plus className="h-4 w-4 mr-2" />
               Add Corporate
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {corporates.map((corporate) => (
-              <div key={corporate.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+              <div key={corporate.id} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{corporate.firmName}</h4>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <h4 className="font-mono font-bold truncate text-white">{corporate.firmName}</h4>
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     Contact: {corporate.contactName}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {corporate.partnershipTypes.slice(0, 2).map((type) => (
-                      <Badge key={type} variant="outline" className="text-xs">{type}</Badge>
+                      <Badge key={type} variant="outline" className="text-xs border-white text-white bg-transparent">{type}</Badge>
                     ))}
                     {corporate.partnershipTypes.length > 2 && (
-                      <Badge variant="outline" className="text-xs">+{corporate.partnershipTypes.length - 2}</Badge>
+                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent">+{corporate.partnershipTypes.length - 2}</Badge>
                     )}
-                    <Badge variant="secondary" className="text-xs">{corporate.totalSlots} slots</Badge>
+                    <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent">{corporate.totalSlots} slots</Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 truncate">
+                  <div className="text-xs text-white/70 mt-1 truncate font-mono">
                     {corporate.geoFocus.join(", ")}
                   </div>
                 </div>
@@ -289,6 +292,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditCorporate(corporate)}
+                    className="text-white hover:text-[#FFED00] hover:bg-white/10"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -296,7 +300,7 @@ export function ParticipantManagement({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteCorporate(corporate.id, corporate.firmName)}
-                    className="text-destructive hover:text-destructive"
+                    className="text-white/70 hover:text-white hover:bg-white/10"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
