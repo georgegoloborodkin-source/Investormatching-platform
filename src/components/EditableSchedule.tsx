@@ -569,7 +569,7 @@ export function EditableSchedule({
                             {/* Attendance Controls */}
                             <div className="space-y-2 pt-2 border-t border-border">
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs font-medium">Startup Attending</Label>
+                                <Label className="text-xs font-mono font-bold text-white">Startup Attending</Label>
                                 <Switch
                                   checked={match.startupAttending !== false}
                                   onCheckedChange={(checked) => 
@@ -578,7 +578,7 @@ export function EditableSchedule({
                                 />
                               </div>
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs font-medium">Investor Attending</Label>
+                                <Label className="text-xs font-mono font-bold text-white">Investor Attending</Label>
                                 <Switch
                                   checked={match.investorAttending !== false}
                                   onCheckedChange={(checked) => 
