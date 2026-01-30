@@ -893,11 +893,11 @@ function DecisionLoggerTab({
 
       {/* Action Buttons */}
       <div className="flex gap-2 items-center">
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => setShowForm(!showForm)} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
           {showForm ? "Cancel" : "Log New Decision"}
         </Button>
         {decisions.length > 0 && (
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" onClick={handleExport} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
             <Download className="h-4 w-4 mr-1" />
             Export CSV
           </Button>
@@ -927,35 +927,37 @@ function DecisionLoggerTab({
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Actor (Who made the decision) *</Label>
+                <Label className="text-white font-mono font-bold">Actor (Who made the decision) *</Label>
                 <Input
                   placeholder="e.g., Partner A, John Smith"
                   value={actor}
                   onChange={(e) => setActor(e.target.value)}
+                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
                 />
               </div>
               <div>
-                <Label>Action Type *</Label>
+                <Label className="text-white font-mono font-bold">Action Type *</Label>
                 <Select value={actionType} onValueChange={(v) => setActionType(v as Decision["actionType"])}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="intro">Intro</SelectItem>
-                    <SelectItem value="meeting">Meeting</SelectItem>
-                    <SelectItem value="follow_up">Follow Up</SelectItem>
-                    <SelectItem value="due_diligence">Due Diligence</SelectItem>
-                    <SelectItem value="pass">Pass</SelectItem>
-                    <SelectItem value="invest">Invest</SelectItem>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="intro" className="text-white">Intro</SelectItem>
+                    <SelectItem value="meeting" className="text-white">Meeting</SelectItem>
+                    <SelectItem value="follow_up" className="text-white">Follow Up</SelectItem>
+                    <SelectItem value="due_diligence" className="text-white">Due Diligence</SelectItem>
+                    <SelectItem value="pass" className="text-white">Pass</SelectItem>
+                    <SelectItem value="invest" className="text-white">Invest</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Startup Name *</Label>
+                <Label className="text-white font-mono font-bold">Startup Name *</Label>
                 <Input
                   placeholder="e.g., Company X"
                   value={startupName}
                   onChange={(e) => setStartupName(e.target.value)}
+                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
                 />
               </div>
               <div>
@@ -2218,7 +2220,7 @@ function SourcesTab({
               </Select>
             </div>
             <div className="flex items-end">
-              <Button onClick={handleLoadClickUpLists} disabled={isLoadingLists} className="w-full" variant="outline">
+              <Button onClick={handleLoadClickUpLists} disabled={isLoadingLists} className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50" variant="outline">
                 {isLoadingLists ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
                 Load Lists
               </Button>
@@ -2235,7 +2237,7 @@ function SourcesTab({
               />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleImportClickUp} disabled={isImportingClickUp} className="w-full">
+              <Button onClick={handleImportClickUp} disabled={isImportingClickUp} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
                 {isImportingClickUp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                 Import ClickUp
               </Button>
@@ -2266,10 +2268,10 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Google Drive Import</CardTitle>
-          <CardDescription>Paste a Google Docs/Slides/Sheets link to register it.</CardDescription>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
+          <CardDescription className="text-white/70 font-mono">Paste a Google Docs/Slides/Sheets link to register it.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2283,11 +2285,11 @@ function SourcesTab({
             </div>
             <div className="flex items-end">
               <div className="flex w-full flex-col gap-2">
-                <Button onClick={openDrivePicker} variant="outline" className="w-full">
+                <Button onClick={openDrivePicker} variant="outline" className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                   <Folder className="h-4 w-4 mr-2" />
                   Choose from Drive
                 </Button>
-                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full">
+                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
                   {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                   Import Drive
                 </Button>
@@ -2305,9 +2307,9 @@ function SourcesTab({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Source Library</CardTitle>
-          <CardDescription>Track syndicates, company decks, and notes in one place.</CardDescription>
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Source Library</CardTitle>
+          <CardDescription className="text-white/70 font-mono">Track syndicates, company decks, and notes in one place.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2359,7 +2361,7 @@ function SourcesTab({
               />
             </div>
           </div>
-          <Button onClick={handleAdd} disabled={isSaving}>
+          <Button onClick={handleAdd} disabled={isSaving} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
             Add Source
           </Button>
@@ -2367,9 +2369,9 @@ function SourcesTab({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Tracked Sources</CardTitle>
-          <CardDescription>{sources.length} items</CardDescription>
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Tracked Sources</CardTitle>
+          <CardDescription className="text-white/70 font-mono">{sources.length} items</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {sources.length === 0 ? (
@@ -2512,11 +2514,11 @@ function DashboardTab({
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Latest Decision</CardTitle>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Decision</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+          <CardContent className="text-sm text-white/70 font-mono">
             {latestDecision ? (
               <div className="space-y-1">
                 <div className="font-medium text-foreground">{latestDecision.startupName}</div>
@@ -2529,11 +2531,11 @@ function DashboardTab({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Latest Document</CardTitle>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Document</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+          <CardContent className="text-sm text-white/70 font-mono">
             {latestDocument ? (
               <div className="space-y-1">
                 <div className="font-medium text-foreground">
@@ -2547,11 +2549,11 @@ function DashboardTab({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Latest Source</CardTitle>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Source</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+          <CardContent className="text-sm text-white/70 font-mono">
             {latestSource ? (
               <div className="space-y-1">
                 <div className="font-medium text-foreground">{latestSource.title || "Untitled source"}</div>
