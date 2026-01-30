@@ -5725,30 +5725,30 @@ export default function CIS() {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className={`grid w-full ${(profile?.role === "managing_partner" || profile?.role === "organizer") ? "grid-cols-6" : "grid-cols-5"} lg:w-auto lg:inline-flex`}>
-            <TabsTrigger value="chat" className="flex items-center gap-2">
+          <TabsList className={`grid w-full border-2 border-white bg-transparent ${(profile?.role === "managing_partner" || profile?.role === "organizer") ? "grid-cols-6" : "grid-cols-5"} lg:w-auto lg:inline-flex`}>
+            <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
               <Brain className="h-4 w-4" />
               Intelligence Chat
             </TabsTrigger>
             {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
-              <TabsTrigger value="onboarding" className="flex items-center gap-2">
+              <TabsTrigger value="onboarding" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
                 <Sparkles className="h-4 w-4" />
                 Onboarding
               </TabsTrigger>
             )}
-            <TabsTrigger value="overview" className="flex items-center gap-2">
+            <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
               <TrendingUp className="h-4 w-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="sources" className="flex items-center gap-2">
+            <TabsTrigger value="sources" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
               <Folder className="h-4 w-4" />
               Sources
             </TabsTrigger>
-            <TabsTrigger value="decisions" className="flex items-center gap-2">
+            <TabsTrigger value="decisions" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
               <ClipboardList className="h-4 w-4" />
               Decision Logger
             </TabsTrigger>
-            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+            <TabsTrigger value="dashboard" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold">
               <TrendingUp className="h-4 w-4" />
               Decision Engine
             </TabsTrigger>
