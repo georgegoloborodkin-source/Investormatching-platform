@@ -3045,14 +3045,14 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Decision breakdown by sector</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.sectorStats.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="sector" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="sector" angle={-45} textAnchor="end" height={100} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" fill="#FFFFFF" name="Pending" />
@@ -3143,23 +3143,23 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Performance */}
           {analytics.partnerStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <Users className="h-5 w-5 text-[#FFED00]" />
                   Partner Performance
                 </CardTitle>
-                <CardDescription>Decision metrics by partner</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Decision metrics by partner</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.partnerStats.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="partner" angle={-45} textAnchor="end" height={100} />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="partner" angle={-45} textAnchor="end" height={100} stroke="#FFFFFF" />
+                    <YAxis yAxisId="left" stroke="#FFFFFF" />
+                    <YAxis yAxisId="right" orientation="right" stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar yAxisId="left" dataKey="totalDecisions" fill="#FFED00" name="Total Decisions" />
                     <Bar yAxisId="right" dataKey="winRate" fill="#FFFFFF" name="Win Rate %" />
                   </BarChart>
@@ -3178,17 +3178,17 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Outcome breakdown by partner (top 10)</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
-                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3205,15 +3205,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Average decision cycle length (days)</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="avgDecisionVelocity" fill="#FFBB28" name="Avg Days" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
+                    <Bar dataKey="avgDecisionVelocity" fill="#FFED00" name="Avg Days" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3223,15 +3223,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Outcome & Confidence */}
           {analytics.outcomeStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="h-5 w-5" />
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="border-b-2 border-white">
+                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                    <PieChart className="h-5 w-5 text-[#FFED00]" />
                     Outcome Mix
                   </CardTitle>
-                  <CardDescription>Overall outcome distribution</CardDescription>
+                  <CardDescription className="text-white/70 font-mono">Overall outcome distribution</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-white">
                   <ResponsiveContainer width="100%" height={260}>
                     <RechartsPieChart>
                       <Pie
@@ -3243,36 +3243,36 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                         cy="50%"
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={90}
-                        fill="#8884d8"
+                        fill="#FFED00"
                         dataKey="value"
                       >
                         {analytics.outcomeStats.map((entry, index) => (
                           <Cell key={`outcome-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
-                      <Legend />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                      <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     </RechartsPieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="border-b-2 border-white">
+                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                     Confidence by Outcome
                   </CardTitle>
-                  <CardDescription>Average confidence score per outcome</CardDescription>
+                  <CardDescription className="text-white/70 font-mono">Average confidence score per outcome</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-white">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={analytics.outcomeStats}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="outcome" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                      <XAxis dataKey="outcome" stroke="#FFFFFF" />
+                      <YAxis stroke="#FFFFFF" />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                      <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                       <Bar dataKey="avgConfidence" fill="#FFED00" name="Avg Confidence %" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -3283,25 +3283,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence Distribution */}
           {analytics.confidenceBuckets.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Confidence Distribution
                 </CardTitle>
-                <CardDescription>Decision volume by confidence band</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Decision volume by confidence band</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.confidenceBuckets}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="range" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="range" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
-                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3310,25 +3310,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Age Distribution */}
           {analytics.ageBuckets.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Decision Age Distribution
                 </CardTitle>
-                <CardDescription>Volume and outcome mix by decision age</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Volume and outcome mix by decision age</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.ageBuckets}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="range" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="range" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
-                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3337,25 +3337,25 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome by Stage */}
           {analytics.outcomeByStage.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Outcome by Stage
                 </CardTitle>
-                <CardDescription>Stage-level outcome mix</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Stage-level outcome mix</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.outcomeByStage}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="stage" angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="stage" angle={-20} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
-                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3364,24 +3364,24 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Geo Focus */}
           {analytics.geoStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Geo Focus
                 </CardTitle>
-                <CardDescription>Decision volume by geography</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Decision volume by geography</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.geoStats.slice(0, 12)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="geo" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="geo" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="total" fill="#FFED00" name="Total Decisions" />
-                    <Bar dataKey="avgConfidence" fill="#82ca9d" name="Avg Confidence" />
+                    <Bar dataKey="avgConfidence" fill="#FFFFFF" name="Avg Confidence" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3390,26 +3390,26 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Time Series */}
           {analytics.timeSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                   Decision Trends Over Time
                 </CardTitle>
-                <CardDescription>Monthly decision volume and outcomes</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Monthly decision volume and outcomes</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={analytics.timeSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="date" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Line type="monotone" dataKey="decisions" stroke="#FFED00" name="Total Decisions" />
                     <Line type="monotone" dataKey="positive" stroke="#FFFFFF" name="Positive" />
-                    <Line type="monotone" dataKey="negative" stroke="#FF8042" name="Negative" />
-                    <Line type="monotone" dataKey="pending" stroke="#8884d8" name="Pending" />
+                    <Line type="monotone" dataKey="negative" stroke="#FFFFFF" name="Negative" />
+                    <Line type="monotone" dataKey="pending" stroke="#FFFFFF" name="Pending" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3426,17 +3426,17 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Outcomes by decision action</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.actionTypeStats.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
-                    <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3453,16 +3453,16 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Positive rate by action type</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={actionConversionSeries.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="action" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="conversionRate" fill="#FFED00" name="Positive Rate %" />
-                    <Bar dataKey="total" fill="#8884d8" name="Decisions" />
+                    <Bar dataKey="total" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3479,16 +3479,16 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Win rate by partner (top 10 by volume)</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={analytics.partnerStats.slice(0, 10)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="partner" angle={-25} textAnchor="end" height={70} stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="winRate" fill="#FFED00" name="Win Rate %" />
-                    <Bar dataKey="totalDecisions" fill="#8884d8" name="Decisions" />
+                    <Bar dataKey="totalDecisions" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3505,15 +3505,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Average decision time over time</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.decisionVelocity}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="avgDays" stroke="#FF8042" name="Avg Days" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="date" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
+                    <Line type="monotone" dataKey="avgDays" stroke="#FFED00" name="Avg Days" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3530,14 +3530,14 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Monthly positive rate across decisions</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.outcomeRateSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="date" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -3555,14 +3555,14 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Total decisions over time</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.cumulativeSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="date" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Line type="monotone" dataKey="cumulativeDecisions" stroke="#FFED00" name="Cumulative Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
