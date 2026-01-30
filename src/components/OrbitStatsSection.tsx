@@ -66,7 +66,7 @@ export function OrbitStatsSection() {
   return (
     <section
       ref={sectionRef}
-      className="orbit-void relative min-h-screen overflow-hidden border-2 border-white bg-[#050505] text-white"
+      className="orbit-void relative overflow-hidden border-2 border-white bg-[#050505] text-white py-12"
     >
       {/* Animated Grid Background (Parallax Layer 1) */}
       <div

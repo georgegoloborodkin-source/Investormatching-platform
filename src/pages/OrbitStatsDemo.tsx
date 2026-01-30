@@ -136,7 +136,7 @@ export default function OrbitStatsDemo() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative z-10 flex min-h-screen items-center justify-center overflow-hidden border-b-2 border-white">
+      <section className="relative z-10 flex min-h-[90vh] items-center justify-center overflow-hidden border-b-2 border-white">
         <div
           className="absolute inset-0 bg-gradient-to-b from-[#FFED00]/5 via-transparent to-[#FFED00]/5"
           style={{
