@@ -919,10 +919,10 @@ function DecisionLoggerTab({
 
       {/* New Decision Form */}
       {showForm && (
-        <Card className="border-primary/50">
-          <CardHeader>
-            <CardTitle>Log New Decision</CardTitle>
-            <CardDescription>Record a decision for pattern analysis</CardDescription>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Log New Decision</CardTitle>
+            <CardDescription className="text-white/70 font-mono">Record a decision for pattern analysis</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1130,9 +1130,9 @@ function DecisionLoggerTab({
       )}
 
       {/* Decision History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Decision History</CardTitle>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Decision History</CardTitle>
           <CardDescription>
             {filteredDecisions.length} decisions shown • Click outcome to update
           </CardDescription>
@@ -1392,9 +1392,9 @@ function DecisionLoggerTab({
 
       {/* Top Actors */}
       {stats.topActors.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Decision Makers</CardTitle>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Decision Makers</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -2167,16 +2167,16 @@ function SourcesTab({
   return (
     <div className="space-y-6">
       {!canImport && (
-        <Card>
-          <CardContent className="pt-4 text-sm text-muted-foreground">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-sm text-white/70 font-mono">
             Loading your active event... Imports will be available in a moment.
           </CardContent>
         </Card>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>ClickUp Import</CardTitle>
-          <CardDescription>Pull syndicate tasks directly from a ClickUp list.</CardDescription>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">ClickUp Import</CardTitle>
+          <CardDescription className="text-white/70 font-mono">Pull syndicate tasks directly from a ClickUp list.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2247,10 +2247,10 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Local Upload</CardTitle>
-          <CardDescription>Upload files from your computer into Sources.</CardDescription>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Local Upload</CardTitle>
+          <CardDescription className="text-white/70 font-mono">Upload files from your computer into Sources.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Input
@@ -5768,10 +5768,10 @@ export default function CIS() {
           {/* Chat Tab */}
           <TabsContent value="chat" className="space-y-4">
             {isDeveloper && (
-              <Card className="border-dashed">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Developer Cost Log</CardTitle>
-                  <CardDescription className="text-xs">
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="pb-2 border-b-2 border-white">
+                  <CardTitle className="text-sm text-white font-mono font-black uppercase tracking-tight">Developer Cost Log</CardTitle>
+                  <CardDescription className="text-xs text-white/70 font-mono">
                     Estimated Claude spend (local only).
                   </CardDescription>
                 </CardHeader>
@@ -5807,9 +5807,9 @@ export default function CIS() {
             <div className="grid grid-cols-12 gap-4">
               {/* Left: Scope */}
               <div className="col-span-12 lg:col-span-3 space-y-3">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Knowledge Scope</CardTitle>
+                <Card className="border-2 border-white bg-transparent">
+                  <CardHeader className="pb-3 border-b-2 border-white">
+                    <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Knowledge Scope</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {scopes.map((s) => (
@@ -5828,9 +5828,9 @@ export default function CIS() {
 
               {/* Center: Chat */}
               <div className="col-span-12 lg:col-span-9 space-y-3">
-                <Card className="h-full flex flex-col">
-                  <CardHeader className="pb-3 border-b">
-                    <CardTitle className="text-lg font-semibold">Chat</CardTitle>
+                <Card className="h-full flex flex-col border-2 border-white bg-transparent">
+                  <CardHeader className="pb-3 border-b-2 border-white">
+                    <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
                   </CardHeader>
                   <CardContent className="flex-1 flex flex-col p-0">
                     <div 
