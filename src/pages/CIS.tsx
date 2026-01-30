@@ -5682,7 +5682,7 @@ export default function CIS() {
                 Build: {buildStamp}
               </div>
             </div>
-            {profile?.role === "admin" && (
+            {(profile?.role as string) === "admin" && (
               <Button variant="outline" asChild>
                 <Link to="/admin">
                   <Shield className="h-4 w-4 mr-2" />
