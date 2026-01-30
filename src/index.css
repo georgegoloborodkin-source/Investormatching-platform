@@ -275,5 +275,40 @@
 
   .orbit-accent-text {
     color: #ffed00;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(255, 237, 0, 0.5);
+    transition: text-shadow 0.3s ease;
+  }
+
+  .orbit-accent-text:hover {
+    text-shadow: 0 0 20px rgba(255, 237, 0, 0.8), 0 0 30px rgba(255, 237, 0, 0.4);
+  }
+
+  /* Futuristic Glow Effects */
+  .orbit-glow {
+    box-shadow: 
+      0 0 20px rgba(255, 237, 0, 0.3),
+      0 0 40px rgba(255, 237, 0, 0.2),
+      inset 0 0 20px rgba(255, 237, 0, 0.1);
+  }
+
+  .orbit-glow-hover:hover {
+    box-shadow: 
+      0 0 30px rgba(255, 237, 0, 0.5),
+      0 0 60px rgba(255, 237, 0, 0.3),
+      inset 0 0 30px rgba(255, 237, 0, 0.2);
+    transition: box-shadow 0.3s ease;
+  }
+
+  /* Smooth Scroll */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Hardware Acceleration */
+  .orbit-void,
+  .orbit-void * {
+    will-change: transform;
+    transform: translateZ(0);
   }
 }
