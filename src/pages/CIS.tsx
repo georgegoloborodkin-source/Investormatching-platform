@@ -1985,10 +1985,14 @@ function SourcesTab({
         return "Google Drive Document";
       };
       
-      const cleanTitle = extractTitleFromGoogleDrive(result.title, result.raw_content || result.content, url.trim());
+      const cleanedTitle = extractTitleFromGoogleDrive(
+        result.title,
+        result.raw_content || result.content,
+        url.trim()
+      );
       
       await onCreateSource({
-        title: cleanTitle(result.title),
+        title: cleanedTitle,
         source_type: "notes",
         external_url: url.trim(),
         tags: ["google-drive"],
@@ -2050,9 +2054,9 @@ function SourcesTab({
           };
           
           const { data: doc, error: docError } = await insertDocument(eventId, {
-            title: cleanTitle(result.title),
+            title: cleanedTitle,
             source_type: "api",
-            file_name: result.title || null,
+            file_name: result.title || cleanedTitle || null,
             storage_path: null,
             detected_type: conversionResult?.detectedType || null,
             extracted_json: (conversionResult || {}) as Record<string, any>,
