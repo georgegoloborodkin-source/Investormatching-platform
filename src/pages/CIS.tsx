@@ -3099,13 +3099,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="border-b-2 border-white">
+                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                     Stage Conversion Rates
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-white/70 font-mono">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -3114,8 +3114,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                             <span className="ml-1">ℹ️</span>
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-xs">
+                        <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                          <p className="max-w-xs font-mono">
                             Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                             <br />
                             Shows what % of decisions in each stage resulted in positive outcomes.
@@ -3170,13 +3170,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Outcome Mix */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Partner Outcome Mix
                 </CardTitle>
-                <CardDescription>Outcome breakdown by partner (top 10)</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Outcome breakdown by partner (top 10)</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -3197,13 +3197,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity by Partner */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <Clock className="h-5 w-5 text-[#FFED00]" />
                   Decision Velocity by Partner
                 </CardTitle>
-                <CardDescription>Average decision cycle length (days)</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Average decision cycle length (days)</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
@@ -3418,13 +3418,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Mix */}
           {analytics.actionTypeStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Action Type Mix
                 </CardTitle>
-                <CardDescription>Outcomes by decision action</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Outcomes by decision action</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -3445,13 +3445,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Conversion Rate */}
           {actionConversionSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Action Type Conversion Rate
                 </CardTitle>
-                <CardDescription>Positive rate by action type</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Positive rate by action type</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
@@ -3471,13 +3471,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Win Rate */}
           {analytics.partnerStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Partner Win Rate
                 </CardTitle>
-                <CardDescription>Win rate by partner (top 10 by volume)</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Win rate by partner (top 10 by volume)</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
@@ -3497,13 +3497,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity */}
           {analytics.decisionVelocity.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <Clock className="h-5 w-5 text-[#FFED00]" />
                   Decision Velocity Trend
                 </CardTitle>
-                <CardDescription>Average decision time over time</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Average decision time over time</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -3522,13 +3522,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome Rate Trend */}
           {analytics.outcomeRateSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                   Positive Rate Trend
                 </CardTitle>
-                <CardDescription>Monthly positive rate across decisions</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Monthly positive rate across decisions</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -3547,13 +3547,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Cumulative Decisions */}
           {analytics.cumulativeSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                   Cumulative Decisions
                 </CardTitle>
-                <CardDescription>Total decisions over time</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Total decisions over time</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -3572,13 +3572,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence vs Positive Rate */}
           {confidenceRateSeries.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                   Confidence vs Positive Rate
                 </CardTitle>
-                <CardDescription>How confidence bands correlate with outcomes</CardDescription>
+                <CardDescription className="text-white/70 font-mono">How confidence bands correlate with outcomes</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -3598,33 +3598,33 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Top Startups */}
           {analytics.startupStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Startups by Decision Volume</CardTitle>
-                <CardDescription>Most discussed companies and outcomes</CardDescription>
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Startups by Decision Volume</CardTitle>
+                <CardDescription className="text-white/70 font-mono">Most discussed companies and outcomes</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Startup</th>
-                        <th className="text-right p-2">Total</th>
-                        <th className="text-right p-2">Positive</th>
-                        <th className="text-right p-2">Negative</th>
-                        <th className="text-right p-2">Pending</th>
-                        <th className="text-right p-2">Avg Confidence</th>
+                      <tr className="border-b-2 border-white">
+                        <th className="text-left p-2 text-white font-bold">Startup</th>
+                        <th className="text-right p-2 text-white font-bold">Total</th>
+                        <th className="text-right p-2 text-white font-bold">Positive</th>
+                        <th className="text-right p-2 text-white font-bold">Negative</th>
+                        <th className="text-right p-2 text-white font-bold">Pending</th>
+                        <th className="text-right p-2 text-white font-bold">Avg Confidence</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.startupStats.slice(0, 10).map((startup) => (
-                        <tr key={startup.startupName} className="border-b">
-                          <td className="p-2 font-medium">{startup.startupName}</td>
-                          <td className="text-right p-2">{startup.total}</td>
-                          <td className="text-right p-2 text-green-600">{startup.positive}</td>
-                          <td className="text-right p-2 text-red-600">{startup.negative}</td>
-                          <td className="text-right p-2 text-muted-foreground">{startup.pending}</td>
-                          <td className="text-right p-2">{startup.avgConfidence}%</td>
+                        <tr key={startup.startupName} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                          <td className="p-2 font-bold text-white">{startup.startupName}</td>
+                          <td className="text-right p-2 text-white">{startup.total}</td>
+                          <td className="text-right p-2 text-[#FFED00]">{startup.positive}</td>
+                          <td className="text-right p-2 text-white/50">{startup.negative}</td>
+                          <td className="text-right p-2 text-white/70">{startup.pending}</td>
+                          <td className="text-right p-2 text-white">{startup.avgConfidence}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3636,10 +3636,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Sector Conversion Rates Table */}
           {analytics.sectorStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Sector Conversion Rates</CardTitle>
-                <CardDescription>
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Sector Conversion Rates</CardTitle>
+                <CardDescription className="text-white/70 font-mono">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -3648,8 +3648,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                           <span className="ml-1">ℹ️</span>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">
+                      <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                        <p className="max-w-xs font-mono">
                           Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                           <br />
                           Shows what % of decisions in each sector resulted in positive outcomes.
