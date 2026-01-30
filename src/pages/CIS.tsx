@@ -390,37 +390,37 @@ function DocumentConverterTab({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left: Input */}
       <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+              <Upload className="h-5 w-5 text-[#FFED00]" />
               Document Input
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-white/70 font-mono">
               Paste pitch deck text or upload a document for AI extraction
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 text-white">
             <div>
-              <Label>Upload File</Label>
+              <Label className="text-white font-mono font-bold">Upload File</Label>
               <Input
                 type="file"
                 accept=".txt,.md,.pdf,.docx,.xlsx,.xls,.csv,.json"
                 onChange={handleFileUpload}
-                className="cursor-pointer"
+                className="cursor-pointer border-2 border-white bg-transparent text-white file:border-white file:bg-transparent file:text-white"
               />
             </div>
 
             <div>
-              <Label htmlFor="doc-text">Document Text</Label>
+              <Label htmlFor="doc-text" className="text-white font-mono font-bold">Document Text</Label>
               <Textarea
                 id="doc-text"
                 placeholder="Paste pitch deck content, investment memo, or any company document here..."
                 value={documentText}
                 onChange={(e) => setDocumentText(e.target.value)}
-                className="min-h-[300px] font-mono text-sm"
+                className="min-h-[300px] font-mono text-sm border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/70 font-mono mt-1">
                 {documentText.length} characters (~{Math.ceil(documentText.length / 4)} tokens)
               </p>
             </div>
@@ -428,7 +428,7 @@ function DocumentConverterTab({
             <Button
               onClick={handleExtract}
               disabled={isLoading || !documentText.trim()}
-              className="w-full"
+              className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -446,13 +446,13 @@ function DocumentConverterTab({
         </Card>
 
         {/* Cost Info */}
-        <Card className="bg-muted/30">
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-start gap-3">
-              <DollarSign className="h-5 w-5 text-green-600 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium">Cost Transparency</p>
-                <p className="text-muted-foreground">
+              <DollarSign className="h-5 w-5 text-[#FFED00] mt-0.5" />
+              <div className="text-sm font-mono">
+                <p className="font-bold text-white">Cost Transparency</p>
+                <p className="text-white/70">
                   Claude 3.5 Sonnet: ~$0.009 per 15-page deck<br/>
                   500 decks/month = ~$4.50 total
                 </p>
@@ -466,49 +466,49 @@ function DocumentConverterTab({
       <div className="space-y-4">
         {result ? (
           <>
-            <Card className="border-green-500/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center justify-between text-white">
+                  <span className="flex items-center gap-2 font-mono font-black uppercase tracking-tight">
+                    <CheckCircle className="h-5 w-5 text-[#FFED00]" />
                     Conversion Result
                   </span>
                   {result && (
-                    <Button size="sm" variant="outline" onClick={downloadJSON}>
+                    <Button size="sm" variant="outline" onClick={downloadJSON} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                       <Download className="h-4 w-4 mr-1" />
                       JSON
                     </Button>
                   )}
                 </CardTitle>
-                <CardDescription>Detected: {result.detectedType || "unknown"}</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Detected: {result.detectedType || "unknown"}</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <div className="space-y-4">
                   {primaryStartup ? (
-                    <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                    <div className="p-3 border-2 border-white rounded-lg space-y-2 bg-transparent hover:border-[#FFED00] transition-all">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-lg">{primaryStartup.companyName}</h3>
-                        {primaryStartup.fundingStage && <Badge variant="outline">{primaryStartup.fundingStage}</Badge>}
+                        <h3 className="font-mono font-black text-lg text-white">{primaryStartup.companyName}</h3>
+                        {primaryStartup.fundingStage && <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.fundingStage}</Badge>}
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        {primaryStartup.industry && <Badge>{primaryStartup.industry}</Badge>}
+                        {primaryStartup.industry && <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{primaryStartup.industry}</Badge>}
                         {primaryStartup.geoMarkets?.length > 0 && (
-                          <Badge variant="secondary">{primaryStartup.geoMarkets.join(", ")}</Badge>
+                          <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.geoMarkets.join(", ")}</Badge>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-white/70 font-mono">
                       No startup detected yet. Upload a pitch deck or paste content.
                     </div>
                   )}
 
                   {(result.errors?.length || result.warnings?.length) && (
-                    <div className="border rounded-md p-3 text-xs space-y-2">
+                    <div className="border-2 border-white rounded-md p-3 text-xs space-y-2 bg-transparent">
                       {result.errors?.length ? (
                         <div>
-                          <div className="font-semibold text-destructive">Errors</div>
-                          <ul className="list-disc list-inside text-destructive">
+                          <div className="font-mono font-bold text-white">Errors</div>
+                          <ul className="list-disc list-inside text-white/70 font-mono">
                             {result.errors.slice(0, 3).map((err) => (
                               <li key={err}>{err}</li>
                             ))}
@@ -517,8 +517,8 @@ function DocumentConverterTab({
                       ) : null}
                       {result.warnings?.length ? (
                         <div>
-                          <div className="font-semibold">Warnings</div>
-                          <ul className="list-disc list-inside text-muted-foreground">
+                          <div className="font-mono font-bold text-white">Warnings</div>
+                          <ul className="list-disc list-inside text-white/70 font-mono">
                             {result.warnings.slice(0, 3).map((warn) => (
                               <li key={warn}>{warn}</li>
                             ))}
@@ -529,17 +529,17 @@ function DocumentConverterTab({
                   )}
 
                   {quickLogEnabled && (
-                    <Button onClick={handleQuickLog} className="w-full" variant="outline">
+                    <Button onClick={handleQuickLog} className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold" variant="outline">
                       <ClipboardList className="h-4 w-4 mr-2" />
                       Open in Decision Log
                     </Button>
                   )}
 
-                  <details className="text-sm">
-                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  <details className="text-sm font-mono">
+                    <summary className="cursor-pointer text-white/70 hover:text-white">
                       View full JSON
                     </summary>
-                    <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto max-h-[300px] text-xs">
+                    <pre className="mt-2 p-3 border-2 border-white rounded-lg overflow-auto max-h-[300px] text-xs bg-transparent text-white">
                       {JSON.stringify(result, null, 2)}
                     </pre>
                   </details>
@@ -548,10 +548,10 @@ function DocumentConverterTab({
             </Card>
           </>
         ) : (
-          <Card className="h-full min-h-[400px] flex items-center justify-center">
-            <CardContent className="text-center text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Paste document text and click Extract</p>
+          <Card className="h-full min-h-[400px] flex items-center justify-center border-2 border-white bg-transparent">
+            <CardContent className="text-center text-white/70 font-mono">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50 text-white/50" />
+              <p className="font-bold">Paste document text and click Extract</p>
               <p className="text-sm mt-2">Results will appear here</p>
             </CardContent>
           </Card>
@@ -834,53 +834,53 @@ function DecisionLoggerTab({
     <div className="space-y-6">
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <ClipboardList className="h-5 w-5 text-primary" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.totalDecisions}</p>
-                <p className="text-xs text-muted-foreground">Total Decisions</p>
+                <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Total Decisions</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
+                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.averageConfidence}%</p>
-                <p className="text-xs text-muted-foreground">Avg Confidence</p>
+                <p className="text-2xl font-mono font-black">{stats.averageConfidence}%</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Avg Confidence</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Target className="h-5 w-5 text-blue-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Target className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.byOutcome.positive || 0}</p>
-                <p className="text-xs text-muted-foreground">Positive Outcomes</p>
+                <p className="text-2xl font-mono font-black">{stats.byOutcome.positive || 0}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive Outcomes</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <Users className="h-5 w-5 text-orange-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Users className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.topActors.length}</p>
@@ -1035,29 +1035,29 @@ function DecisionLoggerTab({
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="Singapore">Singapore</SelectItem>
-                    <SelectItem value="Indonesia">Indonesia</SelectItem>
-                    <SelectItem value="Malaysia">Malaysia</SelectItem>
-                    <SelectItem value="Thailand">Thailand</SelectItem>
-                    <SelectItem value="Vietnam">Vietnam</SelectItem>
-                    <SelectItem value="Philippines">Philippines</SelectItem>
-                    <SelectItem value="India">India</SelectItem>
-                    <SelectItem value="China">China</SelectItem>
-                    <SelectItem value="Hong Kong">Hong Kong</SelectItem>
-                    <SelectItem value="Taiwan">Taiwan</SelectItem>
-                    <SelectItem value="South Korea">South Korea</SelectItem>
-                    <SelectItem value="Japan">Japan</SelectItem>
-                    <SelectItem value="Australia">Australia</SelectItem>
-                    <SelectItem value="New Zealand">New Zealand</SelectItem>
-                    <SelectItem value="United States">United States</SelectItem>
-                    <SelectItem value="United Kingdom">United Kingdom</SelectItem>
-                    <SelectItem value="Europe">Europe</SelectItem>
-                    <SelectItem value="Middle East">Middle East</SelectItem>
-                    <SelectItem value="Africa">Africa</SelectItem>
-                    <SelectItem value="Latin America">Latin America</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                    <SelectItem value="custom">Add new...</SelectItem>
+                    <SelectItem value="none" className="text-white">None</SelectItem>
+                    <SelectItem value="Singapore" className="text-white">Singapore</SelectItem>
+                    <SelectItem value="Indonesia" className="text-white">Indonesia</SelectItem>
+                    <SelectItem value="Malaysia" className="text-white">Malaysia</SelectItem>
+                    <SelectItem value="Thailand" className="text-white">Thailand</SelectItem>
+                    <SelectItem value="Vietnam" className="text-white">Vietnam</SelectItem>
+                    <SelectItem value="Philippines" className="text-white">Philippines</SelectItem>
+                    <SelectItem value="India" className="text-white">India</SelectItem>
+                    <SelectItem value="China" className="text-white">China</SelectItem>
+                    <SelectItem value="Hong Kong" className="text-white">Hong Kong</SelectItem>
+                    <SelectItem value="Taiwan" className="text-white">Taiwan</SelectItem>
+                    <SelectItem value="South Korea" className="text-white">South Korea</SelectItem>
+                    <SelectItem value="Japan" className="text-white">Japan</SelectItem>
+                    <SelectItem value="Australia" className="text-white">Australia</SelectItem>
+                    <SelectItem value="New Zealand" className="text-white">New Zealand</SelectItem>
+                    <SelectItem value="United States" className="text-white">United States</SelectItem>
+                    <SelectItem value="United Kingdom" className="text-white">United Kingdom</SelectItem>
+                    <SelectItem value="Europe" className="text-white">Europe</SelectItem>
+                    <SelectItem value="Middle East" className="text-white">Middle East</SelectItem>
+                    <SelectItem value="Africa" className="text-white">Africa</SelectItem>
+                    <SelectItem value="Latin America" className="text-white">Latin America</SelectItem>
+                    <SelectItem value="Other" className="text-white">Other</SelectItem>
+                    <SelectItem value="custom" className="text-white">Add new...</SelectItem>
                   </SelectContent>
                 </Select>
                 {geo === "custom" && (
@@ -1097,15 +1097,15 @@ function DecisionLoggerTab({
 
             <div className="grid gap-3 md:grid-cols-[1fr_auto] items-end">
               <div>
-                <Label>Attach Source Document</Label>
+                <Label className="text-white font-mono font-bold">Attach Source Document</Label>
                 <Select value={attachedDocumentId} onValueChange={setAttachedDocumentId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
                     <SelectValue placeholder="Choose a document (optional)" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No document</SelectItem>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="none" className="text-white">No document</SelectItem>
                     {documents.filter((doc) => !!doc.id).map((doc) => (
-                      <SelectItem key={doc.id} value={doc.id}>
+                      <SelectItem key={doc.id} value={doc.id} className="text-white">
                         {doc.title || "Untitled document"}
                       </SelectItem>
                     ))}
@@ -1117,7 +1117,7 @@ function DecisionLoggerTab({
               </Button>
             </div>
 
-            <Button onClick={handleSaveDecision} className="w-full" disabled={isSaving}>
+            <Button onClick={handleSaveDecision} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50" disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1135,11 +1135,11 @@ function DecisionLoggerTab({
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Decision History</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-white/70 font-mono">
             {filteredDecisions.length} decisions shown • Click outcome to update
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="mb-4">
             <Label className="text-xs text-white/70 font-mono font-bold">Filter by document</Label>
             <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
@@ -2641,35 +2641,35 @@ function OnboardingTab({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+            <Sparkles className="h-5 w-5 text-[#FFED00]" />
             Tier 2 VC Fund Onboarding
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-white/70 font-mono">
             Recommended onboarding flow for VC teams. Complete the steps below to unlock full
             intelligence and analytics.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 text-white">
           {steps.map((step) => (
-            <div key={step.title} className="flex items-start justify-between gap-4 border rounded-md p-4">
+            <div key={step.title} className="flex items-start justify-between gap-4 border-2 border-white rounded-md p-4 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   {step.status ? (
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-[#FFED00]" />
                   ) : (
-                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    <AlertTriangle className="h-4 w-4 text-white/50" />
                   )}
-                  <span className="font-medium">{step.title}</span>
-                  <Badge variant={step.status ? "default" : "secondary"} className="text-xs">
+                  <span className="font-mono font-bold text-white">{step.title}</span>
+                  <Badge variant="outline" className={step.status ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono text-xs" : "border-white/50 text-white/50 bg-transparent font-mono text-xs"}>
                     {step.status ? "Complete" : "Pending"}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{step.description}</p>
+                <p className="text-sm text-white/70 font-mono">{step.description}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={step.action}>
+              <Button variant="outline" size="sm" onClick={step.action} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
                 {step.actionLabel}
               </Button>
             </div>
@@ -3053,9 +3053,9 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar dataKey="positive" fill="#00C49F" name="Positive" />
-                    <Bar dataKey="negative" fill="#FF8042" name="Negative" />
-                    <Bar dataKey="pending" fill="#8884d8" name="Pending" />
+                    <Bar dataKey="positive" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="negative" fill="#FFFFFF" name="Negative" />
+                    <Bar dataKey="pending" fill="#FFFFFF" name="Pending" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3133,7 +3133,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="conversionRate" fill="#00C49F" name="Conversion Rate %" />
+                      <Bar dataKey="conversionRate" fill="#FFED00" name="Conversion Rate %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -3160,8 +3160,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#0088FE" name="Total Decisions" />
-                    <Bar yAxisId="right" dataKey="winRate" fill="#00C49F" name="Win Rate %" />
+                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#FFED00" name="Total Decisions" />
+                    <Bar yAxisId="right" dataKey="winRate" fill="#FFFFFF" name="Win Rate %" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3186,7 +3186,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
                   </BarChart>
@@ -3273,7 +3273,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="avgConfidence" fill="#0088FE" name="Avg Confidence %" />
+                      <Bar dataKey="avgConfidence" fill="#FFED00" name="Avg Confidence %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -3299,7 +3299,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
                   </BarChart>
@@ -3326,7 +3326,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
                   </BarChart>
@@ -3353,7 +3353,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
                   </BarChart>
@@ -3380,7 +3380,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="total" fill="#0088FE" name="Total Decisions" />
+                    <Bar dataKey="total" fill="#FFED00" name="Total Decisions" />
                     <Bar dataKey="avgConfidence" fill="#82ca9d" name="Avg Confidence" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -3406,8 +3406,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="decisions" stroke="#0088FE" name="Total Decisions" />
-                    <Line type="monotone" dataKey="positive" stroke="#00C49F" name="Positive" />
+                    <Line type="monotone" dataKey="decisions" stroke="#FFED00" name="Total Decisions" />
+                    <Line type="monotone" dataKey="positive" stroke="#FFFFFF" name="Positive" />
                     <Line type="monotone" dataKey="negative" stroke="#FF8042" name="Negative" />
                     <Line type="monotone" dataKey="pending" stroke="#8884d8" name="Pending" />
                   </LineChart>
@@ -3434,7 +3434,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="positive" stackId="a" fill="#00C49F" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FF8042" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#8884d8" name="Pending" />
                   </BarChart>
@@ -3461,7 +3461,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="conversionRate" fill="#00C49F" name="Positive Rate %" />
+                    <Bar dataKey="conversionRate" fill="#FFED00" name="Positive Rate %" />
                     <Bar dataKey="total" fill="#8884d8" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -3487,7 +3487,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="winRate" fill="#00C49F" name="Win Rate %" />
+                    <Bar dataKey="winRate" fill="#FFED00" name="Win Rate %" />
                     <Bar dataKey="totalDecisions" fill="#8884d8" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -3538,7 +3538,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#00C49F" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3563,7 +3563,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#00C49F" name="Cumulative Decisions" />
+                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#FFED00" name="Cumulative Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -3588,7 +3588,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#00C49F" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
                     <Line type="monotone" dataKey="total" stroke="#8884d8" name="Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -3659,30 +3659,30 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   </TooltipProvider>
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="text-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Sector</th>
-                        <th className="text-right p-2">Total</th>
-                        <th className="text-right p-2">Positive</th>
-                        <th className="text-right p-2">Negative</th>
-                        <th className="text-right p-2">Pending</th>
-                        <th className="text-right p-2">Conversion %</th>
-                        <th className="text-right p-2">Avg Confidence</th>
+                      <tr className="border-b-2 border-white">
+                        <th className="text-left p-2 text-white font-bold">Sector</th>
+                        <th className="text-right p-2 text-white font-bold">Total</th>
+                        <th className="text-right p-2 text-white font-bold">Positive</th>
+                        <th className="text-right p-2 text-white font-bold">Negative</th>
+                        <th className="text-right p-2 text-white font-bold">Pending</th>
+                        <th className="text-right p-2 text-white font-bold">Conversion %</th>
+                        <th className="text-right p-2 text-white font-bold">Avg Confidence</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.sectorStats.map((sector) => (
-                        <tr key={sector.sector} className="border-b">
-                          <td className="p-2 font-medium">{sector.sector}</td>
-                          <td className="text-right p-2">{sector.total}</td>
-                          <td className="text-right p-2 text-green-600">{sector.positive}</td>
-                          <td className="text-right p-2 text-red-600">{sector.negative}</td>
-                          <td className="text-right p-2 text-muted-foreground">{sector.pending}</td>
-                          <td className="text-right p-2 font-medium">{sector.conversionRate}%</td>
-                          <td className="text-right p-2">{sector.avgConfidence}%</td>
+                        <tr key={sector.sector} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                          <td className="p-2 font-bold text-white">{sector.sector}</td>
+                          <td className="text-right p-2 text-white">{sector.total}</td>
+                          <td className="text-right p-2 text-[#FFED00]">{sector.positive}</td>
+                          <td className="text-right p-2 text-white/50">{sector.negative}</td>
+                          <td className="text-right p-2 text-white/70">{sector.pending}</td>
+                          <td className="text-right p-2 font-bold text-white">{sector.conversionRate}%</td>
+                          <td className="text-right p-2 text-white">{sector.avgConfidence}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -5987,28 +5987,28 @@ export default function CIS() {
 
               {/* Right: Evidence */}
               <div className="col-span-12 lg:col-span-3 space-y-3">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Memory & Evidence</CardTitle>
+                <Card className="border-2 border-white bg-transparent">
+                  <CardHeader className="pb-3 border-b-2 border-white">
+                    <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Memory & Evidence</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-3 text-white">
                     {evidence.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No knowledge objects yet.</div>
+                      <div className="text-sm text-white/70 font-mono">No knowledge objects yet.</div>
                     ) : (
                       evidence.map((ko) => (
-                        <div key={ko.id} className="border rounded-md p-3 space-y-1 bg-muted/20">
+                        <div key={ko.id} className="border-2 border-white rounded-md p-3 space-y-1 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
                           <div className="flex items-center gap-2">
-                            <Badge variant={ko.type === "Risk" ? "destructive" : ko.type === "Outcome" ? "default" : "secondary"}>
+                            <Badge variant="outline" className={ko.type === "Risk" ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : ko.type === "Outcome" ? "border-white text-white bg-transparent font-mono" : "border-white/70 text-white/70 bg-transparent font-mono"}>
                               {ko.type}
                             </Badge>
-                            <div className="font-medium text-sm">{ko.title}</div>
+                            <div className="font-mono font-bold text-sm text-white">{ko.title}</div>
                           </div>
-                          <div className="text-xs text-muted-foreground">{ko.text}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Source: <span className="font-medium">{ko.source}</span>
+                          <div className="text-xs text-white/70 font-mono">{ko.text}</div>
+                          <div className="text-xs text-white/70 font-mono">
+                            Source: <span className="font-bold">{ko.source}</span>
                           </div>
                           {ko.linked.length > 0 && (
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-white/70 font-mono">
                               Linked: {ko.linked.join(", ")}
                             </div>
                           )}
@@ -6018,10 +6018,10 @@ export default function CIS() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="pt-4 text-sm text-muted-foreground space-y-2">
+                <Card className="border-2 border-white bg-transparent">
+                  <CardContent className="pt-4 text-sm text-white/70 space-y-2 font-mono">
                     <div className="text-xs">
-                      <strong>Tips:</strong>
+                      <strong className="text-white font-bold">Tips:</strong>
                       <ul className="list-disc list-inside space-y-1 mt-1">
                         <li>Ask specific questions about your documents</li>
                         <li>Use semantic search for better results</li>
