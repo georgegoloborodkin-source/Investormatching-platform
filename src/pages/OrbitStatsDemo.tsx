@@ -1,8 +1,7 @@
-import { OrbitStatsSection } from "@/components/OrbitStatsSection";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, Target, TrendingUp, Brain, Shield, BarChart3, Sparkles, Rocket, Globe, Users, Database } from "lucide-react";
+import { ArrowRight, Zap, Target, TrendingUp, Brain, Shield, BarChart3, Sparkles, Rocket, Database } from "lucide-react";
 
 export default function OrbitStatsDemo() {
   const [scrollY, setScrollY] = useState(0);
@@ -186,7 +185,7 @@ export default function OrbitStatsDemo() {
               </Button>
             </Link>
             <Link to="/cis">
-              <Button variant="outline" className="border-2 border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] px-8 py-6 text-lg transition-all">
+              <Button variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] px-8 py-6 text-lg transition-all font-bold">
                 View Platform
               </Button>
             </Link>
@@ -233,13 +232,6 @@ export default function OrbitStatsDemo() {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="relative z-10 border-b-2 border-white">
-        <div className="mx-auto max-w-7xl">
-          <OrbitStatsSection />
-        </div>
-      </section>
-
       {/* What We've Built Section */}
       <section className="relative z-10 border-b-2 border-white py-20 px-6">
         <div className="mx-auto max-w-7xl">
@@ -280,7 +272,7 @@ export default function OrbitStatsDemo() {
       </section>
 
       {/* Roadmap Section */}
-      <section className="relative z-10 border-b-2 border-white py-20 px-6">
+      <section className="relative z-10 border-b-2 border-white py-20 px-6 pb-32">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-black font-mono text-white mb-4 tracking-tight">
@@ -327,7 +319,7 @@ export default function OrbitStatsDemo() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative z-10 py-20 px-6">
+      <section className="relative z-10 py-20 px-6 mb-20">
         <div className="mx-auto max-w-4xl text-center border-2 border-white p-12">
           <Sparkles className="h-12 w-12 text-[#FFED00] mx-auto mb-6" />
           <h2 className="text-4xl md:text-5xl font-black font-mono text-white mb-6 tracking-tight">
@@ -344,7 +336,7 @@ export default function OrbitStatsDemo() {
               </Button>
             </Link>
             <Link to="/cis">
-              <Button variant="outline" className="border-2 border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] px-8 py-6 text-lg transition-all">
+              <Button variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] px-8 py-6 text-lg transition-all font-bold">
                 Explore Platform
               </Button>
             </Link>
