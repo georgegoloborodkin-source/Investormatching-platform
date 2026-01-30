@@ -2817,23 +2817,23 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter decisions by sector, stage, or partner</CardDescription>
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Filters</CardTitle>
+          <CardDescription className="text-white/70 font-mono">Filter decisions by sector, stage, or partner</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="text-white">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label>Sector</Label>
+              <Label className="text-white font-mono font-bold">Sector</Label>
               <Select value={selectedSector} onValueChange={setSelectedSector}>
-                <SelectTrigger>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                   <SelectValue placeholder="All sectors" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All sectors</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectItem value="all" className="text-white">All sectors</SelectItem>
                   {sectors.map((sector) => (
-                    <SelectItem key={sector} value={sector}>
+                    <SelectItem key={sector} value={sector} className="text-white">
                       {sector}
                     </SelectItem>
                   ))}
@@ -2841,15 +2841,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </Select>
             </div>
             <div>
-              <Label>Stage</Label>
+              <Label className="text-white font-mono font-bold">Stage</Label>
               <Select value={selectedStage} onValueChange={setSelectedStage}>
-                <SelectTrigger>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                   <SelectValue placeholder="All stages" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All stages</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectItem value="all" className="text-white">All stages</SelectItem>
                   {stages.map((stage) => (
-                    <SelectItem key={stage} value={stage}>
+                    <SelectItem key={stage} value={stage} className="text-white">
                       {stage}
                     </SelectItem>
                   ))}
@@ -2857,15 +2857,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </Select>
             </div>
             <div>
-              <Label>Partner</Label>
+              <Label className="text-white font-mono font-bold">Partner</Label>
               <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                <SelectTrigger>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white">
                   <SelectValue placeholder="All partners" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All partners</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectItem value="all" className="text-white">All partners</SelectItem>
                   {partners.map((partner) => (
-                    <SelectItem key={partner} value={partner}>
+                    <SelectItem key={partner} value={partner} className="text-white">
                       {partner}
                     </SelectItem>
                   ))}
@@ -2883,6 +2883,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   setSelectedStage("all");
                   setSelectedPartner("all");
                 }}
+                className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
               >
                 Clear filters ({filteredDecisions.length} decisions)
               </Button>
@@ -2893,50 +2894,50 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Target className="h-5 w-5 text-primary" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Target className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{analytics.totalDecisions}</p>
-                <p className="text-xs text-muted-foreground">Decisions Logged</p>
+                <p className="text-2xl font-mono font-black">{analytics.totalDecisions}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions Logged</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
+                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{analytics.positiveRate}%</p>
-                <p className="text-xs text-muted-foreground">Positive Rate</p>
+                <p className="text-2xl font-mono font-black">{analytics.positiveRate}%</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive Rate</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <BarChart3 className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div className="flex-1">
-                <p className="text-2xl font-bold">{analytics.avgConfidence}%</p>
+                <p className="text-2xl font-mono font-black">{analytics.avgConfidence}%</p>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <p className="text-xs text-muted-foreground cursor-help">
+                      <p className="text-xs text-white/70 font-mono cursor-help">
                         Avg Confidence
                         <span className="ml-1">ℹ️</span>
                       </p>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="max-w-xs">
+                    <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                      <p className="max-w-xs font-mono">
                         Average confidence score (0-100) you assigned when logging decisions.
                         <br />
                         Higher = more certain about the decision.
@@ -2948,15 +2949,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <Clock className="h-5 w-5 text-orange-600" />
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Clock className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{analytics.avgDecisionVelocity}</p>
-                <p className="text-xs text-muted-foreground">Avg Velocity (days)</p>
+                <p className="text-2xl font-mono font-black">{analytics.avgDecisionVelocity}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Avg Velocity (days)</p>
               </div>
             </div>
           </CardContent>
@@ -2965,54 +2966,54 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {hasEnoughData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-4">
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Clock className="h-5 w-5 text-primary" />
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <Clock className="h-5 w-5 text-[#FFED00]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{analytics.recencyStats.last7}</p>
-                  <p className="text-xs text-muted-foreground">Decisions (7d)</p>
+                  <p className="text-2xl font-mono font-black">{analytics.recencyStats.last7}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (7d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4">
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{analytics.recencyStats.last30}</p>
-                  <p className="text-xs text-muted-foreground">Decisions (30d)</p>
+                  <p className="text-2xl font-mono font-black">{analytics.recencyStats.last30}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (30d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4">
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-green-600" />
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{analytics.recencyStats.last90}</p>
-                  <p className="text-xs text-muted-foreground">Decisions (90d)</p>
+                  <p className="text-2xl font-mono font-black">{analytics.recencyStats.last90}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (90d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-4">
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-500/10 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-orange-600" />
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{analytics.recencyStats.momentumPct}%</p>
-                  <p className="text-xs text-muted-foreground">30d Momentum</p>
+                  <p className="text-2xl font-mono font-black">{analytics.recencyStats.momentumPct}%</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">30d Momentum</p>
                 </div>
               </div>
             </CardContent>
@@ -3021,12 +3022,12 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
       )}
 
       {!hasEnoughData ? (
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-6 text-white">
             <div className="text-center py-8">
-              <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-medium mb-2">Not Enough Data</p>
-              <p className="text-sm text-muted-foreground">
+              <AlertTriangle className="h-12 w-12 text-white/50 mx-auto mb-4" />
+              <p className="text-lg font-mono font-bold mb-2">Not Enough Data</p>
+              <p className="text-sm text-white/70 font-mono">
                 You need at least 5 decisions to see analytics. Start logging decisions to unlock insights.
               </p>
             </div>
@@ -3036,13 +3037,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
         <>
           {/* Sector Performance */}
           {analytics.sectorStats.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
+            <Card className="border-2 border-white bg-transparent">
+              <CardHeader className="border-b-2 border-white">
+                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
                   Sector Performance
                 </CardTitle>
-                <CardDescription>Decision breakdown by sector</CardDescription>
+                <CardDescription className="text-white/70 font-mono">Decision breakdown by sector</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -3064,13 +3065,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Stage Performance */}
           {analytics.stageStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="h-5 w-5" />
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="border-b-2 border-white">
+                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                    <PieChart className="h-5 w-5 text-[#FFED00]" />
                     Stage Distribution
                   </CardTitle>
-                  <CardDescription>Decisions by funding stage</CardDescription>
+                  <CardDescription className="text-white/70 font-mono">Decisions by funding stage</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={250}>
