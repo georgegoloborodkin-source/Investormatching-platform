@@ -13,6 +13,7 @@ import AuthCallback from "./pages/AuthCallback";
 import RoleSelection from "./pages/RoleSelection";
 import InviteAcceptance from "./pages/InviteAcceptance";
 import AdminPanel from "./pages/AdminPanel";
+import OrbitStatsDemo from "./pages/OrbitStatsDemo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/orbit-stats" element={<OrbitStatsDemo />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
