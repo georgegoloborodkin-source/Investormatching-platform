@@ -3830,6 +3830,7 @@ export default function CIS() {
     let cancelled = false;
     let documentsChannel: ReturnType<typeof supabase.channel> | null = null;
     let decisionsChannel: ReturnType<typeof supabase.channel> | null = null;
+    let sourcesChannel: ReturnType<typeof supabase.channel> | null = null;
 
     const loadDecisions = async () => {
       if (!profile) return;
