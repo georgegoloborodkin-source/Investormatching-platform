@@ -2278,11 +2278,12 @@ function SourcesTab({
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <Label>Drive URL</Label>
+              <Label className="text-white font-mono font-bold">Drive URL</Label>
               <Input
                 value={driveUrl}
                 onChange={(e) => setDriveUrl(e.target.value)}
                 placeholder="https://docs.google.com/document/d/..."
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
               />
             </div>
             <div className="flex items-end">
@@ -2298,8 +2299,8 @@ function SourcesTab({
               </div>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} />
+          <label className="flex items-center gap-2 text-xs text-white/70 font-mono">
+            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
             Auto-extract and log decision after import
           </label>
           <p className="text-xs text-muted-foreground">
@@ -5800,7 +5801,7 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-white/70 font-mono">
               Scope applied:{" "}
               {scopes
                 .filter((s) => s.checked)
@@ -5817,10 +5818,10 @@ export default function CIS() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {scopes.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-sm border px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted/50 transition-colors">
-                        <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} />
+                      <label key={s.id} className="flex items-center gap-2 text-sm border-2 border-white px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
+                        <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
                         <span className="flex-1">{s.label}</span>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
                           {s.type}
                         </Badge>
                       </label>
@@ -5839,14 +5840,14 @@ export default function CIS() {
                   <CardContent className="flex-1 flex flex-col p-0">
                     <div 
                       ref={chatContainerRef}
-                      className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-gradient-to-b from-background to-muted/20"
+                      className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
                       style={{ maxHeight: "calc(100vh - 300px)", minHeight: "500px" }}
                     >
                       {scopedMessages.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center space-y-2">
-                            <div className="text-lg font-medium text-muted-foreground">Start a conversation</div>
-                            <div className="text-sm text-muted-foreground">Ask questions about your documents</div>
+                            <div className="text-lg font-mono font-bold text-white">Start a conversation</div>
+                            <div className="text-sm text-white/70 font-mono">Ask questions about your documents</div>
                           </div>
                         </div>
                       ) : (
@@ -5860,8 +5861,8 @@ export default function CIS() {
                               style={{ animationDelay: `${index * 50}ms` }}
                             >
                               {m.author === "assistant" && (
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/20 flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                   </svg>
                                 </div>
@@ -5869,8 +5870,8 @@ export default function CIS() {
                               <div
                                 className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
                                   m.author === "user"
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-card border border-border/50"
+                                    ? "bg-[#FFED00] text-black font-mono"
+                                    : "bg-transparent border-2 border-white text-white font-mono"
                                 }`}
                               >
                                 {m.author === "assistant" ? (
@@ -5885,7 +5886,7 @@ export default function CIS() {
                                       <>
                                         {renderAssistantContent(m.text)}
                                         {m.isStreaming && (
-                                          <span className="inline-block w-2 h-5 ml-1 bg-primary animate-pulse" />
+                                          <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
                                         )}
                                       </>
                                     )}
@@ -5895,8 +5896,8 @@ export default function CIS() {
                                 )}
                               </div>
                               {m.author === "user" && (
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/20 flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                   </svg>
                                 </div>
@@ -5909,8 +5910,8 @@ export default function CIS() {
                     </div>
 
                     {lastEvidence && lastEvidence.docs.length > 0 && (
-                      <div className="border-t bg-muted/30 px-4 py-3 space-y-2">
-                        <div className="text-xs font-semibold text-muted-foreground mb-2">
+                      <div className="border-t-2 border-white bg-transparent px-4 py-3 space-y-2">
+                        <div className="text-xs font-mono font-bold text-white mb-2">
                           Sources Used
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -5919,7 +5920,7 @@ export default function CIS() {
                               key={doc.id}
                               size="sm"
                               variant="outline"
-                              className="text-xs h-auto py-1.5 px-3"
+                              className="text-xs h-auto py-1.5 px-3 border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-mono font-bold"
                               onClick={() => handleOpenDocument(doc.id)}
                             >
                               {index + 1}. {doc.title || doc.file_name || "Untitled"}
@@ -5929,13 +5930,13 @@ export default function CIS() {
                       </div>
                     )}
 
-                    <div className="border-t p-4 bg-background">
+                    <div className="border-t-2 border-white p-4 bg-transparent">
                       <div className="flex gap-2 items-end">
                         <Textarea
                           value={input}
                           onChange={(e) => setInput(e.target.value)}
                           placeholder="Ask a question..."
-                          className="min-h-[60px] max-h-[200px] resize-none"
+                          className="min-h-[60px] max-h-[200px] resize-none border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
                               e.preventDefault();
@@ -5947,7 +5948,7 @@ export default function CIS() {
                           onClick={addMessage} 
                           disabled={chatIsLoading || !input.trim()}
                           size="lg"
-                          className="h-[60px] px-6"
+                          className="h-[60px] px-6 bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
                         >
                           {chatIsLoading ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
@@ -5959,13 +5960,14 @@ export default function CIS() {
                         </Button>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-white/70 font-mono">
                           {chatIsLoading ? "Searching..." : "Press Enter to send"}
                         </span>
-                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <label className="flex items-center gap-2 text-xs text-white/70 font-mono">
                           <Checkbox
                             checked={semanticMode}
                             onCheckedChange={(val) => setSemanticMode(val === true)}
+                            className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
                           />
                           Semantic search
                         </label>
