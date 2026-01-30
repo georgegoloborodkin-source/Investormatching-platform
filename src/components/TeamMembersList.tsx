@@ -97,26 +97,23 @@ export function TeamMembersList() {
     if (!memberToRemove || !orgId) return;
 
     try {
-      // Remove user from organization (set organization_id to null)
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .update({ organization_id: null })
-        .eq("id", memberToRemove.id)
-        .eq("organization_id", orgId)
-        .select();
+      // Use RPC function to remove team member (more secure and handles permissions)
+      const { data, error } = await supabase.rpc("remove_team_member", {
+        member_id: memberToRemove.id,
+      });
 
       if (error) {
         throw error;
       }
 
-      // Verify the update actually happened
-      if (!data || data.length === 0) {
-        throw new Error("Update did not affect any rows. The user may have already been removed or you don't have permission.");
+      // Check if RPC returned success
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Failed to remove team member");
       }
 
       toast({
         title: "Team member removed",
-        description: `${memberToRemove.full_name || memberToRemove.email} has been removed from your fund.`,
+        description: `${memberToRemove.full_name || memberToRemove.email} has been removed from your fund. They will lose access immediately and cannot log back in to your organization.`,
       });
 
       // Reload team members - reset the ref to force reload
