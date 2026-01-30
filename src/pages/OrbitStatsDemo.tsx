@@ -1,12 +1,11 @@
 import { OrbitStatsSection } from "@/components/OrbitStatsSection";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, Target, TrendingUp, Brain, Shield, BarChart3, Sparkles } from "lucide-react";
+import { ArrowRight, Zap, Target, TrendingUp, Brain, Shield, BarChart3, Sparkles, Rocket, Globe, Users, Database } from "lucide-react";
 
 export default function OrbitStatsDemo() {
   const [scrollY, setScrollY] = useState(0);
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -26,10 +25,11 @@ export default function OrbitStatsDemo() {
       title: "Foundation",
       status: "Complete",
       features: [
-        "Document Intelligence System",
-        "AI-Powered Decision Tracking",
-        "Team Collaboration & Onboarding",
-        "Real-time Synchronization",
+        "Document Intelligence System with Claude AI",
+        "AI-Powered Decision Tracking & Analytics",
+        "Team Collaboration & Role-Based Onboarding",
+        "Real-time Synchronization (ClickUp, Google Drive)",
+        "Investment Decision Logger with Outcome Tracking",
       ],
     },
     {
@@ -39,8 +39,9 @@ export default function OrbitStatsDemo() {
       features: [
         "Graph Relationships (Companies ↔ Syndicates ↔ Investors)",
         "Pattern Detection & Predictive Analytics",
-        "Advanced Decision Engine",
+        "Advanced Decision Engine with ML",
         "Portfolio Intelligence & Cross-Company Learning",
+        "Automated Deal Flow Scoring",
       ],
     },
     {
@@ -49,9 +50,10 @@ export default function OrbitStatsDemo() {
       status: "Planned",
       features: [
         "Unsupervised Learning for Entity Matching",
-        "Automated Deal Flow Intelligence",
-        "Partner Performance Analytics",
-        "Predictive Market Signals",
+        "Predictive Market Signals & Anomaly Detection",
+        "Partner Performance Analytics & Allocation",
+        "Automated Syndicate Intelligence",
+        "Real-time Market Pulse Dashboard",
       ],
     },
   ];
@@ -60,32 +62,50 @@ export default function OrbitStatsDemo() {
     {
       icon: Brain,
       title: "AI Intelligence",
-      description: "Claude-powered document extraction and semantic search across your entire deal flow.",
+      description: "Claude-powered document extraction and semantic search across your entire deal flow. Ask questions in natural language and get comprehensive answers.",
     },
     {
       icon: Target,
       title: "Decision Tracking",
-      description: "Log, track, and analyze every investment decision with outcome-based analytics.",
+      description: "Log, track, and analyze every investment decision with outcome-based analytics. Understand what works and why.",
     },
     {
       icon: Shield,
       title: "Team Sync",
-      description: "Real-time collaboration with role-based access control for MDs and investment teams.",
+      description: "Real-time collaboration with role-based access control for MDs and investment teams. Everyone stays in sync.",
     },
     {
       icon: BarChart3,
       title: "Advanced Analytics",
-      description: "Sector performance, partner metrics, and decision velocity insights.",
+      description: "Sector performance, partner metrics, decision velocity insights, and comprehensive portfolio intelligence.",
     },
     {
       icon: Zap,
       title: "Auto-Sync",
-      description: "Seamless integration with ClickUp, Google Drive, and your existing workflows.",
+      description: "Seamless integration with ClickUp, Google Drive, and your existing workflows. No manual uploads needed.",
     },
     {
       icon: TrendingUp,
       title: "Portfolio Intelligence",
-      description: "Cross-company learning and pattern detection across your entire portfolio.",
+      description: "Cross-company learning and pattern detection across your entire portfolio. Learn from every decision.",
+    },
+  ];
+
+  const whyWeExist = [
+    {
+      icon: Database,
+      title: "The Problem",
+      description: "VC teams drown in documents, lose context across deals, and make decisions without historical data. Information lives in silos—email threads, Google Drive folders, ClickUp tasks—never connecting.",
+    },
+    {
+      icon: Brain,
+      title: "Our Solution",
+      description: "Orbit Ventures is the signal stack that unifies your deal flow. AI extracts intelligence from every document, tracks every decision, and surfaces patterns you'd never see manually.",
+    },
+    {
+      icon: Rocket,
+      title: "The Impact",
+      description: "Faster decisions. Better outcomes. Teams that learn from every deal. We turn your deal flow into a competitive advantage through intelligence, not just data.",
     },
   ];
 
@@ -136,24 +156,27 @@ export default function OrbitStatsDemo() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative z-10 flex min-h-[90vh] items-center justify-center overflow-hidden border-b-2 border-white">
+      <section className="relative z-10 flex min-h-screen items-center justify-center overflow-hidden border-b-2 border-white">
         <div
           className="absolute inset-0 bg-gradient-to-b from-[#FFED00]/5 via-transparent to-[#FFED00]/5"
           style={{
             animation: "gradientShift 8s ease-in-out infinite",
           }}
         />
-        <div className="relative z-10 text-center px-4">
+        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
           <h1 className="mb-4 font-mono text-6xl font-black text-white md:text-8xl lg:text-9xl tracking-tight">
             ORBIT
           </h1>
           <p className="font-mono text-xl text-[#FFED00] md:text-2xl lg:text-3xl mb-8 tracking-wider">
             VENTURES
           </p>
-          <p className="max-w-3xl mx-auto text-lg md:text-xl text-white/80 mb-12 font-mono">
+          <p className="max-w-3xl mx-auto text-lg md:text-xl text-white/80 mb-6 font-mono">
             The{" "}
             <span className="text-[#FFED00] font-bold">EMERGING</span> market signal stack for{" "}
             <span className="text-[#FFED00] font-bold">FRONTIER</span> capital.
+          </p>
+          <p className="max-w-2xl mx-auto text-base md:text-lg text-white/60 mb-12 font-mono">
+            We transform your deal flow into intelligence. Every document, every decision, every pattern—unified and searchable.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link to="/login">
@@ -171,6 +194,45 @@ export default function OrbitStatsDemo() {
         </div>
       </section>
 
+      {/* Why We Exist Section */}
+      <section className="relative z-10 border-b-2 border-white py-20 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black font-mono text-white mb-4 tracking-tight">
+              WHY WE EXIST
+            </h2>
+            <p className="text-white/70 uppercase text-xs tracking-wider font-semibold mb-8">
+              The problem we solve and the future we're building
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {whyWeExist.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={index}
+                  className="group border-2 border-white p-8 min-h-[280px] flex flex-col transition-all duration-300 hover:border-[#FFED00] hover:shadow-[0_0_30px_rgba(255,237,0,0.3)]"
+                  style={{
+                    transform: `translateY(${scrollY * (0.01 + index * 0.005)}px)`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-[#FFED00] opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-10" />
+                  <div className="relative z-10">
+                    <Icon className="h-10 w-10 text-[#FFED00] mb-6" />
+                    <h3 className="text-2xl font-black font-mono text-white mb-4 uppercase tracking-tight">
+                      {item.title}
+                    </h3>
+                    <p className="text-white/70 text-sm leading-relaxed">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* Stats Section */}
       <section className="relative z-10 border-b-2 border-white">
         <div className="mx-auto max-w-7xl">
@@ -178,15 +240,15 @@ export default function OrbitStatsDemo() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* What We've Built Section */}
       <section className="relative z-10 border-b-2 border-white py-20 px-6">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-black font-mono text-white mb-4 tracking-tight">
-              PLATFORM CAPABILITIES
+              WHAT WE'VE BUILT
             </h2>
             <p className="text-white/70 uppercase text-xs tracking-wider font-semibold">
-              Built for venture capital teams who demand precision
+              Platform capabilities that transform how VC teams operate
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -195,7 +257,7 @@ export default function OrbitStatsDemo() {
               return (
                 <div
                   key={index}
-                  className="group border-2 border-white p-6 min-h-[200px] flex flex-col transition-all duration-300 hover:border-[#FFED00] hover:shadow-[0_0_30px_rgba(255,237,0,0.3)]"
+                  className="group border-2 border-white p-6 min-h-[220px] flex flex-col transition-all duration-300 hover:border-[#FFED00] hover:shadow-[0_0_30px_rgba(255,237,0,0.3)]"
                   style={{
                     transform: `translateY(${scrollY * (0.01 + index * 0.005)}px)`,
                   }}
@@ -253,7 +315,7 @@ export default function OrbitStatsDemo() {
                 <ul className="space-y-3">
                   {phase.features.map((feature, fIndex) => (
                     <li key={fIndex} className="flex items-start gap-3">
-                      <span className="text-[#FFED00] mt-1">▸</span>
+                      <span className="text-[#FFED00] mt-1 font-bold">▸</span>
                       <span className="text-white/80 font-mono text-sm">{feature}</span>
                     </li>
                   ))}
