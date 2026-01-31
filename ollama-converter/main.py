@@ -1175,10 +1175,20 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     if should_rewrite and not has_chat_history:
         return question
     
-    # Format the history into a clean dialogue string (last 2 messages for immediate context)
-    # This enforces "immediately preceding exchange" for pronoun resolution.
+    # CRITICAL: Extract names from ALL messages (user AND assistant) for robust pronoun resolution
+    # The full name might appear in the assistant's response, not the user's question
+    all_text = " ".join([m.content for m in previous_messages[-6:]])  # Last 6 messages
+    all_names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', all_text)  # "FirstName LastName"
+    single_names = re.findall(r'\b[A-Z][a-z]{2,}\b', all_text)  # Single capitalized words (potential names)
+    # Filter out common words
+    common_words = {'The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please'}
+    single_names = [n for n in single_names if n not in common_words]
+    
+    print(f"[DEBUG] Names found in history - Full names: {all_names}, Single names: {single_names[:5]}")
+    
+    # Format the history into a clean dialogue string (last 4 messages for better context)
     history_text = ""
-    recent_messages = previous_messages[-2:] if len(previous_messages) >= 2 else previous_messages
+    recent_messages = previous_messages[-4:] if len(previous_messages) >= 4 else previous_messages
     for msg in recent_messages:
         role = "User" if msg.role == "user" else "Assistant"
         # Truncate very long messages to avoid token limits
@@ -1191,24 +1201,18 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     try:
         if not ANTHROPIC_API_KEY:
             # Fallback to simple replacement if no API key
-            # Get the MOST RECENT user question (not just any user question)
-            last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
-            if last_user and (has_pronouns or affirmative_only):
-                # Extract the main subject from the last user question
-                import re
-                # Look for names (capitalized words) in the last question
-                names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
-                if names and has_pronouns:
-                    # Use the most recent name found
-                    main_subject = names[-1]  # Last name found (most recent)
-                    # Replace pronouns with the subject
+            # Use names extracted from ALL messages (above)
+            if (has_pronouns or affirmative_only) and (all_names or single_names):
+                # Prefer full names, fall back to single names
+                main_subject = all_names[-1] if all_names else single_names[-1]
+                print(f"[DEBUG] No API key - using fallback with subject: {main_subject}")
+                if has_pronouns:
                     rewritten = question
                     for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
                         rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
                     return rewritten
                 if affirmative_only:
-                    return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
-                return f"{last_user}\n\nFollow-up question: {question}"
+                    return f"Tell me more about {main_subject}"
             return question
         
         headers = {
@@ -1248,36 +1252,38 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
                 
                 if rewritten and rewritten != question:
                     print(f"[DEBUG] Query rewritten by LLM: '{question}' -> '{rewritten}'")
-                    # Validate: if original had "him" and rewritten doesn't have a name, something went wrong
-                    if has_pronouns:
-                        # Check if rewritten contains capitalized words (likely names)
-                        has_capitalized = any(word[0].isupper() and len(word) > 2 for word in rewritten.split())
-                        # If the rewrite doesn't include a name from the last user question, override it.
-                        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
-                        last_user_names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user) if last_user else []
-                        has_recent_name = any(name in rewritten for name in last_user_names) if last_user_names else False
-                        if not has_capitalized or (last_user_names and not has_recent_name):
-                            print(f"[DEBUG] ⚠️ WARNING: Rewritten query doesn't seem to have resolved pronouns properly")
-                            # Try fallback - extract name from last user question
-                            if last_user:
-                                import re
-                                names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
-                                if names:
-                                    main_subject = names[-1]  # Most recent name
-                                    print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
-                                    rewritten = question
-                                    for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their"]:
-                                        rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
-                                    return rewritten
+                    # Validate: if original had "him" and rewritten doesn't contain any name from history, force fix it
+                    if has_pronouns and (all_names or single_names):
+                        # Check if rewritten contains any of the names we found in history
+                        rewritten_lower = rewritten.lower()
+                        has_name_from_history = any(name.lower() in rewritten_lower for name in all_names) or \
+                                               any(name.lower() in rewritten_lower for name in single_names[:5])
+                        
+                        if not has_name_from_history:
+                            print(f"[DEBUG] ⚠️ WARNING: LLM rewrite doesn't contain names from history, using fallback")
+                            # Use the most recent full name, or fall back to single name
+                            main_subject = all_names[-1] if all_names else single_names[-1] if single_names else None
+                            if main_subject:
+                                print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
+                                rewritten = question
+                                for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
+                                    rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
+                                return rewritten
                     return rewritten
     except Exception as e:
         # Fallback to simple replacement on error
-        print(f"Query rewriting failed: {e}")
-        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
-        if last_user and (has_pronouns or affirmative_only):
-            if affirmative_only:
-                return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
-            return f"{last_user}\n\nFollow-up question: {question}"
+        print(f"[DEBUG] Query rewriting exception: {e}")
+        # Use names extracted from ALL messages (extracted above)
+        if has_pronouns and (all_names or single_names):
+            main_subject = all_names[-1] if all_names else single_names[-1]
+            print(f"[DEBUG] Exception fallback: replacing pronouns with '{main_subject}'")
+            rewritten = question
+            for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
+                rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
+            return rewritten
+        elif affirmative_only and (all_names or single_names):
+            main_subject = all_names[-1] if all_names else single_names[-1]
+            return f"Tell me more about {main_subject}"
     
     return question
 

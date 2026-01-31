@@ -5013,7 +5013,14 @@ export default function CIS() {
       let searchQuestion = question;
       
       // Get thread messages (from state or DB)
-      const threadMessages = await getThreadMessages(threadId, 6);
+      const threadMessages = await getThreadMessages(threadId, 10); // Get more messages for better context
+      
+      console.log("[DEBUG] ========== QUERY REWRITING ==========");
+      console.log("[DEBUG] Original question:", question);
+      console.log("[DEBUG] Thread messages count:", threadMessages.length);
+      if (threadMessages.length > 0) {
+        console.log("[DEBUG] Last few messages:", threadMessages.slice(-3).map(m => ({ role: m.role, content: m.content.substring(0, 100) })));
+      }
       
       // Use backend LLM rewriting if we have chat history and the question might need rewriting
       const qLower = question.toLowerCase();
@@ -5021,17 +5028,69 @@ export default function CIS() {
       const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|expand|elaborate|all you know|everything)\b/i.test(qLower);
       const isShort = question.split(/\s+/).length <= 15;
       
+      // CRITICAL: Extract names from chat history for fallback pronoun replacement
+      const extractNamesFromHistory = (msgs: Array<{ role: string; content: string }>): string[] => {
+        const allText = msgs.map(m => m.content).join(" ");
+        // Find "FirstName LastName" patterns
+        const namePattern = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g;
+        const names = allText.match(namePattern) || [];
+        return [...new Set(names)]; // Unique names
+      };
+      
+      const namesInHistory = extractNamesFromHistory(threadMessages);
+      console.log("[DEBUG] Names found in chat history:", namesInHistory);
+      
       if ((hasPronouns || hasVaguePattern || isShort) && threadMessages.length > 0) {
         try {
           // Call backend LLM to rewrite the query (much more robust than frontend heuristics)
           searchQuestion = await rewriteQueryWithLLM(question, threadMessages);
-          console.log("Query rewritten:", question, "->", searchQuestion);
+          console.log("[DEBUG] LLM rewritten query:", searchQuestion);
+          
+          // VALIDATION: If original had pronouns but rewritten doesn't contain any name from history, force fix it
+          if (hasPronouns && namesInHistory.length > 0) {
+            const rewrittenLower = searchQuestion.toLowerCase();
+            const hasNameInRewritten = namesInHistory.some(name => rewrittenLower.includes(name.toLowerCase()));
+            if (!hasNameInRewritten) {
+              console.log("[DEBUG] ⚠️ LLM rewrite didn't include name from history, using fallback");
+              // Use the most recent name from history
+              const mostRecentName = namesInHistory[namesInHistory.length - 1];
+              searchQuestion = question;
+              for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
+                const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
+                searchQuestion = searchQuestion.replace(regex, mostRecentName);
+              }
+              console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
+            }
+          }
         } catch (rewriteError) {
-          console.warn("Query rewriting failed, using original:", rewriteError);
-          // Fallback to original question if rewriting fails
-          searchQuestion = question;
+          console.warn("[DEBUG] Query rewriting failed:", rewriteError);
+          // FALLBACK: If we have pronouns and names in history, replace pronouns with the most recent name
+          if (hasPronouns && namesInHistory.length > 0) {
+            const mostRecentName = namesInHistory[namesInHistory.length - 1];
+            console.log("[DEBUG] Using fallback: replacing pronouns with", mostRecentName);
+            searchQuestion = question;
+            for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
+              const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
+              searchQuestion = searchQuestion.replace(regex, mostRecentName);
+            }
+            console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
+          } else {
+            searchQuestion = question;
+          }
         }
+      } else if (hasPronouns && namesInHistory.length > 0) {
+        // Even if no LLM rewriting triggered, still resolve pronouns if we have names
+        const mostRecentName = namesInHistory[namesInHistory.length - 1];
+        console.log("[DEBUG] Resolving pronouns without LLM using:", mostRecentName);
+        for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
+          const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
+          searchQuestion = searchQuestion.replace(regex, mostRecentName);
+        }
+        console.log("[DEBUG] Pronoun-resolved query:", searchQuestion);
       }
+      
+      console.log("[DEBUG] Final search question:", searchQuestion);
+      console.log("[DEBUG] ======================================");
       
       // PHASE 1: Extract proper nouns (names) BEFORE cleaning to preserve them
       const extractProperNouns = (text: string): string[] => {
