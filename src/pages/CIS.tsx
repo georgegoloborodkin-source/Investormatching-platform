@@ -5976,6 +5976,63 @@ export default function CIS() {
         <div className="flex gap-4">
           {/* Left Sidebar - Navigation */}
           <div className="w-64 flex-shrink-0 flex flex-col gap-4">
+            {/* Chat Threads - Only show in chat tab, positioned between Knowledge Scope and Navigation */}
+            {activeTab === "chat" && (
+              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
+                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+                  Chat Threads
+                </div>
+                <div className="space-y-3">
+                  <Button
+                    onClick={async () => {
+                      const newThreadId = await createChatThread(`Chat ${threads.length + 1}`, null);
+                      if (newThreadId) {
+                        setActiveThread(newThreadId);
+                        setMessages([]);
+                        // Reload threads to show the new one
+                        const eventId = activeEventId || (await ensureActiveEventId());
+                        if (eventId) {
+                          const { data: threadRows } = await supabase
+                            .from("chat_threads")
+                            .select("*")
+                            .eq("event_id", eventId)
+                            .order("created_at", { ascending: true });
+                          if (threadRows?.length) {
+                            const mappedThreads = threadRows.map((t: any) => ({
+                              id: t.id,
+                              title: t.title,
+                              parentId: t.parent_id || undefined,
+                            }));
+                            setThreads(mappedThreads);
+                          }
+                        }
+                      }
+                    }}
+                    className="w-full border-2 border-[#FFED00] bg-[#FFED00] text-black hover:bg-[#FFED00]/80 hover:border-[#FFED00] font-bold font-mono text-sm transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+                  >
+                    <MessageSquarePlus className="h-4 w-4 mr-2" />
+                    Create New Chat
+                  </Button>
+                  {threads.length > 0 ? (
+                    <div className="max-h-64 overflow-y-auto">
+                      <ThreadTree
+                        threads={threads}
+                        active={activeThread}
+                        onSelect={(id) => {
+                          setActiveThread(id);
+                          setMessages([]);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-xs text-white/50 font-mono text-center py-4">
+                      No threads yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="border-2 border-white bg-transparent p-4 space-y-2 sticky top-4">
               <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
                 Navigation
