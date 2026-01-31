@@ -336,6 +336,33 @@ export async function askClaudeAnswerStream(
   }
 }
 
+export async function rerankDocuments(input: {
+  query: string;
+  documents: Array<{ id: string; text: string }>;
+  topN?: number;
+}): Promise<Array<{ id: string; score: number }>> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  if (!input.documents.length) return [];
+  const response = await fetch(`${baseUrl}/rerank`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query: input.query,
+      documents: input.documents,
+      top_n: input.topN,
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const errorMessage = error.detail || error.message || `HTTP error! status: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+  const data = await response.json();
+  return data?.results || [];
+}
+
 export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const response = await fetchWithTimeout(

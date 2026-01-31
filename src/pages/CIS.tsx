@@ -110,7 +110,7 @@ import {
   deleteSource,
   getDocumentById,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -4471,8 +4471,15 @@ export default function CIS() {
     (
       doc: { raw_content: string | null; extracted_json?: Record<string, any> | null },
       tokens: string[],
-      isComprehensive: boolean = false
+      isComprehensive: boolean = false,
+      snippetOverride?: string | null
     ) => {
+      if (snippetOverride?.trim()) {
+        const limit = isComprehensive ? 2500 : 1000;
+        const trimmed = snippetOverride.trim();
+        return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
+      }
+
       const combined = buildNormalizedDocText(doc);
       if (!combined) return "No preview available.";
 
@@ -4681,22 +4688,44 @@ export default function CIS() {
     return { estInputTokens, estOutputTokens, estCostUsd };
   }, [lastEvidence]);
 
-  const chunkText = useCallback((text: string) => {
-    const CHUNK_SIZE = 800;
-    const CHUNK_OVERLAP = 120;
+  const chunkTextWithOverlap = useCallback((text: string, size: number, overlap: number) => {
     const chunks: string[] = [];
     let start = 0;
     while (start < text.length) {
-      const end = Math.min(text.length, start + CHUNK_SIZE);
+      const end = Math.min(text.length, start + size);
       const chunk = text.slice(start, end).trim();
       if (chunk) {
         chunks.push(chunk);
       }
       if (end === text.length) break;
-      start = Math.max(0, end - CHUNK_OVERLAP);
+      start = Math.max(0, end - overlap);
     }
     return chunks;
   }, []);
+
+  const buildParentChildChunks = useCallback(
+    (text: string) => {
+      const PARENT_SIZE = 2000;
+      const PARENT_OVERLAP = 200;
+      const CHILD_SIZE = 400;
+      const CHILD_OVERLAP = 80;
+      const MAX_PARENT_CHUNKS = 6;
+      const MAX_CHILD_PER_PARENT = 3;
+
+      const parents = chunkTextWithOverlap(text, PARENT_SIZE, PARENT_OVERLAP).slice(0, MAX_PARENT_CHUNKS);
+      const pairs: Array<{ parentText: string; childText: string; parentIndex: number; childIndex: number }> = [];
+
+      parents.forEach((parentText, parentIndex) => {
+        const children = chunkTextWithOverlap(parentText, CHILD_SIZE, CHILD_OVERLAP).slice(0, MAX_CHILD_PER_PARENT);
+        children.forEach((childText, childIndex) => {
+          pairs.push({ parentText, childText, parentIndex, childIndex });
+        });
+      });
+
+      return pairs;
+    },
+    [chunkTextWithOverlap]
+  );
 
   const disableEmbeddings = useCallback((reason?: string) => {
     embeddingsDisabledRef.current = true;
@@ -4721,18 +4750,20 @@ export default function CIS() {
             .limit(1);
           if (existing && existing.length > 0) return;
 
-          const MAX_EMBED_CHARS = 4000;
-          const MAX_EMBED_CHUNKS = 4;
+          const MAX_EMBED_CHARS = 8000;
           const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
-          const chunks = chunkText(truncated).slice(0, MAX_EMBED_CHUNKS);
+          const pairs = buildParentChildChunks(truncated);
 
-          for (const chunk of chunks) {
+          for (const pair of pairs) {
             try {
-              const embedding = await embedQuery(chunk, "document");
+              const embedding = await embedQuery(pair.childText, "document");
               if (!embedding.length) continue;
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
-                chunk_text: chunk,
+                chunk_text: pair.childText,
+                parent_text: pair.parentText,
+                parent_index: pair.parentIndex,
+                child_index: pair.childIndex,
                 embedding,
               });
               if (error) {
@@ -4749,7 +4780,7 @@ export default function CIS() {
         }
       })();
     },
-    [chunkText, disableEmbeddings]
+    [buildParentChildChunks, disableEmbeddings]
   );
 
   const createAssistantMessage = useCallback(
@@ -4960,8 +4991,11 @@ export default function CIS() {
         created_at: string;
         storage_path: string | null;
       }> = [];
+      const snippetByDocId = new Map<string, string>();
       let error: { message?: string } | null = null;
       let semanticFailed = false;
+      let semanticMatches: Array<{ document_id: string; similarity: number; chunk_text?: string | null; parent_text?: string | null }> = [];
+      let keywordMatches: Array<{ document_id: string; rank: number; snippet?: string | null }> = [];
 
       const canSemantic = semanticMode && tokens.length >= 2;
 
@@ -4982,37 +5016,88 @@ export default function CIS() {
           }
           if (timedOut) return;
           if (embedding && embedding.length > 0) {
-            const { data: matches, error: matchError } = await supabase.rpc("match_documents", {
+            const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
               query_embedding: embedding,
-              match_count: 6,
+              match_count: 30,
               filter_event_id: eventId,
             });
             if (timedOut) return;
             if (!matchError && matches?.length) {
-              const ids = matches.map((m: any) => m.document_id);
-              let docQuery = supabase
-                .from("documents")
-                .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
-                .in("id", ids);
-              if (myDocsSelected && !teamDocsSelected && currentUserId) {
-                docQuery = docQuery.eq("created_by", currentUserId);
-              } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
-                docQuery = docQuery.neq("created_by", currentUserId);
-              }
-              const { data: docRows, error: docError } = await docQuery;
-              if (timedOut) return;
-              if (docError) {
-                error = docError as { message?: string };
-              } else if (docRows?.length) {
-                const docMap = new Map(docRows.map((d: any) => [d.id, d]));
-                docs = ids.map((id: string) => docMap.get(id)).filter(Boolean);
-              }
+              semanticMatches = matches as typeof semanticMatches;
+              semanticMatches.forEach((m) => {
+                if (m.parent_text?.trim()) {
+                  snippetByDocId.set(m.document_id, m.parent_text);
+                } else if (m.chunk_text?.trim()) {
+                  snippetByDocId.set(m.document_id, m.chunk_text);
+                }
+              });
             }
           }
         } catch (err) {
           // Semantic search failed - silently fall back to full-text search
           semanticFailed = true;
           // Don't log error - embeddings are optional, full-text search works fine
+        }
+      }
+
+      if (!docs.length && !error) {
+        // Hybrid search: keyword + semantic (RRF)
+        const keywordQueryText = question.replace(/[^\w\s-]/g, " ").trim();
+        if (keywordQueryText.length > 1) {
+          try {
+            const { data: keywordRows, error: keywordError } = await supabase.rpc("match_documents_keyword", {
+              query_text: keywordQueryText,
+              match_count: 30,
+              filter_event_id: eventId,
+            });
+            if (timedOut) return;
+            if (!keywordError && keywordRows?.length) {
+              keywordMatches = keywordRows as typeof keywordMatches;
+              keywordMatches.forEach((m) => {
+                if (!snippetByDocId.has(m.document_id) && m.snippet?.trim()) {
+                  snippetByDocId.set(m.document_id, m.snippet);
+                }
+              });
+            }
+          } catch (keywordErr) {
+            // Ignore keyword errors; fall back below
+          }
+        }
+
+        const RRF_K = 60;
+        const scoreMap = new Map<string, number>();
+        semanticMatches.forEach((m, idx) => {
+          const score = 1 / (RRF_K + idx + 1);
+          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + score);
+        });
+        keywordMatches.forEach((m, idx) => {
+          const score = 1 / (RRF_K + idx + 1);
+          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + score);
+        });
+
+        const rankedIds = Array.from(scoreMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([id]) => id)
+          .slice(0, 20);
+
+        if (rankedIds.length > 0) {
+          let docQuery = supabase
+            .from("documents")
+            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+            .in("id", rankedIds);
+          if (myDocsSelected && !teamDocsSelected && currentUserId) {
+            docQuery = docQuery.eq("created_by", currentUserId);
+          } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+            docQuery = docQuery.neq("created_by", currentUserId);
+          }
+          const { data: docRows, error: docError } = await docQuery;
+          if (timedOut) return;
+          if (docError) {
+            error = docError as { message?: string };
+          } else if (docRows?.length) {
+            const docMap = new Map(docRows.map((d: any) => [d.id, d]));
+            docs = rankedIds.map((id) => docMap.get(id)).filter(Boolean);
+          }
         }
       }
 
@@ -5226,6 +5311,32 @@ export default function CIS() {
         return matches >= minTokenMatches || hasStrongMatch;
       });
 
+      let rankedDocs = filteredDocs;
+      if (rankedDocs.length > 1) {
+        try {
+          const rerankPayload = rankedDocs.map((doc) => {
+            const snippet = snippetByDocId.get(doc.id);
+            const baseText = snippet || buildNormalizedDocText(doc) || "";
+            return {
+              id: doc.id,
+              text: baseText.slice(0, 1500),
+            };
+          });
+          const rerankResults = await rerankDocuments({
+            query: question,
+            documents: rerankPayload,
+            topN: Math.min(10, rerankPayload.length),
+          });
+          if (rerankResults.length > 0) {
+            const docMap = new Map(rankedDocs.map((d) => [d.id, d]));
+            const reranked = rerankResults.map((r) => docMap.get(r.id)).filter(Boolean);
+            rankedDocs = reranked as typeof rankedDocs;
+          }
+        } catch (rerankErr) {
+          // If rerank fails, keep existing order
+        }
+      }
+
       // Check if this is a meta-question (about capabilities/system)
       const isMetaQuestion = (() => {
         const q = normalizedQuestion;
@@ -5252,7 +5363,7 @@ export default function CIS() {
       })();
 
       // For meta-questions, answer even without sources
-      if (isMetaQuestion && (!filteredDocs || filteredDocs.length === 0)) {
+      if (isMetaQuestion && (!rankedDocs || rankedDocs.length === 0)) {
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
         }
@@ -5309,7 +5420,7 @@ export default function CIS() {
       const lowSignalFollowUp =
         isFollowUpQuery && contentTokens.length <= 1;
 
-      if (!filteredDocs || filteredDocs.length === 0 || lowSignalFollowUp) {
+      if (!rankedDocs || rankedDocs.length === 0 || lowSignalFollowUp) {
         if (
           isFollowUpQuery &&
           previousEvidence &&
@@ -5344,7 +5455,7 @@ export default function CIS() {
             const sources = answerDocs.map((doc) => ({
               title: doc.title,
               file_name: doc.file_name,
-              snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion),
+              snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
             }));
             const decisionsForClaude = decisionIntent
               ? decisionMatches.map((d) => ({
@@ -5432,7 +5543,7 @@ export default function CIS() {
 
       // For comprehensive questions, use more sources (up to 5)
       const maxDocs = isComprehensiveQuestion ? 5 : 3;
-      const answerDocs = filteredDocs.slice(0, maxDocs);
+      const answerDocs = rankedDocs.slice(0, maxDocs);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setLastEvidenceThreadId(threadId);
       setChatIsLoading(false);
@@ -5466,7 +5577,7 @@ export default function CIS() {
         const sources = docsForClaude.map((doc) => ({
           title: doc.title,
           file_name: doc.file_name,
-          snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion),
+          snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
         }));
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({

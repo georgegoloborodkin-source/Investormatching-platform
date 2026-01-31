@@ -201,6 +201,10 @@ VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-lite")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 
+# Reranking settings (cross-encoder)
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")
+
 # Ingestion settings
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
 
@@ -405,6 +409,22 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
+
+class RerankDocument(BaseModel):
+    id: str
+    text: str
+
+class RerankRequest(BaseModel):
+    query: str
+    documents: List[RerankDocument]
+    top_n: int | None = None
+
+class RerankResult(BaseModel):
+    id: str
+    score: float
+
+class RerankResponse(BaseModel):
+    results: List[RerankResult]
 
 class EmbedRequest(BaseModel):
     text: str
@@ -2442,7 +2462,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
         max_tokens = max(ASK_MAX_TOKENS, 800)
     else:
         max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
-
+    
     async with httpx.AsyncClient(timeout=60.0) as client:
         for model_name in [m for m in model_list if m]:
             payload = {
@@ -2630,6 +2650,51 @@ async def generate_embedding_openai(text: str) -> List[float]:
                 "model": OPENAI_EMBEDDING_MODEL,
                 "input": text,
             },
+        )
+
+
+@app.post("/rerank", response_model=RerankResponse)
+async def rerank_documents(request: RerankRequest):
+    """
+    Optional cross-encoder reranking for hybrid search results.
+    If no reranker API key is configured, returns the original order with score=0.
+    """
+    if not request.documents:
+        return RerankResponse(results=[])
+
+    if not COHERE_API_KEY:
+        return RerankResponse(
+            results=[RerankResult(id=d.id, score=0.0) for d in request.documents]
+        )
+
+    payload = {
+        "model": RERANK_MODEL,
+        "query": request.query,
+        "documents": [d.text for d in request.documents],
+        "top_n": request.top_n or len(request.documents),
+    }
+    headers = {
+        "Authorization": f"Bearer {COHERE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post("https://api.cohere.ai/v1/rerank", json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        results = []
+        for item in data.get("results", []):
+            idx = item.get("index")
+            score = item.get("relevance_score", 0.0)
+            if idx is None or idx >= len(request.documents):
+                continue
+            results.append(RerankResult(id=request.documents[idx].id, score=score))
+        return RerankResponse(results=results)
+    except Exception:
+        # Fail closed: return original order if rerank fails
+        return RerankResponse(
+            results=[RerankResult(id=d.id, score=0.0) for d in request.documents]
         )
         
         if response.status_code >= 400:
