@@ -68,6 +68,7 @@ import {
   BarChart3,
   PieChart,
   Eye,
+  MessageSquarePlus,
 } from "lucide-react";
 import {
   BarChart,
