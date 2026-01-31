@@ -1081,7 +1081,7 @@ function DecisionLoggerTab({
                 step={5}
                 className="mt-2"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/70 font-mono mt-1">
                 How confident are you in this decision?
               </p>
             </div>
@@ -1359,7 +1359,7 @@ function DecisionLoggerTab({
 
               {viewingDecision.documentId && (
                 <div>
-                  <Label className="text-xs text-muted-foreground">Attached Document</Label>
+                  <Label className="text-xs text-white/70 font-mono font-bold">Attached Document</Label>
                   {(() => {
                     const attachedDoc = documents.find((doc) => doc.id === viewingDecision.documentId);
                     return attachedDoc ? (
@@ -1379,7 +1379,7 @@ function DecisionLoggerTab({
                         )}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Document not found</p>
+                      <p className="text-sm text-white/70 font-mono">Document not found</p>
                     );
                   })()}
                 </div>
@@ -3092,8 +3092,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
-                      <Legend />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                      <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     </RechartsPieChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -3583,11 +3583,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={confidenceRateSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="range" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
+                    <XAxis dataKey="range" stroke="#FFFFFF" />
+                    <YAxis stroke="#FFFFFF" />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
+                    <Legend wrapperStyle={{ color: "#FFFFFF" }} />
                     <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
                     <Line type="monotone" dataKey="total" stroke="#FFFFFF" name="Decisions" />
                   </LineChart>
@@ -5652,7 +5652,7 @@ export default function CIS() {
         {blocks.map((block, idx) => {
           if (block.type === "h") {
             return (
-              <div key={idx} className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+              <div key={idx} className="text-xs uppercase tracking-wide text-white/70 font-mono font-bold">
                 {block.content as string}
               </div>
             );
@@ -5794,13 +5794,13 @@ export default function CIS() {
                     {costLog.reduce((sum, entry) => sum + entry.estCostUsd, 0).toFixed(4)}
                   </div>
                   {costLog.length === 0 ? (
-                    <div className="text-muted-foreground">No Claude calls logged yet.</div>
+                    <div className="text-white/70 font-mono">No Claude calls logged yet.</div>
                   ) : (
                     costLog.slice(0, 5).map((entry) => (
                       <div key={entry.ts} className="border rounded-md p-2">
                         <div className="font-medium">${entry.estCostUsd} • {entry.ts}</div>
-                        <div className="text-muted-foreground">Q: {entry.question}</div>
-                        <div className="text-muted-foreground">
+                        <div className="text-white/70 font-mono">Q: {entry.question}</div>
+                        <div className="text-white/70 font-mono">
                           Tokens: {entry.estInputTokens} in / {entry.estOutputTokens} out
                         </div>
                       </div>
@@ -6112,7 +6112,7 @@ export default function CIS() {
                     <div className="text-sm text-muted-foreground mb-2">
                       Structured data extracted by AI
                     </div>
-                    <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs">
+                    <pre className="p-4 bg-transparent border-2 border-white rounded-lg overflow-auto max-h-[500px] text-xs text-white font-mono">
                       {JSON.stringify(viewingDocument.extracted_json, null, 2)}
                     </pre>
                     <Button
