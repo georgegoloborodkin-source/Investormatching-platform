@@ -1056,19 +1056,42 @@ def has_question_overlap(
 
 
 # System prompt for query contextualization (ChatGPT-style)
-CONTEXTUALIZE_SYSTEM_PROMPT = """You are a query rewriting assistant. Your job is to transform vague follow-up questions into specific, standalone search queries.
+CONTEXTUALIZE_SYSTEM_PROMPT = """You are an expert search query generator. 
+Your task is to rewrite the "Follow-up Question" into a standalone, specific search query based on the "Chat History".
 
-Given a chat history and the latest user question, reformulate the question to be clear and specific.
+CRITICAL INSTRUCTIONS:
+1. **RESOLVE PRONOUNS**: If the Follow-up Question contains "him", "her", "it", "they", replace it with the specific NAME or ENTITY from the *immediately preceding* User/Assistant exchange.
+2. **IGNORE OLD TOPICS**: If the chat started about "Giga Energy" but the last message was about "George", and the user asks "tell me about him", you MUST ask about "George". Ignore Giga Energy.
+3. **BE EXPLICIT**: The output must be a full sentence that can be searched in a database.
+4. **DO NOT ANSWER**: Do not answer the question. Only output the rewritten query.
 
-CRITICAL RULES:
-1. **PRIORITIZE THE MOST RECENT CONVERSATION SUBJECT**. If the user just asked about "George Goloborodkin" and then says "tell me more about him", "him" = "George Goloborodkin" (NOT something mentioned earlier like "Giga Energy").
-2. If the question contains pronouns (it, him, her, they, this, that, these, those), replace them with the MOST RECENTLY DISCUSSED person, entity, or topic from the conversation history.
-3. Look at the LAST user question in the chat history - that's usually what the current question refers to.
-4. If the question is vague (e.g., "tell me more", "what about", "all you know"), combine it with the MOST RECENT subject from the conversation.
-5. Extract the MAIN SUBJECT from the MOST RECENT messages (last 2-3 messages), not from older messages.
-6. Example: If history shows "User: tell me about George Goloborodkin" then "User: tell more about him" → rewrite to "tell me more about George Goloborodkin" (NOT "Giga Energy" from earlier messages).
+---
+EXAMPLES (Follow these patterns):
 
-Output ONLY the reformulated question. No explanations, no prefixes, no additional text. Just the question."""
+History:
+User: Who is Elon Musk?
+Assistant: He is the CEO of Tesla.
+Follow-up Question: How old is he?
+Rewritten Query: How old is Elon Musk?
+
+History:
+User: Tell me about the Q3 Report.
+Assistant: Here is the Q3 summary...
+User: actually, forget that. Who is Sarah Jones?
+Assistant: Sarah Jones is the new VP of Sales.
+Follow-up Question: Tell me more about her background.
+Rewritten Query: Tell me more about Sarah Jones background and resume.
+
+History:
+User: Search for Giga Energy.
+Assistant: Found 3 documents about Giga Energy.
+User: Okay, now look for George Goloborodkin.
+Assistant: I found George's resume.
+Follow-up Question: What is his email?
+Rewritten Query: What is George Goloborodkin's email?
+---
+
+Now, rewrite the following:"""
 
 
 async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
@@ -1202,7 +1225,7 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
             "messages": [
                 {
                     "role": "user",
-                    "content": user_message
+                    "content": final_user_content
                 }
             ]
         }
