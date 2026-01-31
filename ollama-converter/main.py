@@ -1299,11 +1299,19 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
             content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
             conversation_lines.append(f"{role_label}: {content}")
         conversation_context = "\n\n=== PREVIOUS CONVERSATION HISTORY (USE THIS TO UNDERSTAND PRONOUNS AND CONTEXT) ===\n" + "\n".join(conversation_lines) + "\n=== END OF CONVERSATION HISTORY ===\n"
-        # Debug logging
-        print(f"[DEBUG] Conversation history included: {len(recent_messages)} messages")
-        print(f"[DEBUG] First message: {recent_messages[0].role}: {recent_messages[0].content[:100] if recent_messages else 'N/A'}")
+        # Debug logging - DETAILED
+        print(f"[DEBUG] ✅ Conversation history included in prompt: {len(recent_messages)} messages")
+        print(f"[DEBUG] First message: {recent_messages[0].role}: {recent_messages[0].content[:150]}")
+        print(f"[DEBUG] Last message: {recent_messages[-1].role}: {recent_messages[-1].content[:150]}")
+        # Check if history contains names that might be referenced
+        all_content = " ".join([m.content for m in recent_messages])
+        import re
+        names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', all_content)
+        if names:
+            print(f"[DEBUG] Found names in history: {set(names)}")
     else:
-        print(f"[DEBUG] WARNING: No conversation history provided! previous_messages={previous_messages}")
+        print(f"[DEBUG] ❌❌❌ CRITICAL WARNING: No conversation history provided! previous_messages={previous_messages}")
+        print(f"[DEBUG] This means pronouns like 'him', 'her' cannot be resolved!")
     
     
     is_raw_text = is_raw_text_request(question)
@@ -3056,6 +3064,21 @@ async def ask_fund_stream(request: AskRequest):
 
         # Handle previous_messages safely (default to empty list if None)
         previous_messages = request.previous_messages or []
+        
+        # Debug logging - DETAILED
+        print(f"[DEBUG] ========== /ask/stream REQUEST ==========")
+        print(f"[DEBUG] Question: {question}")
+        print(f"[DEBUG] Resolved question: {resolved_question}")
+        print(f"[DEBUG] Previous messages count: {len(previous_messages)}")
+        if previous_messages:
+            print(f"[DEBUG] First message: {previous_messages[0].role}: {previous_messages[0].content[:200]}")
+            print(f"[DEBUG] Last message: {previous_messages[-1].role}: {previous_messages[-1].content[:200]}")
+            # Print all messages for debugging
+            for i, msg in enumerate(previous_messages):
+                print(f"[DEBUG] Message {i+1}: {msg.role}: {msg.content[:100]}...")
+        else:
+            print(f"[DEBUG] ⚠️⚠️⚠️ WARNING: NO PREVIOUS MESSAGES PROVIDED! ⚠️⚠️⚠️")
+        print(f"[DEBUG] =========================================")
         
         prompt = build_answer_prompt(resolved_question, request.sources or [], request.decisions or [], previous_messages)
         

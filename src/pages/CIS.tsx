@@ -4614,7 +4614,7 @@ export default function CIS() {
         let lastError: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const { error } = await supabase.from("chat_messages").insert({
+            const { error, data } = await supabase.from("chat_messages").insert({
               event_id: eventId,
               thread_id: threadId,
               role: payload.role,
@@ -4622,9 +4622,12 @@ export default function CIS() {
               model: payload.model || null,
               source_doc_ids: payload.sourceDocIds || null,
               created_by: userId,
-            });
+            }).select();
             if (!error) {
+              console.log("[DEBUG] ✅ Saved chat message to DB:", { role: payload.role, contentLength: payload.content.length, threadId });
               return; // Success
+            } else {
+              console.error("[DEBUG] ❌ Failed to save chat message:", error);
             }
             lastError = error;
             // Don't retry on RLS/auth errors
@@ -4913,40 +4916,59 @@ export default function CIS() {
 
   // Helper function to get thread messages (from state or DB)
   const getThreadMessages = useCallback(async (threadId: string, limit: number = 10): Promise<Array<{ role: "user" | "assistant"; content: string }>> => {
-    // First try to get from state
-    let threadMessages = messages
-      .filter((m) => m.threadId === threadId)
-      .slice(-limit)
-      .map((m) => ({
-        role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
-        content: m.text,
-      }));
+    // ALWAYS fetch from database to ensure we have the latest messages
+    // State might be stale or missing recent messages
+    let threadMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
     
-    // If we don't have enough messages in state, fetch from database directly
-    if (threadMessages.length < 2 && threadId) {
+    if (threadId) {
       try {
         const eventId = activeEventId || (await ensureActiveEventId());
         if (eventId) {
           const { data: dbMessages, error } = await supabase
             .from("chat_messages")
-            .select("role, content")
+            .select("role, content, created_at")
             .eq("event_id", eventId)
             .eq("thread_id", threadId)
             .order("created_at", { ascending: true })
             .limit(limit);
           
-          if (!error && dbMessages && dbMessages.length > 0) {
+          if (error) {
+            console.error("[DEBUG] Error fetching chat history from DB:", error);
+          } else if (dbMessages && dbMessages.length > 0) {
             threadMessages = dbMessages.map((m: any) => ({
               role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
-              content: m.content,
+              content: m.content || "",
             }));
-            console.log("Fetched chat history from DB:", threadMessages.length, "messages");
+            console.log("[DEBUG] ✅ Fetched chat history from DB:", threadMessages.length, "messages");
+            console.log("[DEBUG] Sample messages:", threadMessages.slice(0, 3).map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." })));
+          } else {
+            console.log("[DEBUG] ⚠️ No messages found in DB for thread:", threadId);
           }
         }
       } catch (fetchError) {
-        console.warn("Failed to fetch chat history from DB:", fetchError);
-        // Continue with state messages if DB fetch fails
+        console.error("[DEBUG] ❌ Failed to fetch chat history from DB:", fetchError);
+        // Fallback to state messages if DB fetch fails
+        threadMessages = messages
+          .filter((m) => m.threadId === threadId)
+          .slice(-limit)
+          .map((m) => ({
+            role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
+            content: m.text,
+          }));
+        console.log("[DEBUG] Using state messages as fallback:", threadMessages.length, "messages");
       }
+    }
+    
+    // If still no messages, try state as last resort
+    if (threadMessages.length === 0) {
+      threadMessages = messages
+        .filter((m) => m.threadId === threadId)
+        .slice(-limit)
+        .map((m) => ({
+          role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
+          content: m.text,
+        }));
+      console.log("[DEBUG] Using state messages (no DB messages):", threadMessages.length, "messages");
     }
     
     return threadMessages;
@@ -5852,6 +5874,13 @@ export default function CIS() {
         
         // Get previous messages from this thread for context (from state or DB)
         const threadMessages = await getThreadMessages(threadId, 10);
+        
+        // Debug logging
+        console.log("[DEBUG] Sending to backend:", {
+          question,
+          threadMessagesCount: threadMessages.length,
+          threadMessages: threadMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." }))
+        });
         
         await askClaudeAnswerStream(
           {
