@@ -1220,7 +1220,7 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         # Use system message + user message (ChatGPT-style)
         payload = {
             "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast rewriting
-            "max_tokens": 200,
+            "max_tokens": 100,  # Reduced since we only want the query
             "system": CONTEXTUALIZE_SYSTEM_PROMPT,
             "messages": [
                 {
@@ -1237,28 +1237,34 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
             content = data.get("content", [])
             if isinstance(content, list) and content:
                 rewritten = content[0].get("text", "").strip()
-                # Clean up any prefixes the model might add
-                rewritten = rewritten.lstrip("Reformulated question:").lstrip("Question:").lstrip("-").strip()
-                # Remove any explanatory text after the question (look for newlines or periods)
+                # Clean up any prefixes or extra text the model might add
+                rewritten = rewritten.lstrip("Rewritten Query:").lstrip("Query:").lstrip("-").strip()
+                # Remove any explanatory text after the question (look for newlines)
                 if "\n" in rewritten:
                     rewritten = rewritten.split("\n")[0].strip()
-                # If the rewritten query doesn't contain the original question's intent, check if it's valid
+                # Remove trailing periods if it's just a period
+                rewritten = rewritten.rstrip(".")
+                
                 if rewritten and rewritten != question:
                     print(f"[DEBUG] Query rewritten by LLM: '{question}' -> '{rewritten}'")
                     # Validate: if original had "him" and rewritten doesn't have a name, something went wrong
-                    if has_pronouns and not any(word[0].isupper() for word in rewritten.split() if len(word) > 3):
-                        print(f"[DEBUG] ⚠️ WARNING: Rewritten query doesn't seem to have resolved pronouns properly")
-                        # Try fallback
-                        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
-                        if last_user:
-                            import re
-                            names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
-                            if names:
-                                main_subject = names[-1]
-                                print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
-                                for pronoun in ["him", "her", "it", "they", "them"]:
-                                    rewritten = re.sub(rf'\b{pronoun}\b', main_subject, question, flags=re.IGNORECASE)
-                                return rewritten
+                    if has_pronouns:
+                        # Check if rewritten contains capitalized words (likely names)
+                        has_capitalized = any(word[0].isupper() and len(word) > 2 for word in rewritten.split())
+                        if not has_capitalized:
+                            print(f"[DEBUG] ⚠️ WARNING: Rewritten query doesn't seem to have resolved pronouns properly")
+                            # Try fallback - extract name from last user question
+                            last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+                            if last_user:
+                                import re
+                                names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
+                                if names:
+                                    main_subject = names[-1]  # Most recent name
+                                    print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
+                                    rewritten = question
+                                    for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their"]:
+                                        rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
+                                    return rewritten
                     return rewritten
     except Exception as e:
         # Fallback to simple replacement on error
