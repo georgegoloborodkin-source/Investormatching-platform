@@ -326,7 +326,7 @@ export default function OrbitStatsDemo() {
             READY TO TRANSFORM YOUR DEAL FLOW?
           </h2>
           <p className="text-white/70 mb-8 text-lg font-mono">
-            Join forward-thinking VC teams who are already using Orbit to make faster, data-driven decisions.
+            Join forward-thinking VC teams who are already using VentureOS to make faster, data-driven decisions.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login">
