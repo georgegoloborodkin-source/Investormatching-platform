@@ -961,16 +961,22 @@ def resolve_followup_context(question: str, previous_messages: List[ChatMessage]
 def build_answer_prompt(question: str, sources: List[AskSource], decisions: List[AskDecision], previous_messages: List[ChatMessage] = None) -> str:
     is_meta = is_meta_question(question)
     is_comprehensive = is_comprehensive_question(question)
+    source_ref = extract_source_reference(question)
     safe_sources = (sources or [])[:ASK_MAX_SOURCES]
     max_snippet_chars = ASK_MAX_SNIPPET_CHARS
     if is_comprehensive:
-        max_snippet_chars = max(ASK_MAX_SNIPPET_CHARS, 600)
+        max_snippet_chars = max(ASK_MAX_SNIPPET_CHARS, 2000)  # Much larger for comprehensive questions
     source_lines: List[str] = []
     for idx, src in enumerate(safe_sources, start=1):
         title = src.title or src.file_name or f"Source {idx}"
         snippet = (src.snippet or "").strip()
-        if len(snippet) > max_snippet_chars:
-            snippet = snippet[:max_snippet_chars] + "…"
+        # If user references a specific source, give it much more space
+        if source_ref == idx:
+            max_snippet_chars_for_this = max(max_snippet_chars, 3000)  # Even larger for referenced source
+        else:
+            max_snippet_chars_for_this = max_snippet_chars
+        if len(snippet) > max_snippet_chars_for_this:
+            snippet = snippet[:max_snippet_chars_for_this] + "…"
         source_lines.append(f"[{idx}] {title}\n{snippet}")
 
     decision_lines: List[str] = []
@@ -1024,20 +1030,27 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         if is_raw_text:
             raw_text_instruction = "\n\nIMPORTANT: The user is asking for RAW/EXACT TEXT. Provide the source snippets verbatim (no paraphrasing). If the text is truncated, say so explicitly. Preserve formatting and line breaks when possible."
         
+        # Build source reference instruction if user mentions a specific source
+        source_ref_instruction = ""
+        if source_ref:
+            source_ref_instruction = f"\n\nIMPORTANT: The user is asking about SOURCE [{source_ref}]. Focus primarily on that source and provide a COMPREHENSIVE overview of everything in that document. Include all key details, sections, data points, and information from source [{source_ref}]."
+        
         return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
 CRITICAL RULES:
 1. Use information from the sources below. If the user refers to a person, entity, or topic mentioned in the conversation history (e.g., "him", "her", "it", "that company"), assume they are referring to the primary subject discussed previously.
-2. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
-3. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details. Be comprehensive and include all relevant information from the sources.
-4. If the sources do NOT contain relevant information about the question topic, you MUST say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-5. Do NOT answer with information that is tangentially related but doesn't actually address the question.
-6. If a source talks about a completely different topic (e.g., trading/ATR when asked about a person's resume), you MUST reject it and say you don't have information.
-7. Cite sources using [1], [2], etc. for every claim.
-8. Do NOT be overly apologetic. If you have information, present it confidently and thoroughly. Only apologize if you truly have no relevant information.
-9. Use the conversation context below to understand what the user has already asked about. If they ask a follow-up question like "tell me more about him" or "the resume tell more", use the conversation history to understand who "him" refers to and what "the resume" means.
-10. If the question is unclear, use the conversation context to infer the likely intent. For follow-up questions, assume continuity from the previous conversation.
-11. When the user asks about something mentioned in the conversation (e.g., "tell me more about him" after discussing George), search the sources for information about that person/entity, even if the current question is vague.{comprehensive_instruction}{raw_text_instruction}
+2. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
+3. If the user references a specific source (e.g., "source 1", "source [1]", "document 1"), focus on that source and provide comprehensive details from it. Recognize that [1] refers to the first source, [2] to the second, etc.
+4. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
+5. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details. Be comprehensive and include all relevant information from the sources.
+6. If the sources do NOT contain relevant information about the question topic, you MUST say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+7. Do NOT answer with information that is tangentially related but doesn't actually address the question.
+8. If a source talks about a completely different topic (e.g., trading/ATR when asked about a person's resume), you MUST reject it and say you don't have information.
+9. Cite sources using [1], [2], etc. for every claim.
+10. Do NOT be overly apologetic. If you have information, present it confidently and thoroughly. Only apologize if you truly have no relevant information.
+11. Use the conversation context below to understand what the user has already asked about. If they ask a follow-up question like "tell me more about him" or "the resume tell more", use the conversation history to understand who "him" refers to and what "the resume" means.
+12. If the question is unclear, use the conversation context to infer the likely intent. For follow-up questions, assume continuity from the previous conversation.
+13. When the user asks about something mentioned in the conversation (e.g., "tell me more about him" after discussing George), search the sources for information about that person/entity, even if the current question is vague.{comprehensive_instruction}{raw_text_instruction}{source_ref_instruction}
 
 Answer style:
 - Prioritize comprehensive, coherent narrative answers grounded in sources.
