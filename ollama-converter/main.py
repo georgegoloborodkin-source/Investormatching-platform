@@ -806,19 +806,19 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     if not question or not previous_messages:
         return question
     
-    # Check if question contains pronouns or is vague
+    # Check if question contains pronouns or is vague (case-insensitive)
     q_lower = question.lower()
     has_pronouns = any(pronoun in q_lower for pronoun in [
-        " it ", " it?", " it.", " it,", " it!", 
-        " him ", " him?", " him.", " him,", " him!",
-        " her ", " her?", " her.", " her,", " her!",
-        " they ", " they?", " they.", " they,", " they!",
-        " them ", " them?", " them.", " them,", " them!",
-        " this ", " this?", " this.", " this,", " this!",
-        " that ", " that?", " that.", " that,", " that!",
-        " these ", " these?", " these.", " these,", " these!",
-        " those ", " those?", " those.", " those,", " those!",
-    ])
+        " it ", " it?", " it.", " it,", " it!", " it\n",
+        " him ", " him?", " him.", " him,", " him!", " him\n",
+        " her ", " her?", " her.", " her,", " her!", " her\n",
+        " they ", " they?", " they.", " they,", " they!", " they\n",
+        " them ", " them?", " them.", " them,", " them!", " them\n",
+        " this ", " this?", " this.", " this,", " this!", " this\n",
+        " that ", " that?", " that.", " that,", " that!", " that\n",
+        " these ", " these?", " these.", " these,", " these!", " these\n",
+        " those ", " those?", " those.", " those,", " those!", " those\n",
+    ]) or q_lower.strip() in ["it", "him", "her", "they", "them", "this", "that", "these", "those"]
     
     # Check for affirmative-only responses
     affirmative_only = q_lower.strip() in {
@@ -829,20 +829,37 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         "okay",
         "sure",
         "go ahead",
+        "yep",
+        "yeah",
     }
     
-    # Check for vague follow-up patterns
+    # Check for vague follow-up patterns (case-insensitive, more comprehensive)
     vague_patterns = [
         "tell me more",
         "what about",
         "and what",
         "how about",
         "what else",
+        "tell more",
+        "more about",
+        "more details",
+        "more info",
+        "more information",
+        "expand on",
+        "elaborate on",
+        "go on",
     ]
     has_vague_pattern = any(pattern in q_lower for pattern in vague_patterns)
     
-    # Only rewrite if question is vague or contains pronouns
-    if not has_pronouns and not affirmative_only and not has_vague_pattern:
+    # ALWAYS rewrite if there's chat history and the question is short/vague
+    # This ensures follow-up questions get properly contextualized
+    is_short_question = len(question.split()) <= 10
+    has_chat_history = previous_messages and len(previous_messages) > 0
+    
+    # Rewrite if: has pronouns, is vague, is affirmative, OR (is short AND has history)
+    should_rewrite = has_pronouns or affirmative_only or has_vague_pattern or (is_short_question and has_chat_history)
+    
+    if not should_rewrite:
         return question
     
     # Build context from recent messages (last 5 for efficiency)
@@ -1007,19 +1024,20 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         if is_raw_text:
             raw_text_instruction = "\n\nIMPORTANT: The user is asking for RAW/EXACT TEXT. Provide the source snippets verbatim (no paraphrasing). If the text is truncated, say so explicitly. Preserve formatting and line breaks when possible."
         
-        return f"""You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from the provided sources only.
+        return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
 CRITICAL RULES:
-1. ONLY use information from the sources below. Do NOT use general knowledge.
+1. Use information from the sources below. If the user refers to a person, entity, or topic mentioned in the conversation history (e.g., "him", "her", "it", "that company"), assume they are referring to the primary subject discussed previously.
 2. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
-3. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details.
-4. If the sources do NOT contain relevant information about the question topic, you MUST say EXACTLY: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
+3. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details. Be comprehensive and include all relevant information from the sources.
+4. If the sources do NOT contain relevant information about the question topic, you MUST say: "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
 5. Do NOT answer with information that is tangentially related but doesn't actually address the question.
-6. If a source talks about a completely different topic (e.g., trading/ATR when asked about economic growth), you MUST reject it and say you don't have information.
+6. If a source talks about a completely different topic (e.g., trading/ATR when asked about a person's resume), you MUST reject it and say you don't have information.
 7. Cite sources using [1], [2], etc. for every claim.
-8. Do NOT be overly apologetic if the sources contain relevant info; summarize them fully.
-9. Use the conversation context below to understand what the user has already asked about, and provide answers that build on previous questions when relevant.
-10. If the question is unclear, use the conversation context to infer the likely intent. If still unclear, ask a brief clarifying question.{comprehensive_instruction}{raw_text_instruction}
+8. Do NOT be overly apologetic. If you have information, present it confidently and thoroughly. Only apologize if you truly have no relevant information.
+9. Use the conversation context below to understand what the user has already asked about. If they ask a follow-up question like "tell me more about him" or "the resume tell more", use the conversation history to understand who "him" refers to and what "the resume" means.
+10. If the question is unclear, use the conversation context to infer the likely intent. For follow-up questions, assume continuity from the previous conversation.
+11. When the user asks about something mentioned in the conversation (e.g., "tell me more about him" after discussing George), search the sources for information about that person/entity, even if the current question is vague.{comprehensive_instruction}{raw_text_instruction}
 
 Answer style:
 - Prioritize comprehensive, coherent narrative answers grounded in sources.
