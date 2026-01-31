@@ -5739,7 +5739,7 @@ export default function CIS() {
         {/* Main Layout with Left Sidebar */}
         <div className="flex gap-4">
           {/* Left Sidebar - Navigation */}
-          <div className="w-64 flex-shrink-0">
+          <div className="w-64 flex-shrink-0 flex flex-col gap-4">
             <div className="border-2 border-white bg-transparent p-4 space-y-2 sticky top-4">
               <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
                 Navigation
@@ -5813,6 +5813,38 @@ export default function CIS() {
                 Decision Engine
               </button>
             </div>
+
+            {/* Knowledge Scope - Only show in chat tab */}
+            {activeTab === "chat" && (
+              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
+                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+                  Knowledge Scope
+                </div>
+                <div className="space-y-2">
+                  {scopes.map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm border-2 border-white px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
+                      <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
+                      <span className="flex-1 text-xs">{s.label}</span>
+                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                        {s.type}
+                      </Badge>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Saved Threads - Only show in chat tab */}
+            {activeTab === "chat" && threads.length > 0 && (
+              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
+                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+                  Saved Threads
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <ThreadTree threads={threads} active={activeThread} onSelect={setActiveThread} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main Content Area */}
@@ -5861,48 +5893,22 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            <div className="text-sm text-white/70 font-mono">
-              Scope applied:{" "}
-              {scopes
-                .filter((s) => s.checked)
-                .map((s) => s.label)
-                .join(", ") || "None"}
-            </div>
-
-            <div className="grid grid-cols-12 gap-4">
-              {/* Left: Scope */}
-              <div className="col-span-12 lg:col-span-12 space-y-3">
-                <Card className="border-2 border-white bg-transparent">
-                  <CardHeader className="pb-3 border-b-2 border-white">
-                    <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Knowledge Scope</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {scopes.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-sm border-2 border-white px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
-                        <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
-                        <span className="flex-1">{s.label}</span>
-                        <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
-                          {s.type}
-                        </Badge>
-                      </label>
-                    ))}
-                  </CardContent>
-                </Card>
-
-              </div>
-
-              {/* Center: Chat */}
-              <div className="col-span-12 space-y-3">
-                <Card className="h-full flex flex-col border-2 border-white bg-transparent">
-                  <CardHeader className="pb-3 border-b-2 border-white">
+            {/* Chat Container - Full height, no scrolling needed */}
+            <div className="flex flex-col h-[calc(100vh-200px)]">
+              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent">
+                <CardHeader className="pb-3 border-b-2 border-white flex-shrink-0">
+                  <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col p-0">
-                    <div 
-                      ref={chatContainerRef}
-                      className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
-                      style={{ maxHeight: "calc(100vh - 300px)", minHeight: "500px" }}
-                    >
+                    <div className="text-xs text-white/70 font-mono">
+                      Scope: {scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+                  <div 
+                    ref={chatContainerRef}
+                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
+                  >
                       {scopedMessages.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center space-y-2">
@@ -5970,7 +5976,7 @@ export default function CIS() {
                     </div>
 
                     {lastEvidence && lastEvidence.docs.length > 0 && (
-                      <div className="border-t-2 border-white bg-transparent px-4 py-3 space-y-2">
+                      <div className="border-t-2 border-white bg-transparent px-4 py-3 space-y-2 flex-shrink-0">
                         <div className="text-xs font-mono font-bold text-white mb-2">
                           Sources Used
                         </div>
@@ -5990,7 +5996,7 @@ export default function CIS() {
                       </div>
                     )}
 
-                    <div className="border-t-2 border-white p-4 bg-transparent">
+                    <div className="border-t-2 border-white p-4 bg-transparent flex-shrink-0">
                       <div className="flex gap-2 items-end">
                         <Textarea
                           value={input}
@@ -6035,8 +6041,6 @@ export default function CIS() {
                     </div>
                   </CardContent>
                 </Card>
-              </div>
-
             </div>
           </TabsContent>
 
