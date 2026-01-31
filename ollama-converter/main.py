@@ -186,7 +186,7 @@ ANTHROPIC_MODEL_FALLBACKS = [
 ]
 
 # Ask-the-fund settings (keep costs lean + fast)
-ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "400"))
+ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "1000"))
 ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "3"))
 ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "150"))  # Reduced from 250 for faster responses
 # Use Haiku for simple questions (3-5x faster, 75% cheaper)
@@ -198,7 +198,7 @@ OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
-VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-lite")
+VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-finance-2")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 
 # Reranking settings (cross-encoder)
@@ -961,8 +961,8 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
     # Choose model based on question complexity (Haiku is 3-5x faster)
     use_haiku = question and sources and is_simple_question(question, sources)
     model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
-    # Reduce max_tokens for simple questions (faster generation)
-    max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
+    # Set max_tokens appropriately (tokens are cheap, user trust is expensive)
+    max_tokens = 1000 if use_haiku else ASK_MAX_TOKENS
     
     last_error: Optional[str] = None
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -2461,7 +2461,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     if is_comprehensive:
         max_tokens = max(ASK_MAX_TOKENS, 800)
     else:
-        max_tokens = 250 if use_haiku else ASK_MAX_TOKENS
+        max_tokens = 1000 if use_haiku else ASK_MAX_TOKENS
     
     async with httpx.AsyncClient(timeout=60.0) as client:
         for model_name in [m for m in model_list if m]:
@@ -2630,27 +2630,6 @@ def normalize_embedding(embedding: List[float]) -> List[float]:
     # Pad with zeros if smaller than expected
     return embedding + [0.0] * (EMBEDDING_DIM - len(embedding))
 
-
-async def generate_embedding_openai(text: str) -> List[float]:
-    """Generate embedding using OpenAI API."""
-    if not OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="OPENAI_API_KEY not set. Set it in the server environment to use OpenAI embeddings."
-        )
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/embeddings",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": OPENAI_EMBEDDING_MODEL,
-                "input": text,
-            },
-        )
 
 
 @app.post("/rerank", response_model=RerankResponse)
