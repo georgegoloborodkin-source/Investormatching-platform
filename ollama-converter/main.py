@@ -16,6 +16,7 @@ import re
 from io import StringIO
 import csv
 import asyncio
+from typing import Tuple, List as TypingList
 
 app = FastAPI(title="Ollama Data Converter API")
 
@@ -710,6 +711,116 @@ def is_raw_text_request(question: str) -> bool:
     return any(pattern in q_lower for pattern in raw_patterns)
 
 
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Calculate Levenshtein distance between two strings.
+    Used for fuzzy name matching.
+    """
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
+
+def fuzzy_match_name(query_name: str, document_name: str, max_distance: int = 2) -> bool:
+    """
+    Check if two names match with fuzzy tolerance.
+    Returns True if Levenshtein distance <= max_distance.
+    """
+    query_lower = query_name.lower().strip()
+    doc_lower = document_name.lower().strip()
+    
+    # Exact match
+    if query_lower == doc_lower:
+        return True
+    
+    # Check if one contains the other (for partial matches)
+    if query_lower in doc_lower or doc_lower in query_lower:
+        return True
+    
+    # Fuzzy match with Levenshtein distance
+    distance = levenshtein_distance(query_lower, doc_lower)
+    max_allowed = min(max_distance, len(query_lower) // 3)  # Allow up to 1/3 of length
+    return distance <= max_allowed
+
+
+def extract_proper_nouns(text: str) -> List[str]:
+    """
+    Extract potential proper nouns (capitalized words, likely names).
+    Simple heuristic: words that start with capital letters and are not at sentence start.
+    """
+    import re
+    # Find capitalized words (potential names)
+    # Pattern: word boundary, capital letter, followed by lowercase letters
+    pattern = r'\b[A-Z][a-z]+\b'
+    matches = re.findall(pattern, text)
+    # Filter out common words that are always capitalized
+    common_caps = {'The', 'A', 'An', 'And', 'Or', 'But', 'In', 'On', 'At', 'To', 'For', 'Of', 'With', 'By'}
+    proper_nouns = [m for m in matches if m not in common_caps and len(m) > 2]
+    return proper_nouns
+
+
+def detect_name_in_query(query: str) -> Tuple[bool, List[str]]:
+    """
+    Detect if query contains person/company names.
+    Returns (has_name, list_of_names).
+    """
+    proper_nouns = extract_proper_nouns(query)
+    # Heuristic: if we have 2+ capitalized words together, likely a name
+    # Or if we have a capitalized word followed by another capitalized word
+    import re
+    # Pattern for "FirstName LastName" or "Company Name"
+    name_pattern = r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b'
+    name_matches = re.findall(name_pattern, query)
+    
+    all_names = list(set(proper_nouns + name_matches))
+    has_name = len(all_names) > 0
+    
+    return (has_name, all_names)
+
+
+def classify_query_intent(query: str) -> str:
+    """
+    Classify query intent: FIND, SUMMARIZE, EXPLAIN, COMPARE, etc.
+    """
+    q_lower = query.lower()
+    
+    # FIND intent
+    find_patterns = ["find", "search", "locate", "get", "fetch", "retrieve", "show me"]
+    if any(pattern in q_lower for pattern in find_patterns):
+        return "FIND"
+    
+    # SUMMARIZE intent
+    summarize_patterns = ["summarize", "summarise", "summary", "overview", "brief", "sum up"]
+    if any(pattern in q_lower for pattern in summarize_patterns):
+        return "SUMMARIZE"
+    
+    # EXPLAIN intent
+    explain_patterns = ["explain", "why", "how does", "how do", "what is", "what are"]
+    if any(pattern in q_lower for pattern in explain_patterns):
+        return "EXPLAIN"
+    
+    # COMPARE intent
+    compare_patterns = ["compare", "difference", "versus", "vs", "contrast"]
+    if any(pattern in q_lower for pattern in compare_patterns):
+        return "COMPARE"
+    
+    # DEFAULT: FIND (most common intent)
+    return "FIND"
+
+
 def extract_source_reference(question: str) -> int | None:
     """
     Extract source number from question (e.g., "source 1", "source [1]", "document 1").
@@ -737,13 +848,21 @@ def extract_source_reference(question: str) -> int | None:
 async def extract_search_keywords(user_query: str) -> str:
     """
     Extract core search terms from user query, removing instruction words.
+    PRESERVES proper nouns (names) to ensure they're not removed.
     This prevents the vector database from matching on "summarize" instead of "Lily".
     
     Example:
     Input: "Summarize the personal statement for Lily regarding cross-border business"
     Output: "Lily personal statement cross-border business"
     """
-    if not user_query or not ANTHROPIC_API_KEY:
+    if not user_query:
+        return user_query
+    
+    # Extract proper nouns BEFORE cleaning (to preserve them)
+    proper_nouns = extract_proper_nouns(user_query)
+    proper_nouns_lower = [pn.lower() for pn in proper_nouns]
+    
+    if not ANTHROPIC_API_KEY:
         # Fallback: simple keyword extraction using regex
         import re
         # Remove common instruction words
@@ -769,6 +888,15 @@ async def extract_search_keywords(user_query: str) -> str:
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
         # Clean up extra spaces
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        
+        # Ensure proper nouns are preserved
+        if proper_nouns:
+            # Add back any proper nouns that might have been removed
+            cleaned_lower = cleaned.lower()
+            for pn in proper_nouns:
+                if pn.lower() not in cleaned_lower:
+                    cleaned = f"{pn} {cleaned}".strip()
+        
         return cleaned if cleaned else user_query
     
     try:

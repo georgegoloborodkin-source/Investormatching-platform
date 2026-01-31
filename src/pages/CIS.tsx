@@ -5013,8 +5013,32 @@ export default function CIS() {
         }
       }
       
+      // PHASE 1: Extract proper nouns (names) BEFORE cleaning to preserve them
+      const extractProperNouns = (text: string): string[] => {
+        // Find capitalized words (potential names)
+        const pattern = /\b[A-Z][a-z]+\b/g;
+        const matches = text.match(pattern) || [];
+        const commonCaps = new Set(['The', 'A', 'An', 'And', 'Or', 'But', 'In', 'On', 'At', 'To', 'For', 'Of', 'With', 'By']);
+        return matches.filter(m => !commonCaps.has(m) && m.length > 2);
+      };
+      
+      const properNouns = extractProperNouns(searchQuestion);
+      const properNounsLower = properNouns.map(pn => pn.toLowerCase());
+      
+      // Detect if query contains names (Phase 1)
+      const detectNameInQuery = (query: string): [boolean, string[]] => {
+        const nouns = extractProperNouns(query);
+        // Pattern for "FirstName LastName"
+        const namePattern = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g;
+        const nameMatches = (query.match(namePattern) || []).map(m => m.trim());
+        const allNames = Array.from(new Set([...nouns, ...nameMatches]));
+        return [allNames.length > 0, allNames];
+      };
+      
+      const [hasName, detectedNames] = detectNameInQuery(searchQuestion);
+      
       // QUERY CLEANING: Remove instruction words to focus on entities/keywords
-      // This prevents matching on "summarize" instead of "Lily"
+      // PRESERVES proper nouns (Phase 1)
       const instructionWords = [
         "summarize", "summarise", "tell me about", "tell me", "find", "search for",
         "what is", "what are", "what does", "explain", "describe", "show me",
@@ -5027,8 +5051,31 @@ export default function CIS() {
       }
       // Clean up extra spaces
       cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, " ").trim();
+      
+      // Ensure proper nouns are preserved (Phase 1)
+      if (properNouns.length > 0) {
+        const cleanedLower = cleanedSearchQuery.toLowerCase();
+        for (const pn of properNouns) {
+          if (!cleanedLower.includes(pn.toLowerCase())) {
+            cleanedSearchQuery = `${pn} ${cleanedSearchQuery}`.trim();
+          }
+        }
+      }
+      
       // Use cleaned query if it's not empty, otherwise use original
       const finalSearchQuery = cleanedSearchQuery || searchQuestion;
+      
+      // PHASE 2: Query intent classification
+      const classifyQueryIntent = (query: string): string => {
+        const qLower = query.toLowerCase();
+        if (/\b(find|search|locate|get|fetch|retrieve|show me)\b/.test(qLower)) return "FIND";
+        if (/\b(summarize|summarise|summary|overview|brief|sum up)\b/.test(qLower)) return "SUMMARIZE";
+        if (/\b(explain|why|how does|how do|what is|what are)\b/.test(qLower)) return "EXPLAIN";
+        if (/\b(compare|difference|versus|vs|contrast)\b/.test(qLower)) return "COMPARE";
+        return "FIND"; // Default
+      };
+      
+      const queryIntent = classifyQueryIntent(question);
       
       const normalizedQuestion = finalSearchQuery.toLowerCase();
       // Unicode-aware tokenization (supports non-English)
@@ -5117,8 +5164,8 @@ export default function CIS() {
             });
             if (timedOut) return;
             if (!matchError && matches?.length) {
-              // Filter by similarity threshold (0.5 = 50% similarity minimum)
-              const SIMILARITY_THRESHOLD = 0.5;
+              // PHASE 1: Lower similarity threshold for name queries (0.3 instead of 0.5)
+              const SIMILARITY_THRESHOLD = hasName ? 0.3 : 0.5;
               semanticMatches = (matches as typeof semanticMatches).filter(
                 (m) => m.similarity >= SIMILARITY_THRESHOLD
               );
@@ -5195,7 +5242,124 @@ export default function CIS() {
             error = docError as { message?: string };
           } else if (docRows?.length) {
             const docMap = new Map(docRows.map((d: any) => [d.id, d]));
-            docs = rankedIds.map((id) => docMap.get(id)).filter(Boolean);
+            let fetchedDocs = rankedIds.map((id) => docMap.get(id)).filter(Boolean);
+            
+            // PHASE 2: Document title boosting - boost documents where query terms appear in title
+            const titleBoost = (docTitle: string | null, docFileName: string | null): number => {
+              if (!docTitle && !docFileName) return 0;
+              const titleText = `${docTitle || ""} ${docFileName || ""}`.toLowerCase();
+              const queryLower = finalSearchQuery.toLowerCase();
+              const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+              let boost = 0;
+              for (const word of queryWords) {
+                if (titleText.includes(word)) {
+                  boost += 0.5; // Boost for each matching word in title
+                }
+              }
+              // Extra boost if name appears in title
+              if (hasName && detectedNames.length > 0) {
+                for (const name of detectedNames) {
+                  if (titleText.includes(name.toLowerCase())) {
+                    boost += 1.0; // Strong boost for name in title
+                  }
+                }
+              }
+              return boost;
+            };
+            
+            // PHASE 1: Fuzzy name matching - check if document names match query names with typos
+            const fuzzyMatchName = (queryName: string, docName: string, maxDistance: number = 2): boolean => {
+              const queryLower = queryName.toLowerCase().trim();
+              const docLower = docName.toLowerCase().trim();
+              
+              // Exact match
+              if (queryLower === docLower) return true;
+              
+              // Contains match
+              if (queryLower.includes(docLower) || docLower.includes(queryLower)) return true;
+              
+              // Levenshtein distance (simple version)
+              const distance = (s1: string, s2: string): number => {
+                if (s1.length === 0) return s2.length;
+                if (s2.length === 0) return s1.length;
+                const matrix: number[][] = [];
+                for (let i = 0; i <= s2.length; i++) {
+                  matrix[i] = [i];
+                }
+                for (let j = 0; j <= s1.length; j++) {
+                  matrix[0][j] = j;
+                }
+                for (let i = 1; i <= s2.length; i++) {
+                  for (let j = 1; j <= s1.length; j++) {
+                    if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+                      matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                      matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                      );
+                    }
+                  }
+                }
+                return matrix[s2.length][s1.length];
+              };
+              
+              const dist = distance(queryLower, docLower);
+              const maxAllowed = Math.min(maxDistance, Math.floor(queryLower.length / 3));
+              return dist <= maxAllowed;
+            };
+            
+            // Apply fuzzy matching and title boosting
+            if (hasName && detectedNames.length > 0) {
+              fetchedDocs = fetchedDocs.map(doc => {
+                let boost = titleBoost(doc.title, doc.file_name);
+                // Check if any detected name fuzzy matches document title/content
+                const docText = `${doc.title || ""} ${doc.file_name || ""} ${doc.raw_content || ""}`.toLowerCase();
+                for (const name of detectedNames) {
+                  const nameParts = name.split(/\s+/);
+                  for (const part of nameParts) {
+                    if (part.length > 3) { // Only check significant name parts
+                      // Check title
+                      if (doc.title && fuzzyMatchName(part, doc.title)) {
+                        boost += 1.5; // Strong boost for fuzzy name match in title
+                      }
+                      // Check filename
+                      if (doc.file_name && fuzzyMatchName(part, doc.file_name)) {
+                        boost += 1.5;
+                      }
+                      // Check content (weaker boost)
+                      if (doc.raw_content && doc.raw_content.toLowerCase().includes(part.toLowerCase())) {
+                        boost += 0.3;
+                      }
+                    }
+                  }
+                }
+                return { ...doc, _boost: boost };
+              });
+              
+              // Re-sort by boost + original score
+              fetchedDocs.sort((a, b) => {
+                const boostA = (a as any)._boost || 0;
+                const boostB = (b as any)._boost || 0;
+                return boostB - boostA;
+              });
+              
+              // Remove boost property
+              docs = fetchedDocs.map(({ _boost, ...doc }) => doc);
+            } else {
+              // Just apply title boosting without fuzzy matching
+              fetchedDocs = fetchedDocs.map(doc => {
+                const boost = titleBoost(doc.title, doc.file_name);
+                return { ...doc, _boost: boost };
+              });
+              fetchedDocs.sort((a, b) => {
+                const boostA = (a as any)._boost || 0;
+                const boostB = (b as any)._boost || 0;
+                return boostB - boostA;
+              });
+              docs = fetchedDocs.map(({ _boost, ...doc }) => doc);
+            }
           }
         }
       }
