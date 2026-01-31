@@ -4841,24 +4841,26 @@ export default function CIS() {
     [persistChatMessage, scrollChatToBottom]
   );
 
-  // Scroll to bottom when chat tab is opened or messages change
+  // Scroll to bottom when chat tab is first opened
   useEffect(() => {
     if (activeTab === "chat" && chatContainerRef.current) {
-      // Small delay to ensure DOM is updated
+      // Scroll to bottom immediately when chat tab opens
+      const container = chatContainerRef.current;
+      // Use setTimeout to ensure DOM is fully rendered
       setTimeout(() => {
-        if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
         }
-      }, 100);
+      }, 50);
     }
-  }, [activeTab, scopedMessages.length]);
+  }, [activeTab]);
 
-  // Auto-scroll when messages change - scroll within chat container only
+  // Auto-scroll when new messages arrive - only if near bottom
   useEffect(() => {
     if (chatContainerRef.current && scopedMessages.length > 0) {
       const container = chatContainerRef.current;
-      // Only auto-scroll if we're near the bottom (within 100px)
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      // Only auto-scroll if we're near the bottom (within 150px)
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
       
       if (isNearBottom) {
         // Use requestAnimationFrame for smooth scrolling
