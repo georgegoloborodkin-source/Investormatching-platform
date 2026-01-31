@@ -1232,7 +1232,26 @@ CRITICAL INSTRUCTIONS:
                 rewritten = content[0].get("text", "").strip()
                 # Clean up any prefixes the model might add
                 rewritten = rewritten.lstrip("Reformulated question:").lstrip("Question:").lstrip("-").strip()
+                # Remove any explanatory text after the question (look for newlines or periods)
+                if "\n" in rewritten:
+                    rewritten = rewritten.split("\n")[0].strip()
+                # If the rewritten query doesn't contain the original question's intent, check if it's valid
                 if rewritten and rewritten != question:
+                    print(f"[DEBUG] Query rewritten by LLM: '{question}' -> '{rewritten}'")
+                    # Validate: if original had "him" and rewritten doesn't have a name, something went wrong
+                    if has_pronouns and not any(word[0].isupper() for word in rewritten.split() if len(word) > 3):
+                        print(f"[DEBUG] ⚠️ WARNING: Rewritten query doesn't seem to have resolved pronouns properly")
+                        # Try fallback
+                        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+                        if last_user:
+                            import re
+                            names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
+                            if names:
+                                main_subject = names[-1]
+                                print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
+                                for pronoun in ["him", "her", "it", "they", "them"]:
+                                    rewritten = re.sub(rf'\b{pronoun}\b', main_subject, question, flags=re.IGNORECASE)
+                                return rewritten
                     return rewritten
     except Exception as e:
         # Fallback to simple replacement on error
