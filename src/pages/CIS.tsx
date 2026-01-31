@@ -4872,19 +4872,25 @@ export default function CIS() {
     [persistChatMessage, scrollChatToBottom]
   );
 
-  // Scroll to bottom when chat tab is first opened
+  // Scroll to bottom when chat tab is first opened or when messages are loaded
   useEffect(() => {
     if (activeTab === "chat" && chatContainerRef.current) {
-      // Scroll to bottom immediately when chat tab opens
+      // Scroll to bottom when tab opens or when messages change
       const container = chatContainerRef.current;
-      // Use setTimeout to ensure DOM is fully rendered
-      setTimeout(() => {
+      // Use multiple timeouts to ensure DOM is fully rendered and messages are displayed
+      const scrollToBottom = () => {
         if (container) {
           container.scrollTop = container.scrollHeight;
         }
-      }, 50);
+      };
+      // Immediate scroll
+      scrollToBottom();
+      // Delayed scrolls to catch any async rendering
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 200);
+      setTimeout(scrollToBottom, 500);
     }
-  }, [activeTab]);
+  }, [activeTab, scopedMessages.length]);
 
   // Auto-scroll when new messages arrive - only if near bottom
   useEffect(() => {
