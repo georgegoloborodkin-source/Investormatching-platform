@@ -1152,40 +1152,17 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     if should_rewrite and not has_chat_history:
         return question
     
-    # Build context from MOST RECENT messages only (last 4 for pronoun resolution)
-    # This prevents confusion from older topics like "Giga Energy"
-    recent_context = []
-    # Use only the last 4 messages to focus on the most recent conversation
+    # Format the history into a clean dialogue string (Last 4 messages is usually enough)
+    # This prevents the model from getting distracted by topics from 20 messages ago.
+    history_text = ""
     for msg in previous_messages[-4:]:
         role = "User" if msg.role == "user" else "Assistant"
         # Truncate very long messages to avoid token limits
         content = msg.content[:500] if len(msg.content) > 500 else msg.content
-        recent_context.append(f"{role}: {content}")
+        history_text += f"{role}: {content}\n"
     
-    context_text = "\n".join(recent_context)
-    
-    # Get the LAST user question to identify the most recent subject
-    last_user_question = next((m.content for m in reversed(previous_messages) if m.role == "user"), "")
-    
-    # Also get the second-to-last user question to see the conversation flow
-    user_questions = [m.content for m in previous_messages if m.role == "user"]
-    second_last_user = user_questions[-2] if len(user_questions) >= 2 else ""
-    
-    # Build user message with chat history - emphasize MOST RECENT subject
-    user_message = f"""MOST RECENT CONVERSATION (last 4 messages - THIS IS WHAT MATTERS):
-{context_text}
-
-Current Question: {question}
-Last User Question: {last_user_question[:200] if last_user_question else "N/A"}
-Previous User Question: {second_last_user[:200] if second_last_user else "N/A"}
-
-🚨 CRITICAL INSTRUCTIONS:
-1. **ONLY USE THE MOST RECENT CONVERSATION ABOVE**. Ignore any older topics mentioned earlier in the full chat history.
-2. If the current question has pronouns (him, her, it, they, this, that), replace them with the subject from the LAST USER QUESTION above.
-3. Example: If "Last User Question" = "tell me about George Goloborodkin" and current question = "tell more about him", then "him" = "George Goloborodkin". DO NOT use "Giga Energy" or any other older topic.
-4. Extract the MAIN SUBJECT (person/company name) from the "Last User Question" and use it to replace pronouns.
-5. If the question is vague (e.g., "tell me more", "all you know"), combine it with the subject from the "Last User Question".
-6. Output ONLY the rewritten question, nothing else. No explanations."""
+    # Construct the final input in the format the system prompt expects
+    final_user_content = f"History:\n{history_text}Follow-up Question: {question}\nRewritten Query:"
     
     try:
         if not ANTHROPIC_API_KEY:
