@@ -1152,10 +1152,11 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     if should_rewrite and not has_chat_history:
         return question
     
-    # Build context from recent messages (last 6 for better context)
-    # BUT emphasize the MOST RECENT messages for pronoun resolution
+    # Build context from MOST RECENT messages only (last 4 for pronoun resolution)
+    # This prevents confusion from older topics like "Giga Energy"
     recent_context = []
-    for msg in previous_messages[-6:]:
+    # Use only the last 4 messages to focus on the most recent conversation
+    for msg in previous_messages[-4:]:
         role = "User" if msg.role == "user" else "Assistant"
         # Truncate very long messages to avoid token limits
         content = msg.content[:500] if len(msg.content) > 500 else msg.content
@@ -1166,19 +1167,25 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     # Get the LAST user question to identify the most recent subject
     last_user_question = next((m.content for m in reversed(previous_messages) if m.role == "user"), "")
     
+    # Also get the second-to-last user question to see the conversation flow
+    user_questions = [m.content for m in previous_messages if m.role == "user"]
+    second_last_user = user_questions[-2] if len(user_questions) >= 2 else ""
+    
     # Build user message with chat history - emphasize MOST RECENT subject
-    user_message = f"""Chat History (most recent first):
+    user_message = f"""MOST RECENT CONVERSATION (last 4 messages - THIS IS WHAT MATTERS):
 {context_text}
 
-Latest User Question: {question}
-Last User Question Before This: {last_user_question[:200] if last_user_question else "N/A"}
+Current Question: {question}
+Last User Question: {last_user_question[:200] if last_user_question else "N/A"}
+Previous User Question: {second_last_user[:200] if second_last_user else "N/A"}
 
-CRITICAL INSTRUCTIONS:
-1. **PRIORITIZE THE MOST RECENT CONVERSATION**. Look at the LAST user question in the chat history - that's what the current question refers to.
-2. If the question has pronouns (him, her, it, they, this, that), replace them with the subject from the MOST RECENT messages (last 2-3 messages), NOT from older messages.
-3. Example: If the last question was "tell me about George Goloborodkin" and current question is "tell more about him", then "him" = "George Goloborodkin" (NOT "Giga Energy" from earlier).
-4. If the question is vague (e.g., "tell me more", "all you know"), combine it with the MOST RECENT subject.
-5. Output ONLY the rewritten question, nothing else"""
+🚨 CRITICAL INSTRUCTIONS:
+1. **ONLY USE THE MOST RECENT CONVERSATION ABOVE**. Ignore any older topics mentioned earlier in the full chat history.
+2. If the current question has pronouns (him, her, it, they, this, that), replace them with the subject from the LAST USER QUESTION above.
+3. Example: If "Last User Question" = "tell me about George Goloborodkin" and current question = "tell more about him", then "him" = "George Goloborodkin". DO NOT use "Giga Energy" or any other older topic.
+4. Extract the MAIN SUBJECT (person/company name) from the "Last User Question" and use it to replace pronouns.
+5. If the question is vague (e.g., "tell me more", "all you know"), combine it with the subject from the "Last User Question".
+6. Output ONLY the rewritten question, nothing else. No explanations."""
     
     try:
         if not ANTHROPIC_API_KEY:
