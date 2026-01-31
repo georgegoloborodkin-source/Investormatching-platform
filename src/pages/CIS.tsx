@@ -5029,7 +5029,11 @@ export default function CIS() {
             });
             if (timedOut) return;
             if (!matchError && matches?.length) {
-              semanticMatches = matches as typeof semanticMatches;
+              // Filter by similarity threshold (0.5 = 50% similarity minimum)
+              const SIMILARITY_THRESHOLD = 0.5;
+              semanticMatches = (matches as typeof semanticMatches).filter(
+                (m) => m.similarity >= SIMILARITY_THRESHOLD
+              );
               semanticMatches.forEach((m) => {
                 if (m.parent_text?.trim()) {
                   snippetByDocId.set(m.document_id, m.parent_text);
@@ -5334,9 +5338,20 @@ export default function CIS() {
             topN: Math.min(10, rerankPayload.length),
           });
           if (rerankResults.length > 0) {
-            const docMap = new Map(rankedDocs.map((d) => [d.id, d]));
-            const reranked = rerankResults.map((r) => docMap.get(r.id)).filter(Boolean);
-            rankedDocs = reranked as typeof rankedDocs;
+            // Filter by reranking score threshold (0.1 = minimum relevance)
+            // Cohere scores are typically 0-1, but can be negative for very poor matches
+            const RERANK_SCORE_THRESHOLD = 0.1;
+            const filteredRerankResults = rerankResults.filter(
+              (r) => r.score >= RERANK_SCORE_THRESHOLD
+            );
+            if (filteredRerankResults.length > 0) {
+              const docMap = new Map(rankedDocs.map((d) => [d.id, d]));
+              const reranked = filteredRerankResults.map((r) => docMap.get(r.id)).filter(Boolean);
+              rankedDocs = reranked as typeof rankedDocs;
+            } else {
+              // If all reranked results are below threshold, keep original order but limit to top 3
+              rankedDocs = rankedDocs.slice(0, 3);
+            }
           }
         } catch (rerankErr) {
           // If rerank fails, keep existing order

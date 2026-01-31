@@ -241,7 +241,7 @@ async def fetch_ollama_model_names() -> List[str]:
         async with httpx.AsyncClient(timeout=2.0) as client:
             res = await client.get(f"{OLLAMA_HOST}/api/tags")
             res.raise_for_status()
-            data = res.json() or {}
+            data = res.json() or {} 
             models = data.get("models", []) or []
             for m in models:
                 if isinstance(m, dict) and m.get("name"):
@@ -780,9 +780,103 @@ def has_question_overlap(
     return False
 
 
+async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
+    """
+    Use Claude Haiku to rewrite questions with pronouns into standalone queries.
+    This prevents vague queries like "tell me more about him" from matching irrelevant documents.
+    """
+    if not question or not previous_messages:
+        return question
+    
+    # Check if question contains pronouns or is vague
+    q_lower = question.lower()
+    has_pronouns = any(pronoun in q_lower for pronoun in [" it ", " it?", " it.", " him ", " him?", " him.", " her ", " her?", " her.", " they ", " they?", " they.", " them ", " them?", " them.", " this ", " this?", " this.", " that ", " that?", " that."])
+    
+    # Check for affirmative-only responses
+    affirmative_only = q_lower.strip() in {
+        "yes",
+        "yes please",
+        "please",
+        "ok",
+        "okay",
+        "sure",
+        "go ahead",
+    }
+    
+    if not has_pronouns and not affirmative_only:
+        return question
+    
+    # Build context from recent messages (last 5)
+    recent_context = []
+    for msg in previous_messages[-5:]:
+        role = "User" if msg.role == "user" else "Assistant"
+        recent_context.append(f"{role}: {msg.content}")
+    
+    context_text = "\n".join(recent_context)
+    
+    # Use Claude Haiku for query rewriting (cheap and fast)
+    prompt = f"""Given the chat history below, rewrite the user's latest question to be a standalone search query.
+Replace pronouns like "it", "him", "her", "they", "this", "that" with the actual names, entities, or topics from the conversation.
+
+Chat History:
+{context_text}
+
+User's Latest Question: {question}
+
+Output ONLY the rewritten query. Do not include explanations or additional text."""
+    
+    try:
+        if not ANTHROPIC_API_KEY:
+            # Fallback to simple replacement if no API key
+            last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+            if last_user and (has_pronouns or affirmative_only):
+                if affirmative_only:
+                    return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
+                return f"{last_user}\n\nFollow-up question: {question}"
+            return question
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        }
+        url = get_anthropic_api_url()
+        
+        payload = {
+            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap rewriting
+            "max_tokens": 200,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(url, headers=headers, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            content = data.get("content", [])
+            if isinstance(content, list) and content:
+                rewritten = content[0].get("text", "").strip()
+                if rewritten:
+                    return rewritten
+    except Exception as e:
+        # Fallback to simple replacement on error
+        print(f"Query rewriting failed: {e}")
+        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+        if last_user and (has_pronouns or affirmative_only):
+            if affirmative_only:
+                return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
+            return f"{last_user}\n\nFollow-up question: {question}"
+    
+    return question
+
+
 def resolve_followup_context(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
     """
-    If the question is vague (e.g., contains "it"), prepend last user topic to improve clarity.
+    Legacy synchronous wrapper. For async contexts, use rewrite_query_with_llm instead.
     """
     if not question or not previous_messages:
         return question
@@ -2534,7 +2628,8 @@ async def ask_fund(request: AskRequest):
         raise HTTPException(status_code=400, detail="question is required.")
 
     no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-    resolved_question = resolve_followup_context(question, request.previous_messages or [])
+    # Use LLM-based query rewriting for better pronoun resolution
+    resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
     if not is_meta_question(resolved_question) and not has_question_overlap(
         resolved_question, request.sources or [], request.previous_messages or [], request.decisions or []
     ):
@@ -2557,7 +2652,8 @@ async def ask_fund_stream(request: AskRequest):
             raise HTTPException(status_code=400, detail="question is required.")
 
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
-        resolved_question = resolve_followup_context(question, request.previous_messages or [])
+        # Use LLM-based query rewriting for better pronoun resolution
+        resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
         if not is_meta_question(resolved_question) and not has_question_overlap(
             resolved_question, request.sources or [], request.previous_messages or [], request.decisions or []
         ):
