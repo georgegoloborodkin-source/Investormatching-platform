@@ -898,7 +898,7 @@ const Index = () => {
             </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <Link to="/cis">
-              <Button variant="outline" className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
+              <Button variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
                 Switch to CIS
               </Button>
             </Link>
@@ -907,7 +907,7 @@ const Index = () => {
                 Orbit Stats
               </Button>
             </Link>
-            <Button onClick={handleSaveData} variant="outline" className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
+            <Button onClick={handleSaveData} variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
               <Save className="h-4 w-4 mr-2" />
               Save Data
             </Button>

@@ -5720,17 +5720,17 @@ export default function CIS() {
               </div>
             </div>
             {(profile?.role as string) === "admin" && (
-              <Button variant="outline" asChild className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
+              <Button variant="outline" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
                 <Link to="/admin">
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Panel
                 </Link>
               </Button>
             )}
-            <Button variant="outline" onClick={signOut} className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
+            <Button variant="outline" onClick={signOut} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
               Log out
             </Button>
-            <Button variant="outline" asChild className="border-white text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all">
+            <Button variant="outline" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
               <a href="/">← Back to Matchmaking</a>
             </Button>
           </div>

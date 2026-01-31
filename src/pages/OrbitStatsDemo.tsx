@@ -99,7 +99,7 @@ export default function OrbitStatsDemo() {
     {
       icon: Brain,
       title: "Our Solution",
-      description: "Orbit Ventures is the signal stack that unifies your deal flow. AI extracts intelligence from every document, tracks every decision, and surfaces patterns you'd never see manually.",
+      description: "VentureOS is the signal stack that unifies your deal flow. AI extracts intelligence from every document, tracks every decision, and surfaces patterns you'd never see manually.",
     },
     {
       icon: Rocket,
@@ -164,10 +164,10 @@ export default function OrbitStatsDemo() {
         />
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
           <h1 className="mb-4 font-mono text-6xl font-black text-white md:text-8xl lg:text-9xl tracking-tight">
-            ORBIT
+            VENTURE
           </h1>
           <p className="font-mono text-xl text-[#FFED00] md:text-2xl lg:text-3xl mb-8 tracking-wider">
-            VENTURES
+            OS
           </p>
           <p className="max-w-3xl mx-auto text-lg md:text-xl text-white/80 mb-6 font-mono">
             The{" "}
