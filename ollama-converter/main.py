@@ -680,6 +680,16 @@ def is_comprehensive_question(question: str) -> bool:
         "what can you tell me",
         "summarize",
         "overview",
+        "what is inside",
+        "what's inside",
+        "what is in",
+        "what's in",
+        "what does it contain",
+        "what does it say",
+        "what is the content",
+        "what are the contents",
+        "just tell",
+        "tell what",
     ]
     return any(pattern in q_lower for pattern in comprehensive_patterns)
 
