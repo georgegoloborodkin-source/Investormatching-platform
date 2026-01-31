@@ -1011,9 +1011,35 @@ def has_question_overlap(
     """
     Return True if any meaningful keyword from the question appears in the sources or decisions.
     This is a lightweight guard to avoid hallucinations when sources are unrelated.
+    
+    IMPORTANT: For follow-up questions, we're more lenient because the user is continuing
+    a conversation about a topic that was already validated.
     """
     q_lower = (question or "").lower()
     q_tokens = [t for t in re.split(r"\W+", q_lower) if len(t) > 3]
+    
+    # CRITICAL: If this is a follow-up question (has previous messages), be MORE lenient
+    # The user is continuing a conversation, so we should allow it even if the specific
+    # words don't match the sources
+    is_followup = previous_messages and len(previous_messages) > 0
+    
+    # Check for follow-up patterns - these should ALWAYS be allowed if there's history
+    followup_patterns = ["yes", "more", "tell", "give", "what", "how", "why", "explain", 
+                        "elaborate", "detail", "about", "background", "education", "experience"]
+    if is_followup and any(pattern in q_lower for pattern in followup_patterns):
+        print(f"[DEBUG] has_question_overlap: ALLOWING follow-up question with history")
+        return True
+    
+    # Extract names from the question - if the question contains a proper name that's in sources, allow it
+    name_pattern = r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b'
+    question_names = re.findall(name_pattern, question)
+    if question_names and sources:
+        source_text = " ".join([f"{s.title or ''} {s.file_name or ''} {s.snippet or ''}".strip() for s in sources]).lower()
+        for name in question_names:
+            if name.lower() in source_text:
+                print(f"[DEBUG] has_question_overlap: ALLOWING because name '{name}' found in sources")
+                return True
+    
     if previous_messages:
         for msg in previous_messages[-5:]:
             q_tokens.extend(
@@ -1052,6 +1078,7 @@ def has_question_overlap(
         if any(token in decision_text for token in q_tokens):
             return True
     
+    print(f"[DEBUG] has_question_overlap: REJECTING - no overlap found. q_tokens={q_tokens[:10]}")
     return False
 
 
@@ -3116,10 +3143,20 @@ async def ask_fund_stream(request: AskRequest):
 
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
         # Use LLM-based query rewriting for better pronoun resolution
+        print(f"[DEBUG] /ask/stream - Original question: {question}")
+        print(f"[DEBUG] /ask/stream - Previous messages count: {len(request.previous_messages or [])}")
+        
         resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
-        if not is_meta_question(resolved_question) and not has_question_overlap(
+        print(f"[DEBUG] /ask/stream - Resolved question: {resolved_question}")
+        
+        # Check overlap - but be more lenient for follow-up questions
+        has_overlap = has_question_overlap(
             resolved_question, request.sources or [], request.previous_messages or [], request.decisions or []
-        ):
+        )
+        print(f"[DEBUG] /ask/stream - has_overlap: {has_overlap}")
+        
+        if not is_meta_question(resolved_question) and not has_overlap:
+            print(f"[DEBUG] /ask/stream - REJECTING: No overlap found, returning no_info_message")
             async def generate_empty():
                 yield f"data: {json.dumps({'text': no_info_message})}\n\n"
                 yield "data: [DONE]\n\n"
