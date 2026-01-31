@@ -1061,11 +1061,12 @@ CONTEXTUALIZE_SYSTEM_PROMPT = """You are a query rewriting assistant. Your job i
 Given a chat history and the latest user question, reformulate the question to be clear and specific.
 
 CRITICAL RULES:
-1. If the question contains pronouns (it, him, her, they, this, that, these, those), replace them with the actual names, entities, or topics mentioned in the conversation history.
-2. If the question is vague (e.g., "tell me more", "what about", "all you know"), combine it with the context from previous messages to create a specific query.
-3. If the user asks "tell me more about him" after discussing "George Goloborodkin", rewrite to "tell me more about George Goloborodkin".
-4. If the user asks "all you know" or "everything about", preserve that intent but add the specific subject from the conversation.
-5. Extract the MAIN SUBJECT (person, company, document) from the conversation history and use it in the rewritten query.
+1. **PRIORITIZE THE MOST RECENT CONVERSATION SUBJECT**. If the user just asked about "George Goloborodkin" and then says "tell me more about him", "him" = "George Goloborodkin" (NOT something mentioned earlier like "Giga Energy").
+2. If the question contains pronouns (it, him, her, they, this, that, these, those), replace them with the MOST RECENTLY DISCUSSED person, entity, or topic from the conversation history.
+3. Look at the LAST user question in the chat history - that's usually what the current question refers to.
+4. If the question is vague (e.g., "tell me more", "what about", "all you know"), combine it with the MOST RECENT subject from the conversation.
+5. Extract the MAIN SUBJECT from the MOST RECENT messages (last 2-3 messages), not from older messages.
+6. Example: If history shows "User: tell me about George Goloborodkin" then "User: tell more about him" → rewrite to "tell me more about George Goloborodkin" (NOT "Giga Energy" from earlier messages).
 
 Output ONLY the reformulated question. No explanations, no prefixes, no additional text. Just the question."""
 
@@ -1152,6 +1153,7 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         return question
     
     # Build context from recent messages (last 6 for better context)
+    # BUT emphasize the MOST RECENT messages for pronoun resolution
     recent_context = []
     for msg in previous_messages[-6:]:
         role = "User" if msg.role == "user" else "Assistant"
@@ -1161,17 +1163,22 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     
     context_text = "\n".join(recent_context)
     
-    # Build user message with chat history - emphasize extracting the main subject
-    user_message = f"""Chat History:
+    # Get the LAST user question to identify the most recent subject
+    last_user_question = next((m.content for m in reversed(previous_messages) if m.role == "user"), "")
+    
+    # Build user message with chat history - emphasize MOST RECENT subject
+    user_message = f"""Chat History (most recent first):
 {context_text}
 
 Latest User Question: {question}
+Last User Question Before This: {last_user_question[:200] if last_user_question else "N/A"}
 
-INSTRUCTIONS:
-1. Identify the MAIN SUBJECT (person, company, document) from the chat history
-2. If the question has pronouns (him, her, it, they, this, that), replace them with the main subject
-3. If the question is vague (e.g., "tell me more", "all you know"), combine it with the main subject
-4. Output ONLY the rewritten question, nothing else"""
+CRITICAL INSTRUCTIONS:
+1. **PRIORITIZE THE MOST RECENT CONVERSATION**. Look at the LAST user question in the chat history - that's what the current question refers to.
+2. If the question has pronouns (him, her, it, they, this, that), replace them with the subject from the MOST RECENT messages (last 2-3 messages), NOT from older messages.
+3. Example: If the last question was "tell me about George Goloborodkin" and current question is "tell more about him", then "him" = "George Goloborodkin" (NOT "Giga Energy" from earlier).
+4. If the question is vague (e.g., "tell me more", "all you know"), combine it with the MOST RECENT subject.
+5. Output ONLY the rewritten question, nothing else"""
     
     try:
         if not ANTHROPIC_API_KEY:
