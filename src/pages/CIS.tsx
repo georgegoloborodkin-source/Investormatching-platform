@@ -5196,9 +5196,11 @@ export default function CIS() {
         );
       const isFollowUpQuery = (() => {
         const q = normalizedQuestion;
-        const hasPronoun = /\b(it|its|they|them|their|he|his|she|her|there|that|those|these)\b/i.test(q);
-        const hasFollowUpCue = /\b(what about|and what|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden)\b/i.test(q);
-        const isShort = q.split(/\s+/).length <= 12;
+        // CRITICAL: Include ALL pronouns including "him" (was missing!)
+        const hasPronoun = /\b(it|its|they|them|their|he|him|his|she|her|hers|there|that|those|these)\b/i.test(q);
+        // Include more follow-up cues like "more", "tell", "about", "answer", "explain"
+        const hasFollowUpCue = /\b(what about|and what|tell me|more about|more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail)\b/i.test(q);
+        const isShort = q.split(/\s+/).length <= 15; // Increased from 12
         return (hasPronoun || hasFollowUpCue) && isShort;
       })();
       let docs: Array<{
@@ -5769,13 +5771,24 @@ export default function CIS() {
       const lowSignalFollowUp =
         isFollowUpQuery && contentTokens.length <= 1;
 
+      console.log("[DEBUG] Follow-up detection:", {
+        isFollowUpQuery,
+        hasRankedDocs: rankedDocs?.length > 0,
+        hasPreviousEvidence: !!previousEvidence,
+        previousEvidenceDocsCount: previousEvidence?.docs?.length,
+        sameThread: previousEvidenceThreadId === threadId,
+        lowSignalFollowUp,
+      });
+
       if (!rankedDocs || rankedDocs.length === 0 || lowSignalFollowUp) {
+        // If it's a follow-up query with pronouns/cues and we have previous evidence, use it!
         if (
           isFollowUpQuery &&
           previousEvidence &&
           previousEvidence.docs.length > 0 &&
           previousEvidenceThreadId === threadId
         ) {
+          console.log("[DEBUG] ✅ Using previous evidence for follow-up query");
           const answerDocs = previousEvidence.docs.slice(0, 3);
           setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
           setLastEvidenceThreadId(threadId);
@@ -5854,11 +5867,13 @@ export default function CIS() {
           }
           return;
         }
+        // Show searchQuestion (rewritten) if different from original, for better debugging
+        const queryToShow = searchQuestion !== question ? `${searchQuestion} (original: ${question})` : question;
         const fallback = decisionIntent
           ? decisionMatches.length
             ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
-            : `I couldn't find matching decisions for: "${question}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
-          : `I couldn't find relevant documents in your uploaded sources for: "${question}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
+            : `I couldn't find matching decisions for: "${queryToShow}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
+          : `I couldn't find relevant documents in your uploaded sources for: "${queryToShow}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
         }
