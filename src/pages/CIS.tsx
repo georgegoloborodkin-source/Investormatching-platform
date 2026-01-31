@@ -5077,9 +5077,10 @@ export default function CIS() {
       if (canSemantic) {
         try {
           // Add timeout to embedding query (15s max)
+          // Use rewritten query for embedding
           let embedding: number[] | null = null;
           try {
-            const embeddingPromise = embedQuery(question, "query");
+            const embeddingPromise = embedQuery(searchQuestion, "query");
             const embeddingTimeout = new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error("Embedding timeout")), 15000)
             );
@@ -5091,10 +5092,8 @@ export default function CIS() {
           }
           if (timedOut) return;
           if (embedding && embedding.length > 0) {
-            // Use rewritten query for semantic search
-            const searchEmbedding = await embedQuery(searchQuestion, "query");
             const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
-              query_embedding: searchEmbedding,
+              query_embedding: embedding,
               match_count: 30,
               filter_event_id: eventId,
             });
