@@ -5867,17 +5867,6 @@ export default function CIS() {
               </div>
             )}
 
-            {/* Saved Threads - Only show in chat tab */}
-            {activeTab === "chat" && threads.length > 0 && (
-              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
-                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
-                  Saved Threads
-                </div>
-                <div className="max-h-[300px] overflow-y-auto">
-                  <ThreadTree threads={threads} active={activeThread} onSelect={setActiveThread} />
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Main Content Area */}
