@@ -1287,16 +1287,18 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
     sources_block = "\n\n".join(source_lines) if source_lines else "No sources available."
     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
     
-    # Build conversation history context
+    # Build conversation history context - INCLUDE ALL MESSAGES for full context
     conversation_context = ""
     if previous_messages and len(previous_messages) > 0:
-        # Include last 5 messages for context (to avoid token limits)
-        recent_messages = previous_messages[-5:]
+        # Include ALL messages (up to 20 to avoid token limits, but prioritize recent)
+        recent_messages = previous_messages[-20:] if len(previous_messages) > 20 else previous_messages
         conversation_lines = []
         for msg in recent_messages:
             role_label = "User" if msg.role == "user" else "Assistant"
-            conversation_lines.append(f"{role_label}: {msg.content}")
-        conversation_context = "\n\nPrevious conversation context:\n" + "\n".join(conversation_lines)
+            # Truncate very long messages to avoid token limits
+            content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
+            conversation_lines.append(f"{role_label}: {content}")
+        conversation_context = "\n\n=== PREVIOUS CONVERSATION HISTORY (USE THIS TO UNDERSTAND PRONOUNS AND CONTEXT) ===\n" + "\n".join(conversation_lines) + "\n=== END OF CONVERSATION HISTORY ===\n"
     
     
     is_raw_text = is_raw_text_request(question)
@@ -1334,8 +1336,10 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         
         return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
+{conversation_context}
+
 CRITICAL RULES:
-1. Use information from the sources below. If the user refers to a person, entity, or topic mentioned in the conversation history (e.g., "him", "her", "it", "that company"), assume they are referring to the primary subject discussed previously.
+1. **ALWAYS CHECK THE CONVERSATION HISTORY ABOVE FIRST**. If the user refers to a person, entity, or topic using pronouns (e.g., "him", "her", "it", "that company", "him", "his", "they", "them"), you MUST look in the conversation history to identify what they're referring to. The conversation history contains the full context of what was discussed previously.
 2. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
 3. If the user references a specific source (e.g., "source 1", "source [1]", "document 1"), focus on that source and provide comprehensive details from it. Recognize that [1] refers to the first source, [2] to the second, etc.
 4. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
@@ -1365,9 +1369,11 @@ Sources:
 {sources_block}
 
 Decision history (optional context):
-{decisions_block}{conversation_context}
+{decisions_block}
 
-Remember: If the answer isn't in the sources above, you MUST say you don't have that information. Never make up answers.
+Remember: 
+- ALWAYS check the conversation history above to understand pronouns and context
+- If the answer isn't in the sources above, you MUST say you don't have that information. Never make up answers.
 """
 
 # Fast model for simple questions (3-5x faster)
