@@ -4911,6 +4911,47 @@ export default function CIS() {
     }
   }, [scopedMessages]);
 
+  // Helper function to get thread messages (from state or DB)
+  const getThreadMessages = useCallback(async (threadId: string, limit: number = 10): Promise<Array<{ role: "user" | "assistant"; content: string }>> => {
+    // First try to get from state
+    let threadMessages = messages
+      .filter((m) => m.threadId === threadId)
+      .slice(-limit)
+      .map((m) => ({
+        role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        content: m.text,
+      }));
+    
+    // If we don't have enough messages in state, fetch from database directly
+    if (threadMessages.length < 2 && threadId) {
+      try {
+        const eventId = activeEventId || (await ensureActiveEventId());
+        if (eventId) {
+          const { data: dbMessages, error } = await supabase
+            .from("chat_messages")
+            .select("role, content")
+            .eq("event_id", eventId)
+            .eq("thread_id", threadId)
+            .order("created_at", { ascending: true })
+            .limit(limit);
+          
+          if (!error && dbMessages && dbMessages.length > 0) {
+            threadMessages = dbMessages.map((m: any) => ({
+              role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+              content: m.content,
+            }));
+            console.log("Fetched chat history from DB:", threadMessages.length, "messages");
+          }
+        }
+      } catch (fetchError) {
+        console.warn("Failed to fetch chat history from DB:", fetchError);
+        // Continue with state messages if DB fetch fails
+      }
+    }
+    
+    return threadMessages;
+  }, [messages, activeEventId, ensureActiveEventId]);
+
   const askFund = useCallback(
     async (question: string, threadId: string) => {
       if (!scopes.some((s) => s.checked)) {
@@ -4920,7 +4961,7 @@ export default function CIS() {
 
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) {
-        createAssistantMessage("I can’t access documents yet. Please try again in a moment.", threadId);
+        createAssistantMessage("I can't access documents yet. Please try again in a moment.", threadId);
         return;
       }
 
@@ -4948,13 +4989,9 @@ export default function CIS() {
       // REWRITE QUERY BEFORE SEARCHING (ChatGPT-style "Condense" step)
       // Use backend LLM-based rewriting for robust pronoun resolution
       let searchQuestion = question;
-      const threadMessages = messages
-        .filter((m) => m.threadId === threadId)
-        .slice(-6) // Last 6 messages for context (matching backend)
-        .map((m) => ({
-          role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
-          content: m.text,
-        }));
+      
+      // Get thread messages (from state or DB)
+      const threadMessages = await getThreadMessages(threadId, 6);
       
       // Use backend LLM rewriting if we have chat history and the question might need rewriting
       const qLower = question.toLowerCase();
@@ -5615,13 +5652,9 @@ export default function CIS() {
         }, 75000);
         try {
           // Answer meta-questions with general knowledge (streaming)
-          const threadMessages = messages
-            .filter((m) => m.threadId === threadId)
-            .slice(-10)
-            .map((m) => ({
-              role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
-              content: m.text,
-            }));
+          // Get thread messages for context (from state or DB)
+          const threadMessages = await getThreadMessages(threadId, 10);
+          
           await askClaudeAnswerStream(
             {
               question,
@@ -5701,14 +5734,8 @@ export default function CIS() {
                 }))
               : [];
             
-            // Get previous messages from this thread for context
-            const threadMessages = messages
-              .filter((m) => m.threadId === threadId)
-              .slice(-10) // Last 10 messages for context
-              .map((m) => ({
-                role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
-                content: m.text,
-              }));
+            // Get previous messages from this thread for context (from state or DB)
+            const threadMessages = await getThreadMessages(threadId, 10);
             
             await askClaudeAnswerStream(
               {
@@ -5823,14 +5850,8 @@ export default function CIS() {
             }))
           : [];
         
-        // Get previous messages from this thread for context
-        const threadMessages = messages
-          .filter((m) => m.threadId === threadId)
-          .slice(-10) // Last 10 messages for context
-          .map((m) => ({
-            role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
-            content: m.text,
-          }));
+        // Get previous messages from this thread for context (from state or DB)
+        const threadMessages = await getThreadMessages(threadId, 10);
         
         await askClaudeAnswerStream(
           {
@@ -5921,6 +5942,7 @@ export default function CIS() {
       user,
       askClaudeAnswerStream,
       persistCostLog,
+      getThreadMessages,
     ]
   );
 
