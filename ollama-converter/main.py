@@ -1175,10 +1175,11 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     if should_rewrite and not has_chat_history:
         return question
     
-    # Format the history into a clean dialogue string (Last 4 messages is usually enough)
-    # This prevents the model from getting distracted by topics from 20 messages ago.
+    # Format the history into a clean dialogue string (last 2 messages for immediate context)
+    # This enforces "immediately preceding exchange" for pronoun resolution.
     history_text = ""
-    for msg in previous_messages[-4:]:
+    recent_messages = previous_messages[-2:] if len(previous_messages) >= 2 else previous_messages
+    for msg in recent_messages:
         role = "User" if msg.role == "user" else "Assistant"
         # Truncate very long messages to avoid token limits
         content = msg.content[:500] if len(msg.content) > 500 else msg.content
@@ -1251,10 +1252,13 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
                     if has_pronouns:
                         # Check if rewritten contains capitalized words (likely names)
                         has_capitalized = any(word[0].isupper() and len(word) > 2 for word in rewritten.split())
-                        if not has_capitalized:
+                        # If the rewrite doesn't include a name from the last user question, override it.
+                        last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
+                        last_user_names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user) if last_user else []
+                        has_recent_name = any(name in rewritten for name in last_user_names) if last_user_names else False
+                        if not has_capitalized or (last_user_names and not has_recent_name):
                             print(f"[DEBUG] ⚠️ WARNING: Rewritten query doesn't seem to have resolved pronouns properly")
                             # Try fallback - extract name from last user question
-                            last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
                             if last_user:
                                 import re
                                 names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
