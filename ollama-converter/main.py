@@ -2459,7 +2459,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     use_haiku = question and sources and is_simple_question(question, sources) and not is_comprehensive
     model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
     if is_comprehensive:
-        max_tokens = max(ASK_MAX_TOKENS, 800)
+        max_tokens = 4096  # Comprehensive questions need space for detailed memos
     else:
         max_tokens = 1000 if use_haiku else ASK_MAX_TOKENS
     
