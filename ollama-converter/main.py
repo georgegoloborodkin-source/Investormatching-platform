@@ -709,6 +709,30 @@ def is_raw_text_request(question: str) -> bool:
     ]
     return any(pattern in q_lower for pattern in raw_patterns)
 
+
+def extract_source_reference(question: str) -> int | None:
+    """
+    Extract source number from question (e.g., "source 1", "source [1]", "document 1").
+    Returns the source number (1-indexed) or None if not found.
+    """
+    import re
+    q_lower = question.lower()
+    # Patterns: "source 1", "source [1]", "document 1", "doc 1", "[1]", etc.
+    patterns = [
+        r"source\s*\[?(\d+)\]?",
+        r"document\s*\[?(\d+)\]?",
+        r"doc\s*\[?(\d+)\]?",
+        r"\[(\d+)\]",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, q_lower)
+        if match:
+            try:
+                return int(match.group(1))
+            except (ValueError, IndexError):
+                continue
+    return None
+
 def is_meta_question(question: str) -> bool:
     """
     Detect if question is about capabilities/system (meta) vs document content.
