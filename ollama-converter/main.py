@@ -733,6 +733,106 @@ def extract_source_reference(question: str) -> int | None:
                 continue
     return None
 
+
+async def extract_search_keywords(user_query: str) -> str:
+    """
+    Extract core search terms from user query, removing instruction words.
+    This prevents the vector database from matching on "summarize" instead of "Lily".
+    
+    Example:
+    Input: "Summarize the personal statement for Lily regarding cross-border business"
+    Output: "Lily personal statement cross-border business"
+    """
+    if not user_query or not ANTHROPIC_API_KEY:
+        # Fallback: simple keyword extraction using regex
+        import re
+        # Remove common instruction words
+        instruction_patterns = [
+            r"\bsummarize\b",
+            r"\bsummarise\b",
+            r"\btell me about\b",
+            r"\btell me\b",
+            r"\bfind\b",
+            r"\bsearch for\b",
+            r"\bwhat is\b",
+            r"\bwhat are\b",
+            r"\bwhat does\b",
+            r"\bexplain\b",
+            r"\bdescribe\b",
+            r"\bshow me\b",
+            r"\bget\b",
+            r"\bfetch\b",
+            r"\bretrieve\b",
+        ]
+        cleaned = user_query
+        for pattern in instruction_patterns:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        # Clean up extra spaces
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned if cleaned else user_query
+    
+    try:
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        }
+        url = get_anthropic_api_url()
+        
+        prompt = f"""Extract the core search terms from this user request. 
+Remove instructions like "summarize", "tell me about", "find", "explain", "describe".
+Focus on Names, Specific Documents, Topics, and Entities.
+
+User Request: "{user_query}"
+
+Output ONLY the search terms. Do not include explanations or additional text."""
+
+        payload = {
+            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast extraction
+            "max_tokens": 100,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        }
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.post(url, headers=headers, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            content = data.get("content", [])
+            if isinstance(content, list) and content:
+                extracted = content[0].get("text", "").strip()
+                if extracted:
+                    return extracted
+    except Exception as e:
+        # Fallback to simple regex extraction on error
+        print(f"Keyword extraction failed: {e}")
+        import re
+        instruction_patterns = [
+            r"\bsummarize\b",
+            r"\bsummarise\b",
+            r"\btell me about\b",
+            r"\btell me\b",
+            r"\bfind\b",
+            r"\bsearch for\b",
+            r"\bwhat is\b",
+            r"\bwhat are\b",
+            r"\bwhat does\b",
+            r"\bexplain\b",
+            r"\bdescribe\b",
+            r"\bshow me\b",
+        ]
+        cleaned = user_query
+        for pattern in instruction_patterns:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned if cleaned else user_query
+    
+    return user_query
+
 def is_meta_question(question: str) -> bool:
     """
     Detect if question is about capabilities/system (meta) vs document content.

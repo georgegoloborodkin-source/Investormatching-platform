@@ -5013,7 +5013,24 @@ export default function CIS() {
         }
       }
       
-      const normalizedQuestion = searchQuestion.toLowerCase();
+      // QUERY CLEANING: Remove instruction words to focus on entities/keywords
+      // This prevents matching on "summarize" instead of "Lily"
+      const instructionWords = [
+        "summarize", "summarise", "tell me about", "tell me", "find", "search for",
+        "what is", "what are", "what does", "explain", "describe", "show me",
+        "get", "fetch", "retrieve", "give me", "provide", "list", "show",
+      ];
+      let cleanedSearchQuery = searchQuestion;
+      for (const instruction of instructionWords) {
+        const regex = new RegExp(`\\b${instruction}\\b`, "gi");
+        cleanedSearchQuery = cleanedSearchQuery.replace(regex, "");
+      }
+      // Clean up extra spaces
+      cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, " ").trim();
+      // Use cleaned query if it's not empty, otherwise use original
+      const finalSearchQuery = cleanedSearchQuery || searchQuestion;
+      
+      const normalizedQuestion = finalSearchQuery.toLowerCase();
       // Unicode-aware tokenization (supports non-English)
       const tokens = normalizedQuestion
         .split(/[\s\p{P}]+/u)
@@ -5078,10 +5095,10 @@ export default function CIS() {
       if (canSemantic) {
         try {
           // Add timeout to embedding query (15s max)
-          // Use rewritten query for embedding
+          // Use cleaned query (without instruction words) for embedding
           let embedding: number[] | null = null;
           try {
-            const embeddingPromise = embedQuery(searchQuestion, "query");
+            const embeddingPromise = embedQuery(finalSearchQuery, "query");
             const embeddingTimeout = new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error("Embedding timeout")), 15000)
             );
@@ -5123,8 +5140,8 @@ export default function CIS() {
 
       if (!docs.length && !error) {
         // Hybrid search: keyword + semantic (RRF)
-        // Use rewritten query for keyword search too
-        const keywordQueryText = searchQuestion.replace(/[^\w\s-]/g, " ").trim();
+        // Use cleaned query (without instruction words) for keyword search
+        const keywordQueryText = finalSearchQuery.replace(/[^\w\s-]/g, " ").trim();
         if (keywordQueryText.length > 1) {
           try {
             const { data: keywordRows, error: keywordError } = await supabase.rpc("match_documents_keyword", {
