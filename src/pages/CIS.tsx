@@ -5659,15 +5659,15 @@ export default function CIS() {
           }
           if (block.type === "ul") {
             return (
-              <ul key={idx} className="list-disc pl-5 text-sm text-foreground/90 space-y-1">
+              <ul key={idx} className="list-disc pl-5 text-sm text-white space-y-1">
                 {(block.content as string[]).map((item, itemIdx) => (
-                  <li key={itemIdx}>{item}</li>
+                  <li key={itemIdx} className="text-white">{item}</li>
                 ))}
               </ul>
             );
           }
           return (
-            <p key={idx} className="text-sm text-foreground/90 leading-relaxed">
+            <p key={idx} className="text-sm text-white leading-relaxed">
               {block.content as string}
             </p>
           );
@@ -5736,36 +5736,88 @@ export default function CIS() {
           </div>
         </div>
 
-        {/* Main Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className={`grid w-full border-2 border-white bg-transparent ${(profile?.role === "managing_partner" || profile?.role === "organizer") ? "grid-cols-6" : "grid-cols-5"} lg:w-auto lg:inline-flex`}>
-            <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
-              <Brain className="h-4 w-4" />
-              Intelligence Chat
-            </TabsTrigger>
-            {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
-              <TabsTrigger value="onboarding" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
-                <Sparkles className="h-4 w-4" />
-                Onboarding
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="overview" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
-              <TrendingUp className="h-4 w-4" />
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger value="sources" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
-              <Folder className="h-4 w-4" />
-              Sources
-            </TabsTrigger>
-            <TabsTrigger value="decisions" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">
-              <ClipboardList className="h-4 w-4" />
-              Decision Logger
-            </TabsTrigger>
-            <TabsTrigger value="dashboard" className="flex items-center gap-2 data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold">
-              <TrendingUp className="h-4 w-4" />
-              Decision Engine
-            </TabsTrigger>
-          </TabsList>
+        {/* Main Layout with Left Sidebar */}
+        <div className="flex gap-4">
+          {/* Left Sidebar - Navigation */}
+          <div className="w-64 flex-shrink-0">
+            <div className="border-2 border-white bg-transparent p-4 space-y-2 sticky top-4">
+              <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+                Navigation
+              </div>
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "chat"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <Brain className="h-4 w-4" />
+                Intelligence Chat
+              </button>
+              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+                <button
+                  onClick={() => setActiveTab("onboarding")}
+                  className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                    activeTab === "onboarding"
+                      ? "bg-[#FFED00] text-black border-[#FFED00]"
+                      : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                  }`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Onboarding
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab("overview")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "overview"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab("sources")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "sources"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <Folder className="h-4 w-4" />
+                Sources
+              </button>
+              <button
+                onClick={() => setActiveTab("decisions")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "decisions"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Decision Logger
+              </button>
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "dashboard"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Decision Engine
+              </button>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
           {/* Onboarding Tab */}
           <TabsContent value="onboarding">
@@ -5883,9 +5935,9 @@ export default function CIS() {
                                 }`}
                               >
                                 {m.author === "assistant" ? (
-                                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                                  <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
                                     {m.isStreaming && m.text === "..." ? (
-                                      <span className="inline-flex items-center gap-1">
+                                      <span className="inline-flex items-center gap-1 text-white">
                                         <span className="animate-pulse">.</span>
                                         <span className="animate-pulse delay-75">.</span>
                                         <span className="animate-pulse delay-150">.</span>
@@ -5900,7 +5952,7 @@ export default function CIS() {
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</div>
+                                  <div className="text-sm leading-relaxed whitespace-pre-wrap text-black">{m.text}</div>
                                 )}
                               </div>
                               {m.author === "user" && (
@@ -6033,11 +6085,13 @@ export default function CIS() {
             />
           </TabsContent>
 
-          {/* Decision Engine Dashboard Tab */}
-          <TabsContent value="dashboard">
-            <DecisionEngineDashboardTab decisions={decisions} />
-          </TabsContent>
-        </Tabs>
+              {/* Decision Engine Dashboard Tab */}
+              <TabsContent value="dashboard">
+                <DecisionEngineDashboardTab decisions={decisions} />
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
       </div>
 
       {/* Document Viewer Modal */}
