@@ -1183,8 +1183,21 @@ CRITICAL INSTRUCTIONS:
     try:
         if not ANTHROPIC_API_KEY:
             # Fallback to simple replacement if no API key
+            # Get the MOST RECENT user question (not just any user question)
             last_user = next((m.content for m in reversed(previous_messages) if m.role == "user"), "").strip()
             if last_user and (has_pronouns or affirmative_only):
+                # Extract the main subject from the last user question
+                import re
+                # Look for names (capitalized words) in the last question
+                names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', last_user)
+                if names and has_pronouns:
+                    # Use the most recent name found
+                    main_subject = names[-1]  # Last name found (most recent)
+                    # Replace pronouns with the subject
+                    rewritten = question
+                    for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
+                        rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
+                    return rewritten
                 if affirmative_only:
                     return f"{last_user}\n\nFollow-up request: Provide a more complete answer from the available sources."
                 return f"{last_user}\n\nFollow-up question: {question}"
