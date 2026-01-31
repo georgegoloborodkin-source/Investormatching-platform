@@ -1295,17 +1295,29 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
     
     # Build conversation history context - INCLUDE ALL MESSAGES for full context
+    # BUT emphasize MOST RECENT messages for pronoun resolution
     conversation_context = ""
     if previous_messages and len(previous_messages) > 0:
         # Include ALL messages (up to 20 to avoid token limits, but prioritize recent)
         recent_messages = previous_messages[-20:] if len(previous_messages) > 20 else previous_messages
         conversation_lines = []
-        for msg in recent_messages:
+        for i, msg in enumerate(recent_messages):
             role_label = "User" if msg.role == "user" else "Assistant"
             # Truncate very long messages to avoid token limits
             content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
-            conversation_lines.append(f"{role_label}: {content}")
-        conversation_context = "\n\n=== PREVIOUS CONVERSATION HISTORY (USE THIS TO UNDERSTAND PRONOUNS AND CONTEXT) ===\n" + "\n".join(conversation_lines) + "\n=== END OF CONVERSATION HISTORY ===\n"
+            # Mark most recent messages (last 3) as MOST RECENT
+            if i >= len(recent_messages) - 3:
+                conversation_lines.append(f"{role_label} (MOST RECENT): {content}")
+            else:
+                conversation_lines.append(f"{role_label}: {content}")
+        
+        # Get the last user question explicitly
+        last_user_q = next((m.content for m in reversed(recent_messages) if m.role == "user"), "")
+        
+        conversation_context = f"\n\n=== PREVIOUS CONVERSATION HISTORY (USE THIS TO UNDERSTAND PRONOUNS AND CONTEXT) ===\n" + \
+                             f"⚠️ IMPORTANT: Messages marked 'MOST RECENT' are the most recent conversation. If user says 'him', 'her', 'it', check the MOST RECENT messages first!\n" + \
+                             f"Last User Question: {last_user_q[:200] if last_user_q else 'N/A'}\n" + \
+                             f"\n" + "\n".join(conversation_lines) + "\n=== END OF CONVERSATION HISTORY ===\n"
         # Debug logging - DETAILED
         print(f"[DEBUG] ✅ Conversation history included in prompt: {len(recent_messages)} messages")
         print(f"[DEBUG] First message: {recent_messages[0].role}: {recent_messages[0].content[:150]}")
