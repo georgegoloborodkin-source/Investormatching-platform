@@ -3741,6 +3741,14 @@ export default function CIS() {
   const embeddingsDisabledRef = useRef(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to scroll chat container to bottom
+  const scrollChatToBottom = useCallback(() => {
+    if (chatContainerRef.current) {
+      const container = chatContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, []);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
@@ -4757,10 +4765,10 @@ export default function CIS() {
       });
       // Auto-scroll to bottom after message is added
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        scrollChatToBottom();
       }, 100);
     },
-    [persistChatMessage]
+    [persistChatMessage, scrollChatToBottom]
   );
 
   const createStreamingAssistantMessage = useCallback(
@@ -4778,7 +4786,7 @@ export default function CIS() {
 
       // Auto-scroll when thinking
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        scrollChatToBottom();
       }, 100);
 
       return {
@@ -4793,7 +4801,7 @@ export default function CIS() {
           });
           // Auto-scroll as text streams
           setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            scrollChatToBottom();
           }, 50);
         },
         finalize: () => {
@@ -4830,13 +4838,24 @@ export default function CIS() {
         },
       };
     },
-    [persistChatMessage]
+    [persistChatMessage, scrollChatToBottom]
   );
 
-  // Auto-scroll when messages change
+  // Auto-scroll when messages change - scroll within chat container only
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (chatContainerRef.current) {
+      const container = chatContainerRef.current;
+      // Only auto-scroll if we're near the bottom (within 100px)
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      
+      if (isNearBottom) {
+        // Use requestAnimationFrame for smooth scrolling
+        requestAnimationFrame(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        });
+      }
     }
   }, [messages]);
 
@@ -5893,9 +5912,9 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            {/* Chat Container - Full height, no scrolling needed */}
-            <div className="flex flex-col h-[calc(100vh-200px)]">
-              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent">
+            {/* Chat Container - Fixed height, scrollable within */}
+            <div className="flex flex-col" style={{ height: "calc(100vh - 250px)", maxHeight: "calc(100vh - 250px)" }}>
+              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0">
                 <CardHeader className="pb-3 border-b-2 border-white flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
@@ -5904,10 +5923,11 @@ export default function CIS() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+                <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
+                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent min-h-0"
+                    style={{ maxHeight: "100%" }}
                   >
                       {scopedMessages.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
