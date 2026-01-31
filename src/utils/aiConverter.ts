@@ -241,12 +241,19 @@ export async function askClaudeAnswerStream(
   }, timeoutMs);
 
   try {
+    const payload = {
+      question: input.question,
+      sources: input.sources,
+      decisions: input.decisions,
+      // Backend expects snake_case
+      previous_messages: input.previousMessages || [],
+    };
     const response = await fetch(`${baseUrl}/ask/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 

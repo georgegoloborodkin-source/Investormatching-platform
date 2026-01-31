@@ -6,7 +6,7 @@ Converts unstructured data (text, CSV, JSON, etc.) into structured Startup/Inves
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Tuple, AsyncGenerator
 import ollama
 import os
@@ -406,7 +406,10 @@ class AskRequest(BaseModel):
     question: str
     sources: List[AskSource] = []
     decisions: List[AskDecision] = []
-    previous_messages: List[ChatMessage] = []
+    previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
+
+    class Config:
+        allow_population_by_field_name = True
 
 class AskResponse(BaseModel):
     answer: str
