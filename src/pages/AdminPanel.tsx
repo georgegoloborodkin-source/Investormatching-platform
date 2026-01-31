@@ -184,7 +184,7 @@ export default function AdminPanel() {
             <div className="space-y-2">
               <Label>Fund Name *</Label>
               <Input
-                placeholder="e.g., Orbit Ventures"
+                placeholder="e.g., VentureOS Fund"
                 value={fundName}
                 onChange={(e) => setFundName(e.target.value)}
                 disabled={isCreating}
@@ -246,7 +246,7 @@ export default function AdminPanel() {
             <div className="space-y-2">
               <p className="font-medium">1. Create Fund Code</p>
               <p className="text-muted-foreground">
-                Enter fund details and generate a unique code (e.g., ORBIT-1234)
+                Enter fund details and generate a unique code (e.g., VOS-1234)
               </p>
             </div>
             <div className="space-y-2">

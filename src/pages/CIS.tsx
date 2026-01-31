@@ -149,7 +149,7 @@ const initialScopes: ScopeItem[] = [
 
 const initialThreads: Thread[] = [];
 const initialMessages: Message[] = [];
-const LOCAL_CHAT_CACHE_KEY = "orbit_chat_cache";
+const LOCAL_CHAT_CACHE_KEY = "ventureos_chat_cache";
 
 type LocalChatMessage = {
   id: string;
@@ -4541,7 +4541,7 @@ export default function CIS() {
     const updated = [entry, ...costLog].slice(0, 100);
     setCostLog(updated);
     if (typeof window !== "undefined") {
-      localStorage.setItem("orbit_cost_log", JSON.stringify(updated));
+      localStorage.setItem("ventureos_cost_log", JSON.stringify(updated));
     }
   }, [costLog]);
 
@@ -4649,7 +4649,7 @@ export default function CIS() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     embeddingsDisabledRef.current = localStorage.getItem("disable_embeddings") === "true";
-    const existing = localStorage.getItem("orbit_cost_log");
+    const existing = localStorage.getItem("ventureos_cost_log");
     if (existing) {
       try {
         const parsed = JSON.parse(existing);
@@ -5208,7 +5208,7 @@ export default function CIS() {
           "how can you help",
           "what features",
           "what functionality",
-          "what is orbit ai",
+          "what is ventureos",
           "who are you",
           "introduce yourself",
           "what is this",
@@ -5819,7 +5819,7 @@ export default function CIS() {
 
             <div className="grid grid-cols-12 gap-4">
               {/* Left: Scope */}
-              <div className="col-span-12 lg:col-span-3 space-y-3">
+              <div className="col-span-12 lg:col-span-12 space-y-3">
                 <Card className="border-2 border-white bg-transparent">
                   <CardHeader className="pb-3 border-b-2 border-white">
                     <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Knowledge Scope</CardTitle>
@@ -5840,7 +5840,7 @@ export default function CIS() {
               </div>
 
               {/* Center: Chat */}
-              <div className="col-span-12 lg:col-span-9 space-y-3">
+              <div className="col-span-12 space-y-3">
                 <Card className="h-full flex flex-col border-2 border-white bg-transparent">
                   <CardHeader className="pb-3 border-b-2 border-white">
                     <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
@@ -5985,52 +5985,6 @@ export default function CIS() {
                 </Card>
               </div>
 
-              {/* Right: Evidence */}
-              <div className="col-span-12 lg:col-span-3 space-y-3">
-                <Card className="border-2 border-white bg-transparent">
-                  <CardHeader className="pb-3 border-b-2 border-white">
-                    <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Memory & Evidence</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-white">
-                    {evidence.length === 0 ? (
-                      <div className="text-sm text-white/70 font-mono">No knowledge objects yet.</div>
-                    ) : (
-                      evidence.map((ko) => (
-                        <div key={ko.id} className="border-2 border-white rounded-md p-3 space-y-1 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={ko.type === "Risk" ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : ko.type === "Outcome" ? "border-white text-white bg-transparent font-mono" : "border-white/70 text-white/70 bg-transparent font-mono"}>
-                              {ko.type}
-                            </Badge>
-                            <div className="font-mono font-bold text-sm text-white">{ko.title}</div>
-                          </div>
-                          <div className="text-xs text-white/70 font-mono">{ko.text}</div>
-                          <div className="text-xs text-white/70 font-mono">
-                            Source: <span className="font-bold">{ko.source}</span>
-                          </div>
-                          {ko.linked.length > 0 && (
-                            <div className="text-xs text-white/70 font-mono">
-                              Linked: {ko.linked.join(", ")}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 border-white bg-transparent">
-                  <CardContent className="pt-4 text-sm text-white/70 space-y-2 font-mono">
-                    <div className="text-xs">
-                      <strong className="text-white font-bold">Tips:</strong>
-                      <ul className="list-disc list-inside space-y-1 mt-1">
-                        <li>Ask specific questions about your documents</li>
-                        <li>Use semantic search for better results</li>
-                        <li>Check sources used for references</li>
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
             </div>
           </TabsContent>
 

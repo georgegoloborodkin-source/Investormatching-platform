@@ -226,8 +226,8 @@ export default function RoleSelection() {
               <Key className="h-4 w-4" />
               <AlertDescription>
                 {profile?.role === "managing_partner"
-                  ? "Contact admin to get your fund code (e.g., ORBIT-1234). First MD to use it creates the fund."
-                  : "Ask your Managing Partner for the invitation code (e.g., ORBIT-1234)"}
+                  ? "Contact admin to get your fund code (e.g., VOS-1234). First MD to use it creates the fund."
+                  : "Ask your Managing Partner for the invitation code (e.g., VOS-1234)"}
               </AlertDescription>
             </Alert>
 
@@ -237,7 +237,7 @@ export default function RoleSelection() {
               </Label>
               <Input
                 id="invitation-code"
-                placeholder="ORBIT-1234"
+                placeholder="VOS-1234"
                 value={invitationCode}
                 onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
                 disabled={isSaving}
@@ -275,7 +275,7 @@ export default function RoleSelection() {
     <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Welcome to Orbit AI</CardTitle>
+          <CardTitle className="text-2xl font-bold">Welcome to VentureOS</CardTitle>
           <CardDescription className="text-base">
             Choose your role to get started
           </CardDescription>

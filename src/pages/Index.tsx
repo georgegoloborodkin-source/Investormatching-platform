@@ -904,7 +904,7 @@ const Index = () => {
             </Link>
             <Link to="/orbit-stats">
               <Button className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
-                Orbit Stats
+                VentureOS Stats
               </Button>
             </Link>
             <Button onClick={handleSaveData} variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">

@@ -59,7 +59,7 @@ export function Header({
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
             <h1 className="text-2xl font-black font-mono text-white tracking-tight">
-              ORBIT
+              VENTUREOS
             </h1>
             <nav className="hidden md:flex space-x-6">
               <span className="text-sm font-medium text-white/70 uppercase tracking-wider">
