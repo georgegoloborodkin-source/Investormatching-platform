@@ -903,13 +903,13 @@ function DecisionLoggerTab({
           </Button>
         )}
         <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Filter by document" />
+          <SelectTrigger className="w-[220px] border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] font-mono font-bold">
+            <SelectValue placeholder="Filter by document" className="text-white" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All documents</SelectItem>
+          <SelectContent className="bg-[#050505] border-2 border-white">
+            <SelectItem value="all" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">All documents</SelectItem>
             {documents.filter((doc) => !!doc.id).map((doc) => (
-              <SelectItem key={doc.id} value={doc.id}>
+              <SelectItem key={doc.id} value={doc.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
                 {doc.title || doc.id}
               </SelectItem>
             ))}
@@ -1261,10 +1261,10 @@ function DecisionLoggerTab({
 
       {/* Decision View Dialog */}
       <Dialog open={!!viewingDecision} onOpenChange={(open) => !open && setViewingDecision(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border-2 border-white text-white">
           <DialogHeader>
-            <DialogTitle>Decision Details</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-white font-mono font-bold">Decision Details</DialogTitle>
+            <DialogDescription className="text-white/70 font-mono">
               Full information about this decision
             </DialogDescription>
           </DialogHeader>
