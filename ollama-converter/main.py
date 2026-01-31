@@ -1299,6 +1299,11 @@ def build_answer_prompt(question: str, sources: List[AskSource], decisions: List
             content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
             conversation_lines.append(f"{role_label}: {content}")
         conversation_context = "\n\n=== PREVIOUS CONVERSATION HISTORY (USE THIS TO UNDERSTAND PRONOUNS AND CONTEXT) ===\n" + "\n".join(conversation_lines) + "\n=== END OF CONVERSATION HISTORY ===\n"
+        # Debug logging
+        print(f"[DEBUG] Conversation history included: {len(recent_messages)} messages")
+        print(f"[DEBUG] First message: {recent_messages[0].role}: {recent_messages[0].content[:100] if recent_messages else 'N/A'}")
+    else:
+        print(f"[DEBUG] WARNING: No conversation history provided! previous_messages={previous_messages}")
     
     
     is_raw_text = is_raw_text_request(question)
@@ -1334,13 +1339,19 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         if source_ref:
             source_ref_instruction = f"\n\nIMPORTANT: The user is asking about SOURCE [{source_ref}]. Focus primarily on that source and provide a COMPREHENSIVE overview of everything in that document. Include all key details, sections, data points, and information from source [{source_ref}]."
         
+        # Build the prompt with conversation history at the top
+        history_section = conversation_context if conversation_context else "\n\n=== PREVIOUS CONVERSATION HISTORY ===\n(No previous conversation history available)\n=== END OF CONVERSATION HISTORY ===\n"
+        
         return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
-{conversation_context}
+{history_section}
+
+🚨 CRITICAL: READ THE CONVERSATION HISTORY ABOVE CAREFULLY BEFORE ANSWERING!
 
 CRITICAL RULES:
-1. **ALWAYS CHECK THE CONVERSATION HISTORY ABOVE FIRST**. If the user refers to a person, entity, or topic using pronouns (e.g., "him", "her", "it", "that company", "him", "his", "they", "them"), you MUST look in the conversation history to identify what they're referring to. The conversation history contains the full context of what was discussed previously.
-2. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
+1. **MANDATORY: CHECK CONVERSATION HISTORY FIRST**. If the user uses pronouns like "him", "her", "it", "they", "them", "his", "her", "their", "this", "that", "these", "those", you MUST look in the conversation history above to find what they're referring to. The conversation history shows the full context of what was discussed previously.
+2. **IF YOU SEE "tell me more about him" AND THE HISTORY SHOWS A PREVIOUS QUESTION ABOUT "George Goloborodkin"**, then "him" = "George Goloborodkin". Use the conversation history to resolve ALL pronouns. **NEVER say "I cannot determine who 'him' refers to" if there is conversation history above - ALWAYS check it first!**
+3. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
 3. If the user references a specific source (e.g., "source 1", "source [1]", "document 1"), focus on that source and provide comprehensive details from it. Recognize that [1] refers to the first source, [2] to the second, etc.
 4. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
 5. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details. Be comprehensive and include all relevant information from the sources.
