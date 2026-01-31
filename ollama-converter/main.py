@@ -711,29 +711,53 @@ def has_question_overlap(
     question: str,
     sources: List[AskSource],
     previous_messages: List[ChatMessage] | None = None,
+    decisions: List[AskDecision] | None = None,
 ) -> bool:
     """
-    Return True if any meaningful keyword from the question appears in the sources.
+    Return True if any meaningful keyword from the question appears in the sources or decisions.
     This is a lightweight guard to avoid hallucinations when sources are unrelated.
     """
-    if not sources:
-        return False
-    q_tokens = [t for t in re.split(r"\W+", (question or "").lower()) if len(t) > 3]
+    q_lower = (question or "").lower()
+    q_tokens = [t for t in re.split(r"\W+", q_lower) if len(t) > 3]
     if previous_messages:
         for msg in previous_messages[-5:]:
             q_tokens.extend(
                 [t for t in re.split(r"\W+", (msg.content or "").lower()) if len(t) > 3]
             )
     q_tokens = list(dict.fromkeys(q_tokens))
-    if not q_tokens:
-        return False
-    source_text = " ".join(
-        [
-            f"{s.title or ''} {s.file_name or ''} {s.snippet or ''}".strip()
-            for s in sources
-        ]
-    ).lower()
-    return any(token in source_text for token in q_tokens)
+    
+    # Check if question is about decisions
+    decision_keywords = ["decision", "decisions", "outcome", "outcomes", "action", "actions", 
+                         "invest", "investment", "invested", "passed", "declined", "approved",
+                         "rejected", "recent decisions", "decision history", "what decisions"]
+    if any(keyword in q_lower for keyword in decision_keywords):
+        # If decisions are provided, allow the question
+        if decisions and len(decisions) > 0:
+            return True
+    
+    # Check sources
+    if sources:
+        source_text = " ".join(
+            [
+                f"{s.title or ''} {s.file_name or ''} {s.snippet or ''}".strip()
+                for s in sources
+            ]
+        ).lower()
+        if q_tokens and any(token in source_text for token in q_tokens):
+            return True
+    
+    # Check decisions content if provided
+    if decisions and q_tokens:
+        decision_text = " ".join(
+            [
+                f"{d.startup_name or ''} {d.action_type or ''} {d.outcome or ''} {d.notes or ''}".strip()
+                for d in decisions
+            ]
+        ).lower()
+        if any(token in decision_text for token in q_tokens):
+            return True
+    
+    return False
 
 
 def resolve_followup_context(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
@@ -2492,7 +2516,7 @@ async def ask_fund(request: AskRequest):
     no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
     resolved_question = resolve_followup_context(question, request.previous_messages or [])
     if not is_meta_question(resolved_question) and not has_question_overlap(
-        resolved_question, request.sources or [], request.previous_messages or []
+        resolved_question, request.sources or [], request.previous_messages or [], request.decisions or []
     ):
         return AskResponse(answer=no_info_message)
 
@@ -2515,7 +2539,7 @@ async def ask_fund_stream(request: AskRequest):
         no_info_message = "I don't have information about this in the provided sources. Please upload relevant documents or try a different question."
         resolved_question = resolve_followup_context(question, request.previous_messages or [])
         if not is_meta_question(resolved_question) and not has_question_overlap(
-            resolved_question, request.sources or [], request.previous_messages or []
+            resolved_question, request.sources or [], request.previous_messages or [], request.decisions or []
         ):
             async def generate_empty():
                 yield f"data: {json.dumps({'text': no_info_message})}\n\n"
