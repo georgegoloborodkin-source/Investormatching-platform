@@ -5885,7 +5885,7 @@ export default function CIS() {
           </TabsContent>
 
           {/* Chat Tab */}
-          <TabsContent value="chat" className="space-y-4">
+          <TabsContent value="chat" className="space-y-4 overflow-hidden">
             {isDeveloper && (
               <Card className="border-2 border-white bg-transparent">
                 <CardHeader className="pb-2 border-b-2 border-white">
@@ -5915,9 +5915,9 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            {/* Chat Container - Fixed height, scrollable within */}
-            <div className="flex flex-col" style={{ height: "600px", maxHeight: "600px" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0 h-full">
+            {/* Chat Container - Fixed height, scrollable within, no page scroll */}
+            <div className="flex flex-col overflow-hidden" style={{ height: "600px", maxHeight: "600px" }}>
+              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0 h-full overflow-hidden">
                 <CardHeader className="pb-3 border-b-2 border-white flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
