@@ -111,7 +111,7 @@ import {
   deleteSource,
   getDocumentById,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -4946,70 +4946,31 @@ export default function CIS() {
       const currentUserId = profile?.id || user?.id || null;
       
       // REWRITE QUERY BEFORE SEARCHING (ChatGPT-style "Condense" step)
-      // If this is a follow-up question, rewrite it using previous context
+      // Use backend LLM-based rewriting for robust pronoun resolution
       let searchQuestion = question;
       const threadMessages = messages
         .filter((m) => m.threadId === threadId)
-        .slice(-5) // Last 5 messages for context
+        .slice(-6) // Last 6 messages for context (matching backend)
         .map((m) => ({
           role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
           content: m.text,
         }));
       
-      // Check if question needs rewriting (has pronouns or is vague)
+      // Use backend LLM rewriting if we have chat history and the question might need rewriting
       const qLower = question.toLowerCase();
       const hasPronouns = /\b(it|its|him|his|her|she|they|them|their|this|that|these|those)\b/i.test(question);
-      const hasVaguePattern = /\b(tell me more|what about|and what|how about|what else|tell more|more about|more details|more info|expand|elaborate)\b/i.test(qLower);
-      const isShort = question.split(/\s+/).length <= 10;
+      const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|expand|elaborate|all you know|everything)\b/i.test(qLower);
+      const isShort = question.split(/\s+/).length <= 15;
       
       if ((hasPronouns || hasVaguePattern || isShort) && threadMessages.length > 0) {
-        // Find the last user question that mentioned a person/entity
-        const lastUserQuestion = threadMessages
-          .filter((m) => m.role === "user")
-          .slice(-1)[0]?.content || "";
-        
-        // Extract names/entities from previous messages (simple heuristic)
-        const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g;
-        const names = new Set<string>();
-        threadMessages.forEach((m) => {
-          const matches = m.content.match(namePattern);
-          if (matches) {
-            matches.forEach((name) => {
-              if (name.split(/\s+/).length >= 2 && name.length > 5) {
-                names.add(name);
-              }
-            });
-          }
-        });
-        
-        // If we found names and the question is vague, rewrite it
-        if (names.size > 0 && (hasPronouns || hasVaguePattern)) {
-          const primaryName = Array.from(names)[0]; // Use first name found
-          if (hasPronouns) {
-            // Replace pronouns with the name
-            searchQuestion = question
-              .replace(/\bhim\b/gi, primaryName)
-              .replace(/\bhis\b/gi, `${primaryName}'s`)
-              .replace(/\bher\b/gi, primaryName)
-              .replace(/\bshe\b/gi, primaryName)
-              .replace(/\bit\b/gi, primaryName)
-              .replace(/\bits\b/gi, `${primaryName}'s`)
-              .replace(/\bthey\b/gi, primaryName)
-              .replace(/\bthem\b/gi, primaryName)
-              .replace(/\btheir\b/gi, `${primaryName}'s`)
-              .replace(/\bthis\b/gi, primaryName)
-              .replace(/\bthat\b/gi, primaryName)
-              .replace(/\bthese\b/gi, primaryName)
-              .replace(/\bthose\b/gi, primaryName);
-          } else if (hasVaguePattern) {
-            // For vague patterns like "tell me more", append the name
-            if (lastUserQuestion) {
-              searchQuestion = `${question} about ${primaryName}`;
-            }
-          }
-        } else if (lastUserQuestion && (hasPronouns || hasVaguePattern)) {
-          // Fallback: prepend last question context
-          searchQuestion = `${lastUserQuestion}. ${question}`;
+        try {
+          // Call backend LLM to rewrite the query (much more robust than frontend heuristics)
+          searchQuestion = await rewriteQueryWithLLM(question, threadMessages);
+          console.log("Query rewritten:", question, "->", searchQuestion);
+        } catch (rewriteError) {
+          console.warn("Query rewriting failed, using original:", rewriteError);
+          // Fallback to original question if rewriting fails
+          searchQuestion = question;
         }
       }
       

@@ -363,6 +363,31 @@ export async function rerankDocuments(input: {
   return data?.results || [];
 }
 
+export async function rewriteQueryWithLLM(
+  question: string,
+  previousMessages?: ChatMessage[]
+): Promise<string> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const response = await fetch(`${baseUrl}/rewrite-query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      question,
+      previous_messages: previousMessages || [],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.rewritten_question || question;
+}
+
 export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const response = await fetchWithTimeout(

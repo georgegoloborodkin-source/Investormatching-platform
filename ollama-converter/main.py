@@ -434,6 +434,13 @@ class EmbedRequest(BaseModel):
 class EmbedResponse(BaseModel):
     embedding: List[float]
 
+class RewriteQueryRequest(BaseModel):
+    question: str
+    previous_messages: Optional[List[ChatMessage]] = []
+
+class RewriteQueryResponse(BaseModel):
+    rewritten_question: str
+
 class ClickUpListsResponse(BaseModel):
     lists: List[Dict[str, Any]] = []
 
@@ -677,6 +684,7 @@ def is_comprehensive_question(question: str) -> bool:
         "full",
         "complete",
         "tell me all",
+        "tell me more all",
         "what do you know",
         "what can you tell me",
         "summarize",
@@ -691,6 +699,11 @@ def is_comprehensive_question(question: str) -> bool:
         "what are the contents",
         "just tell",
         "tell what",
+        "all about",
+        "everything about",
+        "from these",
+        "from the",
+        "from source",
     ]
     return any(pattern in q_lower for pattern in comprehensive_patterns)
 
@@ -869,7 +882,7 @@ async def extract_search_keywords(user_query: str) -> str:
         instruction_patterns = [
             r"\bsummarize\b",
             r"\bsummarise\b",
-            r"\btell me about\b",
+            r"\btell me about\b",   
             r"\btell me\b",
             r"\bfind\b",
             r"\bsearch for\b",
@@ -1043,13 +1056,18 @@ def has_question_overlap(
 
 
 # System prompt for query contextualization (ChatGPT-style)
-CONTEXTUALIZE_SYSTEM_PROMPT = """Given a chat history and the latest user question which might reference context in the chat history, 
-formulate a standalone question which can be understood without the chat history. 
-Do NOT answer the question, just reformulate it if needed and otherwise return it as is.
+CONTEXTUALIZE_SYSTEM_PROMPT = """You are a query rewriting assistant. Your job is to transform vague follow-up questions into specific, standalone search queries.
 
-If the question contains pronouns (it, him, her, they, this, that) or references previous messages, replace them with the actual names, entities, or topics from the conversation history.
+Given a chat history and the latest user question, reformulate the question to be clear and specific.
 
-Output ONLY the reformulated question. Do not include explanations, prefixes, or additional text."""
+CRITICAL RULES:
+1. If the question contains pronouns (it, him, her, they, this, that, these, those), replace them with the actual names, entities, or topics mentioned in the conversation history.
+2. If the question is vague (e.g., "tell me more", "what about", "all you know"), combine it with the context from previous messages to create a specific query.
+3. If the user asks "tell me more about him" after discussing "George Goloborodkin", rewrite to "tell me more about George Goloborodkin".
+4. If the user asks "all you know" or "everything about", preserve that intent but add the specific subject from the conversation.
+5. Extract the MAIN SUBJECT (person, company, document) from the conversation history and use it in the rewritten query.
+
+Output ONLY the reformulated question. No explanations, no prefixes, no additional text. Just the question."""
 
 
 async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
@@ -1065,22 +1083,18 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     
     This prevents the database from searching for vague words like "him" and returning irrelevant results.
     """
-    if not question or not previous_messages:
+    if not question:
         return question
     
-    # Check if question contains pronouns or is vague (case-insensitive)
+    # If no previous messages, still check if question needs rewriting (might have pronouns from context)
+    if not previous_messages:
+        previous_messages = []
+    
+    # Check if question contains pronouns using regex word boundaries (more robust)
+    import re
     q_lower = question.lower()
-    has_pronouns = any(pronoun in q_lower for pronoun in [
-        " it ", " it?", " it.", " it,", " it!", " it\n",
-        " him ", " him?", " him.", " him,", " him!", " him\n",
-        " her ", " her?", " her.", " her,", " her!", " her\n",
-        " they ", " they?", " they.", " they,", " they!", " they\n",
-        " them ", " them?", " them.", " them,", " them!", " them\n",
-        " this ", " this?", " this.", " this,", " this!", " this\n",
-        " that ", " that?", " that.", " that,", " that!", " that\n",
-        " these ", " these?", " these.", " these,", " these!", " these\n",
-        " those ", " those?", " those.", " those,", " those!", " those\n",
-    ]) or q_lower.strip() in ["it", "him", "her", "they", "them", "this", "that", "these", "those"]
+    pronoun_pattern = r'\b(it|its|him|his|her|she|they|them|their|this|that|these|those)\b'
+    has_pronouns = bool(re.search(pronoun_pattern, question, re.IGNORECASE))
     
     # Check for affirmative-only responses
     affirmative_only = q_lower.strip() in {
@@ -1098,6 +1112,7 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     # Check for vague follow-up patterns (case-insensitive, more comprehensive)
     vague_patterns = [
         "tell me more",
+        "tell me all",
         "what about",
         "and what",
         "how about",
@@ -1110,33 +1125,53 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         "expand on",
         "elaborate on",
         "go on",
+        "all you know",
+        "everything about",
+        "what's inside",
+        "what is inside",
     ]
     has_vague_pattern = any(pattern in q_lower for pattern in vague_patterns)
     
     # ALWAYS rewrite if there's chat history and the question is short/vague
     # This ensures follow-up questions get properly contextualized
-    is_short_question = len(question.split()) <= 10
+    is_short_question = len(question.split()) <= 15  # Increased threshold
     has_chat_history = previous_messages and len(previous_messages) > 0
     
     # Rewrite if: has pronouns, is vague, is affirmative, OR (is short AND has history)
-    should_rewrite = has_pronouns or affirmative_only or has_vague_pattern or (is_short_question and has_chat_history)
+    # ALSO rewrite if question contains "all you know", "everything", "comprehensive" - these need context
+    has_comprehensive_intent = any(phrase in q_lower for phrase in ["all you know", "everything", "comprehensive", "all about", "what's inside", "what is inside"])
     
-    if not should_rewrite:
+    should_rewrite = has_pronouns or affirmative_only or has_vague_pattern or has_comprehensive_intent or (is_short_question and has_chat_history)
+    
+    # If no chat history but question has pronouns or is vague, still try to improve it
+    if not should_rewrite and not has_chat_history:
         return question
     
-    # Build context from recent messages (last 5 for efficiency)
+    # If we should rewrite but no history, return as-is (can't contextualize without history)
+    if should_rewrite and not has_chat_history:
+        return question
+    
+    # Build context from recent messages (last 6 for better context)
     recent_context = []
-    for msg in previous_messages[-5:]:
+    for msg in previous_messages[-6:]:
         role = "User" if msg.role == "user" else "Assistant"
-        recent_context.append(f"{role}: {msg.content}")
+        # Truncate very long messages to avoid token limits
+        content = msg.content[:500] if len(msg.content) > 500 else msg.content
+        recent_context.append(f"{role}: {content}")
     
     context_text = "\n".join(recent_context)
     
-    # Build user message with chat history
+    # Build user message with chat history - emphasize extracting the main subject
     user_message = f"""Chat History:
 {context_text}
 
-Latest User Question: {question}"""
+Latest User Question: {question}
+
+INSTRUCTIONS:
+1. Identify the MAIN SUBJECT (person, company, document) from the chat history
+2. If the question has pronouns (him, her, it, they, this, that), replace them with the main subject
+3. If the question is vague (e.g., "tell me more", "all you know"), combine it with the main subject
+4. Output ONLY the rewritten question, nothing else"""
     
     try:
         if not ANTHROPIC_API_KEY:
@@ -1287,7 +1322,7 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         # Document questions: use sources only
         comprehensive_instruction = ""
         if is_comprehensive:
-            comprehensive_instruction = "\n\nIMPORTANT: The user is asking for a COMPREHENSIVE answer. Provide ALL available information from the sources about this topic. Be thorough, detailed, and include all relevant details. Don't summarize - provide a complete overview covering all aspects mentioned in the sources."
+            comprehensive_instruction = "\n\n🚨 CRITICAL: The user is asking for a COMPREHENSIVE answer. This means:\n- Provide ALL available information from the sources about this topic\n- Be thorough, detailed, and include all relevant details\n- Don't summarize or be brief - give the FULL picture\n- Include all sections, data points, qualifications, experiences, and any other information\n- If asked about a person (e.g., 'all you know about George'), include everything: background, education, experience, role, responsibilities, etc.\n- If asked about a document (e.g., 'what's inside source 1'), provide a complete overview of all content\n- Do NOT say 'limited information' or 'very limited' - extract and present EVERYTHING that exists in the sources\n- Be exhaustive, not defensive"
         raw_text_instruction = ""
         if is_raw_text:
             raw_text_instruction = "\n\nIMPORTANT: The user is asking for RAW/EXACT TEXT. Provide the source snippets verbatim (no paraphrasing). If the text is truncated, say so explicitly. Preserve formatting and line breaks when possible."
@@ -3171,6 +3206,19 @@ async def generate_embedding_ollama(text: str) -> List[float]:
     if not embedding:
         raise HTTPException(status_code=502, detail="No embedding returned from Ollama.")
     return normalize_embedding(embedding)
+
+@app.post("/rewrite-query", response_model=RewriteQueryResponse)
+async def rewrite_query_endpoint(request: RewriteQueryRequest):
+    """
+    Rewrite a query using LLM to resolve pronouns and contextualize vague questions.
+    This should be called BEFORE document search to ensure proper query understanding.
+    """
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required.")
+    
+    rewritten = await rewrite_query_with_llm(question, request.previous_messages or [])
+    return RewriteQueryResponse(rewritten_question=rewritten)
 
 @app.post("/embed/query", response_model=EmbedResponse)
 async def embed_query(request: EmbedRequest):
