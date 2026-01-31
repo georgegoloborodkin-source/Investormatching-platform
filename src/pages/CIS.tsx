@@ -4841,9 +4841,21 @@ export default function CIS() {
     [persistChatMessage, scrollChatToBottom]
   );
 
+  // Scroll to bottom when chat tab is opened or messages change
+  useEffect(() => {
+    if (activeTab === "chat" && chatContainerRef.current) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    }
+  }, [activeTab, scopedMessages.length]);
+
   // Auto-scroll when messages change - scroll within chat container only
   useEffect(() => {
-    if (chatContainerRef.current) {
+    if (chatContainerRef.current && scopedMessages.length > 0) {
       const container = chatContainerRef.current;
       // Only auto-scroll if we're near the bottom (within 100px)
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
@@ -4857,7 +4869,7 @@ export default function CIS() {
         });
       }
     }
-  }, [messages]);
+  }, [scopedMessages]);
 
   const askFund = useCallback(
     async (question: string, threadId: string) => {
@@ -5913,8 +5925,8 @@ export default function CIS() {
               </Card>
             )}
             {/* Chat Container - Fixed height, scrollable within */}
-            <div className="flex flex-col" style={{ height: "calc(100vh - 250px)", maxHeight: "calc(100vh - 250px)" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0">
+            <div className="flex flex-col" style={{ height: "600px", maxHeight: "600px" }}>
+              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0 h-full">
                 <CardHeader className="pb-3 border-b-2 border-white flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
@@ -5926,8 +5938,8 @@ export default function CIS() {
                 <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent min-h-0"
-                    style={{ maxHeight: "100%" }}
+                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
+                    style={{ height: "100%", maxHeight: "100%" }}
                   >
                       {scopedMessages.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
