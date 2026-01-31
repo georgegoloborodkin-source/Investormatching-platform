@@ -780,17 +780,45 @@ def has_question_overlap(
     return False
 
 
+# System prompt for query contextualization (ChatGPT-style)
+CONTEXTUALIZE_SYSTEM_PROMPT = """Given a chat history and the latest user question which might reference context in the chat history, 
+formulate a standalone question which can be understood without the chat history. 
+Do NOT answer the question, just reformulate it if needed and otherwise return it as is.
+
+If the question contains pronouns (it, him, her, they, this, that) or references previous messages, replace them with the actual names, entities, or topics from the conversation history.
+
+Output ONLY the reformulated question. Do not include explanations, prefixes, or additional text."""
+
+
 async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMessage] | None = None) -> str:
     """
-    Use Claude Haiku to rewrite questions with pronouns into standalone queries.
-    This prevents vague queries like "tell me more about him" from matching irrelevant documents.
+    ChatGPT-style query rewriting: Use Claude Haiku to contextualize vague follow-up questions.
+    
+    This is the "Invisible Step" that ChatGPT performs before searching:
+    - User: "What do you know about George Goloborodkin?"
+    - AI: "George is an intern..."
+    - User: "Tell me more about him."
+    - System rewrites to: "Tell me more about George Goloborodkin."
+    - THEN searches for "George Goloborodkin" (not "him")
+    
+    This prevents the database from searching for vague words like "him" and returning irrelevant results.
     """
     if not question or not previous_messages:
         return question
     
     # Check if question contains pronouns or is vague
     q_lower = question.lower()
-    has_pronouns = any(pronoun in q_lower for pronoun in [" it ", " it?", " it.", " him ", " him?", " him.", " her ", " her?", " her.", " they ", " they?", " they.", " them ", " them?", " them.", " this ", " this?", " this.", " that ", " that?", " that."])
+    has_pronouns = any(pronoun in q_lower for pronoun in [
+        " it ", " it?", " it.", " it,", " it!", 
+        " him ", " him?", " him.", " him,", " him!",
+        " her ", " her?", " her.", " her,", " her!",
+        " they ", " they?", " they.", " they,", " they!",
+        " them ", " them?", " them.", " them,", " them!",
+        " this ", " this?", " this.", " this,", " this!",
+        " that ", " that?", " that.", " that,", " that!",
+        " these ", " these?", " these.", " these,", " these!",
+        " those ", " those?", " those.", " those,", " those!",
+    ])
     
     # Check for affirmative-only responses
     affirmative_only = q_lower.strip() in {
@@ -803,10 +831,21 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         "go ahead",
     }
     
-    if not has_pronouns and not affirmative_only:
+    # Check for vague follow-up patterns
+    vague_patterns = [
+        "tell me more",
+        "what about",
+        "and what",
+        "how about",
+        "what else",
+    ]
+    has_vague_pattern = any(pattern in q_lower for pattern in vague_patterns)
+    
+    # Only rewrite if question is vague or contains pronouns
+    if not has_pronouns and not affirmative_only and not has_vague_pattern:
         return question
     
-    # Build context from recent messages (last 5)
+    # Build context from recent messages (last 5 for efficiency)
     recent_context = []
     for msg in previous_messages[-5:]:
         role = "User" if msg.role == "user" else "Assistant"
@@ -814,16 +853,11 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     
     context_text = "\n".join(recent_context)
     
-    # Use Claude Haiku for query rewriting (cheap and fast)
-    prompt = f"""Given the chat history below, rewrite the user's latest question to be a standalone search query.
-Replace pronouns like "it", "him", "her", "they", "this", "that" with the actual names, entities, or topics from the conversation.
-
-Chat History:
+    # Build user message with chat history
+    user_message = f"""Chat History:
 {context_text}
 
-User's Latest Question: {question}
-
-Output ONLY the rewritten query. Do not include explanations or additional text."""
+Latest User Question: {question}"""
     
     try:
         if not ANTHROPIC_API_KEY:
@@ -842,13 +876,15 @@ Output ONLY the rewritten query. Do not include explanations or additional text.
         }
         url = get_anthropic_api_url()
         
+        # Use system message + user message (ChatGPT-style)
         payload = {
-            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap rewriting
+            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast rewriting
             "max_tokens": 200,
+            "system": CONTEXTUALIZE_SYSTEM_PROMPT,
             "messages": [
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": user_message
                 }
             ]
         }
@@ -860,7 +896,9 @@ Output ONLY the rewritten query. Do not include explanations or additional text.
             content = data.get("content", [])
             if isinstance(content, list) and content:
                 rewritten = content[0].get("text", "").strip()
-                if rewritten:
+                # Clean up any prefixes the model might add
+                rewritten = rewritten.lstrip("Reformulated question:").lstrip("Question:").lstrip("-").strip()
+                if rewritten and rewritten != question:
                     return rewritten
     except Exception as e:
         # Fallback to simple replacement on error
