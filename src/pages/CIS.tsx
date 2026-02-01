@@ -5194,14 +5194,12 @@ export default function CIS() {
         /\b(all you know|everything|comprehensive|detailed|full|complete|tell me all|what do you know|what can you tell me|summarize|overview)\b/i.test(
           question
         );
+      const followUpHasPronoun = /\b(it|its|they|them|their|he|him|his|she|her|hers|there|that|those|these)\b/i.test(normalizedQuestion);
+      const followUpHasCue = /\b(what about|and what|tell me|more about|more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail)\b/i.test(normalizedQuestion);
       const isFollowUpQuery = (() => {
         const q = normalizedQuestion;
-        // CRITICAL: Include ALL pronouns including "him" (was missing!)
-        const hasPronoun = /\b(it|its|they|them|their|he|him|his|she|her|hers|there|that|those|these)\b/i.test(q);
-        // Include more follow-up cues like "more", "tell", "about", "answer", "explain"
-        const hasFollowUpCue = /\b(what about|and what|tell me|more about|more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail)\b/i.test(q);
         const isShort = q.split(/\s+/).length <= 15; // Increased from 12
-        return (hasPronoun || hasFollowUpCue) && isShort;
+        return (followUpHasPronoun || followUpHasCue) && isShort;
       })();
       let docs: Array<{
         id: string;
@@ -5768,6 +5766,90 @@ export default function CIS() {
         return;
       }
 
+      // CRITICAL: If this is a pronoun-based follow-up, reuse previous evidence directly.
+      // This avoids searching for "him" and failing to find new docs.
+      if (
+        isFollowUpQuery &&
+        followUpHasPronoun &&
+        previousEvidence &&
+        previousEvidence.docs.length > 0 &&
+        previousEvidenceThreadId === threadId
+      ) {
+        console.log("[DEBUG] ✅ Using previous evidence for pronoun follow-up (skip new search)");
+        const maxDocs = isComprehensiveQuestion ? 5 : 3;
+        const answerDocs = previousEvidence.docs.slice(0, maxDocs);
+        setLastEvidence({ question: searchQuestion, docs: answerDocs, decisions: decisionMatches });
+        setLastEvidenceThreadId(threadId);
+        setChatIsLoading(false);
+        if (searchTimeoutId !== null) {
+          window.clearTimeout(searchTimeoutId);
+        }
+        setIsClaudeLoading(true);
+        const streamer = createStreamingAssistantMessage(threadId);
+        let streamCompleted = false;
+        const streamTimeout = setTimeout(() => {
+          if (!streamCompleted) {
+            console.error("Follow-up stream timeout");
+            streamer.setError("Request timed out. Please try again.");
+            setIsClaudeLoading(false);
+          }
+        }, 75000);
+        try {
+          const claudeTokens = searchQuestion
+            .toLowerCase()
+            .split(/\W+/)
+            .map((t) => t.trim())
+            .filter((t) => t.length > 3);
+          const sources = answerDocs.map((doc) => ({
+            title: doc.title,
+            file_name: doc.file_name,
+            snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
+          }));
+          const decisionsForClaude = decisionIntent
+            ? decisionMatches.map((d) => ({
+                startup_name: d.startupName,
+                action_type: d.actionType,
+                outcome: d.outcome ?? null,
+                notes: d.notes ?? null,
+              }))
+            : [];
+          const threadMessages = await getThreadMessages(threadId, 10);
+          await askClaudeAnswerStream(
+            {
+              question: searchQuestion,
+              sources,
+              decisions: decisionsForClaude,
+              previousMessages: threadMessages,
+            },
+            (chunk) => {
+              if (!streamCompleted) {
+                streamer.appendChunk(chunk);
+              }
+            },
+            (error) => {
+              if (!streamCompleted) {
+                streamCompleted = true;
+                clearTimeout(streamTimeout);
+                streamer.setError(error.message || "Claude answer failed. Please try again.");
+                setIsClaudeLoading(false);
+              }
+            }
+          );
+          if (!streamCompleted) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
+            streamer.finalize();
+          }
+        } catch (err) {
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
+          streamer.setError(err instanceof Error ? err.message : "Claude answer failed. Please try again.");
+        } finally {
+          setIsClaudeLoading(false);
+        }
+        return;
+      }
+
       const lowSignalFollowUp =
         isFollowUpQuery && contentTokens.length <= 1;
 
@@ -5781,13 +5863,25 @@ export default function CIS() {
       });
 
       if (!rankedDocs || rankedDocs.length === 0 || lowSignalFollowUp) {
-        // If it's a follow-up query with pronouns/cues and we have previous evidence, use it!
-        if (
-          isFollowUpQuery &&
+        // CRITICAL: If search fails but we have context (pronouns + previous evidence), use previous evidence
+        // Be MORE lenient here - if user is asking about "him/her/it" and we have previous docs, use them
+        const hasPronounInQuestion = /\b(him|her|it|they|them|his|hers|their|this|that)\b/i.test(question);
+        const shouldUsePreviousEvidence = (
+          (isFollowUpQuery || hasPronounInQuestion) &&
           previousEvidence &&
-          previousEvidence.docs.length > 0 &&
-          previousEvidenceThreadId === threadId
-        ) {
+          previousEvidence.docs.length > 0
+          // Removed: && previousEvidenceThreadId === threadId (too strict!)
+        );
+        
+        console.log("[DEBUG] Should use previous evidence:", {
+          isFollowUpQuery,
+          hasPronounInQuestion,
+          hasPreviousEvidence: !!previousEvidence,
+          previousEvidenceDocsCount: previousEvidence?.docs?.length,
+          shouldUsePreviousEvidence,
+        });
+        
+        if (shouldUsePreviousEvidence) {
           console.log("[DEBUG] ✅ Using previous evidence for follow-up query");
           const answerDocs = previousEvidence.docs.slice(0, 3);
           setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
@@ -5867,6 +5961,64 @@ export default function CIS() {
           }
           return;
         }
+        // FALLBACK: If we have chat history and the question has pronouns, try to answer from context
+        // This is a last resort - Claude can reference previous conversation even without new sources
+        const hasPronounInOriginal = /\b(him|her|it|they|them|his|hers|their|this|that)\b/i.test(question);
+        const threadMessagesForFallback = await getThreadMessages(threadId, 10);
+        
+        if (hasPronounInOriginal && threadMessagesForFallback.length > 0) {
+          console.log("[DEBUG] ✅ Fallback: Calling Claude with chat history only (no new sources)");
+          if (searchTimeoutId !== null) {
+            window.clearTimeout(searchTimeoutId);
+          }
+          setChatIsLoading(false);
+          setIsClaudeLoading(true);
+          const streamer = createStreamingAssistantMessage(threadId);
+          let streamCompleted = false;
+          const streamTimeout = setTimeout(() => {
+            if (!streamCompleted) {
+              console.error("Fallback stream timeout");
+              streamer.setError("Request timed out. Please try again.");
+              setIsClaudeLoading(false);
+            }
+          }, 75000);
+          try {
+            await askClaudeAnswerStream(
+              {
+                question,
+                sources: [], // No sources, but chat history should help
+                decisions: [],
+                previousMessages: threadMessagesForFallback,
+              },
+              (chunk) => {
+                if (!streamCompleted) {
+                  streamer.appendChunk(chunk);
+                }
+              },
+              (error) => {
+                if (!streamCompleted) {
+                  streamCompleted = true;
+                  clearTimeout(streamTimeout);
+                  streamer.setError(error.message || "Failed to answer. Please try again.");
+                  setIsClaudeLoading(false);
+                }
+              }
+            );
+            if (!streamCompleted) {
+              streamCompleted = true;
+              clearTimeout(streamTimeout);
+              streamer.finalize();
+            }
+          } catch (err) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
+            streamer.setError(err instanceof Error ? err.message : "Failed to answer. Please try again.");
+          } finally {
+            setIsClaudeLoading(false);
+          }
+          return;
+        }
+        
         // Show searchQuestion (rewritten) if different from original, for better debugging
         const queryToShow = searchQuestion !== question ? `${searchQuestion} (original: ${question})` : question;
         const fallback = decisionIntent
