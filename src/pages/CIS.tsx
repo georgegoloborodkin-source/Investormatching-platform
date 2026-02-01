@@ -5025,7 +5025,8 @@ export default function CIS() {
       // Use backend LLM rewriting if we have chat history and the question might need rewriting
       const qLower = question.toLowerCase();
       const hasPronouns = /\b(it|its|him|his|her|she|they|them|their|this|that|these|those)\b/i.test(question);
-      const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|expand|elaborate|all you know|everything)\b/i.test(qLower);
+      const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|more complete|more comprehensive|more profound|give more|give more info|expand|elaborate|all you know|everything|full|complete|comprehensive|detailed)\b/i.test(qLower);
+      const followUpCueInQuestion = /\b(what about|and what|tell me|more about|more info|more complete|more comprehensive|more profound|give more|give more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail|full|complete|detailed)\b/i.test(qLower);
       const isShort = question.split(/\s+/).length <= 15;
       
       // CRITICAL: Extract names from chat history for fallback pronoun replacement
@@ -5062,6 +5063,15 @@ export default function CIS() {
               console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
             }
           }
+          // If the question is a vague follow-up without pronouns, inject the most recent name
+          if (!hasPronouns && namesInHistory.length > 0 && (hasVaguePattern || followUpCueInQuestion)) {
+            const mostRecentName = namesInHistory[namesInHistory.length - 1];
+            const rewrittenLower = searchQuestion.toLowerCase();
+            if (!rewrittenLower.includes(mostRecentName.toLowerCase())) {
+              searchQuestion = `${searchQuestion} about ${mostRecentName}`.replace(/\s+/g, " ").trim();
+              console.log("[DEBUG] Injected name into vague follow-up:", searchQuestion);
+            }
+          }
         } catch (rewriteError) {
           console.warn("[DEBUG] Query rewriting failed:", rewriteError);
           // FALLBACK: If we have pronouns and names in history, replace pronouns with the most recent name
@@ -5078,13 +5088,17 @@ export default function CIS() {
             searchQuestion = question;
           }
         }
-      } else if (hasPronouns && namesInHistory.length > 0) {
+      } else if ((hasPronouns || hasVaguePattern || followUpCueInQuestion) && namesInHistory.length > 0) {
         // Even if no LLM rewriting triggered, still resolve pronouns if we have names
         const mostRecentName = namesInHistory[namesInHistory.length - 1];
-        console.log("[DEBUG] Resolving pronouns without LLM using:", mostRecentName);
+        console.log("[DEBUG] Resolving follow-up without LLM using:", mostRecentName);
         for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
           const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
           searchQuestion = searchQuestion.replace(regex, mostRecentName);
+        }
+        // If no pronouns were present, append subject to the query
+        if (!hasPronouns && !searchQuestion.toLowerCase().includes(mostRecentName.toLowerCase())) {
+          searchQuestion = `${searchQuestion} about ${mostRecentName}`.replace(/\s+/g, " ").trim();
         }
         console.log("[DEBUG] Pronoun-resolved query:", searchQuestion);
       }
@@ -5195,11 +5209,10 @@ export default function CIS() {
           question
         );
       const followUpHasPronoun = /\b(it|its|they|them|their|he|him|his|she|her|hers|there|that|those|these)\b/i.test(normalizedQuestion);
-      const followUpHasCue = /\b(what about|and what|tell me|more about|more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail)\b/i.test(normalizedQuestion);
       const isFollowUpQuery = (() => {
         const q = normalizedQuestion;
         const isShort = q.split(/\s+/).length <= 15; // Increased from 12
-        return (followUpHasPronoun || followUpHasCue) && isShort;
+        return (followUpHasPronoun || followUpCueInQuestion) && isShort;
       })();
       let docs: Array<{
         id: string;
@@ -5863,11 +5876,12 @@ export default function CIS() {
       });
 
       if (!rankedDocs || rankedDocs.length === 0 || lowSignalFollowUp) {
-        // CRITICAL: If search fails but we have context (pronouns + previous evidence), use previous evidence
-        // Be MORE lenient here - if user is asking about "him/her/it" and we have previous docs, use them
+        // CRITICAL: If search fails but we have context (pronouns OR follow-up cues), use previous evidence
+        // Be MORE lenient here - if user is asking for "more info/complete/profound", use previous docs
         const hasPronounInQuestion = /\b(him|her|it|they|them|his|hers|their|this|that)\b/i.test(question);
+        const hasFollowupCueInOriginal = /\b(more about|more info|more complete|more comprehensive|more profound|give more|give more info|tell me more|elaborate|explain|full|complete|comprehensive|detailed)\b/i.test(question.toLowerCase());
         const shouldUsePreviousEvidence = (
-          (isFollowUpQuery || hasPronounInQuestion) &&
+          (isFollowUpQuery || hasPronounInQuestion || hasFollowupCueInOriginal) &&
           previousEvidence &&
           previousEvidence.docs.length > 0
           // Removed: && previousEvidenceThreadId === threadId (too strict!)
@@ -5876,6 +5890,7 @@ export default function CIS() {
         console.log("[DEBUG] Should use previous evidence:", {
           isFollowUpQuery,
           hasPronounInQuestion,
+          hasFollowupCueInOriginal,
           hasPreviousEvidence: !!previousEvidence,
           previousEvidenceDocsCount: previousEvidence?.docs?.length,
           shouldUsePreviousEvidence,
