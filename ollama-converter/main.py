@@ -933,7 +933,7 @@ Output ONLY the search terms. Do not include explanations or additional text."""
 
         payload = {
             "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast extraction
-            "max_tokens": 100,
+            "max_tokens": 1000,
             "messages": [
                 {
                     "role": "user",
@@ -1549,7 +1549,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
     use_haiku = question and sources and is_simple_question(question, sources)
     model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
     # Set max_tokens appropriately (tokens are cheap, user trust is expensive)
-    max_tokens = 1000 if use_haiku else ASK_MAX_TOKENS
+    max_tokens = 10000 if use_haiku else ASK_MAX_TOKENS
     
     last_error: Optional[str] = None
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -1557,7 +1557,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
             payload = {
                 "model": model_name,
                 "max_tokens": max_tokens,
-                "temperature": 0.1,
+                "temperature": 0.5,
                 "system": "You are Orbit AI, a VC intelligence system. You answer questions STRICTLY from provided sources only. Never use general knowledge. If information isn't in the sources, say so explicitly. Always cite sources with [1], [2], etc.",
                 "messages": [
                     {"role": "user", "content": prompt}
