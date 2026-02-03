@@ -3962,6 +3962,28 @@ export default function CIS() {
     sector?: string;
     stage?: string;
   } | null>(null);
+
+  // Keep folder scopes in sync with source folders for Knowledge Scope
+  useEffect(() => {
+    setScopes((prev) => {
+      const nonFolderScopes = prev.filter((scope) => scope.type !== "folder");
+      const existingFolderChecks = new Map(
+        prev
+          .filter((scope) => scope.type === "folder")
+          .map((scope) => [scope.id, scope.checked])
+      );
+      const folderScopes = sourceFolders.map((folder) => {
+        const scopeId = `folder:${folder.id}`;
+        return {
+          id: scopeId,
+          label: folder.name,
+          checked: existingFolderChecks.get(scopeId) ?? false,
+          type: "folder" as const,
+        };
+      });
+      return [...nonFolderScopes, ...folderScopes];
+    });
+  }, [sourceFolders]);
   const [draftDocumentId, setDraftDocumentId] = useState<string | null>(null);
   const [viewingDocument, setViewingDocument] = useState<{
     id: string;
