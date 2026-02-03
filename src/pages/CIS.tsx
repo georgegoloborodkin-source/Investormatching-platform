@@ -5384,14 +5384,32 @@ export default function CIS() {
       const properNouns = extractProperNouns(searchQuestion);
       const properNounsLower = properNouns.map(pn => pn.toLowerCase());
       
-      // Detect if query contains names (Phase 1)
+      // Detect if query contains names (Phase 1) - IMPROVED for typo tolerance
       const detectNameInQuery = (query: string): [boolean, string[]] => {
         const nouns = extractProperNouns(query);
-        // Pattern for "FirstName LastName"
+        // Pattern for "FirstName LastName" - capital letters at start
         const namePattern = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g;
         const nameMatches = (query.match(namePattern) || []).map(m => m.trim());
-        const allNames = Array.from(new Set([...nouns, ...nameMatches]));
-        return [allNames.length > 0, allNames];
+        
+        // Also detect potential names with typos - capitalized words of 4+ letters
+        const potentialNames = /\b[A-Z][a-z]{3,}\b/g;
+        const potentialMatches = (query.match(potentialNames) || []).filter(m => 
+          !['What', 'Where', 'When', 'Which', 'About', 'Tell', 'Give', 'Find', 'Search', 'Show', 'Explain', 'Describe', 'More', 'Complete', 'Comprehensive'].includes(m)
+        );
+        
+        // Check for common name-like patterns even without capitals (handles "george goloborodkin" in lowercase)
+        const lowerQuery = query.toLowerCase();
+        const hasNameLikeWords = /\b[a-z]{4,}\s+[a-z]{6,}\b/.test(lowerQuery); // First + Last name pattern
+        
+        const allNames = Array.from(new Set([...nouns, ...nameMatches, ...potentialMatches]));
+        
+        // If query looks like a "who is X" or "tell me about X" pattern, assume it's a name query
+        const isNameQuery = allNames.length > 0 || 
+          /\b(who is|about|tell me about|search for)\s+\w{4,}/i.test(query) ||
+          hasNameLikeWords;
+        
+        console.log("[DEBUG] Name detection:", { nouns, nameMatches, potentialMatches, allNames, hasNameLikeWords, isNameQuery });
+        return [isNameQuery, allNames];
       };
       
       const [hasName, detectedNames] = detectNameInQuery(searchQuestion);
@@ -5515,6 +5533,7 @@ export default function CIS() {
             embedding = null;
           }
           if (timedOut) return;
+          console.log("[DEBUG] Embedding generated:", { length: embedding?.length || 0 });
           if (embedding && embedding.length > 0) {
             const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
               query_embedding: embedding,
@@ -5522,12 +5541,20 @@ export default function CIS() {
               filter_event_id: eventId,
             });
             if (timedOut) return;
+            console.log("[DEBUG] Semantic search results:", { 
+              matchCount: matches?.length || 0, 
+              matchError: matchError?.message || null,
+              topSimilarities: matches?.slice(0, 5).map((m: any) => ({ docId: m.document_id, similarity: m.similarity })) || []
+            });
             if (!matchError && matches?.length) {
               // PHASE 1: Lower similarity threshold for name queries (0.3 instead of 0.5)
-              const SIMILARITY_THRESHOLD = hasName ? 0.3 : 0.5;
+              // CRITICAL FIX: If hasName, use even lower threshold (0.15) to catch typos
+              const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
+              console.log("[DEBUG] Filtering with threshold:", { hasName, SIMILARITY_THRESHOLD, detectedNames });
               semanticMatches = (matches as typeof semanticMatches).filter(
                 (m) => m.similarity >= SIMILARITY_THRESHOLD
               );
+              console.log("[DEBUG] After threshold filter:", { remaining: semanticMatches.length });
               semanticMatches.forEach((m) => {
                 if (m.parent_text?.trim()) {
                   snippetByDocId.set(m.document_id, m.parent_text);
@@ -5536,11 +5563,13 @@ export default function CIS() {
                 }
               });
             }
+          } else {
+            console.log("[DEBUG] ⚠️ No embedding generated - semantic search skipped");
           }
         } catch (err) {
           // Semantic search failed - silently fall back to full-text search
           semanticFailed = true;
-          // Don't log error - embeddings are optional, full-text search works fine
+          console.log("[DEBUG] ⚠️ Semantic search error:", err instanceof Error ? err.message : String(err));
         }
       }
 
@@ -5548,6 +5577,7 @@ export default function CIS() {
         // Hybrid search: keyword + semantic (RRF)
         // Use cleaned query (without instruction words) for keyword search
         const keywordQueryText = finalSearchQuery.replace(/[^\w\s-]/g, " ").trim();
+        console.log("[DEBUG] Keyword search query:", keywordQueryText);
         if (keywordQueryText.length > 1) {
           try {
             const { data: keywordRows, error: keywordError } = await supabase.rpc("match_documents_keyword", {
@@ -5556,6 +5586,11 @@ export default function CIS() {
               filter_event_id: eventId,
             });
             if (timedOut) return;
+            console.log("[DEBUG] Keyword search results:", { 
+              matchCount: keywordRows?.length || 0, 
+              keywordError: keywordError?.message || null,
+              topRanks: keywordRows?.slice(0, 5).map((m: any) => ({ docId: m.document_id, rank: m.rank })) || []
+            });
             if (!keywordError && keywordRows?.length) {
               keywordMatches = keywordRows as typeof keywordMatches;
               keywordMatches.forEach((m) => {
@@ -5566,6 +5601,63 @@ export default function CIS() {
             }
           } catch (keywordErr) {
             // Ignore keyword errors; fall back below
+            console.log("[DEBUG] ⚠️ Keyword search error:", keywordErr instanceof Error ? keywordErr.message : String(keywordErr));
+          }
+        }
+        
+        // CRITICAL FIX: Direct title/filename search for name queries
+        // PostgreSQL full-text search is bad at proper nouns, so search directly
+        if (hasName && (semanticMatches.length === 0 || keywordMatches.length === 0)) {
+          console.log("[DEBUG] 🔍 Trying direct title/filename search for names:", detectedNames);
+          try {
+            // Build OR conditions for each detected name (and each word in names)
+            const searchTerms = new Set<string>();
+            detectedNames.forEach(name => {
+              searchTerms.add(name.toLowerCase());
+              name.split(/\s+/).forEach(part => {
+                if (part.length > 3) searchTerms.add(part.toLowerCase());
+              });
+            });
+            // Also add words from finalSearchQuery that look like names
+            finalSearchQuery.split(/\s+/).forEach(word => {
+              if (word.length > 4 && /^[A-Za-z]+$/.test(word)) {
+                searchTerms.add(word.toLowerCase());
+              }
+            });
+            
+            console.log("[DEBUG] Direct search terms:", Array.from(searchTerms));
+            
+            // Query documents directly using ILIKE for fuzzy matching
+            const { data: titleMatches, error: titleError } = await supabase
+              .from("documents")
+              .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+              .eq("event_id", eventId)
+              .limit(30);
+            
+            if (!titleError && titleMatches?.length) {
+              // Filter documents that contain any of our search terms in title, filename, or content
+              const directMatches = titleMatches.filter((doc: any) => {
+                const titleText = `${doc.title || ""} ${doc.file_name || ""}`.toLowerCase();
+                const contentText = (doc.raw_content || "").toLowerCase().substring(0, 5000); // Check first 5k chars
+                const fullText = `${titleText} ${contentText}`;
+                return Array.from(searchTerms).some(term => fullText.includes(term));
+              });
+              
+              console.log("[DEBUG] Direct title/content search found:", directMatches.length, "documents");
+              
+              // Add these to keyword matches if not already there
+              directMatches.forEach((doc: any) => {
+                if (!keywordMatches.some(m => m.document_id === doc.id)) {
+                  keywordMatches.push({
+                    document_id: doc.id,
+                    rank: 0.5, // Medium rank
+                    snippet: (doc.raw_content || "").substring(0, 200)
+                  });
+                }
+              });
+            }
+          } catch (directErr) {
+            console.log("[DEBUG] Direct search error:", directErr instanceof Error ? directErr.message : String(directErr));
           }
         }
 
@@ -5584,6 +5676,62 @@ export default function CIS() {
           .sort((a, b) => b[1] - a[1])
           .map(([id]) => id)
           .slice(0, 20);
+        
+        console.log("[DEBUG] RRF results:", { 
+          semanticMatchCount: semanticMatches.length, 
+          keywordMatchCount: keywordMatches.length, 
+          rankedIdsCount: rankedIds.length 
+        });
+
+        // CRITICAL FALLBACK: If all searches fail but it's a name query, try direct document query
+        if (rankedIds.length === 0 && hasName) {
+          console.log("[DEBUG] 🆘 All searches failed for name query - trying DIRECT document query");
+          try {
+            // Query ALL documents for this event and filter manually
+            let fallbackQuery = supabase
+              .from("documents")
+              .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+              .eq("event_id", eventId)
+              .limit(100);
+            
+            if (myDocsSelected && !teamDocsSelected && currentUserId) {
+              fallbackQuery = fallbackQuery.eq("created_by", currentUserId);
+            } else if (!myDocsSelected && teamDocsSelected && currentUserId) {
+              fallbackQuery = fallbackQuery.neq("created_by", currentUserId);
+            }
+            
+            const { data: allDocs, error: fallbackError } = await fallbackQuery;
+            
+            if (!fallbackError && allDocs?.length) {
+              console.log("[DEBUG] Fallback: Got", allDocs.length, "documents to scan");
+              
+              // Filter documents that contain any name or query token
+              const searchTermsLower = new Set<string>();
+              detectedNames.forEach(name => {
+                searchTermsLower.add(name.toLowerCase());
+                name.split(/\s+/).forEach(part => {
+                  if (part.length > 3) searchTermsLower.add(part.toLowerCase());
+                });
+              });
+              contentTokens.forEach(token => {
+                if (token.length > 3) searchTermsLower.add(token);
+              });
+              
+              const matchedDocs = allDocs.filter((doc: any) => {
+                const fullText = `${doc.title || ""} ${doc.file_name || ""} ${doc.raw_content || ""}`.toLowerCase();
+                return Array.from(searchTermsLower).some(term => fullText.includes(term));
+              });
+              
+              console.log("[DEBUG] Fallback: Matched", matchedDocs.length, "documents by text search");
+              
+              if (matchedDocs.length > 0) {
+                docs = matchedDocs.slice(0, 10);
+              }
+            }
+          } catch (fallbackErr) {
+            console.log("[DEBUG] Fallback query error:", fallbackErr);
+          }
+        }
 
         if (rankedIds.length > 0) {
           let docQuery = supabase
@@ -5917,11 +6065,29 @@ export default function CIS() {
 
       // STRICT FILTERING: Only keep documents that are actually relevant
       // Allow strong matches for short, entity-like queries
-      const minTokenMatches = contentTokens.length <= 2
-        ? 1
-        : Math.max(2, Math.ceil(contentTokens.length * 0.6));
+      // CRITICAL: For name queries, be VERY lenient - names are the signal
+      const minTokenMatches = hasName 
+        ? 1 // Name queries: just 1 token match is enough
+        : contentTokens.length <= 2
+          ? 1
+          : Math.max(2, Math.ceil(contentTokens.length * 0.6));
+      
+      console.log("[DEBUG] Content filtering:", { 
+        contentTokens, 
+        minTokenMatches, 
+        hasName,
+        docsBeforeFilter: docs?.length || 0
+      });
+      
       const filteredDocs = (docs || []).filter((doc) => {
-        if (!contentTokens.length) return false; // No tokens = no match
+        if (!contentTokens.length && !hasName) return false; // No tokens = no match (unless name query)
+        
+        // For name queries with no tokens but detected names, check directly
+        if (hasName && contentTokens.length === 0 && detectedNames.length > 0) {
+          const haystack = `${doc.title || ""} ${doc.file_name || ""} ${doc.raw_content || ""}`.toLowerCase();
+          return detectedNames.some(name => haystack.includes(name.toLowerCase()));
+        }
+        
         const haystack = [
           doc.raw_content || "",
           doc.extracted_json ? JSON.stringify(doc.extracted_json) : "",
@@ -5934,7 +6100,22 @@ export default function CIS() {
         const hasStrongMatch =
           contentTokens.length <= 6 &&
           contentTokens.some((t) => t.length >= 4 && haystack.includes(t));
-        return matches >= minTokenMatches || hasStrongMatch;
+        
+        // For name queries, also check if detected names appear in doc
+        const hasNameMatch = hasName && detectedNames.some(name => {
+          const nameLower = name.toLowerCase();
+          const nameParts = nameLower.split(/\s+/);
+          // Match if full name OR any part of name (first/last) appears
+          return haystack.includes(nameLower) || 
+            nameParts.some(part => part.length > 3 && haystack.includes(part));
+        });
+        
+        return matches >= minTokenMatches || hasStrongMatch || hasNameMatch;
+      });
+      
+      console.log("[DEBUG] After content filtering:", { 
+        filteredDocsCount: filteredDocs.length,
+        filteredDocTitles: filteredDocs.map(d => d.title || d.file_name).slice(0, 5)
       });
 
       let rankedDocs = filteredDocs;
