@@ -186,10 +186,10 @@ ANTHROPIC_MODEL_FALLBACKS = [
     ] if m not in INVALID_MODELS
 ]
 
-# Ask-the-fund settings (keep costs lean + fast)
-ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "1000"))
-ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "3"))
-ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "150"))  # Reduced from 250 for faster responses
+# Ask-the-fund settings (generous tokens for comprehensive answers)
+ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "4000"))  # Increased from 1000 for more detailed responses
+ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "5"))   # More sources for better context
+ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "500"))  # Larger snippets for better answers
 # Use Haiku for simple questions (3-5x faster, 75% cheaper)
 USE_HAIKU_FOR_SIMPLE = os.getenv("USE_HAIKU_FOR_SIMPLE", "true").lower() == "true"
 
@@ -3046,9 +3046,9 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     use_haiku = question and sources and is_simple_question(question, sources) and not is_comprehensive
     model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
     if is_comprehensive:
-        max_tokens = 4096  # Comprehensive questions need space for detailed memos
+        max_tokens = 8000  # Comprehensive questions need space for detailed memos/analysis
     else:
-        max_tokens = 1000 if use_haiku else ASK_MAX_TOKENS
+        max_tokens = 2000 if use_haiku else ASK_MAX_TOKENS  # Haiku also gets more room
     
     async with httpx.AsyncClient(timeout=60.0) as client:
         for model_name in [m for m in model_list if m]:

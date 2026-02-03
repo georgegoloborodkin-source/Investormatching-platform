@@ -64,6 +64,7 @@ import {
   DollarSign,
   Sparkles,
   Folder,
+  FolderPlus,
   Link2,
   BarChart3,
   PieChart,
@@ -103,9 +104,11 @@ import {
   getDecisionsByEvent,
   getDocumentsByEvent,
   getSourcesByEvent,
+  getSourceFoldersByEvent,
   insertDecision,
   insertDocument,
   insertSource,
+  insertSourceFolder,
   updateDecision,
   deleteDecision,
   deleteSource,
@@ -119,7 +122,7 @@ import { supabase } from "@/integrations/supabase/client";
 // TYPES
 // ============================================================================
 
-type ScopeItem = { id: string; label: string; checked: boolean; type: "portfolio" | "deal" | "thread" | "global" };
+type ScopeItem = { id: string; label: string; checked: boolean; type: "portfolio" | "deal" | "thread" | "global" | "folder" };
 type Message = { id: string; author: "user" | "assistant"; text: string; threadId: string; isStreaming?: boolean };
 type Thread = { id: string; title: string; parentId?: string };
 type KnowledgeObject = {
@@ -158,6 +161,13 @@ type LocalChatMessage = {
   author: "assistant" | "user";
   text: string;
   ts: string;
+};
+
+type SourceFolder = {
+  id: string;
+  name: string;
+  created_at?: string | null;
+  created_by?: string | null;
 };
 const initialKOs: KnowledgeObject[] = [];
 
@@ -1454,7 +1464,9 @@ function DecisionLoggerTab({
 function SourcesTab({
   sources,
   documents,
+  sourceFolders,
   onCreateSource,
+  onCreateFolder,
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
@@ -1471,7 +1483,9 @@ function SourcesTab({
     storage_path: string | null;
     uploader_name?: string | null;
     uploader_email?: string | null;
+    folder_id?: string | null;
   }>;
+  sourceFolders: SourceFolder[];
   onCreateSource: (
     payload: {
       title: string | null;
@@ -1484,6 +1498,7 @@ function SourcesTab({
     },
     eventIdOverride?: string | null
   ) => Promise<void>;
+  onCreateFolder: (name: string) => Promise<SourceFolder | null>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
   onAutoLogDecision: (input: {
@@ -1495,7 +1510,7 @@ function SourcesTab({
     rawContent?: string | null;
     eventIdOverride?: string | null;
   }) => Promise<void>;
-  onDocumentSaved: (doc: { id: string; title: string | null; storage_path: string | null }) => void;
+  onDocumentSaved: (doc: { id: string; title: string | null; storage_path: string | null; folder_id?: string | null }) => void;
   activeEventId: string | null;
   ensureActiveEventId: () => Promise<string | null>;
   currentUserId: string | null;
@@ -1521,6 +1536,9 @@ function SourcesTab({
   const [isImportingDrive, setIsImportingDrive] = useState(false);
   const [isUploadingLocal, setIsUploadingLocal] = useState(false);
   const [autoExtract, setAutoExtract] = useState(true);
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("none");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const MAX_IMPORT_CHARS = 24000;
   const MAX_PDF_PAGES = 6;
   const canImport = Boolean(activeEventId);
@@ -1816,6 +1834,8 @@ function SourcesTab({
           };
 
           // Save document record (even if storage upload failed)
+          // Use selected folder if not "none"
+          const folderId = selectedFolderId !== "none" ? selectedFolderId : null;
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: getDocumentTitle(file.name),
             source_type: "upload",
@@ -1825,6 +1845,7 @@ function SourcesTab({
             extracted_json: extractedJson,
             raw_content: rawContent,
             created_by: currentUserId || null,
+            folder_id: folderId,
           });
 
           if (docError || !doc) {
@@ -1908,7 +1929,7 @@ function SourcesTab({
         e.target.value = "";
       }
     },
-    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onDocumentSaved, toast]
+    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onDocumentSaved, selectedFolderId, toast]
   );
 
   const importDriveUrl = useCallback(async (url: string) => {
@@ -2059,6 +2080,8 @@ function SourcesTab({
             return cleaned;
           };
           
+          // Use selected folder for Google Drive imports
+          const driveFolderId = selectedFolderId !== "none" ? selectedFolderId : null;
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: cleanedTitle,
             source_type: "api",
@@ -2068,6 +2091,7 @@ function SourcesTab({
             extracted_json: (conversionResult || {}) as Record<string, any>,
             raw_content: rawContent || null,
             created_by: currentUserId || null,
+            folder_id: driveFolderId,
           });
           const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
           if (docError) {
@@ -2113,7 +2137,7 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [activeEventId, autoExtract, currentUserId, ensureActiveEventId, getGoogleAccessToken, onAutoLogDecision, onCreateSource, onDocumentSaved, toast]);
+  }, [activeEventId, autoExtract, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onAutoLogDecision, onCreateSource, onDocumentSaved, selectedFolderId, toast]);
 
   const handleImportDrive = useCallback(async () => {
     await importDriveUrl(driveUrl.trim());
@@ -2139,23 +2163,66 @@ function SourcesTab({
     }
     try {
       await loadGooglePicker();
-      const view = new window.google.picker.DocsView()
+      
+      // View for all supported document types (including uploaded files, not just native Google docs)
+      const allFilesView = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false)
+        .setMode(window.google.picker.DocsViewMode.LIST)
+        .setMimeTypes([
+          // Google native formats
+          "application/vnd.google-apps.document",
+          "application/vnd.google-apps.spreadsheet",
+          "application/vnd.google-apps.presentation",
+          // PDFs
+          "application/pdf",
+          // Microsoft Office formats
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "application/msword",
+          "application/vnd.ms-excel",
+          "application/vnd.ms-powerpoint",
+          // Text formats
+          "text/plain",
+          "text/csv",
+          "text/markdown",
+          "application/json",
+        ].join(","));
+      
+      // View specifically for Shared Drives (Team Drives)
+      const sharedDriveView = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false)
+        .setEnableDrives(true)
+        .setMode(window.google.picker.DocsViewMode.LIST);
+      
+      // Recently viewed files view
+      const recentView = new window.google.picker.DocsView()
         .setIncludeFolders(false)
         .setSelectFolderEnabled(false)
-        .setMimeTypes(
-          "application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.presentation"
-        );
+        .setMode(window.google.picker.DocsViewMode.LIST)
+        .setOwnedByMe(false);  // Include files shared with me
+      
       const picker = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey)
         .setOAuthToken(accessToken)
-        .addView(view)
+        .setAppId(googleClientId.split("-")[0])  // Extract project number from client ID
+        .addView(allFilesView)
+        .addView(sharedDriveView)
+        .addView(recentView)
+        .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)  // Enable Shared Drives
+        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)  // Allow multiple file selection
         .setCallback((data: any) => {
           if (data.action === window.google.picker.Action.PICKED) {
-            const doc = data.docs?.[0];
-            const pickedUrl = doc?.url;
-            if (pickedUrl) {
-              setDriveUrl(pickedUrl);
-              importDriveUrl(pickedUrl);
+            const docs = data.docs || [];
+            // Handle multiple files if selected
+            for (const doc of docs) {
+              const pickedUrl = doc?.url;
+              if (pickedUrl) {
+                setDriveUrl(pickedUrl);
+                importDriveUrl(pickedUrl);
+              }
             }
           }
         })
@@ -2255,10 +2322,121 @@ function SourcesTab({
         </CardContent>
       </Card>
 
+      {/* Folder Management Section */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
+            <Folder className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            Document Folders
+          </CardTitle>
+          <CardDescription className="text-white/70 font-mono">Organize your documents into folders for better context filtering.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Folder Selector */}
+          <div>
+            <Label className="text-white font-mono font-bold">Select Folder for Uploads</Label>
+            <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
+              <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectValue placeholder="Select a folder" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#050505] border-2 border-white">
+                <SelectItem value="none" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                  <span className="flex items-center gap-2">
+                    <Folder className="h-4 w-4" />
+                    No Folder (Root)
+                  </span>
+                </SelectItem>
+                {sourceFolders.map((folder) => (
+                  <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                    <span className="flex items-center gap-2">
+                      <Folder className="h-4 w-4 text-[#FFED00]" />
+                      {folder.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-white/50 font-mono mt-1">
+              Documents uploaded will be assigned to this folder and appear in Knowledge Scope.
+            </p>
+          </div>
+          
+          {/* Create New Folder */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Label className="text-white font-mono font-bold">Create New Folder</Label>
+              <Input
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="e.g., Q1 2026 Deals, Due Diligence, Market Research"
+                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                onClick={async () => {
+                  if (!newFolderName.trim()) return;
+                  setIsCreatingFolder(true);
+                  try {
+                    const folder = await onCreateFolder(newFolderName.trim());
+                    if (folder) {
+                      setSelectedFolderId(folder.id);
+                      setNewFolderName("");
+                      toast({ title: "Folder created", description: `Created folder "${folder.name}"` });
+                    }
+                  } catch (err) {
+                    toast({ title: "Error", description: "Failed to create folder", variant: "destructive" });
+                  } finally {
+                    setIsCreatingFolder(false);
+                  }
+                }}
+                disabled={isCreatingFolder || !newFolderName.trim()}
+                className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50"
+                variant="outline"
+              >
+                {isCreatingFolder ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
+                Create Folder
+              </Button>
+            </div>
+          </div>
+          
+          {/* Existing Folders List */}
+          {sourceFolders.length > 0 && (
+            <div className="pt-2 border-t border-white/20">
+              <Label className="text-white/70 font-mono text-xs mb-2 block">Existing Folders ({sourceFolders.length})</Label>
+              <div className="flex flex-wrap gap-2">
+                {sourceFolders.map((folder) => (
+                  <Badge
+                    key={folder.id}
+                    variant="outline"
+                    className={`cursor-pointer transition-all font-mono ${
+                      selectedFolderId === folder.id
+                        ? "border-[#FFED00] text-[#FFED00] bg-[#FFED00]/10"
+                        : "border-white text-white bg-transparent hover:border-[#FFED00] hover:text-[#FFED00]"
+                    }`}
+                    onClick={() => setSelectedFolderId(folder.id)}
+                  >
+                    <Folder className="h-3 w-3 mr-1" />
+                    {folder.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Local Upload</CardTitle>
-          <CardDescription className="text-white/70 font-mono">Upload files from your computer into Sources.</CardDescription>
+          <CardDescription className="text-white/70 font-mono">
+            Upload files from your computer into Sources.
+            {selectedFolderId !== "none" && (
+              <span className="ml-2 text-[#FFED00]">
+                → Folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+              </span>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Input
@@ -2269,7 +2447,7 @@ function SourcesTab({
             accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
           />
           <p className="text-xs text-white/70 font-mono">
-            Text files (.txt, .md, .csv, .json) are indexed for search. Other files are stored and can be referenced later.
+            Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) — all are indexed for AI search.
           </p>
         </CardContent>
       </Card>
@@ -2277,7 +2455,14 @@ function SourcesTab({
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
-          <CardDescription className="text-white/70 font-mono">Paste a Google Docs/Slides/Sheets link to register it.</CardDescription>
+          <CardDescription className="text-white/70 font-mono">
+            Paste a Google Docs/Slides/Sheets link or choose from Drive.
+            {selectedFolderId !== "none" && (
+              <span className="ml-2 text-[#FFED00]">
+                → Folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+              </span>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -3771,6 +3956,7 @@ export default function CIS() {
     localStorage.setItem(LOCAL_CHAT_CACHE_KEY, JSON.stringify(items));
   }, []);
   const [sources, setSources] = useState<SourceRecord[]>([]);
+  const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
   const [draftDecision, setDraftDecision] = useState<{
     startupName: string;
     sector?: string;
@@ -3849,6 +4035,29 @@ export default function CIS() {
       setSources((prev) => [data as SourceRecord, ...prev]);
     },
     [activeEventId, profile, user]
+  );
+
+  const handleCreateFolder = useCallback(
+    async (name: string): Promise<SourceFolder | null> => {
+      const eventId = activeEventId;
+      if (!eventId) {
+        toast({ title: "No active event", description: "Cannot create folder.", variant: "destructive" });
+        return null;
+      }
+      const userId = user?.id || profile?.id || null;
+      const { data, error } = await insertSourceFolder(eventId, {
+        name,
+        created_by: userId,
+      });
+      if (error || !data) {
+        toast({ title: "Folder creation failed", description: error?.message || "Unknown error", variant: "destructive" });
+        return null;
+      }
+      const folder = data as SourceFolder;
+      setSourceFolders((prev) => [folder, ...prev]);
+      return folder;
+    },
+    [activeEventId, profile, user, toast]
   );
 
   const ensureActiveEventId = useCallback(async () => {
@@ -4155,10 +4364,11 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const [decisionsRes, documentsRes, sourcesRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes, foldersRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
         getSourcesByEvent(event.id),
+        getSourceFoldersByEvent(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -4168,6 +4378,7 @@ export default function CIS() {
           id: doc.id,
           title: doc.title,
           storage_path: doc.storage_path || null,
+          folder_id: doc.folder_id || null,
         }))
       );
       const normalizedSources = (sourcesRes.data || []).map((source: any) => {
@@ -4179,6 +4390,8 @@ export default function CIS() {
         return { ...source, tags };
       });
       setSources(normalizedSources as SourceRecord[]);
+      // Load source folders
+      setSourceFolders((foldersRes.data || []) as SourceFolder[]);
 
       // Set up real-time subscriptions for documents
       documentsChannel = supabase
@@ -6767,13 +6980,15 @@ export default function CIS() {
             <SourcesTab
               sources={sources}
               documents={documents}
+              sourceFolders={sourceFolders}
               onCreateSource={handleCreateSource}
+              onCreateFolder={handleCreateFolder}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}
               onDocumentSaved={(doc) =>
                 setDocuments((prev) => [
-                  { id: doc.id, title: doc.title, storage_path: doc.storage_path },
+                  { id: doc.id, title: doc.title, storage_path: doc.storage_path, folder_id: doc.folder_id },
                   ...prev,
                 ])
               }

@@ -194,6 +194,7 @@ export interface DocumentRecord {
   detected_type: string | null;
   extracted_json: Record<string, any> | null;
   created_by: string | null;
+  folder_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -183,6 +183,25 @@ export async function getSourcesByEvent(eventId: string) {
     .order("created_at", { ascending: false });
 }
 
+export async function getSourceFoldersByEvent(eventId: string) {
+  return supabase
+    .from("source_folders")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+}
+
+export async function insertSourceFolder(
+  eventId: string,
+  payload: { name: string; created_by: string | null }
+) {
+  return supabase
+    .from("source_folders")
+    .insert({ event_id: eventId, ...payload })
+    .select("*")
+    .single();
+}
+
 export async function insertSource(
   eventId: string,
   payload: {
