@@ -2594,60 +2594,64 @@ function SourcesTab({
           {sources.length === 0 ? (
             <div className="text-sm text-white/70 font-mono">No sources yet. Add your first syndicate or company source.</div>
           ) : (
-            sources.map((source) => (
-              <div key={source.id} className="flex items-center justify-between gap-3 border-2 border-white rounded-md p-3 hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{source.source_type}</Badge>
-                    {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-transparent font-mono">{source.status}</Badge>}
-                  </div>
-                  <div className="font-mono font-bold text-white">{source.title || "Untitled source"}</div>
-                  {source.external_url && (
-                    <div className="text-xs text-white/70 font-mono truncate max-w-[420px]">{source.external_url}</div>
-                  )}
-                  {(() => {
-                    // Find document for this source to show uploader
-                    const relatedDoc = documents.find((d: any) => 
-                      d.storage_path === source.storage_path || 
-                      d.title === source.title
-                    );
-                    if (relatedDoc && (relatedDoc.uploader_email || relatedDoc.uploader_name)) {
-                      return (
-                        <div className="text-xs text-white/70 font-mono">
-                          Uploaded by: {relatedDoc.uploader_name || relatedDoc.uploader_email}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                  {source.notes && (
-                    <div className="text-sm text-white/70 font-mono whitespace-pre-wrap">{source.notes}</div>
-                  )}
-                  {source.tags && source.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {source.tags.map((tag) => (
-                        <Badge key={tag} variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
-                          {tag}
-                        </Badge>
-                      ))}
+            sources.map((source) => {
+              const relatedDoc = documents.find(
+                (d: any) => d.storage_path === source.storage_path || d.title === source.title
+              );
+              const relatedFolderName = relatedDoc?.folder_id
+                ? sourceFolders.find((folder) => folder.id === relatedDoc.folder_id)?.name
+                : null;
+
+              return (
+                <div key={source.id} className="flex items-center justify-between gap-3 border-2 border-white rounded-md p-3 hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{source.source_type}</Badge>
+                      {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-transparent font-mono">{source.status}</Badge>}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {source.external_url && (
-                    <Button variant="outline" size="sm" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
-                      <a href={source.external_url} target="_blank" rel="noreferrer">
-                        <Link2 className="h-4 w-4 mr-1" />
-                        Open
-                      </a>
+                    <div className="font-mono font-bold text-white">{source.title || "Untitled source"}</div>
+                    {source.external_url && (
+                      <div className="text-xs text-white/70 font-mono truncate max-w-[420px]">{source.external_url}</div>
+                    )}
+                    {relatedDoc && (relatedDoc.uploader_email || relatedDoc.uploader_name) && (
+                      <div className="text-xs text-white/70 font-mono">
+                        Uploaded by: {relatedDoc.uploader_name || relatedDoc.uploader_email}
+                      </div>
+                    )}
+                    {relatedFolderName && (
+                      <div className="text-xs text-white/70 font-mono">
+                        Folder: <span className="text-[#FFED00]">{relatedFolderName}</span>
+                      </div>
+                    )}
+                    {source.notes && (
+                      <div className="text-sm text-white/70 font-mono whitespace-pre-wrap">{source.notes}</div>
+                    )}
+                    {source.tags && source.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {source.tags.map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {source.external_url && (
+                      <Button variant="outline" size="sm" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                        <a href={source.external_url} target="_blank" rel="noreferrer">
+                          <Link2 className="h-4 w-4 mr-1" />
+                          Open
+                        </a>
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-white/10">
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-white/10">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
