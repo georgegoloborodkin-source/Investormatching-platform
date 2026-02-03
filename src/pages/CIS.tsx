@@ -1540,6 +1540,10 @@ function SourcesTab({
   const [selectedFolderId, setSelectedFolderId] = useState<string>("none");
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [pendingFolderDocs, setPendingFolderDocs] = useState<Array<{ id: string; title: string | null }>>([]);
+  const [folderAssignmentIds, setFolderAssignmentIds] = useState<string[]>([]);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [isAssigningFolders, setIsAssigningFolders] = useState(false);
   const MAX_IMPORT_CHARS = 24000;
   const MAX_PDF_PAGES = 6;
   const canImport = Boolean(activeEventId);
@@ -1561,6 +1565,71 @@ function SourcesTab({
       localStorage.setItem("clickup_list_id", trimmed);
     }
   }, [clickUpListId]);
+
+  const openFolderAssignmentDialog = useCallback(
+    (docs: Array<{ id: string; title: string | null }>) => {
+      if (!docs.length) return;
+      setPendingFolderDocs(docs);
+      const defaults = selectedFolderId !== "none" ? [selectedFolderId] : [];
+      setFolderAssignmentIds(defaults);
+      setIsFolderDialogOpen(true);
+    },
+    [selectedFolderId]
+  );
+
+  const assignFoldersToDocuments = useCallback(async () => {
+    if (!pendingFolderDocs.length || folderAssignmentIds.length === 0) {
+      setIsFolderDialogOpen(false);
+      setPendingFolderDocs([]);
+      return;
+    }
+    setIsAssigningFolders(true);
+    try {
+      const docIds = pendingFolderDocs.map((d) => d.id);
+      const rows = docIds.flatMap((docId) =>
+        folderAssignmentIds.map((folderId) => ({
+          document_id: docId,
+          folder_id: folderId,
+          created_by: currentUserId || null,
+        }))
+      );
+
+      // Replace existing links for these documents
+      await supabase.from("document_folder_links").delete().in("document_id", docIds);
+      const { error: insertError } = await supabase.from("document_folder_links").insert(rows);
+      if (insertError) {
+        throw insertError;
+      }
+
+      // Keep a primary folder for backward compatibility
+      const primaryFolderId = folderAssignmentIds[0] || null;
+      await supabase.from("documents").update({ folder_id: primaryFolderId }).in("id", docIds);
+
+      toast({
+        title: "Folders assigned",
+        description: `Assigned ${folderAssignmentIds.length} folder${folderAssignmentIds.length > 1 ? "s" : ""} to ${docIds.length} document${docIds.length > 1 ? "s" : ""}.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Folder assignment failed",
+        description: err instanceof Error ? err.message : "Could not assign folders to documents.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAssigningFolders(false);
+      setIsFolderDialogOpen(false);
+      setPendingFolderDocs([]);
+    }
+  }, [currentUserId, folderAssignmentIds, pendingFolderDocs, toast]);
+
+  const toggleFolderAssignment = useCallback((folderId: string, checked: boolean) => {
+    setFolderAssignmentIds((prev) => {
+      if (checked) {
+        return prev.includes(folderId) ? prev : [...prev, folderId];
+      }
+      return prev.filter((id) => id !== folderId);
+    });
+  }, []);
 
   const handleAdd = useCallback(async () => {
     if (!title.trim() && !externalUrl.trim()) {
@@ -1750,6 +1819,7 @@ function SourcesTab({
       setIsUploadingLocal(true);
       try {
         let successCount = 0;
+        const uploadedDocs: Array<{ id: string; title: string | null }> = [];
 
         for (const file of files) {
           // Better sanitization: replace spaces and special chars, keep extension
@@ -1835,8 +1905,6 @@ function SourcesTab({
           };
 
           // Save document record (even if storage upload failed)
-          // Use selected folder if not "none"
-          const folderId = selectedFolderId !== "none" ? selectedFolderId : null;
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: getDocumentTitle(file.name),
             source_type: "upload",
@@ -1846,7 +1914,7 @@ function SourcesTab({
             extracted_json: extractedJson,
             raw_content: rawContent,
             created_by: currentUserId || null,
-            folder_id: folderId,
+            folder_id: null,
           });
 
           if (docError || !doc) {
@@ -1873,6 +1941,7 @@ function SourcesTab({
             title: docRecord.title || null,
             storage_path: docRecord.storage_path || null,
           });
+          uploadedDocs.push({ id: docRecord.id, title: docRecord.title || null });
 
           // Create a source entry for the uploaded file
           try {
@@ -1919,6 +1988,9 @@ function SourcesTab({
             description: `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}.`,
           });
         }
+        if (uploadedDocs.length > 0) {
+          openFolderAssignmentDialog(uploadedDocs);
+        }
       } catch (err) {
         toast({
           title: "Upload error",
@@ -1930,7 +2002,7 @@ function SourcesTab({
         e.target.value = "";
       }
     },
-    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onDocumentSaved, selectedFolderId, toast]
+    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onCreateSource, onDocumentSaved, openFolderAssignmentDialog, toast]
   );
 
   const importDriveUrl = useCallback(async (url: string) => {
@@ -2030,6 +2102,7 @@ function SourcesTab({
       toast({ title: "Drive import complete", description: "Source saved to your library." });
 
       const rawContent = result.raw_content || result.content;
+      let assignmentDoc: { id: string; title: string | null } | null = null;
       let autoLogged = false;
       let conversionResult: AIConversionResponse | null = null;
       if (autoExtract && rawContent) {
@@ -2081,8 +2154,6 @@ function SourcesTab({
             return cleaned;
           };
           
-          // Use selected folder for Google Drive imports
-          const driveFolderId = selectedFolderId !== "none" ? selectedFolderId : null;
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: cleanedTitle,
             source_type: "api",
@@ -2092,7 +2163,7 @@ function SourcesTab({
             extracted_json: (conversionResult || {}) as Record<string, any>,
             raw_content: rawContent || null,
             created_by: currentUserId || null,
-            folder_id: driveFolderId,
+            folder_id: null,
           });
           const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
           if (docError) {
@@ -2117,6 +2188,7 @@ function SourcesTab({
             });
             toast({ title: "Document saved", description: "Raw content stored in Documents." });
             await indexDocumentEmbeddings(docRecord.id, rawContent || null);
+            assignmentDoc = { id: docRecord.id, title: docRecord.title || cleanedTitle };
           }
         } catch (err) {
           console.error("Exception during document insert:", err);
@@ -2126,6 +2198,28 @@ function SourcesTab({
             variant: "destructive",
           });
         }
+      }
+
+      if (!assignmentDoc && result.title) {
+        try {
+          const { data: recentDocs } = await supabase
+            .from("documents")
+            .select("id,title")
+            .eq("event_id", eventId)
+            .eq("file_name", result.title)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          const candidate = Array.isArray(recentDocs) ? recentDocs[0] : null;
+          if (candidate?.id) {
+            assignmentDoc = { id: candidate.id, title: candidate.title || result.title || cleanedTitle };
+          }
+        } catch (lookupErr) {
+          console.warn("Folder assignment lookup failed:", lookupErr);
+        }
+      }
+
+      if (assignmentDoc) {
+        openFolderAssignmentDialog([assignmentDoc]);
       }
 
       setDriveUrl("");
@@ -2138,7 +2232,7 @@ function SourcesTab({
     } finally {
       setIsImportingDrive(false);
     }
-  }, [activeEventId, autoExtract, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onAutoLogDecision, onCreateSource, onDocumentSaved, selectedFolderId, toast]);
+  }, [activeEventId, autoExtract, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onAutoLogDecision, onCreateSource, onDocumentSaved, openFolderAssignmentDialog, toast]);
 
   const handleImportDrive = useCallback(async () => {
     await importDriveUrl(driveUrl.trim());
@@ -2247,81 +2341,7 @@ function SourcesTab({
           </CardContent>
         </Card>
       )}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">ClickUp Import</CardTitle>
-          <CardDescription className="text-white/70 font-mono">Pull syndicate tasks directly from a ClickUp list.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Label className="text-white font-mono font-bold">ClickUp Team ID</Label>
-              <Input
-                value={clickUpTeamId}
-                onChange={(e) => setClickUpTeamId(e.target.value)}
-                placeholder="e.g., 1234567"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
-              />
-            </div>
-            <div>
-              <Label className="text-white font-mono font-bold">Available Lists</Label>
-              <Select
-                value={selectedListId}
-                onValueChange={(value) => {
-                  setSelectedListId(value);
-                  setClickUpListId(value);
-                }}
-              >
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
-                  <SelectValue placeholder="Select a list" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  {clickUpLists.filter((list) => list.id && list.id.trim().length > 0).length === 0 ? (
-                    <SelectItem value="no-lists" disabled className="text-white/50">
-                      No lists loaded
-                    </SelectItem>
-                  ) : (
-                    clickUpLists
-                      .filter((list) => list.id && list.id.trim().length > 0)
-                      .map((list) => (
-                      <SelectItem key={list.id} value={list.id} className="text-white">
-                        {list.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button onClick={handleLoadClickUpLists} disabled={isLoadingLists} className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50" variant="outline">
-                {isLoadingLists ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
-                Load Lists
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2">
-              <Label className="text-white font-mono font-bold">ClickUp List ID (manual)</Label>
-              <Input
-                value={clickUpListId}
-                onChange={(e) => setClickUpListId(e.target.value)}
-                placeholder="e.g., 90120481234"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button onClick={handleImportClickUp} disabled={isImportingClickUp} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
-                {isImportingClickUp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                Import ClickUp
-              </Button>
-            </div>
-          </div>
-          <p className="text-xs text-white/70 font-mono">
-            Uses server-side token. Ask admin to set CLICKUP_API_TOKEN in the converter service.
-          </p>
-        </CardContent>
-      </Card>
+      {/* ClickUp import temporarily disabled */}
 
       {/* Folder Management Section */}
       <Card className="border-2 border-white bg-transparent">
@@ -2358,7 +2378,7 @@ function SourcesTab({
               </SelectContent>
             </Select>
             <p className="text-xs text-white/50 font-mono mt-1">
-              Documents uploaded will be assigned to this folder and appear in Knowledge Scope.
+              This folder will be preselected in the post-upload folder picker.
             </p>
           </div>
           
@@ -2434,7 +2454,7 @@ function SourcesTab({
             Upload files from your computer into Sources.
             {selectedFolderId !== "none" && (
               <span className="ml-2 text-[#FFED00]">
-                → Folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
           </CardDescription>
@@ -2460,7 +2480,7 @@ function SourcesTab({
             Paste a Google Docs/Slides/Sheets link or choose from Drive.
             {selectedFolderId !== "none" && (
               <span className="ml-2 text-[#FFED00]">
-                → Folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
           </CardDescription>
@@ -2631,6 +2651,81 @@ function SourcesTab({
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={isFolderDialogOpen}
+        onOpenChange={(open) => {
+          setIsFolderDialogOpen(open);
+          if (!open) {
+            setPendingFolderDocs([]);
+            setFolderAssignmentIds([]);
+          }
+        }}
+      >
+        <DialogContent className="bg-[#050505] border-2 border-white text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight">Assign Folders</DialogTitle>
+            <DialogDescription className="text-white/70 font-mono">
+              Choose one or more folders for your uploaded documents.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-white/70 font-mono">
+              {pendingFolderDocs.length} document{pendingFolderDocs.length > 1 ? "s" : ""} uploaded:
+            </div>
+            <div className="space-y-1 max-h-[160px] overflow-y-auto border border-white/20 rounded-md p-2">
+              {pendingFolderDocs.map((doc) => (
+                <div key={doc.id} className="text-xs text-white font-mono truncate">
+                  • {doc.title || "Untitled document"}
+                </div>
+              ))}
+            </div>
+            {sourceFolders.length === 0 ? (
+              <div className="text-xs text-white/70 font-mono border border-white/20 rounded-md p-2">
+                No folders yet. Create a folder first to organize these documents.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sourceFolders.map((folder) => (
+                  <label
+                    key={folder.id}
+                    className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono"
+                  >
+                    <Checkbox
+                      checked={folderAssignmentIds.includes(folder.id)}
+                      onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
+                      className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                    />
+                    <Folder className="h-3 w-3 text-white/70" />
+                    <span className="flex-1">{folder.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+              onClick={() => {
+                setIsFolderDialogOpen(false);
+                setPendingFolderDocs([]);
+                setFolderAssignmentIds([]);
+              }}
+            >
+              Skip for now
+            </Button>
+            <Button
+              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              disabled={isAssigningFolders || folderAssignmentIds.length === 0}
+              onClick={assignFoldersToDocuments}
+            >
+              {isAssigningFolders ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
+              Assign folders
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3938,7 +4033,9 @@ export default function CIS() {
   }, []);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
-  const [documents, setDocuments] = useState<Array<{ id: string; title: string | null; storage_path: string | null }>>([]);
+  const [documents, setDocuments] = useState<
+    Array<{ id: string; title: string | null; storage_path: string | null; folder_id?: string | null }>
+  >([]);
 
   const readLocalChatCache = useCallback((): LocalChatMessage[] => {
     if (typeof window === "undefined") return [];
@@ -4319,7 +4416,12 @@ export default function CIS() {
 
       await indexDocumentEmbeddings(docId, input.rawContent || null);
       setDocuments((prev) => [
-        { id: docId, title: docRecord?.title || null, storage_path: docRecord?.storage_path || null },
+        {
+          id: docId,
+          title: docRecord?.title || null,
+          storage_path: docRecord?.storage_path || null,
+          folder_id: docRecord?.folder_id || null,
+        },
         ...prev,
       ]);
 
@@ -4459,6 +4561,7 @@ export default function CIS() {
                     id: newDoc.id,
                     title: cleanTitle(newDoc.title) || newDoc.title || "Untitled document",
                     storage_path: newDoc.storage_path || null,
+                    folder_id: newDoc.folder_id || null,
                   },
                   ...prev,
                 ];
@@ -4476,6 +4579,7 @@ export default function CIS() {
                         id: updatedDoc.id,
                         title: updatedDoc.title,
                         storage_path: updatedDoc.storage_path || null,
+                        folder_id: updatedDoc.folder_id || null,
                       }
                     : d
                 )
@@ -5251,6 +5355,32 @@ export default function CIS() {
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
       const currentUserId = profile?.id || user?.id || null;
+      const selectedFolderIds = scopes
+        .filter((s) => s.type === "folder" && s.checked)
+        .map((s) => s.id.replace("folder:", ""));
+
+      const filterDocsByFolderScope = async <T extends { id: string; folder_id?: string | null }>(
+        docList: T[]
+      ): Promise<T[]> => {
+        if (selectedFolderIds.length === 0 || docList.length === 0) return docList;
+        const docIds = docList.map((doc) => doc.id);
+        try {
+          const { data: links } = await supabase
+            .from("document_folder_links")
+            .select("document_id, folder_id")
+            .in("document_id", docIds)
+            .in("folder_id", selectedFolderIds);
+          const allowed = new Set((links || []).map((row: any) => row.document_id));
+          return docList.filter(
+            (doc) =>
+              allowed.has(doc.id) ||
+              (doc.folder_id && selectedFolderIds.includes(doc.folder_id))
+          );
+        } catch (err) {
+          console.warn("Folder scope filter failed:", err);
+          return docList;
+        }
+      };
       
       // REWRITE QUERY BEFORE SEARCHING (ChatGPT-style "Condense" step)
       // Use backend LLM-based rewriting for robust pronoun resolution
@@ -5466,6 +5596,7 @@ export default function CIS() {
         extracted_json?: Record<string, any> | null;
         created_at: string;
         storage_path: string | null;
+        folder_id?: string | null;
       }> = [];
       const snippetByDocId = new Map<string, string>();
       let error: { message?: string } | null = null;
@@ -5565,7 +5696,7 @@ export default function CIS() {
         if (rankedIds.length > 0) {
           let docQuery = supabase
             .from("documents")
-            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by,folder_id")
             .in("id", rankedIds);
           if (myDocsSelected && !teamDocsSelected && currentUserId) {
             docQuery = docQuery.eq("created_by", currentUserId);
@@ -5705,7 +5836,7 @@ export default function CIS() {
         // First, try full-text search with the question
         let responseQuery = supabase
           .from("documents")
-          .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+          .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by,folder_id")
           .eq("event_id", eventId)
           .textSearch("raw_content", question.replace(/[^\w\s-]/g, ' ').trim(), { type: "websearch", config: "english" })
           .order("created_at", { ascending: false })
@@ -5740,7 +5871,7 @@ export default function CIS() {
             try {
               let keywordQuery = supabase
                 .from("documents")
-                .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+                .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by,folder_id")
                 .eq("event_id", eventId);
               
               // Build OR conditions safely
@@ -5777,7 +5908,7 @@ export default function CIS() {
         if (!docs.length && !error && contentTokens.length > 0) {
           let recentQuery = supabase
             .from("documents")
-            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by,folder_id")
             .eq("event_id", eventId)
             .order("created_at", { ascending: false })
             .limit(50);
@@ -5814,6 +5945,10 @@ export default function CIS() {
             }
           }
         }
+      }
+
+      if (selectedFolderIds.length > 0 && docs.length > 0) {
+        docs = await filterDocsByFolderScope(docs);
       }
 
       const decisionIntent =
