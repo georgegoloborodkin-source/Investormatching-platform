@@ -3887,7 +3887,6 @@ export default function CIS() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [chatIsLoading, setChatIsLoading] = useState(false);
-  const [semanticMode, setSemanticMode] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -5239,7 +5238,7 @@ export default function CIS() {
         timedOut = true;
         setChatIsLoading(false);
         createAssistantMessage(
-          "Search is taking too long. Please try a more specific query or disable semantic search.",
+          "Search is taking too long. Please try a more specific query.",
           threadId
         );
       }, 20000);
@@ -5514,7 +5513,7 @@ export default function CIS() {
       let semanticMatches: Array<{ document_id: string; similarity: number; chunk_text?: string | null; parent_text?: string | null }> = [];
       let keywordMatches: Array<{ document_id: string; rank: number; snippet?: string | null }> = [];
 
-      const canSemantic = semanticMode && tokens.length >= 2;
+      const canSemantic = tokens.length >= 1;
 
       if (canSemantic) {
         try {
@@ -7226,14 +7225,6 @@ export default function CIS() {
                         <span className="text-xs text-white/70 font-mono">
                           {chatIsLoading ? "Searching..." : "Press Enter to send"}
                         </span>
-                        <label className="flex items-center gap-2 text-xs text-white/70 font-mono">
-                          <Checkbox
-                            checked={semanticMode}
-                            onCheckedChange={(val) => setSemanticMode(val === true)}
-                            className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
-                          />
-                          Semantic search
-                        </label>
                       </div>
                     </div>
                   </CardContent>
