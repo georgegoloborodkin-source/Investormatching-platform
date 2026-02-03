@@ -64,6 +64,7 @@ import {
   DollarSign,
   Sparkles,
   Folder,
+  ChevronDown,
   FolderPlus,
   Link2,
   BarChart3,
@@ -3957,6 +3958,7 @@ export default function CIS() {
   }, []);
   const [sources, setSources] = useState<SourceRecord[]>([]);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
+  const [foldersExpanded, setFoldersExpanded] = useState(false);
   const [draftDecision, setDraftDecision] = useState<{
     startupName: string;
     sector?: string;
@@ -3984,6 +3986,13 @@ export default function CIS() {
       return [...nonFolderScopes, ...folderScopes];
     });
   }, [sourceFolders]);
+
+  // Auto-expand folder list if any folder is selected
+  useEffect(() => {
+    if (scopes.some((scope) => scope.type === "folder" && scope.checked)) {
+      setFoldersExpanded(true);
+    }
+  }, [scopes]);
   const [draftDocumentId, setDraftDocumentId] = useState<string | null>(null);
   const [viewingDocument, setViewingDocument] = useState<{
     id: string;
@@ -6784,7 +6793,7 @@ export default function CIS() {
                   Knowledge Scope
                 </div>
                 <div className="space-y-2">
-                  {scopes.map((s) => (
+                  {scopes.filter((s) => s.type !== "folder").map((s) => (
                     <label key={s.id} className="flex items-center gap-2 text-sm border-2 border-white px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
                       <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
                       <span className="flex-1 text-xs">{s.label}</span>
@@ -6793,6 +6802,33 @@ export default function CIS() {
                       </Badge>
                     </label>
                   ))}
+                  {scopes.some((s) => s.type === "folder") && (
+                    <div className="border-2 border-white/60 rounded-md">
+                      <button
+                        type="button"
+                        onClick={() => setFoldersExpanded((prev) => !prev)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white font-mono font-bold uppercase tracking-wider hover:bg-[#FFED00]/5 transition-colors"
+                      >
+                        <Folder className="h-4 w-4 text-[#FFED00]" />
+                        <span className="flex-1 text-left">Folders</span>
+                        <Badge variant="outline" className="text-[10px] border-white/60 text-white/80 bg-transparent font-mono">
+                          {scopes.filter((s) => s.type === "folder").length}
+                        </Badge>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${foldersExpanded ? "rotate-180" : ""}`} />
+                      </button>
+                      {foldersExpanded && (
+                        <div className="space-y-2 px-2 pb-2">
+                          {scopes.filter((s) => s.type === "folder").map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
+                              <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
+                              <Folder className="h-3 w-3 text-white/70" />
+                              <span className="flex-1">{s.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
