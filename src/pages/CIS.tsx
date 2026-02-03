@@ -1518,12 +1518,6 @@ function SourcesTab({
   indexDocumentEmbeddings: (documentId: string, rawContent?: string | null) => Promise<void>;
 }) {
   const { toast } = useToast();
-  const [title, setTitle] = useState("");
-  const [sourceType, setSourceType] = useState<SourceRecord["source_type"]>("syndicate");
-  const [externalUrl, setExternalUrl] = useState("");
-  const [tags, setTags] = useState("");
-  const [notes, setNotes] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
   const [clickUpListId, setClickUpListId] = useState(() => {
     if (typeof window === "undefined") return "";
     return localStorage.getItem("clickup_list_id") || "";
@@ -1630,43 +1624,6 @@ function SourcesTab({
       return prev.filter((id) => id !== folderId);
     });
   }, []);
-
-  const handleAdd = useCallback(async () => {
-    if (!title.trim() && !externalUrl.trim()) {
-      toast({
-        title: "Missing details",
-        description: "Add a title or a URL to create a source.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsSaving(true);
-    try {
-      await onCreateSource({
-        title: title.trim() || null,
-        source_type: sourceType,
-        external_url: externalUrl.trim() || null,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        notes: notes.trim() || null,
-        status: "active",
-      });
-      setTitle("");
-      setExternalUrl("");
-      setTags("");
-      setNotes("");
-    } catch (error) {
-      toast({
-        title: "Create failed",
-        description: error instanceof Error ? error.message : "Could not create source.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }, [externalUrl, onCreateSource, sourceType, tags, title, notes, toast]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -2521,78 +2478,12 @@ function SourcesTab({
 
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Source Library</CardTitle>
-          <CardDescription className="text-white/70 font-mono">Track syndicates, company decks, and notes in one place.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 text-white">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-white font-mono font-bold">Title</Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Syndicate: Astor Ventures"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
-              />
-            </div>
-            <div>
-              <Label className="text-white font-mono font-bold">Source Type</Label>
-              <Select value={sourceType} onValueChange={(value) => setSourceType(value as SourceRecord["source_type"])}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="syndicate" className="text-white">Syndicate</SelectItem>
-                  <SelectItem value="company" className="text-white">Company</SelectItem>
-                  <SelectItem value="deck" className="text-white">Deck</SelectItem>
-                  <SelectItem value="notes" className="text-white">Notes</SelectItem>
-                  <SelectItem value="other" className="text-white">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-white font-mono font-bold">External URL (optional)</Label>
-              <Input
-                value={externalUrl}
-                onChange={(e) => setExternalUrl(e.target.value)}
-                placeholder="https://docs.google.com/..."
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
-              />
-            </div>
-            <div>
-              <Label className="text-white font-mono font-bold">Tags (comma separated)</Label>
-              <Input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="SEA, fintech, seed"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="text-white font-mono font-bold">Notes (optional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add context, key points, or reminders..."
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
-              />
-            </div>
-          </div>
-          <Button onClick={handleAdd} disabled={isSaving} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
-            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-            Add Source
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Tracked Sources</CardTitle>
           <CardDescription className="text-white/70 font-mono">{sources.length} items</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-white">
           {sources.length === 0 ? (
-            <div className="text-sm text-white/70 font-mono">No sources yet. Add your first syndicate or company source.</div>
+            <div className="text-sm text-white/70 font-mono">No sources yet. Upload documents or import from Google Drive to create sources.</div>
           ) : (
             sources.map((source) => {
               const relatedDoc = documents.find(
@@ -4397,7 +4288,7 @@ export default function CIS() {
         created_by: userId,
       });
 
-      const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
+      const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null; folder_id?: string | null } | null;
       const docId = docRecord?.id;
       if (docError) {
         console.error("Document insert error in auto-log:", docError);
@@ -4448,9 +4339,6 @@ export default function CIS() {
         return;
       }
       setDecisions((prev) => [mapDecisionRow(decision), ...prev]);
-      if (storagePath) {
-        setDocuments((prev) => [{ id: docId, title: input.draft.startupName, storage_path: storagePath }, ...prev]);
-      }
     },
     [activeEventId, profile, user]
   );
