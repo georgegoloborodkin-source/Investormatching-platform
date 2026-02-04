@@ -2271,6 +2271,18 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Check which converter provider is available"""
+    # Always include embedding config in health check
+    embedding_config = {
+        "embeddings_provider": EMBEDDINGS_PROVIDER,
+        "voyage_model": VOYAGE_EMBEDDING_MODEL if EMBEDDINGS_PROVIDER == "voyage" else None,
+        "voyage_api_key_set": bool(VOYAGE_API_KEY),
+        "openai_model": OPENAI_EMBEDDING_MODEL if EMBEDDINGS_PROVIDER == "openai" else None,
+        "openai_api_key_set": bool(OPENAI_API_KEY),
+        "embedding_dim": EMBEDDING_DIM,
+        "cohere_rerank_model": RERANK_MODEL,
+        "cohere_api_key_set": bool(COHERE_API_KEY),
+    }
+    
     if ANTHROPIC_API_KEY:
         return {
             "status": "healthy",
@@ -2278,6 +2290,7 @@ async def health_check():
             "provider": "claude",
             "models": [ANTHROPIC_MODEL],
             "error": None,
+            "embedding_config": embedding_config,
         }
     if CONVERTER_PROVIDER == "claude":
         return {
@@ -2286,6 +2299,7 @@ async def health_check():
             "provider": "claude",
             "models": [ANTHROPIC_MODEL],
             "error": "ANTHROPIC_API_KEY not set",
+            "embedding_config": embedding_config,
         }
 
     try:
@@ -2297,6 +2311,7 @@ async def health_check():
             "models": model_list,
             "ollama_host": OLLAMA_HOST,
             "preferred_model": PREFERRED_OLLAMA_MODEL,
+            "embedding_config": embedding_config,
         }
     except Exception as e:
         return {
@@ -2306,7 +2321,41 @@ async def health_check():
             "error": str(e),
             "ollama_host": OLLAMA_HOST,
             "preferred_model": PREFERRED_OLLAMA_MODEL,
+            "embedding_config": embedding_config,
         }
+
+@app.get("/embedding-config")
+async def get_embedding_config():
+    """Show current embedding configuration for debugging"""
+    return {
+        "provider": EMBEDDINGS_PROVIDER,
+        "voyage": {
+            "model": VOYAGE_EMBEDDING_MODEL,
+            "api_key_set": bool(VOYAGE_API_KEY),
+            "api_key_prefix": VOYAGE_API_KEY[:8] + "..." if VOYAGE_API_KEY else None,
+        },
+        "openai": {
+            "model": OPENAI_EMBEDDING_MODEL,
+            "api_key_set": bool(OPENAI_API_KEY),
+        },
+        "ollama": {
+            "model": OLLAMA_EMBEDDING_MODEL,
+        },
+        "embedding_dim": EMBEDDING_DIM,
+        "reranking": {
+            "model": RERANK_MODEL,
+            "cohere_api_key_set": bool(COHERE_API_KEY),
+        },
+        "supported_voyage_models": [
+            "voyage-finance-2",      # Best for finance (recommended for VC)
+            "voyage-large-2",        # General purpose, high quality
+            "voyage-3",              # Latest general model
+            "voyage-3-lite",         # Faster, cheaper
+            "voyage-code-3",         # Best for code
+            "voyage-law-2",          # Best for legal
+            "voyage-multilingual-2", # Best for non-English
+        ],
+    }
 
 @app.get("/models")
 async def list_models():
@@ -2410,7 +2459,7 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
                         mentors.append(mentor)
                 except Exception as e:
                     warnings.append(f"Error parsing mentor row: {str(e)}")
-            
+                
             if mentors:
                 return ConversionResponse(
                     startups=[],
@@ -3315,6 +3364,9 @@ async def generate_embedding_voyage(text: str, input_type: str) -> List[float]:
             detail="VOYAGE_API_KEY not set. Set it in the server environment to use VoyageAI embeddings."
         )
 
+    # Log which model is being used for debugging
+    print(f"[VOYAGE] Generating embedding with model: {VOYAGE_EMBEDDING_MODEL}, input_type: {input_type}")
+
     payload = {
         "model": VOYAGE_EMBEDDING_MODEL,
         "input": [text],
@@ -3601,6 +3653,29 @@ async def validate_data(request: ValidationRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Log configuration on startup for debugging"""
+    print("=" * 60)
+    print("🚀 VentureOS Converter API Starting")
+    print("=" * 60)
+    print(f"📊 EMBEDDING CONFIGURATION:")
+    print(f"   Provider: {EMBEDDINGS_PROVIDER}")
+    if EMBEDDINGS_PROVIDER == "voyage":
+        print(f"   Voyage Model: {VOYAGE_EMBEDDING_MODEL}")
+        print(f"   Voyage API Key: {'✅ Set' if VOYAGE_API_KEY else '❌ NOT SET'}")
+    elif EMBEDDINGS_PROVIDER == "openai":
+        print(f"   OpenAI Model: {OPENAI_EMBEDDING_MODEL}")
+        print(f"   OpenAI API Key: {'✅ Set' if OPENAI_API_KEY else '❌ NOT SET'}")
+    print(f"   Embedding Dimensions: {EMBEDDING_DIM}")
+    print(f"🔄 RERANKING:")
+    print(f"   Model: {RERANK_MODEL}")
+    print(f"   Cohere API Key: {'✅ Set' if COHERE_API_KEY else '❌ NOT SET'}")
+    print(f"🤖 CLAUDE:")
+    print(f"   Model: {ANTHROPIC_MODEL}")
+    print(f"   API Key: {'✅ Set' if ANTHROPIC_API_KEY else '❌ NOT SET'}")
+    print("=" * 60)
 
 if __name__ == "__main__":
     import os
