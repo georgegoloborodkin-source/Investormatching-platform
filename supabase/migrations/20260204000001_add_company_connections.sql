@@ -28,44 +28,38 @@ CREATE TABLE IF NOT EXISTS company_connections (
 -- Enable RLS
 ALTER TABLE company_connections ENABLE ROW LEVEL SECURITY;
 
--- RLS policies
-CREATE POLICY "Users can view connections in their events"
+-- RLS policies (using same pattern as documents table - check org through events)
+CREATE POLICY "Users can view org connections"
   ON company_connections FOR SELECT
-  USING (event_id IN (
-    SELECT id FROM events WHERE fund_id IN (
-      SELECT fund_id FROM user_fund_memberships WHERE user_id = auth.uid()
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.organization_id = (
+        SELECT organization_id FROM events WHERE events.id = company_connections.event_id
+      )
     )
-  ));
+  );
 
-CREATE POLICY "Users can create connections in their events"
-  ON company_connections FOR INSERT
-  WITH CHECK (event_id IN (
-    SELECT id FROM events WHERE fund_id IN (
-      SELECT fund_id FROM user_fund_memberships WHERE user_id = auth.uid()
+CREATE POLICY "Users can manage own connections"
+  ON company_connections FOR ALL
+  USING (
+    created_by = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role IN ('organizer', 'managing_partner')
+      AND user_profiles.organization_id = (
+        SELECT organization_id FROM events WHERE events.id = company_connections.event_id
+      )
     )
-  ));
-
-CREATE POLICY "Users can update connections in their events"
-  ON company_connections FOR UPDATE
-  USING (event_id IN (
-    SELECT id FROM events WHERE fund_id IN (
-      SELECT fund_id FROM user_fund_memberships WHERE user_id = auth.uid()
-    )
-  ));
-
-CREATE POLICY "Users can delete connections in their events"
-  ON company_connections FOR DELETE
-  USING (event_id IN (
-    SELECT id FROM events WHERE fund_id IN (
-      SELECT fund_id FROM user_fund_memberships WHERE user_id = auth.uid()
-    )
-  ));
+  );
 
 -- Indexes for performance
-CREATE INDEX idx_company_connections_event_id ON company_connections(event_id);
-CREATE INDEX idx_company_connections_source ON company_connections(source_company_name);
-CREATE INDEX idx_company_connections_target ON company_connections(target_company_name);
-CREATE INDEX idx_company_connections_status ON company_connections(connection_status);
+CREATE INDEX IF NOT EXISTS idx_company_connections_event_id ON company_connections(event_id);
+CREATE INDEX IF NOT EXISTS idx_company_connections_source ON company_connections(source_company_name);
+CREATE INDEX IF NOT EXISTS idx_company_connections_target ON company_connections(target_company_name);
+CREATE INDEX IF NOT EXISTS idx_company_connections_status ON company_connections(connection_status);
 
 -- Trigger for updated_at
 CREATE OR REPLACE FUNCTION update_company_connections_updated_at()
@@ -76,6 +70,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_company_connections_updated_at ON company_connections;
 CREATE TRIGGER trigger_company_connections_updated_at
   BEFORE UPDATE ON company_connections
   FOR EACH ROW
