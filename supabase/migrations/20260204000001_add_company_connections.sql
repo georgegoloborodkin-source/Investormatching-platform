@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS company_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID REFERENCES events(id) ON DELETE CASCADE,
-  created_by UUID REFERENCES profiles(id),
+  created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
   
   -- Source and target companies (references documents/sources)
   source_company_name TEXT NOT NULL,
