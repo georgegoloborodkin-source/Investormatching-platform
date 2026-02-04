@@ -106,14 +106,21 @@ import {
   getDocumentsByEvent,
   getSourcesByEvent,
   getSourceFoldersByEvent,
+  getCompanyConnectionsByEvent,
   insertDecision,
   insertDocument,
   insertSource,
   insertSourceFolder,
+  insertCompanyConnection,
+  updateCompanyConnection,
+  deleteCompanyConnection,
   updateDecision,
   deleteDecision,
   deleteSource,
   getDocumentById,
+  type ConnectionType,
+  type ConnectionStatus,
+  type CompanyConnection,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, type AIConversionResponse } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
@@ -3914,6 +3921,26 @@ export default function CIS() {
   } | null>(null);
   const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
+  
+  // Company Connections state for visual graph and decision logging
+  const [companyConnections, setCompanyConnections] = useState<Array<{
+    id: string;
+    source_company_name: string;
+    target_company_name: string;
+    source_document_id?: string | null;
+    target_document_id?: string | null;
+    connection_type: "BD" | "INV" | "Knowledge" | "Partnership" | "Portfolio";
+    connection_status: "To Connect" | "Connected" | "Rejected" | "In Progress" | "Completed";
+    ai_reasoning?: string | null;
+    notes?: string | null;
+    created_at: string;
+  }>>([]);
+  const [logDecisionDialogOpen, setLogDecisionDialogOpen] = useState(false);
+  const [pendingDecisionContext, setPendingDecisionContext] = useState<{
+    aiReasoning: string;
+    sourceDocIds?: string[];
+  } | null>(null);
+  
   const embeddingsDisabledRef = useRef(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -4388,11 +4415,12 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const [decisionsRes, documentsRes, sourcesRes, foldersRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
         getSourcesByEvent(event.id),
         getSourceFoldersByEvent(event.id),
+        getCompanyConnectionsByEvent(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -4416,6 +4444,9 @@ export default function CIS() {
       setSources(normalizedSources as SourceRecord[]);
       // Load source folders
       setSourceFolders((foldersRes.data || []) as SourceFolder[]);
+      
+      // Load company connections for graph view
+      setCompanyConnections((connectionsRes.data || []) as typeof companyConnections);
 
       // Set up real-time subscriptions for documents
       documentsChannel = supabase
@@ -6711,6 +6742,90 @@ export default function CIS() {
     setScopes((prev) => prev.map((s) => (s.id === id ? { ...s, checked } : s)));
   };
 
+  // Handler to open Log Decision dialog after AI response
+  const handleLogDecisionFromChat = useCallback((aiReasoning: string, sourceDocIds?: string[]) => {
+    setPendingDecisionContext({ aiReasoning, sourceDocIds });
+    setLogDecisionDialogOpen(true);
+  }, []);
+
+  // Handler to create a company connection
+  const handleCreateConnection = useCallback(async (connectionData: {
+    source_company_name: string;
+    target_company_name: string;
+    source_document_id?: string | null;
+    target_document_id?: string | null;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+    ai_reasoning?: string | null;
+    notes?: string | null;
+  }) => {
+    const eventId = activeEventId;
+    if (!eventId) {
+      toast({
+        title: "No active event",
+        description: "Please wait for the event to load.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await insertCompanyConnection(eventId, {
+        ...connectionData,
+        created_by: profile?.id || null,
+      });
+
+      if (error) throw error;
+
+      // Add to local state
+      if (data) {
+        setCompanyConnections((prev) => [data as typeof prev[0], ...prev]);
+      }
+
+      toast({
+        title: "Connection logged",
+        description: `Created ${connectionData.connection_type} connection: ${connectionData.source_company_name} → ${connectionData.target_company_name}`,
+      });
+
+      setLogDecisionDialogOpen(false);
+      setPendingDecisionContext(null);
+    } catch (err) {
+      console.error("Failed to create connection:", err);
+      toast({
+        title: "Failed to log decision",
+        description: err instanceof Error ? err.message : "Could not create connection.",
+        variant: "destructive",
+      });
+    }
+  }, [activeEventId, profile?.id, toast]);
+
+  // Handler to update connection status
+  const handleUpdateConnectionStatus = useCallback(async (
+    connectionId: string, 
+    newStatus: ConnectionStatus
+  ) => {
+    try {
+      const { error } = await updateCompanyConnection(connectionId, { connection_status: newStatus });
+      if (error) throw error;
+
+      setCompanyConnections((prev) =>
+        prev.map((c) => c.id === connectionId ? { ...c, connection_status: newStatus } : c)
+      );
+
+      toast({
+        title: "Status updated",
+        description: `Connection status changed to "${newStatus}"`,
+      });
+    } catch (err) {
+      console.error("Failed to update connection:", err);
+      toast({
+        title: "Update failed",
+        description: err instanceof Error ? err.message : "Could not update status.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
   const evidence = initialKOs;
   const buildStamp =
     (import.meta.env.VITE_BUILD_STAMP as string | undefined) ||
@@ -6981,6 +7096,17 @@ export default function CIS() {
                 Decision Logger
               </button>
               <button
+                onClick={() => setActiveTab("connections")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "connections"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <Link2 className="h-4 w-4" />
+                Connections Graph
+              </button>
+              <button
                 onClick={() => setActiveTab("dashboard")}
                 className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
                   activeTab === "dashboard"
@@ -7137,22 +7263,38 @@ export default function CIS() {
                                 }`}
                               >
                                 {m.author === "assistant" ? (
-                                  <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
-                                    {m.isStreaming && m.text === "..." ? (
-                                      <span className="inline-flex items-center gap-1 text-white">
-                                        <span className="animate-pulse">.</span>
-                                        <span className="animate-pulse delay-75">.</span>
-                                        <span className="animate-pulse delay-150">.</span>
-                                      </span>
-                                    ) : (
-                                      <>
-                                        {renderAssistantContent(m.text)}
-                                        {m.isStreaming && (
-                                          <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
-                                        )}
-                                      </>
+                                  <>
+                                    <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
+                                      {m.isStreaming && m.text === "..." ? (
+                                        <span className="inline-flex items-center gap-1 text-white">
+                                          <span className="animate-pulse">.</span>
+                                          <span className="animate-pulse delay-75">.</span>
+                                          <span className="animate-pulse delay-150">.</span>
+                                        </span>
+                                      ) : (
+                                        <>
+                                          {renderAssistantContent(m.text)}
+                                          {m.isStreaming && (
+                                            <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                    {/* Log Decision button - appears after each AI response */}
+                                    {!m.isStreaming && m.text && m.text !== "..." && (
+                                      <div className="mt-2 pt-2 border-t border-white/20">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleLogDecisionFromChat(m.text)}
+                                          className="text-xs h-6 px-2 text-white/70 hover:text-[#FFED00] hover:bg-white/5 font-mono"
+                                        >
+                                          <Link2 className="h-3 w-3 mr-1" />
+                                          Log Decision
+                                        </Button>
+                                      </div>
                                     )}
-                                  </div>
+                                  </>
                                 ) : (
                                   <div className="text-sm leading-relaxed whitespace-pre-wrap text-black">{m.text}</div>
                                 )}
@@ -7276,6 +7418,16 @@ export default function CIS() {
               onOpenDocument={handleOpenDocument}
                 onOpenConverter={() => setActiveTab("sources")}
                 currentUserId={profile?.id || user?.id || null}
+            />
+          </TabsContent>
+
+          {/* Connections Graph Tab */}
+          <TabsContent value="connections">
+            <ConnectionsGraphTab
+              connections={companyConnections}
+              documents={documents}
+              onUpdateStatus={handleUpdateConnectionStatus}
+              onAddConnection={() => setLogDecisionDialogOpen(true)}
             />
           </TabsContent>
 
@@ -7405,6 +7557,570 @@ export default function CIS() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Log Decision Dialog - Create company connections from chat */}
+      <Dialog open={logDecisionDialogOpen} onOpenChange={setLogDecisionDialogOpen}>
+        <DialogContent className="sm:max-w-lg bg-[#050505] border-2 border-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white font-mono font-black uppercase">
+              <Link2 className="h-5 w-5 text-[#FFED00]" />
+              Log Decision / Connection
+            </DialogTitle>
+            <DialogDescription className="text-white/70 font-mono">
+              Record a connection between two companies based on AI insight
+            </DialogDescription>
+          </DialogHeader>
+
+          <LogDecisionForm
+            documents={documents}
+            pendingContext={pendingDecisionContext}
+            onSubmit={handleCreateConnection}
+            onCancel={() => {
+              setLogDecisionDialogOpen(false);
+              setPendingDecisionContext(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Log Decision Form Component
+function LogDecisionForm({
+  documents,
+  pendingContext,
+  onSubmit,
+  onCancel,
+}: {
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  pendingContext: { aiReasoning: string; sourceDocIds?: string[] } | null;
+  onSubmit: (data: {
+    source_company_name: string;
+    target_company_name: string;
+    source_document_id?: string | null;
+    target_document_id?: string | null;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+    ai_reasoning?: string | null;
+    notes?: string | null;
+  }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [sourceCompany, setSourceCompany] = useState("");
+  const [targetCompany, setTargetCompany] = useState("");
+  const [sourceDocId, setSourceDocId] = useState<string>("none");
+  const [targetDocId, setTargetDocId] = useState<string>("none");
+  const [connectionType, setConnectionType] = useState<ConnectionType>("BD");
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("To Connect");
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Extract company names from AI reasoning
+  useEffect(() => {
+    if (pendingContext?.aiReasoning) {
+      // Try to extract company names from the reasoning
+      const companyPatterns = [
+        /([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:would be|could be|should|might|can)\s+(?:useful|helpful|good|great)\s+(?:to\s+)?(?:connect|partner|work)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+        /suggest(?:s|ing)?\s+(?:that\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:and|with)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+        /connect(?:ing)?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:to|with)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+      ];
+      
+      for (const pattern of companyPatterns) {
+        const match = pendingContext.aiReasoning.match(pattern);
+        if (match) {
+          setSourceCompany(match[1] || "");
+          setTargetCompany(match[2] || "");
+          break;
+        }
+      }
+    }
+  }, [pendingContext?.aiReasoning]);
+
+  const handleSubmit = async () => {
+    if (!sourceCompany.trim() || !targetCompany.trim()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        source_company_name: sourceCompany.trim(),
+        target_company_name: targetCompany.trim(),
+        source_document_id: sourceDocId === "none" ? null : sourceDocId,
+        target_document_id: targetDocId === "none" ? null : targetDocId,
+        connection_type: connectionType,
+        connection_status: connectionStatus,
+        ai_reasoning: pendingContext?.aiReasoning || null,
+        notes: notes.trim() || null,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 py-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Source Company</Label>
+          <Input
+            value={sourceCompany}
+            onChange={(e) => setSourceCompany(e.target.value)}
+            placeholder="e.g., Ridelink"
+            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Target Company</Label>
+          <Input
+            value={targetCompany}
+            onChange={(e) => setTargetCompany(e.target.value)}
+            placeholder="e.g., Weego"
+            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Source Document (optional)</Label>
+          <Select value={sourceDocId} onValueChange={setSourceDocId}>
+            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+              <SelectValue placeholder="Link to document..." />
+            </SelectTrigger>
+            <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectItem value="none" className="text-white font-mono">None</SelectItem>
+              {documents.map((doc) => (
+                <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
+                  {doc.title || "Untitled"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Target Document (optional)</Label>
+          <Select value={targetDocId} onValueChange={setTargetDocId}>
+            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+              <SelectValue placeholder="Link to document..." />
+            </SelectTrigger>
+            <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectItem value="none" className="text-white font-mono">None</SelectItem>
+              {documents.filter((d) => d.id !== sourceDocId || sourceDocId === "none").map((doc) => (
+                <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
+                  {doc.title || "Untitled"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Connection Type</Label>
+          <Select value={connectionType} onValueChange={(v) => setConnectionType(v as ConnectionType)}>
+            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectItem value="BD" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  BD (Business Dev)
+                </span>
+              </SelectItem>
+              <SelectItem value="INV" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  INV (Investment)
+                </span>
+              </SelectItem>
+              <SelectItem value="Knowledge" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                  Knowledge
+                </span>
+              </SelectItem>
+              <SelectItem value="Partnership" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  Partnership
+                </span>
+              </SelectItem>
+              <SelectItem value="Portfolio" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-500" />
+                  Portfolio
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold">Status</Label>
+          <Select value={connectionStatus} onValueChange={(v) => setConnectionStatus(v as ConnectionStatus)}>
+            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectItem value="To Connect" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <Clock className="h-3 w-3 text-yellow-500" />
+                  To Connect
+                </span>
+              </SelectItem>
+              <SelectItem value="In Progress" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 text-blue-500" />
+                  In Progress
+                </span>
+              </SelectItem>
+              <SelectItem value="Connected" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                  Connected
+                </span>
+              </SelectItem>
+              <SelectItem value="Rejected" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-3 w-3 text-red-500" />
+                  Rejected
+                </span>
+              </SelectItem>
+              <SelectItem value="Completed" className="text-white font-mono">
+                <span className="flex items-center gap-2">
+                  <CheckCircle className="h-3 w-3 text-emerald-500" />
+                  Completed
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-white font-mono font-bold">Additional Notes</Label>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add any additional context..."
+          className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono min-h-[80px]"
+        />
+      </div>
+
+      {pendingContext?.aiReasoning && (
+        <div className="space-y-2">
+          <Label className="text-white font-mono font-bold text-xs">AI Context (will be saved)</Label>
+          <div className="p-3 rounded-md bg-white/5 border border-white/20 max-h-[100px] overflow-y-auto">
+            <p className="text-xs text-white/70 font-mono whitespace-pre-wrap line-clamp-4">
+              {pendingContext.aiReasoning.substring(0, 500)}
+              {pendingContext.aiReasoning.length > 500 && "..."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button
+          variant="outline"
+          onClick={onCancel}
+          className="border-2 border-white bg-transparent text-white hover:bg-white/10 font-mono"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={isSubmitting || !sourceCompany.trim() || !targetCompany.trim()}
+          className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <Link2 className="h-4 w-4 mr-2" />
+              Log Connection
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Connections Graph Tab Component
+const CONNECTION_TYPE_COLORS: Record<ConnectionType, string> = {
+  BD: "#22c55e",        // green
+  INV: "#f59e0b",       // amber
+  Knowledge: "#6366f1", // indigo
+  Partnership: "#a855f7", // purple
+  Portfolio: "#06b6d4",  // cyan
+};
+
+const CONNECTION_STATUS_COLORS: Record<ConnectionStatus, string> = {
+  "To Connect": "#eab308",  // yellow
+  "In Progress": "#3b82f6", // blue
+  Connected: "#22c55e",     // green
+  Rejected: "#ef4444",      // red
+  Completed: "#10b981",     // emerald
+};
+
+function ConnectionsGraphTab({
+  connections,
+  documents,
+  onUpdateStatus,
+  onAddConnection,
+}: {
+  connections: Array<{
+    id: string;
+    source_company_name: string;
+    target_company_name: string;
+    source_document_id?: string | null;
+    target_document_id?: string | null;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+    ai_reasoning?: string | null;
+    notes?: string | null;
+    created_at: string;
+  }>;
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  onUpdateStatus: (connectionId: string, newStatus: ConnectionStatus) => Promise<void>;
+  onAddConnection: () => void;
+}) {
+  // Extract unique companies from connections
+  const companies = useMemo(() => {
+    const companySet = new Set<string>();
+    connections.forEach((c) => {
+      companySet.add(c.source_company_name);
+      companySet.add(c.target_company_name);
+    });
+    return Array.from(companySet);
+  }, [connections]);
+
+  // Group connections by status
+  const connectionsByStatus = useMemo(() => {
+    return connections.reduce((acc, conn) => {
+      if (!acc[conn.connection_status]) {
+        acc[conn.connection_status] = [];
+      }
+      acc[conn.connection_status].push(conn);
+      return acc;
+    }, {} as Record<ConnectionStatus, typeof connections>);
+  }, [connections]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header with Add Connection button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-mono font-black uppercase tracking-tight text-white">
+            Company Connections
+          </h2>
+          <p className="text-sm text-white/70 font-mono mt-1">
+            {connections.length} connections between {companies.length} companies
+          </p>
+        </div>
+        <Button
+          onClick={onAddConnection}
+          className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
+        >
+          <Link2 className="h-4 w-4 mr-2" />
+          Add Connection
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
+          <Card key={status} className="border-2 border-white bg-transparent">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div 
+                  className="w-3 h-3 rounded-full" 
+                  style={{ backgroundColor: CONNECTION_STATUS_COLORS[status] }}
+                />
+                <span className="text-xs font-mono text-white/70">{status}</span>
+              </div>
+              <div className="text-2xl font-mono font-black text-white">
+                {connectionsByStatus[status]?.length || 0}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Connection Type Legend */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="pb-2 border-b-2 border-white">
+          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
+            Connection Types
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap gap-4">
+            {(Object.entries(CONNECTION_TYPE_COLORS) as [ConnectionType, string][]).map(([type, color]) => (
+              <div key={type} className="flex items-center gap-2">
+                <div className="w-4 h-1 rounded" style={{ backgroundColor: color }} />
+                <span className="text-xs font-mono text-white">{type}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Visual Graph Placeholder */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="pb-2 border-b-2 border-white">
+          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
+            Network Graph
+          </CardTitle>
+          <CardDescription className="text-white/70 font-mono">
+            Visual representation of company relationships
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {connections.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-center">
+                <Link2 className="h-12 w-12 mx-auto mb-4 text-white/30" />
+                <p className="text-white/70 font-mono">No connections yet</p>
+                <p className="text-sm text-white/50 font-mono mt-1">
+                  Log decisions from the chat to create connections
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-[400px] relative bg-white/5 rounded-lg overflow-hidden">
+              {/* Simple SVG-based graph visualization */}
+              <svg className="w-full h-full" viewBox="0 0 800 400">
+                {/* Draw edges */}
+                {connections.map((conn, idx) => {
+                  const sourceIdx = companies.indexOf(conn.source_company_name);
+                  const targetIdx = companies.indexOf(conn.target_company_name);
+                  const sourceX = 100 + (sourceIdx % 4) * 180;
+                  const sourceY = 80 + Math.floor(sourceIdx / 4) * 120;
+                  const targetX = 100 + (targetIdx % 4) * 180;
+                  const targetY = 80 + Math.floor(targetIdx / 4) * 120;
+                  return (
+                    <line
+                      key={`edge-${idx}`}
+                      x1={sourceX}
+                      y1={sourceY}
+                      x2={targetX}
+                      y2={targetY}
+                      stroke={CONNECTION_TYPE_COLORS[conn.connection_type]}
+                      strokeWidth="2"
+                      opacity="0.6"
+                    />
+                  );
+                })}
+                {/* Draw nodes */}
+                {companies.map((company, idx) => {
+                  const x = 100 + (idx % 4) * 180;
+                  const y = 80 + Math.floor(idx / 4) * 120;
+                  return (
+                    <g key={`node-${idx}`}>
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="30"
+                        fill="#050505"
+                        stroke="#FFED00"
+                        strokeWidth="2"
+                      />
+                      <text
+                        x={x}
+                        y={y}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="white"
+                        fontSize="10"
+                        fontFamily="monospace"
+                      >
+                        {company.length > 12 ? company.substring(0, 10) + "..." : company}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Connections List */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="pb-2 border-b-2 border-white">
+          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
+            All Connections
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-3">
+          {connections.length === 0 ? (
+            <div className="text-center py-8 text-white/70 font-mono">
+              No connections logged yet
+            </div>
+          ) : (
+            connections.map((conn) => (
+              <div
+                key={conn.id}
+                className="flex items-center justify-between gap-4 p-3 border-2 border-white rounded-md hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all"
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div
+                    className="w-2 h-8 rounded"
+                    style={{ backgroundColor: CONNECTION_TYPE_COLORS[conn.connection_type] }}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 text-white font-mono font-bold">
+                      <span>{conn.source_company_name}</span>
+                      <span className="text-white/50">→</span>
+                      <span>{conn.target_company_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                        {conn.connection_type}
+                      </Badge>
+                      {conn.ai_reasoning && (
+                        <span className="text-xs text-white/50 font-mono truncate max-w-[200px]">
+                          {conn.ai_reasoning.substring(0, 50)}...
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={conn.connection_status}
+                    onValueChange={(v) => onUpdateStatus(conn.id, v as ConnectionStatus)}
+                  >
+                    <SelectTrigger className="w-[140px] border-2 border-white bg-transparent text-white font-mono text-xs h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#050505] border-2 border-white">
+                      {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
+                        <SelectItem key={status} value={status} className="text-white font-mono text-xs">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: CONNECTION_STATUS_COLORS[status] }}
+                            />
+                            {status}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

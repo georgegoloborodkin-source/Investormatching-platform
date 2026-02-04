@@ -202,6 +202,74 @@ export async function insertSourceFolder(
     .single();
 }
 
+// Company Connections helpers
+export type ConnectionType = "BD" | "INV" | "Knowledge" | "Partnership" | "Portfolio";
+export type ConnectionStatus = "To Connect" | "Connected" | "Rejected" | "In Progress" | "Completed";
+
+export interface CompanyConnection {
+  id: string;
+  event_id: string;
+  created_by: string | null;
+  source_company_name: string;
+  target_company_name: string;
+  source_document_id: string | null;
+  target_document_id: string | null;
+  connection_type: ConnectionType;
+  connection_status: ConnectionStatus;
+  ai_reasoning: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getCompanyConnectionsByEvent(eventId: string) {
+  return supabase
+    .from("company_connections")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+}
+
+export async function insertCompanyConnection(
+  eventId: string,
+  payload: {
+    source_company_name: string;
+    target_company_name: string;
+    source_document_id?: string | null;
+    target_document_id?: string | null;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+    ai_reasoning?: string | null;
+    notes?: string | null;
+    created_by: string | null;
+  }
+) {
+  return supabase
+    .from("company_connections")
+    .insert({ event_id: eventId, ...payload })
+    .select("*")
+    .single();
+}
+
+export async function updateCompanyConnection(
+  connectionId: string,
+  payload: Partial<{
+    connection_status: ConnectionStatus;
+    notes: string | null;
+  }>
+) {
+  return supabase
+    .from("company_connections")
+    .update(payload)
+    .eq("id", connectionId)
+    .select("*")
+    .single();
+}
+
+export async function deleteCompanyConnection(connectionId: string) {
+  return supabase.from("company_connections").delete().eq("id", connectionId);
+}
+
 export async function insertSource(
   eventId: string,
   payload: {
