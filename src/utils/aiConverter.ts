@@ -80,6 +80,15 @@ export interface AskFundDecision {
   notes?: string | null;
 }
 
+export interface AskFundConnection {
+  source_company_name: string;
+  target_company_name: string;
+  connection_type: string;
+  connection_status: string;
+  ai_reasoning?: string | null;
+  notes?: string | null;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -226,6 +235,7 @@ export async function askClaudeAnswerStream(
     question: string;
     sources: AskFundSource[];
     decisions: AskFundDecision[];
+    connections?: AskFundConnection[];
     previousMessages?: ChatMessage[];
   },
   onChunk: (text: string) => void,
@@ -245,6 +255,7 @@ export async function askClaudeAnswerStream(
       question: input.question,
       sources: input.sources,
       decisions: input.decisions,
+      connections: input.connections || [],
       // Backend expects snake_case
       previous_messages: input.previousMessages || [],
     };
@@ -549,6 +560,52 @@ export async function checkConverterHealth(): Promise<{
       available: false,
       error: error instanceof Error ? error.message : "Connection failed",
     };
+  }
+}
+
+/**
+ * Ask Claude to suggest company connections based on documents + existing graph
+ */
+export interface SuggestedConnection {
+  source_company: string;
+  target_company: string;
+  connection_type: string;
+  reasoning: string;
+  confidence: number;
+}
+
+export async function suggestConnections(input: {
+  companyName?: string;
+  question?: string;
+  sources: AskFundSource[];
+  existingConnections: AskFundConnection[];
+  maxSuggestions?: number;
+}): Promise<{ suggestions: SuggestedConnection[]; contextSummary: string }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetch(`${baseUrl}/suggest-connections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_name: input.companyName || "",
+        question: input.question || "",
+        sources: input.sources,
+        existing_connections: input.existingConnections,
+        max_suggestions: input.maxSuggestions ?? 5,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      suggestions: data.suggestions || [],
+      contextSummary: data.context_summary || "",
+    };
+  } catch (error) {
+    console.error("[suggestConnections] Error:", error);
+    return { suggestions: [], contextSummary: "Failed to get suggestions." };
   }
 }
 

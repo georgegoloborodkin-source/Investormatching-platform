@@ -122,7 +122,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, type AIConversionResponse } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, type AIConversionResponse, type AskFundConnection } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -5244,6 +5244,18 @@ export default function CIS() {
     return threadMessages;
   }, [messages, activeEventId, ensureActiveEventId]);
 
+  // ── Convert companyConnections state to the format expected by askClaudeAnswerStream ──
+  const connectionsForChat: AskFundConnection[] = useMemo(() => {
+    return companyConnections.map((c) => ({
+      source_company_name: c.source_company_name,
+      target_company_name: c.target_company_name,
+      connection_type: c.connection_type,
+      connection_status: c.connection_status,
+      ai_reasoning: c.ai_reasoning ?? null,
+      notes: c.notes ?? null,
+    }));
+  }, [companyConnections]);
+
   const askFund = useCallback(
     async (question: string, threadId: string) => {
       if (!scopes.some((s) => s.checked)) {
@@ -5287,17 +5299,38 @@ export default function CIS() {
         if (selectedFolderIds.length === 0 || docList.length === 0) return docList;
         const docIds = docList.map((doc) => doc.id);
         try {
+          // Check document_folder_links table
           const { data: links } = await supabase
             .from("document_folder_links")
             .select("document_id, folder_id")
             .in("document_id", docIds)
             .in("folder_id", selectedFolderIds);
           const allowed = new Set((links || []).map((row: any) => row.document_id));
-          return docList.filter(
+          
+          // Also check if document's direct folder_id matches any selected folder
+          const filtered = docList.filter(
             (doc) =>
               allowed.has(doc.id) ||
               (doc.folder_id && selectedFolderIds.includes(doc.folder_id))
           );
+          
+          console.log("[DEBUG] Folder scope filter:", {
+            totalDocs: docList.length,
+            selectedFolders: selectedFolderIds,
+            linkedDocs: allowed.size,
+            afterFilter: filtered.length,
+            droppedDocs: docList.length - filtered.length,
+          });
+          
+          // IMPORTANT: If folder filter removes ALL documents, return the original list
+          // This prevents the case where a document IS in the folder but the link table
+          // is out of sync. Better to show too many results than none.
+          if (filtered.length === 0 && docList.length > 0) {
+            console.warn("[DEBUG] Folder scope filter removed ALL docs — returning unfiltered to avoid empty results");
+            return docList;
+          }
+          
+          return filtered;
         } catch (err) {
           console.warn("Folder scope filter failed:", err);
           return docList;
@@ -6209,6 +6242,14 @@ export default function CIS() {
         ];
         return metaPatterns.some(pattern => q.includes(pattern));
       })();
+      
+      // ── CONNECTION-INTENT DETECTION ──
+      // When user asks about connections, partnerships, or "who to connect with",
+      // we need to send ALL portfolio context so Claude knows what companies exist.
+      const isConnectionIntent = (() => {
+        const q = normalizedQuestion;
+        return /\b(connect|connected|connection|connections|partner|partnership|partnerships|introduce|introduction|link|linked|linking|network|networking|relationship|relationships|relate|who.*help|help.*them|could.*connect|should.*connect|could.*partner|suggest.*compan|recommend.*compan|match.*with|pair.*with|synerg|collaborate|collaboration)\b/i.test(q);
+      })();
 
       // For meta-questions, answer even without sources
       if (isMetaQuestion && (!rankedDocs || rankedDocs.length === 0)) {
@@ -6236,6 +6277,7 @@ export default function CIS() {
               question,
               sources: [],
               decisions: [],
+              connections: connectionsForChat,
               previousMessages: threadMessages,
             },
             (chunk) => {
@@ -6314,6 +6356,7 @@ export default function CIS() {
               question: searchQuestion,
               sources,
               decisions: decisionsForClaude,
+              connections: connectionsForChat,
               previousMessages: threadMessages,
             },
             (chunk) => {
@@ -6427,6 +6470,7 @@ export default function CIS() {
                 question,
                 sources,
                 decisions: decisionsForClaude,
+                connections: connectionsForChat,
                 previousMessages: threadMessages,
               },
               (chunk) => {
@@ -6485,6 +6529,7 @@ export default function CIS() {
                 question,
                 sources: [], // No sources, but chat history should help
                 decisions: [],
+                connections: connectionsForChat,
                 previousMessages: threadMessagesForFallback,
               },
               (chunk) => {
@@ -6518,18 +6563,124 @@ export default function CIS() {
         
         // Show searchQuestion (rewritten) if different from original, for better debugging
         const queryToShow = searchQuestion !== question ? `${searchQuestion} (original: ${question})` : question;
-        const fallback = decisionIntent
-          ? decisionMatches.length
-            ? `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`
-            : `I couldn't find matching decisions for: "${queryToShow}".\n\n💡 Try:\n1. Searching by company name or decision type\n2. Logging decisions in the Decision Logger\n3. Checking your Knowledge Scope (My docs / Team docs)`
-          : `I couldn't find relevant documents in your uploaded sources for: "${queryToShow}"\n\n💡 To get answers:\n1. Upload relevant documents (pitch decks, memos, meeting notes) in the Sources tab\n2. Or try a different question about companies/sectors you've already uploaded\n3. Check your Knowledge Scope settings (My docs / Team docs)`;
+        // If we have decision matches, show them
+        if (decisionIntent && decisionMatches.length) {
+          const fallback = `${formatDecisionMatches(decisionMatches)}\n\nIf you want deeper answers, upload or link supporting documents in the Sources tab.`;
+          if (searchTimeoutId !== null) {
+            window.clearTimeout(searchTimeoutId);
+          }
+          createAssistantMessage(fallback, threadId);
+          setLastEvidence(null);
+          setChatIsLoading(false);
+          return;
+        }
+
+        // NO DOCUMENTS FOUND — but instead of showing an error, forward to Claude
+        // so it can still answer general questions, greetings, or use conversation context.
+        // This fixes the problem where "hello" or document-specific questions get blocked.
+        console.log("[DEBUG] No docs found, forwarding to Claude for general answer");
+        console.log("[DEBUG] isConnectionIntent:", isConnectionIntent, "| documents count:", documents.length);
+        
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
         }
-        createAssistantMessage(fallback, threadId);
-        // Don't set lastEvidence if no docs found - prevents Claude from being called
-        setLastEvidence(null);
+        
+        // ── CONNECTION-INTENT: Build portfolio context from ALL documents ──
+        // When user asks about connections/partnerships, send all doc titles
+        // so Claude knows what companies are in the portfolio even though
+        // the search didn't match the specific company name.
+        let portfolioSources: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
+        if (isConnectionIntent && documents.length > 0) {
+          console.log("[DEBUG] 🔗 Connection-intent detected — injecting full portfolio context");
+          portfolioSources = documents.slice(0, 15).map((doc) => ({
+            title: doc.title || "Untitled",
+            file_name: null,
+            snippet: `[Portfolio company/document: ${doc.title || "Untitled"}]`,
+          }));
+        }
+        
+        // Set evidence (even with empty docs) and call Claude directly
+        setLastEvidence({ question, docs: [], decisions: decisionMatches });
+        setLastEvidenceThreadId(threadId);
         setChatIsLoading(false);
+        setIsClaudeLoading(true);
+        
+        // Create streaming message
+        const streamer = createStreamingAssistantMessage(threadId, []);
+        let fullAnswer = "";
+        let streamCompleted = false;
+        
+        const streamTimeout = setTimeout(() => {
+          if (!streamCompleted) {
+            console.error("Stream timeout - no response after 75 seconds");
+            streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
+            setIsClaudeLoading(false);
+          }
+        }, 75000);
+        
+        try {
+          // Get previous messages from this thread for context
+          const threadMessages = await getThreadMessages(threadId, 10);
+          
+          // Call Claude with portfolio context for connection-intent, or empty sources otherwise
+          await askClaudeAnswerStream(
+            {
+              question,
+              sources: portfolioSources.length > 0 ? portfolioSources : [],
+              decisions: decisionIntent
+                ? decisionMatches.map((d) => ({
+                    startup_name: d.startupName,
+                    action_type: d.actionType,
+                    outcome: d.outcome ?? null,
+                    notes: d.notes ?? null,
+                  }))
+                : [],
+              connections: connectionsForChat,
+              previousMessages: threadMessages,
+            },
+            (chunk) => {
+              if (!streamCompleted) {
+                fullAnswer += chunk;
+                streamer.appendChunk(chunk);
+              }
+            },
+            (error) => {
+              if (!streamCompleted) {
+                streamCompleted = true;
+                clearTimeout(streamTimeout);
+                const errorMsg = error.message || "Claude answer failed. Please try again.";
+                console.error("Stream error:", errorMsg);
+                streamer.setError(errorMsg);
+                setIsClaudeLoading(false);
+              }
+            }
+          );
+          
+          if (!streamCompleted && fullAnswer.length > 0) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
+            streamer.finalize();
+          } else if (!streamCompleted) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
+            setIsClaudeLoading(false);
+          }
+          
+          const estimate = estimateClaudeCost(question);
+          persistCostLog({
+            ts: new Date().toISOString(),
+            question: question.slice(0, 120),
+            estInputTokens: estimate.estInputTokens,
+            estOutputTokens: estimate.estOutputTokens,
+            estCostUsd: estimate.estCostUsd,
+          });
+        } catch (error: any) {
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
+          const errorMsg = error?.message || "Could not generate an answer.";
+          streamer.setError(errorMsg);
+          setIsClaudeLoading(false);
+        }
         return;
       }
 
@@ -6581,11 +6732,30 @@ export default function CIS() {
           .split(/\W+/)
           .map((t) => t.trim())
           .filter((t) => t.length > 3);
-        const sources = docsForClaude.map((doc) => ({
+        let sources = docsForClaude.map((doc) => ({
           title: doc.title,
           file_name: doc.file_name,
           snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
         }));
+        
+        // ── CONNECTION-INTENT: Inject additional portfolio context ──
+        // When user asks about connections, also include titles of OTHER docs
+        // not already in sources so Claude knows the full portfolio.
+        if (isConnectionIntent) {
+          const existingDocIds = new Set(docsForClaude.map((d) => d.id));
+          const extraPortfolio = documents
+            .filter((d) => !existingDocIds.has(d.id))
+            .slice(0, 10)
+            .map((doc) => ({
+              title: doc.title || "Untitled",
+              file_name: null as string | null,
+              snippet: `[Portfolio company/document: ${doc.title || "Untitled"}]`,
+            }));
+          if (extraPortfolio.length > 0) {
+            sources = [...sources, ...extraPortfolio];
+            console.log("[DEBUG] 🔗 Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
+          }
+        }
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({
               startup_name: d.startupName,
@@ -6610,6 +6780,7 @@ export default function CIS() {
             question,
             sources,
             decisions: decisionsForClaude,
+            connections: connectionsForChat,
             previousMessages: threadMessages,
           },
           (chunk) => {
@@ -6693,6 +6864,8 @@ export default function CIS() {
       profile,
       user,
       askClaudeAnswerStream,
+      connectionsForChat,
+      documents,
       persistCostLog,
       getThreadMessages,
     ]
@@ -6825,6 +6998,57 @@ export default function CIS() {
       });
     }
   }, [toast]);
+
+  // Handler: AI-powered connection suggestions
+  const [aiSuggestions, setAiSuggestions] = useState<Array<{
+    source_company: string;
+    target_company: string;
+    connection_type: string;
+    reasoning: string;
+    confidence: number;
+  }>>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  const handleSuggestConnections = useCallback(async () => {
+    setSuggestionsLoading(true);
+    try {
+      // Build sources from documents
+      const docSources = documents.slice(0, 10).map((doc) => ({
+        title: doc.title,
+        file_name: null as string | null,
+        snippet: null as string | null, // The backend will use titles for context
+      }));
+
+      const result = await suggestConnections({
+        sources: docSources,
+        existingConnections: connectionsForChat,
+        maxSuggestions: 5,
+      });
+
+      setAiSuggestions(result.suggestions);
+
+      if (result.suggestions.length === 0) {
+        toast({
+          title: "No suggestions",
+          description: result.contextSummary || "Upload more documents to get AI suggestions.",
+        });
+      } else {
+        toast({
+          title: `${result.suggestions.length} connection(s) suggested`,
+          description: result.contextSummary || "Review and add them to your graph.",
+        });
+      }
+    } catch (err) {
+      console.error("Suggest connections failed:", err);
+      toast({
+        title: "Suggestion failed",
+        description: err instanceof Error ? err.message : "Could not generate suggestions.",
+        variant: "destructive",
+      });
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, [documents, connectionsForChat, toast]);
 
   const evidence = initialKOs;
   const buildStamp =
@@ -7428,7 +7652,65 @@ export default function CIS() {
               documents={documents}
               onUpdateStatus={handleUpdateConnectionStatus}
               onAddConnection={() => setLogDecisionDialogOpen(true)}
+              onSuggestConnections={handleSuggestConnections}
             />
+            {/* AI Suggested Connections */}
+            {(suggestionsLoading || aiSuggestions.length > 0) && (
+              <Card className="mt-4 border-2 border-[#6366f1] bg-transparent">
+                <CardHeader className="pb-2 border-b-2 border-[#6366f1]">
+                  <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#6366f1] flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    AI-Suggested Connections
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3">
+                  {suggestionsLoading ? (
+                    <div className="flex items-center justify-center py-6 gap-2 text-white/70 font-mono">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Analyzing documents for connections...
+                    </div>
+                  ) : (
+                    aiSuggestions.map((s, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 border-2 border-white/20 rounded-md hover:border-[#6366f1] transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 text-white font-mono font-bold">
+                              <span>{s.source_company}</span>
+                              <span className="text-white/50">→</span>
+                              <span>{s.target_company}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs border-[#6366f1] text-[#6366f1] bg-transparent font-mono">
+                                {s.connection_type}
+                              </Badge>
+                              <span className="text-xs text-white/50 font-mono">
+                                {Math.round(s.confidence * 100)}% confidence
+                              </span>
+                            </div>
+                            <p className="text-xs text-white/60 font-mono mt-2">{s.reasoning}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setPendingDecisionContext({
+                                aiReasoning: s.reasoning,
+                              });
+                              setLogDecisionDialogOpen(true);
+                            }}
+                            className="bg-[#6366f1] text-white hover:bg-[#6366f1]/80 font-bold text-xs"
+                          >
+                            + Add
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
               {/* Decision Engine Dashboard Tab */}
@@ -7874,6 +8156,7 @@ function ConnectionsGraphTab({
   documents,
   onUpdateStatus,
   onAddConnection,
+  onSuggestConnections,
 }: {
   connections: Array<{
     id: string;
@@ -7890,6 +8173,7 @@ function ConnectionsGraphTab({
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   onUpdateStatus: (connectionId: string, newStatus: ConnectionStatus) => Promise<void>;
   onAddConnection: () => void;
+  onSuggestConnections?: () => void;
 }) {
   // Extract unique companies from connections
   const companies = useMemo(() => {
@@ -7924,13 +8208,25 @@ function ConnectionsGraphTab({
             {connections.length} connections between {companies.length} companies
           </p>
         </div>
-        <Button
-          onClick={onAddConnection}
-          className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
-        >
-          <Link2 className="h-4 w-4 mr-2" />
-          Add Connection
-        </Button>
+        <div className="flex gap-2">
+          {onSuggestConnections && (
+            <Button
+              onClick={onSuggestConnections}
+              variant="outline"
+              className="border-2 border-[#6366f1] text-[#6366f1] hover:bg-[#6366f1]/10 font-bold"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Suggest
+            </Button>
+          )}
+          <Button
+            onClick={onAddConnection}
+            className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
+          >
+            <Link2 className="h-4 w-4 mr-2" />
+            Add Connection
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
