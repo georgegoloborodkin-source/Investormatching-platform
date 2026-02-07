@@ -429,25 +429,44 @@ def get_ollama_client():
         raise HTTPException(status_code=503, detail="ollama package not installed.")
     return ollama.Client(host=OLLAMA_HOST)
 
-# CORS middleware to allow frontend requests
-# FastAPI CORSMiddleware doesn't support ["*"] with allow_credentials=False
-# So we use a list of common origins or allow all by using None
-_cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
-if _cors_origins_env.strip() == "*":
-    # Use None to allow all origins (FastAPI's way)
-    cors_allow_origins = None
+# CORS middleware — allow all origins (Vercel frontend → Render backend)
+_cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+if _cors_origins_env and _cors_origins_env != "*":
+    _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
 else:
-    cors_allow_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    _cors_origins = ["*"]
+
+print(f"🌐 CORS allow_origins: {_cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    # None means allow all origins, otherwise use the list
-    allow_origins=cors_allow_origins if cors_allow_origins else ["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=86400,  # Cache preflight for 24h
 )
+
+# Fallback: manual CORS headers for any requests the middleware misses
+@app.middleware("http")
+async def cors_fallback(request: Request, call_next):
+    if request.method == "OPTIONS":
+        from starlette.responses import Response
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 # Data models
 class StartupData(BaseModel):
