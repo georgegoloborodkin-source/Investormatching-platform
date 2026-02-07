@@ -6695,7 +6695,8 @@ export default function CIS() {
             .join("\n")}`
         : "";
 
-      const semanticNote = semanticFailed
+      const showSearchNotes = String(import.meta.env.VITE_SHOW_SEARCH_NOTES || "").toLowerCase() === "true";
+      const semanticNote = semanticFailed && showSearchNotes
         ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
         : "";
 
