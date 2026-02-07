@@ -4469,22 +4469,29 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
 
-    # ---------- uvloop: high-performance event loop (2-4× faster than asyncio) ----------
-    loop_impl = "asyncio"
+    # ---------- Detect optional high-performance packages ----------
+    loop_impl = "auto"
     try:
-        import uvloop
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        import uvloop  # noqa: F401
         loop_impl = "uvloop"
-        print("✅ uvloop active — high-performance event loop")
+        print("✅ uvloop available — high-performance event loop")
     except ImportError:
         print("⚠️  uvloop not installed — using default asyncio event loop")
+
+    http_impl = "auto"
+    try:
+        import httptools  # noqa: F401
+        http_impl = "httptools"
+        print("✅ httptools available — fast HTTP parsing")
+    except ImportError:
+        print("⚠️  httptools not installed — using h11 HTTP parser")
 
     port = int(os.environ.get("PORT", os.environ.get("OLLAMA_CONVERTER_PORT", "8000")))
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=port,
-        loop=loop_impl,       # Use uvloop only if installed; otherwise asyncio
-        http="httptools",     # httptools: faster HTTP parsing than h11
+        loop=loop_impl,
+        http=http_impl,
     )
 
