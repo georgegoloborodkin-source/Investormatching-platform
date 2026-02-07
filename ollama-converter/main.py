@@ -549,8 +549,7 @@ class AskRequest(BaseModel):
     connections: List[AskConnection] = Field(default_factory=list)
     previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 class AskResponse(BaseModel):
     answer: str
