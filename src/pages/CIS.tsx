@@ -7065,10 +7065,60 @@ export default function CIS() {
   }, [lastEvidence?.question]);
 
   const renderAssistantContent = useCallback((text: string) => {
+    // ── Inline markdown renderer ──
+    // Converts **bold**, *italic*, `code`, [n] references into React elements
+    const renderInline = (raw: string, keyPrefix: string = ""): React.ReactNode[] => {
+      const parts: React.ReactNode[] = [];
+      // Regex: bold+italic (***), bold (**), italic (*), code (`), source ref [n]
+      const inlineRegex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[(\d+)\])/g;
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      let i = 0;
+      while ((match = inlineRegex.exec(raw)) !== null) {
+        // Text before the match
+        if (match.index > lastIndex) {
+          parts.push(<span key={`${keyPrefix}t${i}`}>{raw.slice(lastIndex, match.index)}</span>);
+        }
+        if (match[2]) {
+          // ***bold italic***
+          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-[#FFED00]">{match[2]}</strong>);
+        } else if (match[3]) {
+          // **bold**
+          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-[#FFED00]">{match[3]}</strong>);
+        } else if (match[4]) {
+          // *italic*
+          parts.push(<em key={`${keyPrefix}i${i}`} className="italic text-white/90">{match[4]}</em>);
+        } else if (match[5]) {
+          // `code`
+          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-[#FFED00] font-mono">{match[5]}</code>);
+        } else if (match[6]) {
+          // [1] source reference
+          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-[#FFED00]/20 text-[#FFED00] text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[6]}</span>);
+        }
+        lastIndex = match.index + match[0].length;
+        i++;
+      }
+      if (lastIndex < raw.length) {
+        parts.push(<span key={`${keyPrefix}end`}>{raw.slice(lastIndex)}</span>);
+      }
+      return parts.length > 0 ? parts : [<span key={`${keyPrefix}plain`}>{raw}</span>];
+    };
+
     const lines = text.split("\n");
-    const blocks: Array<{ type: "p" | "ul" | "h"; content: string | string[] }> = [];
+    type Block =
+      | { type: "h1"; content: string }
+      | { type: "h2"; content: string }
+      | { type: "h3"; content: string }
+      | { type: "p"; content: string }
+      | { type: "ul"; items: string[] }
+      | { type: "ol"; items: string[] }
+      | { type: "hr" }
+      | { type: "blank" };
+
+    const blocks: Block[] = [];
+    let ulItems: string[] = [];
+    let olItems: string[] = [];
     let paragraph: string[] = [];
-    let list: string[] = [];
 
     const flushParagraph = () => {
       if (paragraph.length) {
@@ -7076,62 +7126,118 @@ export default function CIS() {
         paragraph = [];
       }
     };
-
-    const flushList = () => {
-      if (list.length) {
-        blocks.push({ type: "ul", content: list });
-        list = [];
+    const flushUl = () => {
+      if (ulItems.length) {
+        blocks.push({ type: "ul", items: [...ulItems] });
+        ulItems = [];
       }
     };
+    const flushOl = () => {
+      if (olItems.length) {
+        blocks.push({ type: "ol", items: [...olItems] });
+        olItems = [];
+      }
+    };
+    const flushAll = () => { flushParagraph(); flushUl(); flushOl(); };
 
-    lines.forEach((raw) => {
-      const line = raw.trim();
-      if (!line) {
-        flushParagraph();
-        flushList();
-        return;
-      }
-      if (line.endsWith(":") && line.length < 64) {
-        flushParagraph();
-        flushList();
-        blocks.push({ type: "h", content: line.replace(/:$/, "") });
-        return;
-      }
-      if (line.startsWith("- ") || line.startsWith("* ")) {
-        flushParagraph();
-        list.push(line.replace(/^[-*]\s*/, ""));
-        return;
-      }
-      paragraph.push(line);
-    });
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      const trimmed = line.trim();
 
-    flushParagraph();
-    flushList();
+      // Blank line
+      if (!trimmed) { flushAll(); continue; }
+
+      // Horizontal rule
+      if (/^(---+|\*\*\*+|___+)$/.test(trimmed)) { flushAll(); blocks.push({ type: "hr" }); continue; }
+
+      // Headings: ## or ###
+      const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+      if (headingMatch) {
+        flushAll();
+        const level = headingMatch[1].length;
+        const content = headingMatch[2].replace(/\s*#+$/, ""); // strip trailing #
+        if (level === 1) blocks.push({ type: "h1", content });
+        else if (level === 2) blocks.push({ type: "h2", content });
+        else blocks.push({ type: "h3", content });
+        continue;
+      }
+
+      // Unordered list: - item or * item
+      if (/^[-*]\s+/.test(trimmed)) {
+        flushParagraph(); flushOl();
+        ulItems.push(trimmed.replace(/^[-*]\s+/, ""));
+        continue;
+      }
+
+      // Ordered list: 1. item, 2. item
+      if (/^\d+[.)]\s+/.test(trimmed)) {
+        flushParagraph(); flushUl();
+        olItems.push(trimmed.replace(/^\d+[.)]\s+/, ""));
+        continue;
+      }
+
+      // Lines ending with ":" that are short → treat as sub-heading
+      if (trimmed.endsWith(":") && trimmed.length < 80 && !trimmed.startsWith("http")) {
+        flushAll();
+        blocks.push({ type: "h3", content: trimmed.replace(/:$/, "") });
+        continue;
+      }
+
+      // Normal paragraph text
+      flushUl(); flushOl();
+      paragraph.push(trimmed);
+    }
+    flushAll();
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         {blocks.map((block, idx) => {
-          if (block.type === "h") {
-            return (
-              <div key={idx} className="text-xs uppercase tracking-wide text-white/70 font-mono font-bold">
-                {block.content as string}
-              </div>
-            );
+          switch (block.type) {
+            case "h1":
+              return (
+                <h2 key={idx} className="text-base font-bold text-[#FFED00] font-mono mt-3 mb-1 border-b border-white/20 pb-1">
+                  {renderInline(block.content, `h1-${idx}-`)}
+                </h2>
+              );
+            case "h2":
+              return (
+                <h3 key={idx} className="text-sm font-bold text-[#FFED00] font-mono mt-3 mb-1">
+                  {renderInline(block.content, `h2-${idx}-`)}
+                </h3>
+              );
+            case "h3":
+              return (
+                <h4 key={idx} className="text-sm font-semibold text-white/90 font-mono mt-2 mb-0.5">
+                  {renderInline(block.content, `h3-${idx}-`)}
+                </h4>
+              );
+            case "ul":
+              return (
+                <ul key={idx} className="list-disc pl-5 text-sm text-white space-y-1.5">
+                  {block.items.map((item, i) => (
+                    <li key={i} className="text-white leading-relaxed">{renderInline(item, `ul-${idx}-${i}-`)}</li>
+                  ))}
+                </ul>
+              );
+            case "ol":
+              return (
+                <ol key={idx} className="list-decimal pl-5 text-sm text-white space-y-1.5">
+                  {block.items.map((item, i) => (
+                    <li key={i} className="text-white leading-relaxed">{renderInline(item, `ol-${idx}-${i}-`)}</li>
+                  ))}
+                </ol>
+              );
+            case "hr":
+              return <hr key={idx} className="border-white/20 my-3" />;
+            case "p":
+              return (
+                <p key={idx} className="text-sm text-white leading-relaxed">
+                  {renderInline(block.content, `p-${idx}-`)}
+                </p>
+              );
+            default:
+              return null;
           }
-          if (block.type === "ul") {
-            return (
-              <ul key={idx} className="list-disc pl-5 text-sm text-white space-y-1">
-                {(block.content as string[]).map((item, itemIdx) => (
-                  <li key={itemIdx} className="text-white">{item}</li>
-                ))}
-              </ul>
-            );
-          }
-          return (
-            <p key={idx} className="text-sm text-white leading-relaxed">
-              {block.content as string}
-            </p>
-          );
         })}
       </div>
     );
