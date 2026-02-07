@@ -312,13 +312,31 @@ ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "500"))  # Larger
 USE_HAIKU_FOR_SIMPLE = os.getenv("USE_HAIKU_FOR_SIMPLE", "true").lower() == "true"
 
 # Embeddings settings (semantic search)
-EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "voyage").lower().strip()
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-finance-2")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
+
+# Auto-detect embedding provider: use explicit env var, or pick the first available key
+_explicit_provider = os.getenv("EMBEDDINGS_PROVIDER", "").lower().strip()
+if _explicit_provider:
+    EMBEDDINGS_PROVIDER = _explicit_provider
+elif VOYAGE_API_KEY:
+    EMBEDDINGS_PROVIDER = "voyage"
+elif OPENAI_API_KEY:
+    EMBEDDINGS_PROVIDER = "openai"
+elif ANTHROPIC_API_KEY:
+    # Anthropic doesn't have a native embedding API — use Voyage via Anthropic partnership
+    # Fall back to OpenAI model if available, else warn
+    EMBEDDINGS_PROVIDER = "openai"  # placeholder — will fail without key
+else:
+    EMBEDDINGS_PROVIDER = "voyage"  # default, but will warn on first call
+
+print(f"📊 Embeddings provider: {EMBEDDINGS_PROVIDER} "
+      f"(voyage_key={'✅' if VOYAGE_API_KEY else '❌'}, "
+      f"openai_key={'✅' if OPENAI_API_KEY else '❌'})")
 
 # Reranking settings (cross-encoder)
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
@@ -3880,20 +3898,43 @@ async def embed_query(request: EmbedRequest):
         if input_type not in ["document", "query"]:
             input_type = "document"
 
+        # Try the configured provider first, then fall through to alternatives
+        providers_to_try = []
         if EMBEDDINGS_PROVIDER == "voyage":
-            embedding = await generate_embedding_voyage(text, input_type)
+            providers_to_try = ["voyage", "openai", "ollama"]
         elif EMBEDDINGS_PROVIDER == "openai":
-            embedding = await generate_embedding_openai(text)
+            providers_to_try = ["openai", "voyage", "ollama"]
         elif EMBEDDINGS_PROVIDER == "ollama":
-            embedding = await generate_embedding_ollama(text)
+            providers_to_try = ["ollama", "voyage", "openai"]
         else:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    f"EMBEDDINGS_PROVIDER '{EMBEDDINGS_PROVIDER}' not supported. "
-                    "Use 'voyage', 'openai', or 'ollama'."
-                )
+            providers_to_try = ["voyage", "openai", "ollama"]
+
+        embedding = None
+        last_error = None
+        for provider in providers_to_try:
+            try:
+                if provider == "voyage" and VOYAGE_API_KEY:
+                    embedding = await generate_embedding_voyage(text, input_type)
+                    break
+                elif provider == "openai" and OPENAI_API_KEY:
+                    embedding = await generate_embedding_openai(text)
+                    break
+                elif provider == "ollama":
+                    embedding = await generate_embedding_ollama(text)
+                    break
+            except Exception as provider_err:
+                last_error = provider_err
+                print(f"[EMBED] ⚠️ {provider} failed: {provider_err}, trying next...")
+                continue
+
+        if embedding is None:
+            detail = (
+                f"No embedding provider available. "
+                f"Set one of: VOYAGE_API_KEY, OPENAI_API_KEY, or run Ollama locally. "
+                f"Configured provider: '{EMBEDDINGS_PROVIDER}'. "
+                f"Last error: {last_error}"
             )
+            raise HTTPException(status_code=503, detail=detail)
         
         return EmbedResponse(embedding=embedding)
     except HTTPException:
