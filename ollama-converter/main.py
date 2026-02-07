@@ -26,11 +26,15 @@ from pydantic import BaseModel, Field
 
 # ---------- High-Performance Foundation ----------
 # ORJSONResponse: 20-50 % faster JSON serialisation than stdlib json
+# IMPORTANT: FastAPI lets you import ORJSONResponse even without orjson,
+# but it crashes at runtime. So we must check for the orjson module itself.
 try:
+    import orjson  # noqa: F401
     from fastapi.responses import ORJSONResponse
+    print("✅ orjson available — using ORJSONResponse")
 except ImportError:
-    # orjson not installed — fall back to default JSONResponse
     from fastapi.responses import JSONResponse as ORJSONResponse  # type: ignore[assignment]
+    print("⚠️  orjson not installed — using standard JSONResponse")
 
 # Anthropic SDK — async client for all Claude interactions
 try:
