@@ -5030,14 +5030,9 @@ export default function CIS() {
 
           for (const pair of pairs) {
             try {
-              let embedding = await embedQuery(pair.childText, "document");
+              const embedding = await embedQuery(pair.childText, "document");
               if (!embedding.length) continue;
-              
-              // Pad Voyage 1024-dim embeddings to 1536 for Supabase compatibility
-              if (embedding.length === 1024) {
-                embedding = [...embedding, ...new Array(512).fill(0.0)];
-              }
-              
+
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
                 chunk_text: pair.childText,
@@ -5605,17 +5600,9 @@ export default function CIS() {
           console.log("[DEBUG] Embedding generated:", { length: embedding?.length || 0 });
           if (embedding && embedding.length > 0) {
             console.log("[DEBUG] Embedding dimension:", embedding.length);
-            
-            // Pad Voyage 1024-dim embeddings to 1536 for Supabase compatibility
-            // (Supabase table is fixed at VECTOR(1536))
-            let queryEmbedding = embedding;
-            if (embedding.length === 1024) {
-              console.log("[DEBUG] Padding 1024-dim Voyage embedding to 1536 for Supabase");
-              queryEmbedding = [...embedding, ...new Array(512).fill(0.0)];
-            }
-            
+
             const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
-              query_embedding: queryEmbedding,
+              query_embedding: embedding,
               match_count: 30,
               filter_event_id: eventId,
             });

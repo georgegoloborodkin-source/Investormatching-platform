@@ -316,8 +316,8 @@ OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY") or os.getenv("VOYAGER_API_KEY")
-VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-finance-2")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
+VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 
 # Auto-detect embedding provider: use explicit env var, or pick the first available key
 _explicit_provider = os.getenv("EMBEDDINGS_PROVIDER", "").lower().strip()
