@@ -5030,8 +5030,14 @@ export default function CIS() {
 
           for (const pair of pairs) {
             try {
-              const embedding = await embedQuery(pair.childText, "document");
+              let embedding = await embedQuery(pair.childText, "document");
               if (!embedding.length) continue;
+              
+              // Pad Voyage 1024-dim embeddings to 1536 for Supabase compatibility
+              if (embedding.length === 1024) {
+                embedding = [...embedding, ...new Array(512).fill(0.0)];
+              }
+              
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
                 chunk_text: pair.childText,
