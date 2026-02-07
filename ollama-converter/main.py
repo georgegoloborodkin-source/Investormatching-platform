@@ -429,44 +429,18 @@ def get_ollama_client():
         raise HTTPException(status_code=503, detail="ollama package not installed.")
     return ollama.Client(host=OLLAMA_HOST)
 
-# CORS middleware — allow all origins (Vercel frontend → Render backend)
-_cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
-if _cors_origins_env and _cors_origins_env != "*":
-    _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
-else:
-    _cors_origins = ["*"]
-
-print(f"🌐 CORS allow_origins: {_cors_origins}")
-
+# CORS — allow ALL origins (Vercel frontend → Render backend)
+# Using CORSMiddleware with explicit wildcard configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=86400,  # Cache preflight for 24h
+    max_age=86400,
 )
-
-# Fallback: manual CORS headers for any requests the middleware misses
-@app.middleware("http")
-async def cors_fallback(request: Request, call_next):
-    if request.method == "OPTIONS":
-        from starlette.responses import Response
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Max-Age": "86400",
-            },
-        )
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+print("🌐 CORS: allow_origins=['*'] — all origins permitted")
 
 # Data models
 class StartupData(BaseModel):

@@ -6709,10 +6709,8 @@ export default function CIS() {
             .join("\n")}`
         : "";
 
-      const showSearchNotes = String(import.meta.env.VITE_SHOW_SEARCH_NOTES || "").toLowerCase() === "true";
-      const semanticNote = semanticFailed && showSearchNotes
-        ? "\n\nNote: Semantic search was unavailable, so I used keyword search."
-        : "";
+      // Semantic note completely removed — never show this to users
+      const semanticNote = "";
 
       // For comprehensive questions, use more sources (up to 5)
       const maxDocs = isComprehensiveQuestion ? 5 : 3;
