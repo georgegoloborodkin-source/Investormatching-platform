@@ -5598,7 +5598,16 @@ export default function CIS() {
           if (timedOut) return;
           console.log("[DEBUG] Embedding generated:", { length: embedding?.length || 0 });
           if (embedding && embedding.length > 0) {
-            const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
+            console.log("[DEBUG] Embedding dimension:", embedding.length);
+            // Auto-detect dimension and use the right RPC function
+            const rpcFunction = embedding.length === 1024 
+              ? "match_document_chunks_1024" 
+              : embedding.length === 1536 
+                ? "match_document_chunks_1536" 
+                : "match_document_chunks"; // fallback to original (1536)
+            
+            console.log("[DEBUG] Using RPC function:", rpcFunction, "for dimension", embedding.length);
+            const { data: matches, error: matchError } = await supabase.rpc(rpcFunction, {
               query_embedding: embedding,
               match_count: 30,
               filter_event_id: eventId,
@@ -5607,9 +5616,16 @@ export default function CIS() {
             console.log("[DEBUG] Semantic search results:", { 
               matchCount: matches?.length || 0, 
               matchError: matchError?.message || null,
+              matchErrorCode: matchError?.code || null,
+              matchErrorDetails: matchError || null,
               topSimilarities: matches?.slice(0, 5).map((m: any) => ({ docId: m.document_id, similarity: m.similarity })) || []
             });
-            if (!matchError && matches?.length) {
+            
+            // Only mark as failed if there's an actual error, not just 0 results
+            if (matchError) {
+              console.error("[ERROR] Semantic search RPC failed:", matchError);
+              semanticFailed = true;
+            } else if (matches && matches.length > 0) {
               // PHASE 1: Lower similarity threshold for name queries (0.3 instead of 0.5)
               // CRITICAL FIX: If hasName, use even lower threshold (0.15) to catch typos
               const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
@@ -5625,9 +5641,13 @@ export default function CIS() {
                   snippetByDocId.set(m.document_id, m.chunk_text);
                 }
               });
+            } else {
+              // No matches found, but RPC succeeded - this is OK, just no semantic results
+              console.log("[DEBUG] Semantic search returned 0 matches (RPC succeeded, no results)");
             }
           } else {
             console.log("[DEBUG] ⚠️ No embedding generated - semantic search skipped");
+            semanticFailed = true;
           }
         } catch (err) {
           // Semantic search failed - silently fall back to full-text search
