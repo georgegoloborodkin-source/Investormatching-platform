@@ -5599,16 +5599,17 @@ export default function CIS() {
           console.log("[DEBUG] Embedding generated:", { length: embedding?.length || 0 });
           if (embedding && embedding.length > 0) {
             console.log("[DEBUG] Embedding dimension:", embedding.length);
-            // Auto-detect dimension and use the right RPC function
-            const rpcFunction = embedding.length === 1024 
-              ? "match_document_chunks_1024" 
-              : embedding.length === 1536 
-                ? "match_document_chunks_1536" 
-                : "match_document_chunks"; // fallback to original (1536)
             
-            console.log("[DEBUG] Using RPC function:", rpcFunction, "for dimension", embedding.length);
-            const { data: matches, error: matchError } = await supabase.rpc(rpcFunction, {
-              query_embedding: embedding,
+            // Pad Voyage 1024-dim embeddings to 1536 for Supabase compatibility
+            // (Supabase table is fixed at VECTOR(1536))
+            let queryEmbedding = embedding;
+            if (embedding.length === 1024) {
+              console.log("[DEBUG] Padding 1024-dim Voyage embedding to 1536 for Supabase");
+              queryEmbedding = [...embedding, ...new Array(512).fill(0.0)];
+            }
+            
+            const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
+              query_embedding: queryEmbedding,
               match_count: 30,
               filter_event_id: eventId,
             });

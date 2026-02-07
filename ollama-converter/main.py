@@ -3795,11 +3795,8 @@ async def generate_embedding_voyage(text: str, input_type: str) -> List[float]:
         if not embedding:
             raise HTTPException(status_code=502, detail="No embedding returned from VoyageAI.")
 
-        # Voyage finance-2 returns 1024 dimensions, but our Supabase table expects 1536
-        # Pad with zeros to match OpenAI dimension (simple but effective)
-        if len(embedding) == 1024:
-            print(f"[VOYAGE] Padding 1024-dim embedding to 1536 for Supabase compatibility")
-            embedding = list(embedding) + [0.0] * 512
+        # Log dimension for debugging
+        print(f"[VOYAGE] Generated embedding with {len(embedding)} dimensions")
         
         return normalize_embedding(embedding)
 
