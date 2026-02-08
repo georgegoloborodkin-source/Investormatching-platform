@@ -2413,7 +2413,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         # Peek inside the zip to disambiguate docx vs xlsx
         try:
             import zipfile
-            from io import BytesIO
+            # BytesIO is already imported at top of file
             with zipfile.ZipFile(BytesIO(content)) as z:
                 names = set(z.namelist())
                 if 'word/document.xml' in names:
@@ -2437,8 +2437,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
             if file_ext == 'xlsx':
                 try:
                     import openpyxl
-                    from io import BytesIO
-                    
+                    # BytesIO is already imported at top of file
                     excel_file = BytesIO(content)
                     workbook = openpyxl.load_workbook(excel_file, data_only=True)
                     text_content = ""
@@ -2506,7 +2505,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
     # Handle DOCX files (prefer python-docx for tables; fallback to raw XML)
     elif file_ext == 'docx':
         try:
-            from io import BytesIO
+            # BytesIO is already imported at top of file
             try:
                 from docx import Document  # type: ignore
                 doc = Document(BytesIO(content))
@@ -2581,8 +2580,9 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         pymupdf_error = None
         try:
             import fitz  # PyMuPDF
-
-            doc = fitz.open(stream=BytesIO(content).getvalue(), filetype="pdf")
+            # BytesIO is already imported at top of file
+            pdf_stream = BytesIO(content)
+            doc = fitz.open(stream=pdf_stream.getvalue(), filetype="pdf")
             page_limit = min(doc.page_count, MAX_PDF_PAGES)
 
             def _extract_page(i: int) -> str:
@@ -2613,8 +2613,9 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         py_pdf2_error = None
         try:
             import PyPDF2
-
-            pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+            # BytesIO is already imported at top of file
+            pdf_stream = BytesIO(content)
+            pdf_reader = PyPDF2.PdfReader(pdf_stream)
             text_content = ""
             page_limit = min(len(pdf_reader.pages), MAX_PDF_PAGES)
             for pn in range(page_limit):
@@ -2629,9 +2630,10 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
             py_pdf2_error = e
             try:
                 import pdfplumber
-
+                # BytesIO is already imported at top of file
+                pdf_stream = BytesIO(content)
                 text_content = ""
-                with pdfplumber.open(BytesIO(content)) as pdf:
+                with pdfplumber.open(pdf_stream) as pdf:
                     page_limit = min(len(pdf.pages), MAX_PDF_PAGES)
                     for pn in range(page_limit):
                         text_content += f"\n--- Page {pn + 1} ---\n"
@@ -2653,10 +2655,25 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
         # Regular text files (CSV, TXT, JSON)
         try:
             text_content = content.decode('utf-8')
+            # For JSON files, validate and pretty-print if needed
+            if file_ext == 'json':
+                try:
+                    parsed = json.loads(text_content)
+                    # Re-encode as pretty JSON for better readability
+                    text_content = json.dumps(parsed, indent=2, ensure_ascii=False)
+                except json.JSONDecodeError as e:
+                    # Invalid JSON - keep original but log warning
+                    print(f"[JSON] Invalid JSON structure: {e}. Using raw content.")
         except UnicodeDecodeError:
             # Try other encodings
             try:
                 text_content = content.decode('latin-1')
+                if file_ext == 'json':
+                    try:
+                        parsed = json.loads(text_content)
+                        text_content = json.dumps(parsed, indent=2, ensure_ascii=False)
+                    except json.JSONDecodeError:
+                        pass
             except:
                 raise HTTPException(status_code=400, detail="Could not decode file. Please ensure it's a text-based file (CSV, TXT, JSON).")
     else:
