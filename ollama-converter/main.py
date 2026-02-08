@@ -4972,7 +4972,12 @@ async def startup_event():
     print("=" * 60)
     print(f"📐 ARCHITECTURE:")
     print(f"   Response class: ORJSONResponse {'✅' if 'orjson' in str(type(ORJSONResponse)) else '(fallback: JSONResponse)'}")
-    print(f"   Anthropic SDK: {'✅' if _anthropic_sdk_available else '❌ NOT INSTALLED'}")
+    print(f"   Anthropic SDK: {'✅ INSTALLED' if _anthropic_sdk_available else '❌ NOT INSTALLED'}")
+    print(f"   Anthropic API Key: {'✅ Set' if ANTHROPIC_API_KEY else '❌ NOT SET'}")
+    if ANTHROPIC_API_KEY:
+        # Show first/last 4 chars for verification (don't expose full key)
+        key_preview = f"{ANTHROPIC_API_KEY[:4]}...{ANTHROPIC_API_KEY[-4:]}" if len(ANTHROPIC_API_KEY) > 8 else "***"
+        print(f"   API Key Preview: {key_preview}")
     print(f"   JWT Auth: {'🔒 ENFORCED' if ENFORCE_AUTH else '🔓 Optional (dev mode)'}")
     print(f"📊 EMBEDDING CONFIGURATION:")
     print(f"   Provider: {EMBEDDINGS_PROVIDER}")
