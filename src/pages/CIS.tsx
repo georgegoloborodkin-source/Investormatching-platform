@@ -4440,14 +4440,63 @@ export default function CIS() {
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
       setDecisions(mapped);
-      setDocuments(
-        (documentsRes.data || []).map((doc: any) => ({
-          id: doc.id,
-          title: doc.title,
-          storage_path: doc.storage_path || null,
-          folder_id: doc.folder_id || null,
-        }))
-      );
+      
+      // Check for documents with NULL event_id and fix them
+      if (documentsRes.error) {
+        console.error("[DOCUMENTS] Query error:", documentsRes.error);
+        toast({
+          title: "Documents load error",
+          description: documentsRes.error.message || "Could not load documents. Check RLS policies.",
+          variant: "destructive",
+        });
+      }
+      
+      // Also query documents with NULL event_id (orphaned documents)
+      const { data: orphanedDocs } = await supabase
+        .from("documents")
+        .select("id, title, event_id, created_by")
+        .is("event_id", null)
+        .eq("created_by", profile?.id || user?.id || "")
+        .limit(100);
+      
+      // If we found orphaned documents, link them to the current event
+      if (orphanedDocs && orphanedDocs.length > 0 && event.id) {
+        console.log(`[DOCUMENTS] Found ${orphanedDocs.length} orphaned documents, linking to event ${event.id}`);
+        const { error: updateError } = await supabase
+          .from("documents")
+          .update({ event_id: event.id })
+          .in("id", orphanedDocs.map((d) => d.id));
+        
+        if (updateError) {
+          console.warn("[DOCUMENTS] Failed to link orphaned documents:", updateError);
+        } else {
+          console.log(`[DOCUMENTS] ✅ Linked ${orphanedDocs.length} documents to event`);
+          toast({
+            title: "Documents linked",
+            description: `Linked ${orphanedDocs.length} orphaned document(s) to current event.`,
+          });
+        }
+        
+        // Reload documents after linking
+        const { data: reloadedDocs } = await getDocumentsByEvent(event.id);
+        setDocuments(
+          (reloadedDocs || []).map((doc: any) => ({
+            id: doc.id,
+            title: doc.title,
+            storage_path: doc.storage_path || null,
+            folder_id: doc.folder_id || null,
+          }))
+        );
+      } else {
+        setDocuments(
+          (documentsRes.data || []).map((doc: any) => ({
+            id: doc.id,
+            title: doc.title,
+            storage_path: doc.storage_path || null,
+            folder_id: doc.folder_id || null,
+          }))
+        );
+      }
       const normalizedSources = (sourcesRes.data || []).map((source: any) => {
         const tags = Array.isArray(source.tags)
           ? source.tags
