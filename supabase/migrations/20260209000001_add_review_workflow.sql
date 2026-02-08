@@ -18,11 +18,12 @@ BEGIN
     WHEN 'partner_of' THEN 'Partnership'
     WHEN 'invested_in' THEN 'INV'
     WHEN 'portfolio_company' THEN 'Portfolio'
-    WHEN 'competitor_of' THEN 'Knowledge'
+    WHEN 'competitor_of' THEN 'BD' -- Competitors are business relationships, not knowledge
+    WHEN 'acquired' THEN 'BD' -- Acquisitions are business relationships
     ELSE 'BD' -- Default to BD for other relationships
   END;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$ LANGUAGE plpgsql IMMUTABLE;  
 
 -- Function to auto-create company_connections from approved kg_edges
 CREATE OR REPLACE FUNCTION sync_approved_edges_to_connections()

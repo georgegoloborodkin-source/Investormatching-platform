@@ -4644,12 +4644,20 @@ async def suggest_connections(request: SuggestConnectionsRequest, auth: AuthCont
     Given document sources and the existing connections graph, use Claude to
     suggest new company connections the user hasn't logged yet.
     """
-    if not _anthropic_sdk_available or not ANTHROPIC_API_KEY:
-        # Return empty suggestions instead of error (graceful degradation)
+    # Check Anthropic availability with detailed logging
+    if not _anthropic_sdk_available:
+        print("[suggest-connections] ❌ Anthropic SDK not installed")
         return SuggestConnectionsResponse(
             suggestions=[],
-            context_summary="Connection suggestions require Anthropic API key. Please configure ANTHROPIC_API_KEY in your environment."
+            context_summary="Connection suggestions require Anthropic SDK. Please install: pip install anthropic"
         )
+    if not ANTHROPIC_API_KEY:
+        print("[suggest-connections] ❌ ANTHROPIC_API_KEY not set in environment")
+        return SuggestConnectionsResponse(
+            suggestions=[],
+            context_summary="Connection suggestions require Anthropic API key. Please set ANTHROPIC_API_KEY in your environment variables."
+        )
+    print(f"[suggest-connections] ✅ Anthropic SDK available, API key: {'Set' if ANTHROPIC_API_KEY else 'NOT SET'}")
 
     # Build context about existing connections
     existing_lines: List[str] = []

@@ -8958,7 +8958,8 @@ function ConnectionsGraphTab({
                 "partner_of": "Partnership",
                 "invested_in": "INV",
                 "portfolio_company": "Portfolio",
-                "competitor_of": "Knowledge",
+                "competitor_of": "BD", // Competitors are business relationships
+                "acquired": "BD", // Acquisitions are business relationships
               };
               const connectionType = connectionTypeMap[review.relation_type] || "BD";
               
