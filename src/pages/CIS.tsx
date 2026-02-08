@@ -7455,9 +7455,12 @@ export default function CIS() {
       setAiSuggestions(result.suggestions);
 
       if (result.suggestions.length === 0) {
+        // Only show error toast if it's an actual error, not just "no suggestions found"
+        const isError = result.contextSummary?.includes("require") || result.contextSummary?.includes("unavailable");
         toast({
-          title: "No suggestions",
+          title: isError ? "Suggestion unavailable" : "No suggestions",
           description: result.contextSummary || "Upload more documents to get AI suggestions.",
+          variant: isError ? "destructive" : "default",
         });
       } else {
         toast({
@@ -8903,15 +8906,37 @@ function ConnectionsGraphTab({
                 {companies.map((company, idx) => {
                   const x = 100 + (idx % 4) * 180;
                   const y = 80 + Math.floor(idx / 4) * 120;
+                  // Get the most common status for this company (from all connections involving it)
+                  const companyConnections = connections.filter(
+                    (c) => c.source_company_name === company || c.target_company_name === company
+                  );
+                  // Priority: Connected > In Progress > To Connect > Completed > Rejected
+                  const statusPriority: Record<ConnectionStatus, number> = {
+                    Connected: 5,
+                    "In Progress": 4,
+                    "To Connect": 3,
+                    Completed: 2,
+                    Rejected: 1,
+                  };
+                  const dominantStatus = companyConnections.length > 0
+                    ? companyConnections.reduce((prev, curr) => 
+                        statusPriority[curr.connection_status] > statusPriority[prev.connection_status]
+                          ? curr.connection_status
+                          : prev.connection_status,
+                        companyConnections[0].connection_status
+                      )
+                    : "To Connect";
+                  const statusColor = CONNECTION_STATUS_COLORS[dominantStatus];
                   return (
                     <g key={`node-${idx}`}>
                       <circle
                         cx={x}
                         cy={y}
                         r="30"
-                        fill="#050505"
+                        fill={statusColor}
                         stroke="#FFED00"
                         strokeWidth="2"
+                        opacity="0.8"
                       />
                       <text
                         x={x}

@@ -863,8 +863,11 @@ export async function suggestConnections(input: {
   } catch (error) {
     console.error("[suggestConnections] Error:", error);
     // Return empty suggestions if backend is unavailable
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("Anthropic SDK") || errorMessage.includes("API key")) {
+      return { suggestions: [], contextSummary: "AI suggestions require Anthropic API configuration. Please set ANTHROPIC_API_KEY in your backend environment." };
+    }
     return { suggestions: [], contextSummary: "Connection suggestions unavailable. Please check backend configuration." };
-    return { suggestions: [], contextSummary: "Failed to get suggestions." };
   }
 }
 
