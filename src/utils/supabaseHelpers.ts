@@ -230,6 +230,43 @@ export async function getCompanyConnectionsByEvent(eventId: string) {
     .order("created_at", { ascending: false });
 }
 
+// Get pending relationship reviews from knowledge graph
+export async function getPendingRelationshipReviews(eventId: string) {
+  return supabase
+    .from("kg_edges")
+    .select(`
+      id,
+      relation_type,
+      confidence,
+      properties,
+      source_document_id,
+      created_at,
+      source_entity:kg_entities!kg_edges_source_entity_id_fkey(name, entity_type),
+      target_entity:kg_entities!kg_edges_target_entity_id_fkey(name, entity_type)
+    `)
+    .eq("event_id", eventId)
+    .eq("review_status", "pending")
+    .order("created_at", { ascending: false });
+}
+
+// Update kg_edge review status
+export async function updateKgEdgeReview(
+  edgeId: string,
+  reviewStatus: "approved" | "rejected" | "edited",
+  reviewedBy: string
+) {
+  return supabase
+    .from("kg_edges")
+    .update({
+      review_status: reviewStatus,
+      reviewed_by: reviewedBy,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", edgeId)
+    .select()
+    .single();
+}
+
 export async function insertCompanyConnection(
   eventId: string,
   payload: {

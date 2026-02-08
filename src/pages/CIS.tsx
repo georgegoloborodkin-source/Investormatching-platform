@@ -3935,6 +3935,18 @@ export default function CIS() {
     notes?: string | null;
     created_at: string;
   }>>([]);
+  
+  // Pending relationship reviews from knowledge graph
+  const [pendingReviews, setPendingReviews] = useState<Array<{
+    id: string;
+    relation_type: string;
+    confidence: number;
+    properties: Record<string, any>;
+    source_document_id: string | null;
+    created_at: string;
+    source_entity: { name: string; entity_type: string } | null;
+    target_entity: { name: string; entity_type: string } | null;
+  }>>([]);
   const [logDecisionDialogOpen, setLogDecisionDialogOpen] = useState(false);
   const [pendingDecisionContext, setPendingDecisionContext] = useState<{
     aiReasoning: string;
@@ -4415,12 +4427,13 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
         getSourcesByEvent(event.id),
         getSourceFoldersByEvent(event.id),
         getCompanyConnectionsByEvent(event.id),
+        getPendingRelationshipReviews(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -4447,6 +4460,19 @@ export default function CIS() {
       
       // Load company connections for graph view
       setCompanyConnections((connectionsRes.data || []) as typeof companyConnections);
+      
+      // Load pending relationship reviews
+      const pendingData = (pendingReviewsRes.data || []).map((r: any) => ({
+        id: r.id,
+        relation_type: r.relation_type,
+        confidence: r.confidence,
+        properties: r.properties || {},
+        source_document_id: r.source_document_id,
+        created_at: r.created_at,
+        source_entity: r.source_entity,
+        target_entity: r.target_entity,
+      }));
+      setPendingReviews(pendingData);
 
       // Set up real-time subscriptions for documents
       documentsChannel = supabase
@@ -5100,6 +5126,11 @@ export default function CIS() {
               .limit(1);
 
             if (!existingEdge || existingEdge.length === 0) {
+              // Auto-approve high-confidence extractions (confidence > 0.9)
+              // Require review for low-confidence (confidence < 0.7)
+              const reviewStatus = rel.confidence > 0.9 ? 'approved' : 
+                                   rel.confidence < 0.7 ? 'pending' : 'pending';
+              
               const { error: edgeErr } = await supabase.from("kg_edges").insert({
                 event_id: eventId,
                 source_entity_id: sourceId,
@@ -5109,9 +5140,14 @@ export default function CIS() {
                 confidence: rel.confidence,
                 source_document_id: documentId,
                 created_by: userId,
+                review_status: reviewStatus,
+                // Auto-approve high-confidence by setting reviewed_by to creator
+                ...(reviewStatus === 'approved' ? { reviewed_by: userId, reviewed_at: new Date().toISOString() } : {}),
               });
               if (edgeErr) {
                 console.warn(`[EXTRACT] Failed to insert edge:`, edgeErr);
+              } else if (reviewStatus === 'pending') {
+                console.log(`[EXTRACT] ⚠️ Relationship ${rel.source_name} → ${rel.target_name} requires review (confidence: ${rel.confidence})`);
               }
             }
           }
@@ -8536,9 +8572,11 @@ const CONNECTION_STATUS_COLORS: Record<ConnectionStatus, string> = {
 function ConnectionsGraphTab({
   connections,
   documents,
+  pendingReviews,
   onUpdateStatus,
   onAddConnection,
   onSuggestConnections,
+  onReviewPending,
 }: {
   connections: Array<{
     id: string;
@@ -8553,9 +8591,20 @@ function ConnectionsGraphTab({
     created_at: string;
   }>;
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  pendingReviews: Array<{
+    id: string;
+    relation_type: string;
+    confidence: number;
+    properties: Record<string, any>;
+    source_document_id: string | null;
+    created_at: string;
+    source_entity: { name: string; entity_type: string } | null;
+    target_entity: { name: string; entity_type: string } | null;
+  }>;
   onUpdateStatus: (connectionId: string, newStatus: ConnectionStatus) => Promise<void>;
   onAddConnection: () => void;
   onSuggestConnections?: () => void;
+  onReviewPending: (edgeId: string, status: "approved" | "rejected") => Promise<void>;
 }) {
   // Extract unique companies from connections
   const companies = useMemo(() => {
@@ -8729,6 +8778,90 @@ function ConnectionsGraphTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Pending Reviews Section */}
+      {pendingReviews.length > 0 && (
+        <Card className="border-2 border-[#eab308] bg-transparent">
+          <CardHeader className="pb-2 border-b-2 border-[#eab308]">
+            <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#eab308]">
+              ⚠️ Pending Reviews ({pendingReviews.length})
+            </CardTitle>
+            <CardDescription className="text-white/70 font-mono text-xs">
+              Auto-extracted relationships requiring your approval
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3">
+            {pendingReviews.map((review) => {
+              const sourceName = review.source_entity?.name || "Unknown";
+              const targetName = review.target_entity?.name || "Unknown";
+              const isCompanyToCompany = review.source_entity?.entity_type === "company" && 
+                                         review.target_entity?.entity_type === "company";
+              
+              if (!isCompanyToCompany) return null; // Only show company-to-company relationships
+              
+              // Map kg relation_type to connection_type
+              const connectionTypeMap: Record<string, ConnectionType> = {
+                "partner_of": "Partnership",
+                "invested_in": "INV",
+                "portfolio_company": "Portfolio",
+                "competitor_of": "Knowledge",
+              };
+              const connectionType = connectionTypeMap[review.relation_type] || "BD";
+              
+              return (
+                <div
+                  key={review.id}
+                  className="flex items-center justify-between gap-4 p-3 border-2 border-[#eab308] rounded-md bg-[#eab308]/5"
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-2 h-8 rounded bg-[#eab308]" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-white font-mono font-bold">
+                        <span>{sourceName}</span>
+                        <span className="text-white/50">→</span>
+                        <span>{targetName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs border-[#eab308] text-[#eab308] bg-transparent font-mono">
+                          {connectionType}
+                        </Badge>
+                        <span className="text-xs text-white/50 font-mono">
+                          Confidence: {Math.round(review.confidence * 100)}%
+                        </span>
+                        {review.properties?.reasoning && (
+                          <span className="text-xs text-white/50 font-mono truncate max-w-[200px]">
+                            {review.properties.reasoning.substring(0, 50)}...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-2 border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-bold"
+                      onClick={() => onReviewPending(review.id, "approved")}
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-2 border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/10 font-bold"
+                      onClick={() => onReviewPending(review.id, "rejected")}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Connections List */}
       <Card className="border-2 border-white bg-transparent">
