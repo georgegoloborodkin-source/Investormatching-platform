@@ -4497,6 +4497,63 @@ export default function CIS() {
           }))
         );
       }
+      // Check for sources with NULL event_id and fix them
+      if (sourcesRes.error) {
+        console.error("[SOURCES] Query error:", sourcesRes.error);
+        toast({
+          title: "Sources load error",
+          description: sourcesRes.error.message || "Could not load sources. Check RLS policies.",
+          variant: "destructive",
+        });
+      }
+      
+      // Also query sources with NULL event_id (orphaned sources)
+      const userId = profile?.id || user?.id;
+      if (userId) {
+        const { data: orphanedSources } = await supabase
+          .from("sources")
+          .select("id, title, event_id, created_by")
+          .is("event_id", null)
+          .eq("created_by", userId)
+          .limit(100);
+        
+        // If we found orphaned sources, link them to the current event
+        if (orphanedSources && orphanedSources.length > 0 && event.id) {
+          console.log(`[SOURCES] Found ${orphanedSources.length} orphaned sources, linking to event ${event.id}`);
+          const orphanedIds = orphanedSources.map((s) => s.id);
+          const { error: updateError } = await supabase
+            .from("sources")
+            .update({ event_id: event.id })
+            .in("id", orphanedIds);
+          
+          if (updateError) {
+            console.warn("[SOURCES] Failed to link orphaned sources:", updateError);
+          } else {
+            console.log(`[SOURCES] ✅ Linked ${orphanedSources.length} sources to event`);
+            toast({
+              title: "Sources linked",
+              description: `Linked ${orphanedSources.length} orphaned source(s) to current event.`,
+            });
+            
+            // Reload sources after linking
+            const { data: reloadedSources } = await getSourcesByEvent(event.id);
+            if (reloadedSources) {
+              const normalized = reloadedSources.map((source: any) => {
+                const tags = Array.isArray(source.tags)
+                  ? source.tags
+                  : typeof source.tags === "string"
+                  ? source.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+                  : null;
+                return { ...source, tags };
+              });
+              setSources(normalized as SourceRecord[]);
+              return; // Early return after reload
+            }
+          }
+        }
+      }
+      
+      // Set sources from the original query
       const normalizedSources = (sourcesRes.data || []).map((source: any) => {
         const tags = Array.isArray(source.tags)
           ? source.tags
