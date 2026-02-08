@@ -1838,10 +1838,67 @@ def is_simple_question(question: str, sources: List[AskSource]) -> bool:
     return False
 
 
-async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None) -> str:
+# ── Tool definitions for tool-augmented RAG ──
+TOOLS_FOR_ANSWERS = [
+    {
+        "name": "query_kpis",
+        "description": "Query structured KPIs (revenue, growth, valuations) for companies. Use this when users ask about metrics, financials, or comparisons.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "company_name": {"type": "string", "description": "Company name to query"},
+                "metric_name": {"type": "string", "description": "Metric name (e.g., 'revenue', 'ARR', 'valuation')"},
+                "period": {"type": "string", "description": "Time period (e.g., '2024', 'Q1 2024')"},
+            },
+            "required": ["company_name"],
+        },
+    },
+    {
+        "name": "search_graph",
+        "description": "Search the knowledge graph for entities and relationships. Use this to find connections, investors, rounds, or related companies.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_name": {"type": "string", "description": "Entity name to search for"},
+                "entity_type": {"type": "string", "description": "Entity type (company, person, fund, round)"},
+                "relation_type": {"type": "string", "description": "Filter by relation type (invested_in, founded, partner_with)"},
+                "max_depth": {"type": "integer", "description": "Max traversal depth (default 2)"},
+            },
+            "required": ["entity_name"],
+        },
+    },
+]
+
+
+async def execute_tool_call(tool_name: str, tool_input: Dict[str, Any], event_id: Optional[str] = None) -> str:
     """
-    Call Claude to answer a user question.  Uses the Anthropic SDK when available
-    (faster, automatic retries, prompt caching) with httpx fallback.
+    Execute a tool call requested by Claude.
+    Returns a JSON string with results (or error message).
+    """
+    if tool_name == "query_kpis":
+        # TODO: Add Supabase client to query company_kpis table
+        company = tool_input.get("company_name", "")
+        metric = tool_input.get("metric_name")
+        period = tool_input.get("period")
+        return json.dumps({
+            "status": "tool_not_implemented",
+            "message": f"KPI query for {company} (metric: {metric}, period: {period}) requires Supabase connection. Coming soon.",
+        })
+    elif tool_name == "search_graph":
+        # TODO: Add Supabase client to query kg_entities/kg_edges
+        entity = tool_input.get("entity_name", "")
+        entity_type = tool_input.get("entity_type")
+        return json.dumps({
+            "status": "tool_not_implemented",
+            "message": f"Graph search for {entity} (type: {entity_type}) requires Supabase connection. Coming soon.",
+        })
+    return json.dumps({"status": "error", "message": f"Unknown tool: {tool_name}"})
+
+
+async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None) -> str:
+    """
+    Call Claude to answer a user question with tool-augmented RAG.
+    Uses the Anthropic SDK when available (faster, automatic retries, prompt caching) with httpx fallback.
     """
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
@@ -1862,26 +1919,65 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
         "Sources labeled [Portfolio company/document: ...] represent companies in the user's "
         "portfolio — use them to suggest partnerships, introductions, and synergies. "
         "NEVER say 'I don't have information' when you have portfolio sources or connections data. "
-        "Be helpful, proactive, and reference company relationships whenever relevant."
+        "Be helpful, proactive, and reference company relationships whenever relevant. "
+        "You have access to tools: query_kpis (for financial metrics) and search_graph (for entity relationships). "
+        "Use them when users ask about specific numbers or connections."
     )
 
-    # ── SDK path (preferred) ──
+    # ── SDK path (preferred) — with tool calling ──
     if _anthropic_sdk_available:
         client = _get_anthropic_async_client()
         last_error: Optional[str] = None
         for model_name in model_list:
             try:
+                # First call: Claude may request tools
                 message = await client.messages.create(
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=0.5,
                     system=system_msg,
                     messages=[{"role": "user", "content": prompt}],
+                    tools=TOOLS_FOR_ANSWERS,
                 )
-                text_parts = [b.text for b in message.content if hasattr(b, "text")]
-                text = "\n".join(text_parts).strip()
-                if text:
-                    return text
+                
+                # Handle tool use if present
+                tool_results = []
+                for content_block in message.content:
+                    if hasattr(content_block, "type") and content_block.type == "tool_use":
+                        tool_id = getattr(content_block, "id", "")
+                        tool_name = getattr(content_block, "name", "")
+                        tool_input = getattr(content_block, "input", {})
+                        result = await execute_tool_call(tool_name, tool_input, event_id)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": result,
+                        })
+                
+                # If tools were used, make a follow-up call with results
+                if tool_results:
+                    follow_up = await client.messages.create(
+                        model=model_name,
+                        max_tokens=max_tokens,
+                        temperature=0.5,
+                        system=system_msg,
+                        messages=[
+                            {"role": "user", "content": prompt},
+                            {"role": "assistant", "content": message.content},
+                            {"role": "user", "content": tool_results},
+                        ],
+                    )
+                    text_parts = [b.text for b in follow_up.content if hasattr(b, "text")]
+                    text = "\n".join(text_parts).strip()
+                    if text:
+                        return text
+                else:
+                    # No tools used — return direct answer
+                    text_parts = [b.text for b in message.content if hasattr(b, "text")]
+                    text = "\n".join(text_parts).strip()
+                    if text:
+                        return text
+                
                 last_error = "Claude returned empty content."
             except anthropic.NotFoundError:
                 last_error = f"Model not found: {model_name}"
@@ -1891,7 +1987,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                 continue
         raise HTTPException(status_code=503, detail=last_error or "No Claude model available.")
 
-    # ── httpx fallback ──
+    # ── httpx fallback (tools not supported in httpx path — use SDK) ──
     headers = {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,
@@ -1909,6 +2005,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                 "temperature": 0.5,
                 "system": system_msg,
                 "messages": [{"role": "user", "content": prompt}],
+                "tools": TOOLS_FOR_ANSWERS,  # Tools available but execution requires SDK
             }
 
             res = await http_client.post(url, headers=headers, json=payload)
@@ -1928,7 +2025,9 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
             content = data.get("content") or []
             text = ""
             if isinstance(content, list) and content:
-                text = content[0].get("text") or ""
+                # Handle tool_use blocks (would need follow-up in full implementation)
+                text_blocks = [b.get("text", "") for b in content if b.get("type") == "text"]
+                text = "\n".join(text_blocks).strip()
             elif isinstance(content, str):
                 text = content
             if not text:
@@ -3401,9 +3500,9 @@ async def list_clickup_lists(request: ClickUpListsRequest):
 
     return ClickUpListsResponse(lists=lists)
 
-async def stream_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None) -> AsyncGenerator[str, None]:
+async def stream_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None) -> AsyncGenerator[str, None]:
     """
-    Stream Claude's response token by token for ChatGPT-like experience.
+    Stream Claude's response token by token for ChatGPT-like experience with tool-augmented RAG.
     Uses Anthropic SDK streaming when available, httpx SSE fallback otherwise.
     """
     if not ANTHROPIC_API_KEY:
@@ -3422,23 +3521,63 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
         "Sources labeled [Portfolio company/document: ...] represent companies in the user's "
         "portfolio — use them to suggest partnerships, introductions, and synergies. "
         "NEVER say 'I don't have information' when you have portfolio sources or connections data. "
-        "Be helpful, proactive, and reference company relationships whenever relevant."
+        "Be helpful, proactive, and reference company relationships whenever relevant. "
+        "You have access to tools: query_kpis (for financial metrics) and search_graph (for entity relationships). "
+        "Use them when users ask about specific numbers or connections."
     )
 
-    # ── SDK streaming (preferred) ──
+    # ── SDK streaming (preferred) — with tool support ──
     if _anthropic_sdk_available:
         client = _get_anthropic_async_client()
         for model_name in model_list:
             try:
+                # First stream: Claude may request tools
                 async with client.messages.stream(
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=0.1,
                     system=system_msg,
                     messages=[{"role": "user", "content": prompt}],
+                    tools=TOOLS_FOR_ANSWERS,
                 ) as stream:
-                    async for text in stream.text_stream:
-                        yield json.dumps({"text": text})
+                    tool_uses = []
+                    async for event in stream:
+                        if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                            yield json.dumps({"text": event.delta.text})
+                        elif event.type == "content_block_start" and hasattr(event.content_block, "type") and getattr(event.content_block, "type") == "tool_use":
+                            tool_uses.append({
+                                "id": getattr(event.content_block, "id", ""),
+                                "name": getattr(event.content_block, "name", ""),
+                                "input": getattr(event.content_block, "input", {}),
+                            })
+                    
+                    # If tools were used, execute and stream follow-up
+                    if tool_uses:
+                        yield json.dumps({"status": "tool_execution", "tools": len(tool_uses)})
+                        tool_results = []
+                        for tool_use in tool_uses:
+                            result = await execute_tool_call(tool_use["name"], tool_use["input"], event_id)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_use["id"],
+                                "content": result,
+                            })
+                        
+                        # Stream follow-up response with tool results
+                        async with client.messages.stream(
+                            model=model_name,
+                            max_tokens=max_tokens,
+                            temperature=0.1,
+                            system=system_msg,
+                            messages=[
+                                {"role": "user", "content": prompt},
+                                {"role": "assistant", "content": [{"type": "tool_use", **tu} for tu in tool_uses]},
+                                {"role": "user", "content": tool_results},
+                            ],
+                        ) as follow_stream:
+                            async for event in follow_stream:
+                                if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                                    yield json.dumps({"text": event.delta.text})
                 return  # Success
             except anthropic.NotFoundError:
                 continue
@@ -3542,7 +3681,14 @@ async def ask_fund(request: AskRequest, auth: AuthContext = Depends(get_auth_con
         return AskResponse(answer="I couldn't find relevant information for your question. Could you provide more details or try rephrasing?")
 
     prompt = build_answer_prompt(resolved_question, request.sources, request.decisions, request.previous_messages, request.connections)
-    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources)
+    # Extract event_id from sources if available (first source's metadata)
+    event_id = None
+    if request.sources and len(request.sources) > 0:
+        # Try to extract from first source's metadata or document_id prefix
+        first_source = request.sources[0]
+        if hasattr(first_source, "metadata") and isinstance(first_source.metadata, dict):
+            event_id = first_source.metadata.get("event_id")
+    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources, event_id=event_id)
     return AskResponse(answer=answer)
 
 
@@ -3624,7 +3770,14 @@ async def ask_fund_stream(request: AskRequest, auth: AuthContext = Depends(get_a
 
                 yield f"data: {json.dumps({'status': 'Generating response...'})}\n\n"
 
-                async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or []):
+                # Extract event_id from sources if available
+                event_id = None
+                if request.sources and len(request.sources) > 0:
+                    first_source = request.sources[0]
+                    if hasattr(first_source, "metadata") and isinstance(first_source.metadata, dict):
+                        event_id = first_source.metadata.get("event_id")
+
+                async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or [], event_id=event_id):
                     yield f"data: {chunk}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:

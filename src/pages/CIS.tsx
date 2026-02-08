@@ -5011,6 +5011,153 @@ export default function CIS() {
     }
   }, []);
 
+  // ── Entity extraction helper: populate knowledge graph + KPIs from documents ──
+  const extractAndStoreEntities = useCallback(
+    async (documentId: string, rawContent: string, docTitle: string, eventId: string) => {
+      if (!rawContent?.trim() || !eventId) return;
+      
+      (async () => {
+        try {
+          console.log(`[EXTRACT] Extracting entities from doc ${documentId}`);
+          const extraction = await extractEntities({
+            document_title: docTitle,
+            document_text: rawContent.slice(0, 12000), // Limit for API
+            document_type: "pitch_deck", // Could be smarter — detect from filename
+          });
+
+          if (extraction.entities.length === 0 && extraction.relationships.length === 0 && extraction.kpis.length === 0) {
+            console.log("[EXTRACT] No entities/relationships/KPIs found");
+            return;
+          }
+
+          const userId = profile?.id || user?.id;
+          if (!userId) {
+            console.warn("[EXTRACT] No user ID, skipping entity storage");
+            return;
+          }
+
+          // ── Step 1: Insert entities (dedupe by normalized_name) ──
+          const entityMap = new Map<string, string>(); // normalized_name → entity_id
+          
+          for (const entity of extraction.entities) {
+            const normalized = entity.name.toLowerCase().trim();
+            // Check if entity already exists
+            const { data: existing } = await supabase
+              .from("kg_entities")
+              .select("id")
+              .eq("event_id", eventId)
+              .eq("normalized_name", normalized)
+              .eq("entity_type", entity.type)
+              .limit(1);
+
+            let entityId: string;
+            if (existing && existing.length > 0) {
+              entityId = existing[0].id;
+            } else {
+              const { data: newEntity, error: insertErr } = await supabase
+                .from("kg_entities")
+                .insert({
+                  event_id: eventId,
+                  entity_type: entity.type,
+                  name: entity.name,
+                  normalized_name: normalized,
+                  properties: entity.properties || {},
+                  confidence: entity.confidence,
+                  source_document_id: documentId,
+                  created_by: userId,
+                })
+                .select("id")
+                .single();
+              
+              if (insertErr || !newEntity) {
+                console.warn(`[EXTRACT] Failed to insert entity ${entity.name}:`, insertErr);
+                continue;
+              }
+              entityId = newEntity.id;
+            }
+            entityMap.set(normalized, entityId);
+          }
+
+          // ── Step 2: Insert relationships ──
+          for (const rel of extraction.relationships) {
+            const sourceNorm = rel.source_name.toLowerCase().trim();
+            const targetNorm = rel.target_name.toLowerCase().trim();
+            const sourceId = entityMap.get(sourceNorm);
+            const targetId = entityMap.get(targetNorm);
+
+            if (!sourceId || !targetId) {
+              console.warn(`[EXTRACT] Missing entity for relationship ${rel.source_name} → ${rel.target_name}`);
+              continue;
+            }
+
+            // Check if edge already exists
+            const { data: existingEdge } = await supabase
+              .from("kg_edges")
+              .select("id")
+              .eq("source_entity_id", sourceId)
+              .eq("target_entity_id", targetId)
+              .eq("relation_type", rel.relation_type)
+              .limit(1);
+
+            if (!existingEdge || existingEdge.length === 0) {
+              const { error: edgeErr } = await supabase.from("kg_edges").insert({
+                event_id: eventId,
+                source_entity_id: sourceId,
+                target_entity_id: targetId,
+                relation_type: rel.relation_type,
+                properties: rel.properties || {},
+                confidence: rel.confidence,
+                source_document_id: documentId,
+                created_by: userId,
+              });
+              if (edgeErr) {
+                console.warn(`[EXTRACT] Failed to insert edge:`, edgeErr);
+              }
+            }
+          }
+
+          // ── Step 3: Insert KPIs ──
+          for (const kpi of extraction.kpis) {
+            // Check if KPI already exists (same company + metric + period)
+            const { data: existingKpi } = await supabase
+              .from("company_kpis")
+              .select("id")
+              .eq("event_id", eventId)
+              .eq("company_name", kpi.company_name)
+              .eq("metric_name", kpi.metric_name)
+              .eq("period", kpi.period || "")
+              .limit(1);
+
+            if (!existingKpi || existingKpi.length === 0) {
+              const { error: kpiErr } = await supabase.from("company_kpis").insert({
+                event_id: eventId,
+                company_name: kpi.company_name,
+                metric_name: kpi.metric_name,
+                value: kpi.value,
+                unit: kpi.unit,
+                period: kpi.period || null,
+                metric_category: kpi.category,
+                confidence: kpi.confidence,
+                source_document_id: documentId,
+                extraction_method: "claude_extraction",
+                created_by: userId,
+              });
+              if (kpiErr) {
+                console.warn(`[EXTRACT] Failed to insert KPI:`, kpiErr);
+              }
+            }
+          }
+
+          console.log(`[EXTRACT] ✅ Stored ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
+        } catch (err) {
+          console.error("[EXTRACT] Entity extraction failed:", err);
+          // Non-fatal — document is saved, embeddings work
+        }
+      })();
+    },
+    [profile, user]
+  );
+
   const indexDocumentEmbeddings = useCallback(
     async (documentId: string, rawContent?: string | null, docTitle?: string | null) => {
       if (embeddingsDisabledRef.current) return;
@@ -5095,12 +5242,18 @@ export default function CIS() {
             }
           }
           console.log(`[EMBED] ✅ Indexed ${pairs.length} chunks for doc ${documentId} (contextual enrichment enabled)`);
+          
+          // ── Trigger entity extraction after embeddings are done ──
+          const eventId = activeEventId || (await ensureActiveEventId());
+          if (eventId && rawContent && docTitle) {
+            void extractAndStoreEntities(documentId, rawContent, docTitle, eventId);
+          }
         } catch (err) {
           disableEmbeddings(err instanceof Error ? err.message : "Embedding setup failed");
         }
       })();
     },
-    [buildParentChildChunks, disableEmbeddings]
+    [buildParentChildChunks, disableEmbeddings, extractAndStoreEntities, activeEventId, ensureActiveEventId]
   );
 
   const createAssistantMessage = useCallback(
@@ -5625,6 +5778,25 @@ export default function CIS() {
 
       const canSemantic = tokens.length >= 1;
 
+      // ── STEP 1: Query Router — analyze intent, entities, complexity, routing strategy ──
+      let queryAnalysis: QueryAnalysis | null = null;
+      try {
+        queryAnalysis = await analyzeQuery(question, threadMessages);
+        console.log("[ROUTER] Query analysis:", {
+          intent: queryAnalysis.intent,
+          complexity: queryAnalysis.complexity,
+          strategy: queryAnalysis.retrieval_strategy,
+          entities: queryAnalysis.entities.length,
+        });
+        // Use rewritten query from router if available
+        if (queryAnalysis.rewritten_query && queryAnalysis.rewritten_query !== question) {
+          finalSearchQuery = queryAnalysis.rewritten_query;
+        }
+      } catch (routerErr) {
+        console.warn("[ROUTER] Analysis failed, using fallback:", routerErr);
+        queryAnalysis = null;
+      }
+
       if (canSemantic) {
         try {
           // Add timeout to embedding query (15s max)
@@ -5665,14 +5837,60 @@ export default function CIS() {
               console.error("[ERROR] Semantic search RPC failed:", matchError);
               semanticFailed = true;
             } else if (matches && matches.length > 0) {
-              // PHASE 1: Lower similarity threshold for name queries (0.3 instead of 0.5)
-              // CRITICAL FIX: If hasName, use even lower threshold (0.15) to catch typos
-              const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
-              console.log("[DEBUG] Filtering with threshold:", { hasName, SIMILARITY_THRESHOLD, detectedNames });
-              semanticMatches = (matches as typeof semanticMatches).filter(
-                (m) => m.similarity >= SIMILARITY_THRESHOLD
-              );
-              console.log("[DEBUG] After threshold filter:", { remaining: semanticMatches.length });
+              // ── STEP 2: GraphRAG — relevance filtering + optional graph expansion ──
+              // Convert Supabase matches to GraphRAG format
+              const initialChunks = matches.map((m: any) => ({
+                id: m.document_id,
+                text: (m.parent_text || m.chunk_text || "").slice(0, 1500),
+                score: m.similarity,
+                metadata: { chunk_text: m.chunk_text, parent_text: m.parent_text },
+              }));
+
+              // Use GraphRAG if strategy requires it (vector+graph or vector+graph+structured)
+              const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
+              let finalChunks = initialChunks;
+
+              if (useGraphRAG && initialChunks.length > 0) {
+                try {
+                  console.log("[GRAPHRAG] Running relevance assessment + optional expansion");
+                  const graphragResult = await graphragRetrieve({
+                    query: finalSearchQuery,
+                    initial_chunks: initialChunks,
+                    min_relevant_chunks: queryAnalysis?.complexity && queryAnalysis.complexity > 0.6 ? 3 : 2,
+                  });
+                  finalChunks = graphragResult.relevant_chunks;
+                  console.log("[GRAPHRAG] Result:", {
+                    initial: initialChunks.length,
+                    relevant: finalChunks.length,
+                    expanded: graphragResult.expanded,
+                    assessed: graphragResult.total_assessed,
+                  });
+                } catch (graphragErr) {
+                  console.warn("[GRAPHRAG] Failed, using initial chunks:", graphragErr);
+                  finalChunks = initialChunks;
+                }
+              }
+
+              // Convert back to semanticMatches format (GraphRAG already filtered by relevance)
+              const chunkMap = new Map(finalChunks.map((c) => [c.id, c]));
+              let filteredMatches = matches
+                .filter((m: any) => chunkMap.has(m.document_id))
+                .map((m: any) => ({
+                  document_id: m.document_id,
+                  similarity: chunkMap.get(m.document_id)?.score ?? m.similarity,
+                  chunk_text: m.chunk_text,
+                  parent_text: m.parent_text,
+                }));
+
+              // Apply similarity threshold only if GraphRAG wasn't used (fallback)
+              if (!useGraphRAG) {
+                const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
+                console.log("[DEBUG] Filtering with threshold:", { hasName, SIMILARITY_THRESHOLD, detectedNames });
+                filteredMatches = filteredMatches.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+              }
+              
+              semanticMatches = filteredMatches;
+              console.log("[DEBUG] Final semantic matches:", { count: semanticMatches.length });
               semanticMatches.forEach((m) => {
                 if (m.parent_text?.trim()) {
                   snippetByDocId.set(m.document_id, m.parent_text);
