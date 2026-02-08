@@ -3886,6 +3886,202 @@ async def rewrite_query_endpoint(request: RewriteQueryRequest):
     rewritten = await rewrite_query_with_llm(question, request.previous_messages or [])
     return RewriteQueryResponse(rewritten_question=rewritten)
 
+
+# ---------------------------------------------------------------------------
+#  Adaptive Query Router — entity extraction, intent, complexity, routing
+# ---------------------------------------------------------------------------
+
+class QueryEntity(BaseModel):
+    name: str
+    type: str = Field(description="company, person, fund, metric, sector, unknown")
+
+class QueryAnalysisResponse(BaseModel):
+    entities: List[QueryEntity] = Field(default_factory=list)
+    intent: str = Field(default="factual", description="factual, compare, summarize, diligence, forecast, relationship, meta, conversational")
+    complexity: float = Field(default=0.3, ge=0.0, le=1.0)
+    retrieval_strategy: str = Field(default="vector", description="vector, vector+graph, vector+graph+structured, none")
+    rewritten_query: str = ""
+
+class AnalyzeQueryRequest(BaseModel):
+    question: str
+    previous_messages: List[ChatMessage] = Field(default_factory=list)
+
+
+@app.post("/analyze-query", response_model=QueryAnalysisResponse)
+async def analyze_query_endpoint(request: AnalyzeQueryRequest):
+    """
+    Adaptive retrieval router: extracts entities, classifies intent,
+    scores complexity, and decides which retrieval stores to hit.
+    Uses Haiku for speed (~200ms).
+    """
+    question = (request.question or "").strip()
+    if not question:
+        return QueryAnalysisResponse(rewritten_query=question)
+
+    # First do query rewriting
+    rewritten = await rewrite_query_with_llm(question, request.previous_messages or [])
+
+    # Check if it's a meta/greeting question (fast path — no LLM needed)
+    if is_meta_question(question):
+        return QueryAnalysisResponse(
+            entities=[],
+            intent="meta" if len(question.split()) > 3 else "conversational",
+            complexity=0.1,
+            retrieval_strategy="none",
+            rewritten_query=rewritten,
+        )
+
+    # Use Claude Haiku for entity extraction + intent classification in one call
+    if _anthropic_sdk_available and ANTHROPIC_API_KEY:
+        try:
+            client = _get_anthropic_async_client()
+            analysis_prompt = (
+                f"Analyze this VC intelligence query:\n"
+                f"Query: {question}\n\n"
+                "Return JSON with:\n"
+                '- "entities": [{{"name": "...", "type": "company|person|fund|metric|sector|unknown"}}]\n'
+                '- "intent": one of "factual", "compare", "summarize", "diligence", "forecast", "relationship", "meta", "conversational"\n'
+                '- "complexity": 0.0-1.0 (how much retrieval is needed)\n'
+                '- "retrieval_strategy": one of "vector", "vector+graph", "vector+graph+structured", "none"\n\n'
+                "Rules:\n"
+                '- "compare" = comparing 2+ entities\n'
+                '- "diligence" = risk assessment, red flags, deep analysis\n'
+                '- "relationship" = company connections, partnerships, who knows who\n'
+                '- "forecast" = growth projections, market potential, forward-looking\n'
+                '- "factual" = simple lookup, what is X\n'
+                '- complexity > 0.6 means multiple entities or multi-hop reasoning\n'
+                '- "vector+graph" when relationships matter\n'
+                '- "vector+graph+structured" when numbers/KPIs matter\n'
+                "Return ONLY valid JSON."
+            )
+
+            message = await client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=300,
+                temperature=0.0,
+                messages=[{"role": "user", "content": analysis_prompt}],
+            )
+            raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+
+            # Parse JSON from response
+            try:
+                # Try direct parse
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                # Try extracting JSON from markdown code block
+                json_match = re.search(r'\{[\s\S]*\}', raw)
+                if json_match:
+                    data = json.loads(json_match.group())
+                else:
+                    data = {}
+
+            entities = [
+                QueryEntity(name=e.get("name", ""), type=e.get("type", "unknown"))
+                for e in data.get("entities", [])
+                if e.get("name")
+            ]
+
+            return QueryAnalysisResponse(
+                entities=entities,
+                intent=data.get("intent", "factual"),
+                complexity=float(data.get("complexity", 0.3)),
+                retrieval_strategy=data.get("retrieval_strategy", "vector"),
+                rewritten_query=rewritten,
+            )
+        except Exception as e:
+            print(f"[ROUTER] Query analysis failed: {e}")
+
+    # Fallback: keyword-based heuristic
+    q = question.lower()
+    intent = "factual"
+    strategy = "vector"
+    complexity = 0.3
+
+    connection_words = ["connect", "partner", "introduce", "relationship", "linked", "network"]
+    compare_words = ["compare", "vs", "versus", "difference", "better"]
+    diligence_words = ["risk", "diligence", "red flag", "concern", "weakness", "threat"]
+    forecast_words = ["growth", "potential", "forecast", "predict", "future", "projection"]
+
+    if any(w in q for w in connection_words):
+        intent, strategy = "relationship", "vector+graph"
+    elif any(w in q for w in compare_words):
+        intent, strategy, complexity = "compare", "vector+graph", 0.7
+    elif any(w in q for w in diligence_words):
+        intent, strategy, complexity = "diligence", "vector+graph+structured", 0.8
+    elif any(w in q for w in forecast_words):
+        intent, strategy, complexity = "forecast", "vector+graph+structured", 0.7
+
+    return QueryAnalysisResponse(
+        entities=[],
+        intent=intent,
+        complexity=complexity,
+        retrieval_strategy=strategy,
+        rewritten_query=rewritten,
+    )
+
+
+# ---------------------------------------------------------------------------
+#  RAG Eval Logging — track retrieval quality for regression detection
+# ---------------------------------------------------------------------------
+
+class RAGEvalLogEntry(BaseModel):
+    question: str = ""
+    retrieval_strategy: str = ""
+    chunks_retrieved: int = 0
+    chunks_cited: int = 0
+    model_used: str = ""
+    latency_ms: float = 0.0
+    user_feedback: Optional[str] = None  # "helpful" | "not_helpful"
+
+
+# In-memory buffer (flush to DB or file periodically)
+_rag_eval_buffer: List[Dict[str, Any]] = []
+
+
+@app.post("/rag-eval/log")
+async def log_rag_eval(entry: RAGEvalLogEntry):
+    """Log a RAG evaluation entry for quality tracking and regression detection."""
+    entry_dict = entry.dict()
+    entry_dict["timestamp"] = time.time()
+    _rag_eval_buffer.append(entry_dict)
+
+    # Keep buffer manageable (flush oldest if > 1000)
+    if len(_rag_eval_buffer) > 1000:
+        _rag_eval_buffer.pop(0)
+
+    return {"status": "logged", "buffer_size": len(_rag_eval_buffer)}
+
+
+@app.get("/rag-eval/stats")
+async def get_rag_eval_stats():
+    """Get aggregated RAG quality stats from the eval buffer."""
+    if not _rag_eval_buffer:
+        return {"total_queries": 0, "message": "No eval data yet"}
+
+    total = len(_rag_eval_buffer)
+    avg_chunks_retrieved = sum(e.get("chunks_retrieved", 0) for e in _rag_eval_buffer) / total
+    avg_chunks_cited = sum(e.get("chunks_cited", 0) for e in _rag_eval_buffer) / total
+    avg_latency = sum(e.get("latency_ms", 0) for e in _rag_eval_buffer) / total
+
+    helpful = sum(1 for e in _rag_eval_buffer if e.get("user_feedback") == "helpful")
+    not_helpful = sum(1 for e in _rag_eval_buffer if e.get("user_feedback") == "not_helpful")
+
+    strategies = {}
+    for e in _rag_eval_buffer:
+        s = e.get("retrieval_strategy", "unknown")
+        strategies[s] = strategies.get(s, 0) + 1
+
+    return {
+        "total_queries": total,
+        "avg_chunks_retrieved": round(avg_chunks_retrieved, 1),
+        "avg_chunks_cited": round(avg_chunks_cited, 1),
+        "avg_latency_ms": round(avg_latency, 0),
+        "feedback": {"helpful": helpful, "not_helpful": not_helpful, "no_feedback": total - helpful - not_helpful},
+        "retrieval_strategies": strategies,
+        "citation_rate": round(avg_chunks_cited / max(avg_chunks_retrieved, 1), 2),
+    }
+
+
 @app.post("/embed/query", response_model=EmbedResponse)
 async def embed_query(request: EmbedRequest):
     text = (request.text or "").strip()
@@ -3943,6 +4139,126 @@ async def embed_query(request: EmbedRequest):
             status_code=503,
             detail=f"Embedding generation failed: {str(e)}"
         )
+
+
+# ---------------------------------------------------------------------------
+#  Entity Extraction — auto-populate knowledge graph from documents
+# ---------------------------------------------------------------------------
+
+class ExtractedEntity(BaseModel):
+    name: str
+    type: str = Field(description="company, person, fund, round, sector, metric, location")
+    properties: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = 0.8
+
+class ExtractedRelationship(BaseModel):
+    source_name: str
+    target_name: str
+    relation_type: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = 0.8
+
+class ExtractedKPI(BaseModel):
+    company_name: str
+    metric_name: str
+    value: float
+    unit: str = "USD"
+    period: str = ""
+    category: str = "financial"
+    confidence: float = 0.8
+
+class EntityExtractionRequest(BaseModel):
+    document_title: str = ""
+    document_text: str
+    document_type: str = ""  # pitch_deck, memo, email, report
+
+class EntityExtractionResponse(BaseModel):
+    entities: List[ExtractedEntity] = []
+    relationships: List[ExtractedRelationship] = []
+    kpis: List[ExtractedKPI] = []
+
+
+@app.post("/extract-entities", response_model=EntityExtractionResponse)
+async def extract_entities(request: EntityExtractionRequest):
+    """
+    Extract entities, relationships, and KPIs from a document using Claude.
+    This populates the knowledge graph and structured KPI store.
+    Call this after document ingestion for each new document.
+    """
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return EntityExtractionResponse()
+
+    text = (request.document_text or "").strip()[:8000]
+    if not text:
+        return EntityExtractionResponse()
+
+    prompt = (
+        f"Document title: {request.document_title}\n"
+        f"Document type: {request.document_type or 'unknown'}\n\n"
+        f"Text:\n{text}\n\n"
+        "Extract ALL of the following from this VC/investment document:\n\n"
+        "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
+        '   Format: [{{"name": "...", "type": "company|person|fund|round|sector|location", '
+        '"properties": {{"industry": "...", "role": "...", etc.}}, "confidence": 0.0-1.0}}]\n\n'
+        "2. RELATIONSHIPS between entities:\n"
+        '   Format: [{{"source_name": "...", "target_name": "...", '
+        '"relation_type": "founded|works_at|invested_in|raised|led_round|partner_of|'
+        'competitor_of|acquired|operates_in|located_in|board_member|advisor|portfolio_company", '
+        '"properties": {{}}, "confidence": 0.0-1.0}}]\n\n'
+        "3. KPIs — any numbers, metrics, financial data:\n"
+        '   Format: [{{"company_name": "...", "metric_name": "revenue|arr|mrr|valuation|'
+        'burn_rate|headcount|users|growth_rate|raise_amount|etc.", '
+        '"value": 123.0, "unit": "USD|%|count", "period": "2024-Q3", '
+        '"category": "financial|growth|fundraising|operational|market|tokenomics", '
+        '"confidence": 0.0-1.0}}]\n\n'
+        'Return JSON with keys: "entities", "relationships", "kpis". Return ONLY valid JSON.'
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        # Use Sonnet for higher quality extraction
+        message = await client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=4000,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                return EntityExtractionResponse()
+
+        entities = [
+            ExtractedEntity(**e)
+            for e in data.get("entities", [])
+            if e.get("name")
+        ]
+        relationships = [
+            ExtractedRelationship(**r)
+            for r in data.get("relationships", [])
+            if r.get("source_name") and r.get("target_name")
+        ]
+        kpis = [
+            ExtractedKPI(**k)
+            for k in data.get("kpis", [])
+            if k.get("company_name") and k.get("metric_name")
+        ]
+
+        return EntityExtractionResponse(
+            entities=entities,
+            relationships=relationships,
+            kpis=kpis,
+        )
+
+    except Exception as e:
+        print(f"[EXTRACT] Entity extraction failed: {e}")
+        return EntityExtractionResponse()
 
 
 # ---------------------------------------------------------------------------

@@ -122,7 +122,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, type AIConversionResponse, type AskFundConnection } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1933,10 +1933,10 @@ function SourcesTab({
             // Non-fatal - document is saved, source creation can fail
           }
 
-          // Index embeddings if we have content
+          // Index embeddings if we have content (with contextual enrichment)
           if (rawContent && docRecord.id) {
             try {
-              await indexDocumentEmbeddings(docRecord.id, rawContent);
+              await indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name);
             } catch (embedErr) {
               console.error("Error indexing embeddings:", embedErr);
               // Non-fatal - document is saved
@@ -2151,7 +2151,7 @@ function SourcesTab({
               storage_path: docRecord.storage_path || null,
             });
             toast({ title: "Document saved", description: "Raw content stored in Documents." });
-            await indexDocumentEmbeddings(docRecord.id, rawContent || null);
+            await indexDocumentEmbeddings(docRecord.id, rawContent || null, docRecord.title || cleanedTitle);
             assignmentDoc = { id: docRecord.id, title: docRecord.title || cleanedTitle };
           }
         } catch (err) {
@@ -4335,7 +4335,7 @@ export default function CIS() {
         return;
       }
 
-      await indexDocumentEmbeddings(docId, input.rawContent || null);
+      await indexDocumentEmbeddings(docId, input.rawContent || null, docRecord?.title || input.title || null);
       setDocuments((prev) => [
         {
           id: docId,
@@ -5012,7 +5012,7 @@ export default function CIS() {
   }, []);
 
   const indexDocumentEmbeddings = useCallback(
-    async (documentId: string, rawContent?: string | null) => {
+    async (documentId: string, rawContent?: string | null, docTitle?: string | null) => {
       if (embeddingsDisabledRef.current) return;
       if (!rawContent?.trim()) return;
       (async () => {
@@ -5024,13 +5024,39 @@ export default function CIS() {
             .limit(1);
           if (existing && existing.length > 0) return;
 
-          const MAX_EMBED_CHARS = 8000;
+          const MAX_EMBED_CHARS = 12000; // Increased for better coverage
           const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
           const pairs = buildParentChildChunks(truncated);
 
-          for (const pair of pairs) {
+          // Build a short document summary for contextual headers (first 500 chars)
+          const docSummary = rawContent.slice(0, 500);
+          const title = docTitle || "Untitled document";
+
+          for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
             try {
-              const embedding = await embedQuery(pair.childText, "document");
+              // ── Contextual Retrieval: enrich chunk with a Claude-generated header ──
+              // This dramatically improves embedding quality (per Anthropic's paper)
+              let textToEmbed = pair.childText;
+              let contextualHeader = "";
+              try {
+                const ctx = await contextualizeChunk({
+                  document_title: title,
+                  document_summary: docSummary,
+                  chunk_text: pair.childText,
+                  chunk_index: i,
+                  total_chunks: pairs.length,
+                });
+                if (ctx.enriched_chunk) {
+                  textToEmbed = ctx.enriched_chunk;
+                  contextualHeader = ctx.contextual_header || "";
+                }
+              } catch {
+                // Contextual enrichment failed — embed raw chunk (still works, just less precise)
+                console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length}`);
+              }
+
+              const embedding = await embedQuery(textToEmbed, "document");
               if (!embedding.length) continue;
 
               const { error } = await supabase.from("document_embeddings").insert({
@@ -5040,16 +5066,35 @@ export default function CIS() {
                 parent_index: pair.parentIndex,
                 child_index: pair.childIndex,
                 embedding,
+                // Store the contextual header for later retrieval debugging
+                ...(contextualHeader ? { contextual_header: contextualHeader } : {}),
               });
               if (error) {
-                disableEmbeddings(error.message || "Embedding insert failed");
-                return;
+                // If contextual_header column doesn't exist yet, retry without it
+                if (error.message?.includes("contextual_header")) {
+                  const { error: retryError } = await supabase.from("document_embeddings").insert({
+                    document_id: documentId,
+                    chunk_text: pair.childText,
+                    parent_text: pair.parentText,
+                    parent_index: pair.parentIndex,
+                    child_index: pair.childIndex,
+                    embedding,
+                  });
+                  if (retryError) {
+                    disableEmbeddings(retryError.message || "Embedding insert failed");
+                    return;
+                  }
+                } else {
+                  disableEmbeddings(error.message || "Embedding insert failed");
+                  return;
+                }
               }
             } catch (chunkErr) {
               disableEmbeddings(chunkErr instanceof Error ? chunkErr.message : "Embedding error");
               return;
             }
           }
+          console.log(`[EMBED] ✅ Indexed ${pairs.length} chunks for doc ${documentId} (contextual enrichment enabled)`);
         } catch (err) {
           disableEmbeddings(err instanceof Error ? err.message : "Embedding setup failed");
         }

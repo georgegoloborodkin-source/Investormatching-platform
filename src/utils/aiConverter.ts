@@ -533,6 +533,263 @@ export async function convertFileWithAI(
   }
 }
 
+// ---------------------------------------------------------------------------
+//  Step 1: Contextual chunking — call /contextualize-chunk before embedding
+// ---------------------------------------------------------------------------
+
+export interface ContextualizeChunkInput {
+  document_title: string;
+  document_summary: string;
+  chunk_text: string;
+  chunk_index: number;
+  total_chunks: number;
+}
+
+export interface ContextualizeChunkResult {
+  enriched_chunk: string;
+  contextual_header: string;
+}
+
+export async function contextualizeChunk(
+  input: ContextualizeChunkInput
+): Promise<ContextualizeChunkResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/contextualize-chunk`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      20000 // 20s — Haiku is fast but network can be slow
+    );
+    if (!response.ok) {
+      // Fall back to raw chunk
+      return { enriched_chunk: input.chunk_text, contextual_header: "" };
+    }
+    return await response.json();
+  } catch {
+    // Fail silently — return raw chunk
+    return { enriched_chunk: input.chunk_text, contextual_header: "" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Step 2: GraphRAG retrieval — call /graphrag/retrieve for relevance filtering
+// ---------------------------------------------------------------------------
+
+export interface GraphRAGChunk {
+  id: string;
+  text: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GraphRAGResult {
+  relevant_chunks: GraphRAGChunk[];
+  expanded: boolean;
+  total_assessed: number;
+}
+
+export async function graphragRetrieve(input: {
+  query: string;
+  initial_chunks: GraphRAGChunk[];
+  neighboring_chunks?: GraphRAGChunk[];
+  min_relevant_chunks?: number;
+}): Promise<GraphRAGResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/graphrag/retrieve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: input.query,
+          initial_chunks: input.initial_chunks,
+          neighboring_chunks: input.neighboring_chunks || [],
+          min_relevant_chunks: input.min_relevant_chunks ?? 2,
+        }),
+      },
+      30000 // 30s — Claude needs to assess each chunk
+    );
+    if (!response.ok) {
+      return { relevant_chunks: input.initial_chunks, expanded: false, total_assessed: 0 };
+    }
+    return await response.json();
+  } catch {
+    return { relevant_chunks: input.initial_chunks, expanded: false, total_assessed: 0 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Step 3: Query router — entity extraction, intent, complexity, routing
+// ---------------------------------------------------------------------------
+
+export type QueryIntent =
+  | "factual"       // Simple lookup: "What is Giga Energy?"
+  | "compare"       // Compare entities: "Compare Ridelink vs Weego"
+  | "summarize"     // Summarize a doc/company
+  | "diligence"     // Due diligence: "risks of investing in X"
+  | "forecast"      // Forward-looking: "What's the growth potential"
+  | "relationship"  // About connections: "Who is connected to X"
+  | "meta"          // About the system: "What can you do?"
+  | "conversational"; // Greeting/chat
+
+export interface QueryAnalysis {
+  entities: Array<{ name: string; type: "company" | "person" | "fund" | "metric" | "sector" | "unknown" }>;
+  intent: QueryIntent;
+  complexity: number; // 0.0–1.0
+  retrieval_strategy: "vector" | "vector+graph" | "vector+graph+structured" | "none";
+  rewritten_query: string;
+}
+
+export async function analyzeQuery(
+  question: string,
+  previousMessages?: ChatMessage[]
+): Promise<QueryAnalysis> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/analyze-query`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, previous_messages: previousMessages || [] }),
+      },
+      10000
+    );
+    if (!response.ok) {
+      // Fallback: simple heuristic
+      return fallbackQueryAnalysis(question);
+    }
+    return await response.json();
+  } catch {
+    return fallbackQueryAnalysis(question);
+  }
+}
+
+function fallbackQueryAnalysis(question: string): QueryAnalysis {
+  const q = question.toLowerCase();
+  const connectionWords = ["connect", "partner", "introduce", "relationship", "linked"];
+  const compareWords = ["compare", "vs", "versus", "difference", "better"];
+  const diligenceWords = ["risk", "diligence", "red flag", "concern", "weakness"];
+  const forecastWords = ["growth", "potential", "forecast", "predict", "future"];
+  const metaWords = ["what can you", "your purpose", "help me", "what do you"];
+
+  let intent: QueryIntent = "factual";
+  let strategy: QueryAnalysis["retrieval_strategy"] = "vector";
+
+  if (metaWords.some((w) => q.includes(w))) { intent = "meta"; strategy = "none"; }
+  else if (connectionWords.some((w) => q.includes(w))) { intent = "relationship"; strategy = "vector+graph"; }
+  else if (compareWords.some((w) => q.includes(w))) { intent = "compare"; strategy = "vector+graph"; }
+  else if (diligenceWords.some((w) => q.includes(w))) { intent = "diligence"; strategy = "vector+graph+structured"; }
+  else if (forecastWords.some((w) => q.includes(w))) { intent = "forecast"; strategy = "vector+graph+structured"; }
+  else { intent = "factual"; strategy = "vector"; }
+
+  return {
+    entities: [],
+    intent,
+    complexity: q.split(" ").length > 15 ? 0.8 : 0.3,
+    retrieval_strategy: strategy,
+    rewritten_query: question,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Step 7 (partial): RAG eval logging
+// ---------------------------------------------------------------------------
+
+export interface RAGEvalEntry {
+  question: string;
+  retrieval_strategy: string;
+  chunks_retrieved: number;
+  chunks_cited: number;
+  model_used: string;
+  latency_ms: number;
+  user_feedback?: "helpful" | "not_helpful" | null;
+}
+
+export async function logRAGEval(entry: RAGEvalEntry): Promise<void> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    await fetchWithTimeout(
+      `${baseUrl}/rag-eval/log`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      },
+      5000
+    );
+  } catch {
+    // Non-critical — don't block the user
+    console.warn("[RAG eval] Failed to log entry");
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Entity Extraction — auto-populate knowledge graph + KPIs from documents
+// ---------------------------------------------------------------------------
+
+export interface ExtractedEntity {
+  name: string;
+  type: "company" | "person" | "fund" | "round" | "sector" | "metric" | "location";
+  properties: Record<string, unknown>;
+  confidence: number;
+}
+
+export interface ExtractedRelationship {
+  source_name: string;
+  target_name: string;
+  relation_type: string;
+  properties: Record<string, unknown>;
+  confidence: number;
+}
+
+export interface ExtractedKPI {
+  company_name: string;
+  metric_name: string;
+  value: number;
+  unit: string;
+  period: string;
+  category: string;
+  confidence: number;
+}
+
+export interface EntityExtractionResult {
+  entities: ExtractedEntity[];
+  relationships: ExtractedRelationship[];
+  kpis: ExtractedKPI[];
+}
+
+export async function extractEntities(input: {
+  document_title: string;
+  document_text: string;
+  document_type?: string;
+}): Promise<EntityExtractionResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/extract-entities`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      45000 // 45s — Sonnet extraction can be slow on large docs
+    );
+    if (!response.ok) {
+      return { entities: [], relationships: [], kpis: [] };
+    }
+    return await response.json();
+  } catch {
+    console.warn("[extractEntities] Failed");
+    return { entities: [], relationships: [], kpis: [] };
+  }
+}
+
 /**
  * Check if converter API is available
  */
