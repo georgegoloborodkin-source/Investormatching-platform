@@ -321,7 +321,19 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY") or os.getenv("VOYAGER_API_KEY")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
+
+# Auto-detect embedding dimension based on model
+# Voyage model dimensions: voyage-3-lite=512, voyage-3=1024, voyage-large-2=1536, voyage-finance-2=1024
+_voyage_model_dims = {
+    "voyage-3-lite": 512,
+    "voyage-3": 1024,
+    "voyage-large-2": 1536,
+    "voyage-finance-2": 1024,
+    "voyage-code-3": 1024,
+    "voyage-law-2": 1024,
+}
+_auto_dim = _voyage_model_dims.get(VOYAGE_EMBEDDING_MODEL, 1024)
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", str(_auto_dim)))
 
 # Auto-detect embedding provider: use explicit env var, or pick the first available key
 _explicit_provider = os.getenv("EMBEDDINGS_PROVIDER", "").lower().strip()
