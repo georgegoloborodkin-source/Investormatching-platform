@@ -4645,7 +4645,11 @@ async def suggest_connections(request: SuggestConnectionsRequest, auth: AuthCont
     suggest new company connections the user hasn't logged yet.
     """
     if not _anthropic_sdk_available or not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=503, detail="Anthropic SDK or API key not available.")
+        # Return empty suggestions instead of error (graceful degradation)
+        return SuggestConnectionsResponse(
+            suggestions=[],
+            context_summary="Connection suggestions require Anthropic API key. Please configure ANTHROPIC_API_KEY in your environment."
+        )
 
     # Build context about existing connections
     existing_lines: List[str] = []

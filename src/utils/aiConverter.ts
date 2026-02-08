@@ -862,6 +862,8 @@ export async function suggestConnections(input: {
     };
   } catch (error) {
     console.error("[suggestConnections] Error:", error);
+    // Return empty suggestions if backend is unavailable
+    return { suggestions: [], contextSummary: "Connection suggestions unavailable. Please check backend configuration." };
     return { suggestions: [], contextSummary: "Failed to get suggestions." };
   }
 }

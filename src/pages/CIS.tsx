@@ -109,6 +109,8 @@ import {
   getSourcesByEvent,
   getSourceFoldersByEvent,
   getCompanyConnectionsByEvent,
+  getPendingRelationshipReviews,
+  updateKgEdgeReview,
   insertDecision,
   insertDocument,
   insertSource,
