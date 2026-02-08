@@ -232,21 +232,37 @@ export async function getCompanyConnectionsByEvent(eventId: string) {
 
 // Get pending relationship reviews from knowledge graph
 export async function getPendingRelationshipReviews(eventId: string) {
-  return supabase
-    .from("kg_edges")
-    .select(`
-      id,
-      relation_type,
-      confidence,
-      properties,
-      source_document_id,
-      created_at,
-      source_entity:kg_entities!kg_edges_source_entity_id_fkey(name, entity_type),
-      target_entity:kg_entities!kg_edges_target_entity_id_fkey(name, entity_type)
-    `)
-    .eq("event_id", eventId)
-    .eq("review_status", "pending")
-    .order("created_at", { ascending: false });
+  try {
+    // First, try to get edges with joined entities
+    const result = await supabase
+      .from("kg_edges")
+      .select(`
+        id,
+        relation_type,
+        confidence,
+        properties,
+        source_document_id,
+        created_at,
+        source_entity_id,
+        target_entity_id,
+        source_entity:kg_entities!source_entity_id(name, entity_type),
+        target_entity:kg_entities!target_entity_id(name, entity_type)
+      `)
+      .eq("event_id", eventId)
+      .eq("review_status", "pending")
+      .order("created_at", { ascending: false });
+    
+    // If the query fails (e.g., review_status column doesn't exist), return empty
+    if (result.error) {
+      console.warn("[getPendingRelationshipReviews] Query failed:", result.error);
+      return { data: [], error: null };
+    }
+    
+    return result;
+  } catch (error) {
+    console.warn("[getPendingRelationshipReviews] Exception:", error);
+    return { data: [], error: null };
+  }
 }
 
 // Update kg_edge review status

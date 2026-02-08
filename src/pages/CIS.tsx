@@ -4463,18 +4463,23 @@ export default function CIS() {
       // Load company connections for graph view
       setCompanyConnections((connectionsRes.data || []) as typeof companyConnections);
       
-      // Load pending relationship reviews
-      const pendingData = (pendingReviewsRes.data || []).map((r: any) => ({
-        id: r.id,
-        relation_type: r.relation_type,
-        confidence: r.confidence,
-        properties: r.properties || {},
-        source_document_id: r.source_document_id,
-        created_at: r.created_at,
-        source_entity: r.source_entity,
-        target_entity: r.target_entity,
-      }));
-      setPendingReviews(pendingData);
+      // Load pending relationship reviews (handle errors gracefully if migration not run)
+      if (pendingReviewsRes.error) {
+        console.warn("[PENDING REVIEWS] Query failed (migration may not be run):", pendingReviewsRes.error);
+        setPendingReviews([]);
+      } else {
+        const pendingData = (pendingReviewsRes.data || []).map((r: any) => ({
+          id: r.id,
+          relation_type: r.relation_type,
+          confidence: r.confidence || 0.5,
+          properties: r.properties || {},
+          source_document_id: r.source_document_id,
+          created_at: r.created_at,
+          source_entity: r.source_entity || null,
+          target_entity: r.target_entity || null,
+        }));
+        setPendingReviews(pendingData);
+      }
 
       // Set up real-time subscriptions for documents
       documentsChannel = supabase
@@ -8070,9 +8075,48 @@ export default function CIS() {
             <ConnectionsGraphTab
               connections={companyConnections}
               documents={documents}
+              pendingReviews={pendingReviews}
               onUpdateStatus={handleUpdateConnectionStatus}
               onAddConnection={() => setLogDecisionDialogOpen(true)}
               onSuggestConnections={handleSuggestConnections}
+              onReviewPending={async (edgeId: string, status: "approved" | "rejected") => {
+                const userId = profile?.id || user?.id;
+                if (!userId) {
+                  toast({ title: "Not authenticated", variant: "destructive" });
+                  return;
+                }
+                try {
+                  const { error } = await updateKgEdgeReview(edgeId, status, userId);
+                  if (error) {
+                    toast({ title: "Review failed", description: error.message, variant: "destructive" });
+                  } else {
+                    toast({ title: status === "approved" ? "Connection approved" : "Connection rejected" });
+                    // Reload pending reviews
+                    if (activeEventId) {
+                      const { data } = await getPendingRelationshipReviews(activeEventId);
+                      if (data) {
+                        setPendingReviews(data.map((r: any) => ({
+                          id: r.id,
+                          relation_type: r.relation_type,
+                          confidence: r.confidence || 0.5,
+                          properties: r.properties || {},
+                          source_document_id: r.source_document_id,
+                          created_at: r.created_at,
+                          source_entity: r.source_entity || null,
+                          target_entity: r.target_entity || null,
+                        })));
+                      }
+                      // Reload connections (approved ones will auto-create)
+                      const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
+                      if (connData) {
+                        setCompanyConnections(connData as typeof companyConnections);
+                      }
+                    }
+                  }
+                } catch (err) {
+                  toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+                }
+              }}
             />
             {/* AI Suggested Connections */}
             {(suggestionsLoading || aiSuggestions.length > 0) && (
