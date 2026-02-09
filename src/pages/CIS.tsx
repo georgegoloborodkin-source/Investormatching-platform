@@ -8481,26 +8481,76 @@ function LogDecisionForm({
     }
   }, [pendingContext?.aiReasoning]);
 
-  // Extract company names from AI reasoning
+  // Extract company names from AI reasoning using known document titles + bold patterns
   useEffect(() => {
-    if (pendingContext?.aiReasoning) {
-      // Try to extract company names from the reasoning
-      const companyPatterns = [
-        /([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:would be|could be|should|might|can)\s+(?:useful|helpful|good|great)\s+(?:to\s+)?(?:connect|partner|work)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
-        /suggest(?:s|ing)?\s+(?:that\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:and|with)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
-        /connect(?:ing)?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:to|with)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
-      ];
-      
-      for (const pattern of companyPatterns) {
-        const match = pendingContext.aiReasoning.match(pattern);
-        if (match) {
-          setSourceCompany(match[1] || "");
-          setTargetCompany(match[2] || "");
-          break;
-        }
+    if (!pendingContext?.aiReasoning) return;
+    const text = pendingContext.aiReasoning;
+
+    // Strategy 1: Match known company names from uploaded documents
+    const knownNames = documents
+      .map((d) => d.title?.trim())
+      .filter((t): t is string => !!t && t.length > 1 && t.length < 60);
+
+    // Find which known names appear in the AI text (case-insensitive)
+    const foundNames = knownNames.filter((name) =>
+      text.toLowerCase().includes(name.toLowerCase())
+    );
+
+    if (foundNames.length >= 2) {
+      setSourceCompany(foundNames[0]);
+      setTargetCompany(foundNames[1]);
+      return;
+    }
+
+    // Strategy 2: Extract **bold** company names from markdown (Claude often bolds company names)
+    const boldPattern = /\*\*([A-Z][a-zA-Z0-9 ]+?)\*\*/g;
+    const boldMatches: string[] = [];
+    let bm;
+    while ((bm = boldPattern.exec(text)) !== null) {
+      const name = bm[1].trim();
+      // Skip common non-company bold words
+      if (!/^(Note|Warning|Status|Connection|Type|Why|How|Key|Summary|Position|Duration|Schedule|Current|Potential|Recommended)$/i.test(name)) {
+        boldMatches.push(name);
       }
     }
-  }, [pendingContext?.aiReasoning]);
+    if (boldMatches.length >= 2) {
+      setSourceCompany(boldMatches[0]);
+      setTargetCompany(boldMatches[1]);
+      return;
+    }
+
+    // Strategy 3: Look for "X → Y" or "X and Y" connection patterns
+    const arrowMatch = text.match(/([A-Z][a-zA-Z0-9 ]+?)\s*[→→>]\s*([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\()/);
+    if (arrowMatch) {
+      setSourceCompany(arrowMatch[1].trim());
+      setTargetCompany(arrowMatch[2].trim());
+      return;
+    }
+
+    // Strategy 4: Classic sentence patterns (broader than before)
+    const sentencePatterns = [
+      /connect(?:ing)?\s+([A-Z][a-zA-Z0-9 ]+?)\s+(?:to|with)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
+      /partner(?:ship)?\s+(?:between|with)\s+([A-Z][a-zA-Z0-9 ]+?)\s+(?:and|&)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
+      /([A-Z][a-zA-Z0-9 ]+?)\s+(?:could|should|would|can|might)\s+(?:partner|connect|collaborate|work)\s+with\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
+      /introduce\s+([A-Z][a-zA-Z0-9 ]+?)\s+to\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
+    ];
+    for (const pattern of sentencePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        setSourceCompany(match[1].trim());
+        setTargetCompany(match[2].trim());
+        return;
+      }
+    }
+
+    // Strategy 5: If we found exactly 1 known name, use it as source
+    if (foundNames.length === 1) {
+      setSourceCompany(foundNames[0]);
+      // Try to find one bold name that's different
+      const other = boldMatches.find((b) => b.toLowerCase() !== foundNames[0].toLowerCase());
+      if (other) setTargetCompany(other);
+    }
+  }, [pendingContext?.aiReasoning, documents]);
 
   const handleSubmit = async () => {
     if (!sourceCompany.trim() || !targetCompany.trim()) {
