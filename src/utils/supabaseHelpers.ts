@@ -231,6 +231,60 @@ export async function getCompanyConnectionsByEvent(eventId: string) {
 }
 
 // Get pending relationship reviews from knowledge graph
+export async function getCompanyCards(eventId: string) {
+  // Get all company entities for this event
+  const { data: entities, error: entitiesError } = await supabase
+    .from("kg_entities")
+    .select("id, name, properties, event_id")
+    .eq("event_id", eventId)
+    .eq("entity_type", "company")
+    .order("name", { ascending: true });
+  
+  if (entitiesError || !entities) {
+    return { data: [], error: entitiesError };
+  }
+  
+  // For each company, get its card data
+  const cards = await Promise.all(
+    entities.map(async (entity) => {
+      const { data: cardData, error: cardError } = await supabase
+        .rpc("get_company_card", {
+          company_entity_id: entity.id,
+          filter_event_id: eventId,
+        })
+        .single();
+      
+      if (cardError || !cardData) {
+        // Fallback: return basic card if RPC fails
+        return {
+          company_id: entity.id,
+          company_name: entity.name,
+          company_properties: entity.properties || {},
+          document_count: 0,
+          document_ids: [],
+          connection_count: 0,
+          connection_ids: [],
+          kpi_count: 0,
+          kpi_summary: {},
+          relationship_count: 0,
+          related_companies: [],
+        };
+      }
+      
+      return cardData;
+    })
+  );
+  
+  return { data: cards, error: null };
+}
+
+export async function getCompanyCardById(companyEntityId: string, eventId: string) {
+  const { data, error } = await supabase
+    .rpc("get_company_card", { company_entity_id: companyEntityId, filter_event_id: eventId })
+    .single();
+  return { data, error };
+}
+
 export async function getPendingRelationshipReviews(eventId: string) {
   try {
     // First, try to get edges with joined entities

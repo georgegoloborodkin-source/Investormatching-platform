@@ -73,6 +73,7 @@ import {
   MessageSquarePlus,
   Check,
   X,
+  Building2,
 } from "lucide-react";
 import {
   BarChart,
@@ -111,6 +112,7 @@ import {
   getCompanyConnectionsByEvent,
   getPendingRelationshipReviews,
   updateKgEdgeReview,
+  getCompanyCards,
   insertDecision,
   insertDocument,
   insertSource,
@@ -3951,6 +3953,21 @@ export default function CIS() {
     source_entity: { name: string; entity_type: string } | null;
     target_entity: { name: string; entity_type: string } | null;
   }>>([]);
+  
+  // Company Cards — unified view of companies with documents, connections, KPIs
+  const [companyCards, setCompanyCards] = useState<Array<{
+    company_id: string;
+    company_name: string;
+    company_properties: Record<string, any>;
+    document_count: number;
+    document_ids: string[];
+    connection_count: number;
+    connection_ids: string[];
+    kpi_count: number;
+    kpi_summary: Record<string, any>;
+    relationship_count: number;
+    related_companies: string[];
+  }>>([]);
   const [logDecisionDialogOpen, setLogDecisionDialogOpen] = useState(false);
   const [pendingDecisionContext, setPendingDecisionContext] = useState<{
     aiReasoning: string;
@@ -4431,13 +4448,14 @@ export default function CIS() {
       if (cancelled) return;
       setActiveEventId(event.id);
 
-      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes, companyCardsRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
         getSourcesByEvent(event.id),
         getSourceFoldersByEvent(event.id),
         getCompanyConnectionsByEvent(event.id),
         getPendingRelationshipReviews(event.id),
+        getCompanyCards(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -4587,6 +4605,14 @@ export default function CIS() {
           target_entity: r.target_entity || null,
         }));
         setPendingReviews(pendingData);
+      }
+      
+      // Load company cards (unified view of companies)
+      if (companyCardsRes.error) {
+        console.warn("[COMPANY CARDS] Query failed:", companyCardsRes.error);
+        setCompanyCards([]);
+      } else {
+        setCompanyCards((companyCardsRes.data || []) as typeof companyCards);
       }
 
       // Set up real-time subscriptions for documents
@@ -7856,6 +7882,17 @@ export default function CIS() {
                 Decision Logger
               </button>
               <button
+                onClick={() => setActiveTab("companies")}
+                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
+                  activeTab === "companies"
+                    ? "bg-[#FFED00] text-black border-[#FFED00]"
+                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                }`}
+              >
+                <Building2 className="h-4 w-4" />
+                Company Cards
+              </button>
+              <button
                 onClick={() => setActiveTab("connections")}
                 className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
                   activeTab === "connections"
@@ -8178,6 +8215,17 @@ export default function CIS() {
               onOpenDocument={handleOpenDocument}
                 onOpenConverter={() => setActiveTab("sources")}
                 currentUserId={profile?.id || user?.id || null}
+            />
+          </TabsContent>
+
+          {/* Companies Tab */}
+          <TabsContent value="companies">
+            <CompaniesTab
+              companyCards={companyCards}
+              documents={documents}
+              connections={companyConnections}
+              onOpenDocument={handleOpenDocument}
+              onNavigateToConnections={() => setActiveTab("connections")}
             />
           </TabsContent>
 
@@ -8879,6 +8927,305 @@ function KanbanCard({
         </div>
       )}
     </div>
+  );
+}
+
+// ============================================================================
+// COMPANIES TAB — Auto-Created Company Cards
+// ============================================================================
+
+function CompaniesTab({
+  companyCards,
+  documents,
+  connections,
+  onOpenDocument,
+  onNavigateToConnections,
+}: {
+  companyCards: Array<{
+    company_id: string;
+    company_name: string;
+    company_properties: Record<string, any>;
+    document_count: number;
+    document_ids: string[];
+    connection_count: number;
+    connection_ids: string[];
+    kpi_count: number;
+    kpi_summary: Record<string, any>;
+    relationship_count: number;
+    related_companies: string[];
+  }>;
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  connections: Array<{
+    id: string;
+    source_company_name: string;
+    target_company_name: string;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+  }>;
+  onOpenDocument: (id: string) => void;
+  onNavigateToConnections: () => void;
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const filteredCards = useMemo(() => {
+    if (!searchQuery.trim()) return companyCards;
+    const q = searchQuery.toLowerCase();
+    return companyCards.filter(
+      (card) =>
+        card.company_name.toLowerCase().includes(q) ||
+        card.related_companies.some((c) => c.toLowerCase().includes(q))
+    );
+  }, [companyCards, searchQuery]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-mono font-black uppercase tracking-tight text-white">
+            Company Cards
+          </h2>
+          <p className="text-sm text-white/70 font-mono mt-1">
+            Auto-created from document ingestion • {companyCards.length} companies
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search companies..."
+            className="w-64 border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+          />
+          <Button
+            onClick={onNavigateToConnections}
+            variant="outline"
+            className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+          >
+            <Link2 className="h-4 w-4 mr-2" />
+            View Connections
+          </Button>
+        </div>
+      </div>
+
+      {/* Company Cards Grid */}
+      {filteredCards.length === 0 ? (
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="p-12 text-center">
+            <Building2 className="h-16 w-16 mx-auto mb-4 text-white/30" />
+            <p className="text-white/70 font-mono font-bold mb-2">
+              {searchQuery ? "No companies match your search" : "No company cards yet"}
+            </p>
+            <p className="text-sm text-white/50 font-mono">
+              {searchQuery
+                ? "Try a different search term"
+                : "Upload documents to automatically create company cards"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCards.map((card) => (
+            <CompanyCard
+              key={card.company_id}
+              card={card}
+              documents={documents}
+              connections={connections}
+              onOpenDocument={onOpenDocument}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Individual Company Card Component
+function CompanyCard({
+  card,
+  documents,
+  connections,
+  onOpenDocument,
+}: {
+  card: {
+    company_id: string;
+    company_name: string;
+    company_properties: Record<string, any>;
+    document_count: number;
+    document_ids: string[];
+    connection_count: number;
+    connection_ids: string[];
+    kpi_count: number;
+    kpi_summary: Record<string, any>;
+    relationship_count: number;
+    related_companies: string[];
+  };
+  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
+  connections: Array<{
+    id: string;
+    source_company_name: string;
+    target_company_name: string;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+  }>;
+  onOpenDocument: (id: string) => void;
+}) {
+  const companyDocs = documents.filter((d) => card.document_ids.includes(d.id));
+  const companyConnections = connections.filter(
+    (c) =>
+      c.source_company_name === card.company_name ||
+      c.target_company_name === card.company_name
+  );
+
+  return (
+    <Card className="border-2 border-white bg-transparent hover:border-[#FFED00] transition-all">
+      <CardHeader className="pb-3 border-b-2 border-white">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <CardTitle className="text-lg font-mono font-black text-white flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[#FFED00]" />
+              {card.company_name}
+            </CardTitle>
+            {card.company_properties?.industry && (
+              <Badge variant="outline" className="mt-2 border-white/40 text-white/70 bg-transparent font-mono text-xs">
+                {card.company_properties.industry}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-4">
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.document_count}</div>
+            <div className="text-xs text-white/60 font-mono">Docs</div>
+          </div>
+          <div>
+            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.connection_count}</div>
+            <div className="text-xs text-white/60 font-mono">Connections</div>
+          </div>
+          <div>
+            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.kpi_count}</div>
+            <div className="text-xs text-white/60 font-mono">KPIs</div>
+          </div>
+        </div>
+
+        {/* Documents List */}
+        {companyDocs.length > 0 && (
+          <div>
+            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
+              Documents
+            </div>
+            <div className="space-y-1">
+              {companyDocs.slice(0, 3).map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => onOpenDocument(doc.id)}
+                  className="w-full text-left text-xs font-mono text-white/70 hover:text-[#FFED00] hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
+                  title={doc.title || "Untitled"}
+                >
+                  <FileText className="h-3 w-3 inline mr-1" />
+                  {doc.title || "Untitled"}
+                </button>
+              ))}
+              {companyDocs.length > 3 && (
+                <div className="text-xs text-white/40 font-mono px-2">
+                  +{companyDocs.length - 3} more
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Connections Preview */}
+        {companyConnections.length > 0 && (
+          <div>
+            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
+              Connections
+            </div>
+            <div className="space-y-1">
+              {companyConnections.slice(0, 3).map((conn) => {
+                const otherCompany =
+                  conn.source_company_name === card.company_name
+                    ? conn.target_company_name
+                    : conn.source_company_name;
+                return (
+                  <div
+                    key={conn.id}
+                    className="text-xs font-mono text-white/60 px-2 py-1 flex items-center gap-2"
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status],
+                      }}
+                    />
+                    <span className="truncate">
+                      {otherCompany} ({conn.connection_type})
+                    </span>
+                  </div>
+                );
+              })}
+              {companyConnections.length > 3 && (
+                <div className="text-xs text-white/40 font-mono px-2">
+                  +{companyConnections.length - 3} more
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Related Companies */}
+        {card.related_companies.length > 0 && (
+          <div>
+            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
+              Related Companies ({card.relationship_count})
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {card.related_companies.slice(0, 5).map((name, idx) => (
+                <Badge
+                  key={idx}
+                  variant="outline"
+                  className="text-[10px] border-white/30 text-white/60 bg-transparent font-mono"
+                >
+                  {name}
+                </Badge>
+              ))}
+              {card.related_companies.length > 5 && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] border-white/30 text-white/40 bg-transparent font-mono"
+                >
+                  +{card.related_companies.length - 5}
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* KPIs Summary */}
+        {card.kpi_count > 0 && Object.keys(card.kpi_summary).length > 0 && (
+          <div>
+            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
+              Key Metrics
+            </div>
+            <div className="space-y-1">
+              {Object.entries(card.kpi_summary)
+                .slice(0, 3)
+                .map(([metric, data]: [string, any]) => (
+                  <div key={metric} className="text-xs font-mono text-white/60 px-2">
+                    <span className="font-bold">{metric}:</span>{" "}
+                    {typeof data.value === "number"
+                      ? data.value.toLocaleString()
+                      : data.value}{" "}
+                    {data.unit || ""}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
