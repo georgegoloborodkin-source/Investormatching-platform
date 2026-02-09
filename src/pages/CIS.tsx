@@ -8471,7 +8471,15 @@ function LogDecisionForm({
   const [connectionType, setConnectionType] = useState<ConnectionType>("BD");
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("To Connect");
   const [notes, setNotes] = useState("");
+  const [editableRationale, setEditableRationale] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Initialize editable rationale from AI context
+  useEffect(() => {
+    if (pendingContext?.aiReasoning) {
+      setEditableRationale(pendingContext.aiReasoning.substring(0, 500));
+    }
+  }, [pendingContext?.aiReasoning]);
 
   // Extract company names from AI reasoning
   useEffect(() => {
@@ -8508,7 +8516,7 @@ function LogDecisionForm({
         target_document_id: targetDocId === "none" ? null : targetDocId,
         connection_type: connectionType,
         connection_status: connectionStatus,
-        ai_reasoning: pendingContext?.aiReasoning || null,
+        ai_reasoning: editableRationale.trim() || pendingContext?.aiReasoning || null,
         notes: notes.trim() || null,
       });
     } finally {
@@ -8669,13 +8677,16 @@ function LogDecisionForm({
 
       {pendingContext?.aiReasoning && (
         <div className="space-y-2">
-          <Label className="text-white font-mono font-bold text-xs">AI Context (will be saved)</Label>
-          <div className="p-3 rounded-md bg-white/5 border border-white/20 max-h-[100px] overflow-y-auto">
-            <p className="text-xs text-white/70 font-mono whitespace-pre-wrap line-clamp-4">
-              {pendingContext.aiReasoning.substring(0, 500)}
-              {pendingContext.aiReasoning.length > 500 && "..."}
-            </p>
-          </div>
+          <Label className="text-white font-mono font-bold text-xs">AI Rationale (editable — this is your decision record)</Label>
+          <Textarea
+            value={editableRationale}
+            onChange={(e) => setEditableRationale(e.target.value)}
+            className="border-2 border-white/30 bg-white/5 text-white/80 placeholder:text-white/30 font-mono text-xs min-h-[80px] max-h-[150px]"
+            placeholder="Edit the AI rationale to capture your reasoning..."
+          />
+          <p className="text-[10px] text-white/40 font-mono">
+            This rationale will be saved with the connection for your team's reference.
+          </p>
         </div>
       )}
 
@@ -8705,6 +8716,118 @@ function LogDecisionForm({
           )}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Kanban Card Component — used inside the Kanban board columns
+function KanbanCard({
+  conn,
+  onUpdateStatus,
+  statusColor,
+}: {
+  conn: {
+    id: string;
+    source_company_name: string;
+    target_company_name: string;
+    connection_type: ConnectionType;
+    connection_status: ConnectionStatus;
+    ai_reasoning?: string | null;
+    notes?: string | null;
+    created_at: string;
+  };
+  onUpdateStatus: (id: string, status: ConnectionStatus) => Promise<void>;
+  statusColor: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const allStatuses: ConnectionStatus[] = ["To Connect", "In Progress", "Connected", "Rejected", "Completed"];
+  // Next logical status for quick-advance button
+  const statusOrder: ConnectionStatus[] = ["To Connect", "In Progress", "Connected", "Completed"];
+  const currentIdx = statusOrder.indexOf(conn.connection_status);
+  const nextStatus = currentIdx >= 0 && currentIdx < statusOrder.length - 1
+    ? statusOrder[currentIdx + 1]
+    : null;
+
+  return (
+    <div
+      className="rounded-md border border-white/20 bg-[#050505] p-2.5 cursor-pointer hover:border-[#FFED00] transition-all group"
+      onClick={() => setIsExpanded(!isExpanded)}
+    >
+      {/* Card Header */}
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-mono font-bold text-white leading-tight truncate" title={conn.source_company_name}>
+            {conn.source_company_name}
+          </div>
+          <div className="text-[10px] text-white/40 font-mono">→</div>
+          <div className="text-xs font-mono font-bold text-white leading-tight truncate" title={conn.target_company_name}>
+            {conn.target_company_name}
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className="text-[9px] px-1 py-0 border-white/30 bg-transparent font-mono shrink-0"
+          style={{ color: CONNECTION_TYPE_COLORS[conn.connection_type], borderColor: CONNECTION_TYPE_COLORS[conn.connection_type] }}
+        >
+          {conn.connection_type}
+        </Badge>
+      </div>
+
+      {/* Rationale preview */}
+      {conn.ai_reasoning && (
+        <p className="text-[10px] text-white/40 font-mono mt-1.5 line-clamp-2 leading-tight">
+          {conn.ai_reasoning.substring(0, 80)}{conn.ai_reasoning.length > 80 ? "..." : ""}
+        </p>
+      )}
+
+      {/* Expanded: show full rationale + status buttons */}
+      {isExpanded && (
+        <div className="mt-2 pt-2 border-t border-white/10 space-y-2" onClick={(e) => e.stopPropagation()}>
+          {conn.ai_reasoning && (
+            <p className="text-[10px] text-white/60 font-mono leading-relaxed whitespace-pre-wrap">
+              {conn.ai_reasoning}
+            </p>
+          )}
+          {conn.notes && (
+            <p className="text-[10px] text-white/50 font-mono italic">
+              Note: {conn.notes}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {allStatuses
+              .filter((s) => s !== conn.connection_status)
+              .map((s) => (
+                <button
+                  key={s}
+                  className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-white/20 hover:bg-white/10 transition-colors"
+                  style={{ color: CONNECTION_STATUS_COLORS[s], borderColor: CONNECTION_STATUS_COLORS[s] + "60" }}
+                  onClick={() => onUpdateStatus(conn.id, s)}
+                >
+                  → {s}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick advance button (only if not expanded) */}
+      {!isExpanded && nextStatus && (
+        <div className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            className="w-full text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition-colors"
+            style={{
+              color: CONNECTION_STATUS_COLORS[nextStatus],
+              borderColor: CONNECTION_STATUS_COLORS[nextStatus] + "40",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdateStatus(conn.id, nextStatus);
+            }}
+          >
+            → {nextStatus}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -9043,11 +9166,78 @@ function ConnectionsGraphTab({
         </Card>
       )}
 
-      {/* Connections List */}
+      {/* Kanban Board — Drag connections between columns by clicking status */}
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="pb-2 border-b-2 border-white">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
-            All Connections
+            Connections Pipeline (Kanban)
+          </CardTitle>
+          <CardDescription className="text-white/70 font-mono text-xs">
+            Click the status badge on any card to move it between columns
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {connections.length === 0 ? (
+            <div className="text-center py-8 text-white/70 font-mono">
+              No connections logged yet. Use the chat to discover and log connections.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 min-h-[300px]">
+              {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => {
+                const columnConnections = connectionsByStatus[status] || [];
+                const statusColor = CONNECTION_STATUS_COLORS[status];
+                return (
+                  <div
+                    key={status}
+                    className="flex flex-col rounded-lg border-2 border-white/20 bg-white/5 min-h-[250px]"
+                  >
+                    {/* Column Header */}
+                    <div
+                      className="px-3 py-2 rounded-t-lg flex items-center justify-between"
+                      style={{ borderBottom: `2px solid ${statusColor}` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: statusColor }}
+                        />
+                        <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                          {status}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-white/40 text-white/60 bg-transparent font-mono">
+                        {columnConnections.length}
+                      </Badge>
+                    </div>
+                    {/* Column Cards */}
+                    <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[400px]">
+                      {columnConnections.map((conn) => (
+                        <KanbanCard
+                          key={conn.id}
+                          conn={conn}
+                          onUpdateStatus={onUpdateStatus}
+                          statusColor={statusColor}
+                        />
+                      ))}
+                      {columnConnections.length === 0 && (
+                        <div className="text-center py-6 text-white/30 font-mono text-xs">
+                          No items
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* All Connections List (detail view) */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="pb-2 border-b-2 border-white">
+          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
+            All Connections (Detail View)
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-4 space-y-3">
@@ -9077,11 +9267,16 @@ function ConnectionsGraphTab({
                         {conn.connection_type}
                       </Badge>
                       {conn.ai_reasoning && (
-                        <span className="text-xs text-white/50 font-mono truncate max-w-[200px]">
-                          {conn.ai_reasoning.substring(0, 50)}...
+                        <span className="text-xs text-white/50 font-mono truncate max-w-[300px]" title={conn.ai_reasoning}>
+                          {conn.ai_reasoning.substring(0, 80)}...
                         </span>
                       )}
                     </div>
+                    {conn.notes && (
+                      <div className="text-xs text-white/40 font-mono mt-1 italic">
+                        Note: {conn.notes.substring(0, 100)}{conn.notes.length > 100 ? "..." : ""}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
