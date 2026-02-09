@@ -9041,14 +9041,17 @@ function ConnectionsGraphTab({
                     Completed: 2,
                     Rejected: 1,
                   };
-                  const dominantStatus = companyConnections.length > 0
-                    ? companyConnections.reduce((prev, curr) => 
-                        statusPriority[curr.connection_status] > statusPriority[prev.connection_status]
-                          ? curr.connection_status
-                          : prev.connection_status,
-                        companyConnections[0].connection_status
-                      )
-                    : "To Connect";
+                  let dominantStatus: ConnectionStatus = "To Connect";
+                  if (companyConnections.length > 0) {
+                    let bestPriority = 0;
+                    for (const cc of companyConnections) {
+                      const p = statusPriority[cc.connection_status] ?? 0;
+                      if (p > bestPriority) {
+                        bestPriority = p;
+                        dominantStatus = cc.connection_status;
+                      }
+                    }
+                  }
                   const statusColor = CONNECTION_STATUS_COLORS[dominantStatus];
                   return (
                     <g key={`node-${idx}`}>
