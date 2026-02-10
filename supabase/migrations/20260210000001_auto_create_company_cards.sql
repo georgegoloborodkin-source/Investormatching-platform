@@ -11,49 +11,49 @@ CREATE INDEX IF NOT EXISTS idx_documents_company_entity ON documents(company_ent
 CREATE OR REPLACE FUNCTION auto_create_company_from_document()
 RETURNS TRIGGER AS $$
 DECLARE
-  company_name TEXT;
-  normalized_name TEXT;
-  company_entity_id UUID;
-  doc_title TEXT;
+  v_company_name TEXT;
+  v_normalized_name TEXT;
+  v_company_entity_id UUID;
+  v_doc_title TEXT;
 BEGIN
   -- Only process if document has a title and no company_entity_id yet
   IF NEW.title IS NULL OR NEW.title = '' OR NEW.company_entity_id IS NOT NULL THEN
     RETURN NEW;
   END IF;
 
-  doc_title := TRIM(NEW.title);
+  v_doc_title := TRIM(NEW.title);
   
   -- Skip if title looks like a generic document name
-  IF doc_title ILIKE '%document%' OR 
-     doc_title ILIKE '%uploaded%' OR 
-     doc_title ILIKE '%file%' OR
-     doc_title ILIKE 'untitled%' OR
-     LENGTH(doc_title) < 2 THEN
+  IF v_doc_title ILIKE '%document%' OR 
+     v_doc_title ILIKE '%uploaded%' OR 
+     v_doc_title ILIKE '%file%' OR
+     v_doc_title ILIKE 'untitled%' OR
+     LENGTH(v_doc_title) < 2 THEN
     RETURN NEW;
   END IF;
 
   -- Clean up title: remove common file extensions and suffixes
-  company_name := REGEXP_REPLACE(doc_title, '\s*(pitch|deck|memo|presentation|report|summary|notes|doc|pdf|docx|xlsx)$', '', 'i');
-  company_name := REGEXP_REPLACE(company_name, '\.[^.]+$', ''); -- Remove file extension
-  company_name := TRIM(company_name);
+  v_company_name := REGEXP_REPLACE(v_doc_title, '\s*(pitch|deck|memo|presentation|report|summary|notes|doc|pdf|docx|xlsx)$', '', 'i');
+  v_company_name := REGEXP_REPLACE(v_company_name, '\.[^.]+$', ''); -- Remove file extension
+  v_company_name := TRIM(v_company_name);
   
   -- Skip if too short after cleaning
-  IF LENGTH(company_name) < 2 THEN
+  IF LENGTH(v_company_name) < 2 THEN
     RETURN NEW;
   END IF;
 
-  normalized_name := LOWER(TRIM(company_name));
+  v_normalized_name := LOWER(TRIM(v_company_name));
 
   -- Check if company entity already exists (by normalized name)
-  SELECT id INTO company_entity_id
-  FROM kg_entities
-  WHERE event_id = NEW.event_id
-    AND normalized_name = normalized_name
-    AND entity_type = 'company'
+  SELECT ke.id INTO v_company_entity_id
+  FROM kg_entities ke
+  WHERE ke.event_id = NEW.event_id
+    AND ke.normalized_name = v_normalized_name
+    AND ke.entity_type = 'company'
   LIMIT 1;
 
   -- Create company entity if it doesn't exist
-  IF company_entity_id IS NULL THEN
+  IF v_company_entity_id IS NULL THEN
     INSERT INTO kg_entities (
       event_id,
       entity_type,
@@ -66,8 +66,8 @@ BEGIN
     ) VALUES (
       NEW.event_id,
       'company',
-      company_name,
-      normalized_name,
+      v_company_name,
+      v_normalized_name,
       jsonb_build_object(
         'auto_created', true,
         'source', 'document_title',
@@ -77,7 +77,7 @@ BEGIN
       0.7, -- Lower confidence for auto-created from title
       NEW.created_by
     )
-    RETURNING id INTO company_entity_id;
+    RETURNING id INTO v_company_entity_id;
   ELSE
     -- Update existing entity: add this document to its properties
     UPDATE kg_entities
@@ -87,11 +87,11 @@ BEGIN
           'last_seen_document', NEW.id
         ),
         updated_at = NOW()
-    WHERE id = company_entity_id;
+    WHERE id = v_company_entity_id;
   END IF;
 
   -- Link document to company entity
-  NEW.company_entity_id := company_entity_id;
+  NEW.company_entity_id := v_company_entity_id;
 
   RETURN NEW;
 END;
