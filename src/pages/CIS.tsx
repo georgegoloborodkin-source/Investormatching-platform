@@ -74,6 +74,14 @@ import {
   Check,
   X,
   Building2,
+  Globe,
+  Linkedin,
+  Pencil,
+  Save,
+  Rocket,
+  TrendingDown,
+  Award,
+  Briefcase,
 } from "lucide-react";
 import {
   BarChart,
@@ -113,6 +121,7 @@ import {
   getPendingRelationshipReviews,
   updateKgEdgeReview,
   getCompanyCards,
+  updateCompanyCardProperties,
   insertDecision,
   insertDocument,
   insertSource,
@@ -8226,6 +8235,14 @@ export default function CIS() {
               connections={companyConnections}
               onOpenDocument={handleOpenDocument}
               onNavigateToConnections={() => setActiveTab("connections")}
+              onUpdateCard={async (entityId, properties) => {
+                await updateCompanyCardProperties(entityId, properties);
+                // Refresh card data
+                if (event) {
+                  const res = await getCompanyCards(event.id);
+                  if (res.data) setCompanyCards(res.data as typeof companyCards);
+                }
+              }}
             />
           </TabsContent>
 
@@ -8940,6 +8957,7 @@ function CompaniesTab({
   connections,
   onOpenDocument,
   onNavigateToConnections,
+  onUpdateCard,
 }: {
   companyCards: Array<{
     company_id: string;
@@ -8964,8 +8982,10 @@ function CompaniesTab({
   }>;
   onOpenDocument: (id: string) => void;
   onNavigateToConnections: () => void;
+  onUpdateCard: (entityId: string, properties: Record<string, any>) => Promise<void>;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   
   const filteredCards = useMemo(() => {
     if (!searchQuery.trim()) return companyCards;
@@ -8973,6 +8993,8 @@ function CompaniesTab({
     return companyCards.filter(
       (card) =>
         card.company_name.toLowerCase().includes(q) ||
+        (card.company_properties?.bio || "").toLowerCase().includes(q) ||
+        (card.company_properties?.funding_stage || "").toLowerCase().includes(q) ||
         card.related_companies.some((c) => c.toLowerCase().includes(q))
     );
   }, [companyCards, searchQuery]);
@@ -9023,7 +9045,7 @@ function CompaniesTab({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredCards.map((card) => (
             <CompanyCard
               key={card.company_id}
@@ -9031,6 +9053,13 @@ function CompaniesTab({
               documents={documents}
               connections={connections}
               onOpenDocument={onOpenDocument}
+              isExpanded={expandedCardId === card.company_id}
+              onToggleExpand={() =>
+                setExpandedCardId(
+                  expandedCardId === card.company_id ? null : card.company_id
+                )
+              }
+              onUpdateCard={onUpdateCard}
             />
           ))}
         </div>
@@ -9039,12 +9068,89 @@ function CompaniesTab({
   );
 }
 
-// Individual Company Card Component
+// ── Editable field component ──
+function EditableField({
+  label,
+  value,
+  placeholder,
+  icon: Icon,
+  onSave,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  icon?: any;
+  onSave: (val: string) => void;
+  multiline?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => { setDraft(value); }, [value]);
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        <div className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">
+          {label}
+        </div>
+        {multiline ? (
+          <Textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { onSave(draft); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
+            placeholder={placeholder}
+            className="min-h-[56px] text-xs font-mono border-[#FFED00] bg-black/50 text-white resize-none"
+          />
+        ) : (
+          <Input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { onSave(draft); setEditing(false); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { onSave(draft); setEditing(false); }
+              if (e.key === "Escape") { setDraft(value); setEditing(false); }
+            }}
+            placeholder={placeholder}
+            className="h-7 text-xs font-mono border-[#FFED00] bg-black/50 text-white"
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="w-full text-left group"
+    >
+      <div className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">
+        {label}
+      </div>
+      <div className="flex items-center gap-1.5 mt-0.5">
+        {Icon && <Icon className="h-3 w-3 text-white/40 flex-shrink-0" />}
+        <span className={`text-xs font-mono ${value ? "text-white/80" : "text-white/30 italic"} group-hover:text-[#FFED00] transition-colors`}>
+          {value || placeholder}
+        </span>
+        <Pencil className="h-2.5 w-2.5 text-white/20 group-hover:text-[#FFED00] ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+    </button>
+  );
+}
+
+// ── Individual Company Card Component (Rich & Editable) ──
 function CompanyCard({
   card,
   documents,
   connections,
   onOpenDocument,
+  isExpanded,
+  onToggleExpand,
+  onUpdateCard,
 }: {
   card: {
     company_id: string;
@@ -9068,7 +9174,11 @@ function CompanyCard({
     connection_status: ConnectionStatus;
   }>;
   onOpenDocument: (id: string) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onUpdateCard: (entityId: string, properties: Record<string, any>) => Promise<void>;
 }) {
+  const props = card.company_properties || {};
   const companyDocs = documents.filter((d) => card.document_ids.includes(d.id));
   const companyConnections = connections.filter(
     (c) =>
@@ -9076,152 +9186,256 @@ function CompanyCard({
       c.target_company_name === card.company_name
   );
 
+  const saveField = (field: string, value: string) => {
+    onUpdateCard(card.company_id, { [field]: value });
+  };
+
+  // Determine stage color
+  const stageColors: Record<string, string> = {
+    "pre-seed": "#a78bfa",
+    "seed": "#34d399",
+    "series a": "#60a5fa",
+    "series b": "#f59e0b",
+    "series c": "#ef4444",
+    "growth": "#ec4899",
+  };
+  const stageKey = (props.funding_stage || "").toLowerCase();
+  const stageColor = stageColors[stageKey] || "#FFED00";
+
+  // Parse founders from JSONB
+  let founders: Array<{ name: string; role: string; linkedin: string; pedigree: string }> = [];
+  try {
+    if (typeof props.founders === "string") founders = JSON.parse(props.founders);
+    else if (Array.isArray(props.founders)) founders = props.founders;
+  } catch { /* ignore */ }
+
   return (
-    <Card className="border-2 border-white bg-transparent hover:border-[#FFED00] transition-all">
-      <CardHeader className="pb-3 border-b-2 border-white">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg font-mono font-black text-white flex items-center gap-2">
+    <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
+      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
+    }`}>
+      {/* ── A. Header: Identity ── */}
+      <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
+        <div className="flex items-start gap-3">
+          {/* Logo placeholder */}
+          <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/20">
+            {props.logo_url ? (
+              <img src={props.logo_url} alt="" className="w-8 h-8 rounded object-cover" />
+            ) : (
               <Building2 className="h-5 w-5 text-[#FFED00]" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-base font-mono font-black text-white truncate">
               {card.company_name}
             </CardTitle>
-            {card.company_properties?.industry && (
-              <Badge variant="outline" className="mt-2 border-white/40 text-white/70 bg-transparent font-mono text-xs">
-                {card.company_properties.industry}
+            <p className={`text-xs font-mono mt-0.5 ${props.bio ? "text-white/60" : "text-white/30 italic"} line-clamp-1`}>
+              {props.bio || "Click to add one-sentence bio..."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {props.funding_stage && (
+              <Badge
+                className="text-[10px] font-mono font-bold border-0 px-2 py-0.5"
+                style={{ backgroundColor: stageColor + "20", color: stageColor }}
+              >
+                {props.funding_stage}
               </Badge>
             )}
+            <ChevronDown className={`h-4 w-4 text-white/40 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-4 space-y-4">
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.document_count}</div>
-            <div className="text-xs text-white/60 font-mono">Docs</div>
-          </div>
-          <div>
-            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.connection_count}</div>
-            <div className="text-xs text-white/60 font-mono">Connections</div>
-          </div>
-          <div>
-            <div className="text-2xl font-mono font-black text-[#FFED00]">{card.kpi_count}</div>
-            <div className="text-xs text-white/60 font-mono">KPIs</div>
-          </div>
+
+      <CardContent className="pt-3 space-y-3">
+        {/* Stats Row (always visible) */}
+        <div className="grid grid-cols-4 gap-1 text-center">
+          {[
+            { val: card.document_count, label: "Docs", icon: FileText },
+            { val: card.connection_count, label: "Links", icon: Link2 },
+            { val: card.kpi_count, label: "KPIs", icon: BarChart3 },
+            { val: card.relationship_count, label: "Rels", icon: Users },
+          ].map(({ val, label, icon: Ic }) => (
+            <div key={label}>
+              <div className="text-lg font-mono font-black text-[#FFED00]">{val}</div>
+              <div className="flex items-center justify-center gap-1">
+                <Ic className="h-2.5 w-2.5 text-white/40" />
+                <span className="text-[10px] text-white/50 font-mono">{label}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Documents List */}
-        {companyDocs.length > 0 && (
-          <div>
-            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
-              Documents
+        {/* ── Expanded view ── */}
+        {isExpanded && (
+          <div className="space-y-4 pt-2 border-t border-white/10">
+            {/* B. Investment Snapshot */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Investment Snapshot</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                <EditableField label="Funding Stage" value={props.funding_stage || ""} placeholder="e.g. Seed, Series A" icon={Rocket} onSave={(v) => saveField("funding_stage", v)} />
+                <EditableField label="Amount Seeking" value={props.amount_seeking || ""} placeholder="e.g. $2M" icon={DollarSign} onSave={(v) => saveField("amount_seeking", v)} />
+                <EditableField label="Valuation" value={props.valuation || ""} placeholder="e.g. $10M pre-money" icon={TrendingUp} onSave={(v) => saveField("valuation", v)} />
+                <EditableField label="ARR" value={props.arr || ""} placeholder="e.g. $500K" icon={BarChart3} onSave={(v) => saveField("arr", v)} />
+                <EditableField label="Burn Rate" value={props.burn_rate || ""} placeholder="e.g. $80K/mo" icon={TrendingDown} onSave={(v) => saveField("burn_rate", v)} />
+                <EditableField label="Runway" value={props.runway_months || ""} placeholder="e.g. 18 months" icon={Clock} onSave={(v) => saveField("runway_months", v)} />
+              </div>
             </div>
-            <div className="space-y-1">
-              {companyDocs.slice(0, 3).map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => onOpenDocument(doc.id)}
-                  className="w-full text-left text-xs font-mono text-white/70 hover:text-[#FFED00] hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
-                  title={doc.title || "Untitled"}
-                >
-                  <FileText className="h-3 w-3 inline mr-1" />
-                  {doc.title || "Untitled"}
-                </button>
-              ))}
-              {companyDocs.length > 3 && (
-                <div className="text-xs text-white/40 font-mono px-2">
-                  +{companyDocs.length - 3} more
+
+            {/* One-Sentence Bio */}
+            <EditableField label="One-Sentence Bio" value={props.bio || ""} placeholder="High-level pitch, e.g. 'AI-powered logistics for MENA'" icon={Sparkles} onSave={(v) => saveField("bio", v)} multiline />
+
+            {/* C. Market & Product */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Market & Product</span>
+              </div>
+              <div className="space-y-2 pl-1">
+                <EditableField label="Problem" value={props.problem || ""} placeholder="What gap exists in the market?" onSave={(v) => saveField("problem", v)} multiline />
+                <EditableField label="Solution" value={props.solution || ""} placeholder="How do they fix it?" onSave={(v) => saveField("solution", v)} multiline />
+                <div className="grid grid-cols-2 gap-x-4">
+                  <EditableField label="TAM" value={props.tam || ""} placeholder="e.g. $4.5B" icon={PieChart} onSave={(v) => saveField("tam", v)} />
+                  <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win" icon={Award} onSave={(v) => saveField("competitive_edge", v)} />
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Connections Preview */}
-        {companyConnections.length > 0 && (
-          <div>
-            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
-              Connections
-            </div>
-            <div className="space-y-1">
-              {companyConnections.slice(0, 3).map((conn) => {
-                const otherCompany =
-                  conn.source_company_name === card.company_name
-                    ? conn.target_company_name
-                    : conn.source_company_name;
-                return (
-                  <div
-                    key={conn.id}
-                    className="text-xs font-mono text-white/60 px-2 py-1 flex items-center gap-2"
-                  >
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status],
-                      }}
-                    />
-                    <span className="truncate">
-                      {otherCompany} ({conn.connection_type})
-                    </span>
-                  </div>
-                );
-              })}
-              {companyConnections.length > 3 && (
-                <div className="text-xs text-white/40 font-mono px-2">
-                  +{companyConnections.length - 3} more
+            {/* D. Team / Founders */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Users className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Team</span>
+              </div>
+              {founders.length > 0 ? (
+                <div className="space-y-2 pl-1">
+                  {founders.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs font-mono">
+                      <Briefcase className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <span className="text-white font-bold">{f.name}</span>
+                        {f.role && <span className="text-white/50"> — {f.role}</span>}
+                        {f.pedigree && (
+                          <Badge className="ml-1.5 text-[9px] bg-white/10 text-white/70 border-0 py-0">{f.pedigree}</Badge>
+                        )}
+                        {f.linkedin && (
+                          <a href={f.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex ml-1.5 text-blue-400 hover:text-blue-300">
+                            <Linkedin className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-xs text-white/30 italic font-mono pl-1">
+                  No founders extracted yet — enrich from pitch deck or add manually
+                </p>
               )}
             </div>
-          </div>
-        )}
 
-        {/* Related Companies */}
-        {card.related_companies.length > 0 && (
-          <div>
-            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
-              Related Companies ({card.relationship_count})
+            {/* E. AI Rationale */}
+            <EditableField label="AI Rationale — Why this deal?" value={props.ai_rationale || ""} placeholder="Auto-filled when AI analyzes this company's documents" icon={Sparkles} onSave={(v) => saveField("ai_rationale", v)} multiline />
+
+            {/* Website */}
+            <div className="flex gap-4">
+              <EditableField label="Website" value={props.website || ""} placeholder="https://..." icon={Globe} onSave={(v) => saveField("website", v)} />
+              <EditableField label="Logo URL" value={props.logo_url || ""} placeholder="https://logo.png" onSave={(v) => saveField("logo_url", v)} />
             </div>
-            <div className="flex flex-wrap gap-1">
-              {card.related_companies.slice(0, 5).map((name, idx) => (
-                <Badge
-                  key={idx}
-                  variant="outline"
-                  className="text-[10px] border-white/30 text-white/60 bg-transparent font-mono"
-                >
-                  {name}
-                </Badge>
-              ))}
-              {card.related_companies.length > 5 && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] border-white/30 text-white/40 bg-transparent font-mono"
-                >
-                  +{card.related_companies.length - 5}
-                </Badge>
+
+            <Separator className="bg-white/10" />
+
+            {/* Documents List */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <FileText className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
+                  Source Documents ({companyDocs.length})
+                </span>
+              </div>
+              {companyDocs.length > 0 ? (
+                <div className="space-y-1">
+                  {companyDocs.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={(e) => { e.stopPropagation(); onOpenDocument(doc.id); }}
+                      className="w-full text-left text-xs font-mono text-white/70 hover:text-[#FFED00] hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
+                      title={doc.title || "Untitled"}
+                    >
+                      <FileText className="h-3 w-3 inline mr-1.5" />
+                      {doc.title || "Untitled"}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-white/30 italic font-mono pl-1">No documents linked yet</p>
               )}
             </div>
-          </div>
-        )}
 
-        {/* KPIs Summary */}
-        {card.kpi_count > 0 && Object.keys(card.kpi_summary).length > 0 && (
-          <div>
-            <div className="text-xs font-mono font-bold text-white/70 mb-2 uppercase tracking-wider">
-              Key Metrics
-            </div>
-            <div className="space-y-1">
-              {Object.entries(card.kpi_summary)
-                .slice(0, 3)
-                .map(([metric, data]: [string, any]) => (
-                  <div key={metric} className="text-xs font-mono text-white/60 px-2">
-                    <span className="font-bold">{metric}:</span>{" "}
-                    {typeof data.value === "number"
-                      ? data.value.toLocaleString()
-                      : data.value}{" "}
-                    {data.unit || ""}
-                  </div>
-                ))}
-            </div>
+            {/* Connections */}
+            {companyConnections.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Link2 className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
+                    Connections ({companyConnections.length})
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {companyConnections.map((conn) => {
+                    const other =
+                      conn.source_company_name === card.company_name
+                        ? conn.target_company_name
+                        : conn.source_company_name;
+                    return (
+                      <div key={conn.id} className="text-xs font-mono text-white/60 px-2 py-1 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status] }} />
+                        <span className="truncate flex-1">{other}</span>
+                        <Badge variant="outline" className="text-[9px] border-white/20 text-white/40 bg-transparent py-0">
+                          {conn.connection_type} · {conn.connection_status}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Related Companies */}
+            {card.related_companies.length > 0 && (
+              <div>
+                <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
+                  Related Entities ({card.relationship_count})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {card.related_companies.map((name, idx) => (
+                    <Badge key={idx} variant="outline" className="text-[10px] border-white/20 text-white/60 bg-transparent font-mono">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* KPIs */}
+            {card.kpi_count > 0 && Object.keys(card.kpi_summary).length > 0 && (
+              <div>
+                <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
+                  Extracted KPIs
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {Object.entries(card.kpi_summary).map(([metric, data]: [string, any]) => (
+                    <div key={metric} className="text-xs font-mono text-white/60 px-1">
+                      <span className="font-bold text-white/80">{metric}:</span>{" "}
+                      {typeof data.value === "number" ? data.value.toLocaleString() : data.value}{" "}
+                      <span className="text-white/40">{data.unit || ""}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

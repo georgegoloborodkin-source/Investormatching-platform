@@ -246,12 +246,12 @@ export async function getCompanyCards(eventId: string) {
   
   // For each company, get its card data
   const cards = await Promise.all(
-    entities.map(async (entity) => {
+    entities.map(async (entity: any) => {
       const { data: cardData, error: cardError } = await supabase
         .rpc("get_company_card", {
-          company_entity_id: entity.id,
-          filter_event_id: eventId,
-        })
+          p_company_entity_id: entity.id,
+          p_filter_event_id: eventId,
+        } as any)
         .single();
       
       if (cardError || !cardData) {
@@ -280,9 +280,18 @@ export async function getCompanyCards(eventId: string) {
 
 export async function getCompanyCardById(companyEntityId: string, eventId: string) {
   const { data, error } = await supabase
-    .rpc("get_company_card", { company_entity_id: companyEntityId, filter_event_id: eventId })
+    .rpc("get_company_card", { p_company_entity_id: companyEntityId, p_filter_event_id: eventId } as any)
     .single();
   return { data, error };
+}
+
+export async function updateCompanyCardProperties(entityId: string, newProperties: Record<string, any>) {
+  const { error } = await supabase
+    .rpc("update_company_card_properties", {
+      p_entity_id: entityId,
+      p_new_properties: newProperties,
+    } as any);
+  return { error };
 }
 
 export async function getPendingRelationshipReviews(eventId: string) {
