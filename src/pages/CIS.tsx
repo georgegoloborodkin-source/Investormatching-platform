@@ -9649,13 +9649,13 @@ function CompanyCard({
             )}
 
             {/* Related Companies */}
-            {card.related_companies.length > 0 && (
+            {(card.related_companies || []).length > 0 && (
               <div>
                 <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
-                  Related Entities ({card.relationship_count})
+                  Related Entities ({card.relationship_count || 0})
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {card.related_companies.map((name, idx) => (
+                  {(card.related_companies || []).map((name, idx) => (
                     <Badge key={idx} variant="outline" className="text-[10px] border-white/20 text-white/60 bg-transparent font-mono">
                       {name}
                     </Badge>
@@ -9665,13 +9665,13 @@ function CompanyCard({
             )}
 
             {/* KPIs */}
-            {card.kpi_count > 0 && Object.keys(card.kpi_summary).length > 0 && (
+            {(card.kpi_count || 0) > 0 && Object.keys(card.kpi_summary || {}).length > 0 && (
               <div>
                 <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
                   Extracted KPIs
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  {Object.entries(card.kpi_summary).map(([metric, data]: [string, any]) => (
+                  {Object.entries(card.kpi_summary || {}).map(([metric, data]: [string, any]) => (
                     <div key={metric} className="text-xs font-mono text-white/60 px-1">
                       <span className="font-bold text-white/80">{metric}:</span>{" "}
                       {typeof data.value === "number" ? data.value.toLocaleString() : data.value}{" "}

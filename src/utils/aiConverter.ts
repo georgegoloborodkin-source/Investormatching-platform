@@ -462,7 +462,7 @@ export async function convertFileWithAI(
         method: "POST",
         body: formData,
       },
-      60000
+      180000 // 3 min — Render cold-start + PDF/Claude ingestion can be slow
     );
 
     if (!response.ok) {
