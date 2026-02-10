@@ -122,6 +122,9 @@ import {
   updateKgEdgeReview,
   getCompanyCards,
   updateCompanyCardProperties,
+  getAllEntityCards,
+  ingestInvestorCSVRows,
+  ingestStartupCSVRows,
   insertDecision,
   insertDocument,
   insertSource,
@@ -1955,6 +1958,46 @@ function SourcesTab({
             } catch (embedErr) {
               console.error("Error indexing embeddings:", embedErr);
               // Non-fatal - document is saved
+            }
+          }
+
+          // ── Structured CSV ingestion: extract rows into kg_entities ──
+          // If the conversion result contains structured investors/startups arrays,
+          // create real entity records so they appear in Company Cards / are queryable.
+          if (extractedJson && docRecord.id) {
+            try {
+              const convData = extractedJson as Record<string, any>;
+              const investorRows = convData.investors as any[] | undefined;
+              const startupRows = convData.startups as any[] | undefined;
+
+              if (investorRows && investorRows.length > 0) {
+                const ingResult = await ingestInvestorCSVRows(
+                  eventId, investorRows, docRecord.id, currentUserId || null
+                );
+                console.log(`[StructuredCSV] Investors: ${ingResult.entitiesCreated} created, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
+                if (ingResult.entitiesCreated > 0) {
+                  toast({
+                    title: "Structured data extracted",
+                    description: `Created ${ingResult.entitiesCreated} investor/fund entities from CSV rows.`,
+                  });
+                }
+              }
+
+              if (startupRows && startupRows.length > 0) {
+                const ingResult = await ingestStartupCSVRows(
+                  eventId, startupRows, docRecord.id, currentUserId || null
+                );
+                console.log(`[StructuredCSV] Startups: ${ingResult.entitiesCreated} created, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
+                if (ingResult.entitiesCreated > 0) {
+                  toast({
+                    title: "Structured data extracted",
+                    description: `Created ${ingResult.entitiesCreated} company entities from CSV rows.`,
+                  });
+                }
+              }
+            } catch (structErr) {
+              console.error("Error ingesting structured CSV rows:", structErr);
+              // Non-fatal: the document is saved, structured extraction is a bonus
             }
           }
 
@@ -3967,15 +4010,17 @@ export default function CIS() {
   const [companyCards, setCompanyCards] = useState<Array<{
     company_id: string;
     company_name: string;
+    entity_type?: string;
     company_properties: Record<string, any>;
     document_count: number;
-    document_ids: string[];
-    connection_count: number;
-    connection_ids: string[];
-    kpi_count: number;
-    kpi_summary: Record<string, any>;
-    relationship_count: number;
-    related_companies: string[];
+    document_ids?: string[];
+    connection_count?: number;
+    connection_ids?: string[];
+    kpi_count?: number;
+    kpi_summary?: Record<string, any>;
+    relationship_count?: number;
+    related_companies?: string[];
+    created_at?: string;
   }>>([]);
   const [logDecisionDialogOpen, setLogDecisionDialogOpen] = useState(false);
   const [pendingDecisionContext, setPendingDecisionContext] = useState<{
@@ -4464,7 +4509,7 @@ export default function CIS() {
         getSourceFoldersByEvent(event.id),
         getCompanyConnectionsByEvent(event.id),
         getPendingRelationshipReviews(event.id),
-        getCompanyCards(event.id),
+        getAllEntityCards(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -8239,7 +8284,7 @@ export default function CIS() {
                 await updateCompanyCardProperties(entityId, properties);
                 // Refresh card data
                 if (event) {
-                  const res = await getCompanyCards(event.id);
+                  const res = await getAllEntityCards(event.id);
                   if (res.data) setCompanyCards(res.data as typeof companyCards);
                 }
               }}
@@ -8962,15 +9007,17 @@ function CompaniesTab({
   companyCards: Array<{
     company_id: string;
     company_name: string;
+    entity_type?: string;
     company_properties: Record<string, any>;
     document_count: number;
-    document_ids: string[];
-    connection_count: number;
-    connection_ids: string[];
-    kpi_count: number;
-    kpi_summary: Record<string, any>;
-    relationship_count: number;
-    related_companies: string[];
+    document_ids?: string[];
+    connection_count?: number;
+    connection_ids?: string[];
+    kpi_count?: number;
+    kpi_summary?: Record<string, any>;
+    relationship_count?: number;
+    related_companies?: string[];
+    created_at?: string;
   }>;
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   connections: Array<{
@@ -8986,37 +9033,84 @@ function CompaniesTab({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<"all" | "company" | "fund">("all");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+
+  const companyCounts = useMemo(() => {
+    const companies = companyCards.filter((c) => (c.entity_type || "company") === "company").length;
+    const funds = companyCards.filter((c) => c.entity_type === "fund").length;
+    return { companies, funds, total: companyCards.length };
+  }, [companyCards]);
   
   const filteredCards = useMemo(() => {
-    if (!searchQuery.trim()) return companyCards;
+    let cards = companyCards;
+    if (filterType !== "all") {
+      cards = cards.filter((c) => (c.entity_type || "company") === filterType);
+    }
+    if (!searchQuery.trim()) return cards;
     const q = searchQuery.toLowerCase();
-    return companyCards.filter(
+    return cards.filter(
       (card) =>
         card.company_name.toLowerCase().includes(q) ||
         (card.company_properties?.bio || "").toLowerCase().includes(q) ||
         (card.company_properties?.funding_stage || "").toLowerCase().includes(q) ||
-        card.related_companies.some((c) => c.toLowerCase().includes(q))
+        (card.company_properties?.geo_focus || []).some((g: string) => g.toLowerCase().includes(q)) ||
+        (card.company_properties?.industry_preferences || []).some((g: string) => g.toLowerCase().includes(q)) ||
+        (card.company_properties?.industry || "").toLowerCase().includes(q) ||
+        (card.related_companies || []).some((c: string) => c.toLowerCase().includes(q))
     );
-  }, [companyCards, searchQuery]);
+  }, [companyCards, searchQuery, filterType]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-mono font-black uppercase tracking-tight text-white">
-            Company Cards
+            Entity Cards
           </h2>
           <p className="text-sm text-white/70 font-mono mt-1">
-            Auto-created from document ingestion • {companyCards.length} companies
+            Auto-created from documents & CSV imports • {companyCounts.companies} companies • {companyCounts.funds} investors/funds
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Filter pills */}
+          <div className="flex border-2 border-white rounded-md overflow-hidden">
+            {(["all", "company", "fund"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFilterType(t)}
+                className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
+                  filterType === t
+                    ? "bg-[#FFED00] text-black"
+                    : "bg-transparent text-white hover:bg-white/10"
+                }`}
+              >
+                {t === "all" ? `All (${companyCounts.total})` : t === "company" ? `Companies (${companyCounts.companies})` : `Funds (${companyCounts.funds})`}
+              </button>
+            ))}
+          </div>
+          {/* View toggle */}
+          <div className="flex border-2 border-white rounded-md overflow-hidden">
+            {(["cards", "table"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setViewMode(v)}
+                className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
+                  viewMode === v
+                    ? "bg-[#FFED00] text-black"
+                    : "bg-transparent text-white hover:bg-white/10"
+                }`}
+              >
+                {v === "cards" ? "Cards" : "Table"}
+              </button>
+            ))}
+          </div>
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search companies..."
-            className="w-64 border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+            placeholder="Search..."
+            className="w-48 border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
           />
           <Button
             onClick={onNavigateToConnections}
@@ -9024,27 +9118,91 @@ function CompaniesTab({
             className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
           >
             <Link2 className="h-4 w-4 mr-2" />
-            View Connections
+            Connections
           </Button>
         </div>
       </div>
 
-      {/* Company Cards Grid */}
+      {/* Content */}
       {filteredCards.length === 0 ? (
         <Card className="border-2 border-white bg-transparent">
           <CardContent className="p-12 text-center">
             <Building2 className="h-16 w-16 mx-auto mb-4 text-white/30" />
             <p className="text-white/70 font-mono font-bold mb-2">
-              {searchQuery ? "No companies match your search" : "No company cards yet"}
+              {searchQuery ? "No entities match your search" : "No entity cards yet"}
             </p>
             <p className="text-sm text-white/50 font-mono">
               {searchQuery
                 ? "Try a different search term"
-                : "Upload documents to automatically create company cards"}
+                : "Upload documents or CSV files to automatically create entity cards"}
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === "table" ? (
+        /* ── TABLE VIEW ── */
+        <Card className="border-2 border-white bg-transparent overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm font-mono">
+              <thead>
+                <tr className="border-b-2 border-white/30 bg-white/5">
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Name</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Type</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Geographies</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Verticals</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Cheque / Stage</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Team</th>
+                  <th className="text-right p-3 text-white/70 font-bold uppercase text-xs">Docs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCards.map((card) => {
+                  const props = card.company_properties || {};
+                  const isFund = (card.entity_type || "company") === "fund";
+                  const geos = (props.geo_focus || props.geo_markets || []) as string[];
+                  const verticals = (props.industry_preferences || []) as string[];
+                  const teamMembers = (props.team_members || []) as string[];
+                  const chequeOrStage = isFund
+                    ? props.cheque_size || ""
+                    : props.funding_stage || "";
+                  return (
+                    <tr
+                      key={card.company_id}
+                      className="border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
+                      onClick={() =>
+                        setExpandedCardId(
+                          expandedCardId === card.company_id ? null : card.company_id
+                        )
+                      }
+                    >
+                      <td className="p-3 text-white font-bold">{card.company_name}</td>
+                      <td className="p-3">
+                        <Badge variant="outline" className={`text-xs font-mono ${isFund ? "border-blue-400 text-blue-400" : "border-green-400 text-green-400"}`}>
+                          {isFund ? "Fund" : "Company"}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-white/70 max-w-[200px] truncate">
+                        {geos.slice(0, 4).join(", ")}
+                        {geos.length > 4 && ` +${geos.length - 4}`}
+                      </td>
+                      <td className="p-3 text-white/70 max-w-[200px] truncate">
+                        {verticals.slice(0, 3).join(", ")}
+                        {verticals.length > 3 && ` +${verticals.length - 3}`}
+                      </td>
+                      <td className="p-3 text-white/70">{chequeOrStage}</td>
+                      <td className="p-3 text-white/70 max-w-[150px] truncate">
+                        {teamMembers.slice(0, 2).join(", ")}
+                        {teamMembers.length > 2 && ` +${teamMembers.length - 2}`}
+                      </td>
+                      <td className="p-3 text-right text-white/70">{card.document_count || 0}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : (
+        /* ── CARD VIEW ── */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredCards.map((card) => (
             <CompanyCard
@@ -9155,15 +9313,17 @@ function CompanyCard({
   card: {
     company_id: string;
     company_name: string;
+    entity_type?: string;
     company_properties: Record<string, any>;
     document_count: number;
-    document_ids: string[];
-    connection_count: number;
-    connection_ids: string[];
-    kpi_count: number;
-    kpi_summary: Record<string, any>;
-    relationship_count: number;
-    related_companies: string[];
+    document_ids?: string[];
+    connection_count?: number;
+    connection_ids?: string[];
+    kpi_count?: number;
+    kpi_summary?: Record<string, any>;
+    relationship_count?: number;
+    related_companies?: string[];
+    created_at?: string;
   };
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   connections: Array<{
@@ -9179,7 +9339,8 @@ function CompanyCard({
   onUpdateCard: (entityId: string, properties: Record<string, any>) => Promise<void>;
 }) {
   const props = card.company_properties || {};
-  const companyDocs = documents.filter((d) => card.document_ids.includes(d.id));
+  const isFund = (card.entity_type || "company") === "fund";
+  const companyDocs = documents.filter((d) => (card.document_ids || []).includes(d.id));
   const companyConnections = connections.filter(
     (c) =>
       c.source_company_name === card.company_name ||
@@ -9190,7 +9351,7 @@ function CompanyCard({
     onUpdateCard(card.company_id, { [field]: value });
   };
 
-  // Determine stage color
+  // Determine stage color / type color
   const stageColors: Record<string, string> = {
     "pre-seed": "#a78bfa",
     "seed": "#34d399",
@@ -9201,6 +9362,7 @@ function CompanyCard({
   };
   const stageKey = (props.funding_stage || "").toLowerCase();
   const stageColor = stageColors[stageKey] || "#FFED00";
+  const typeColor = isFund ? "#60a5fa" : "#34d399";
 
   // Parse founders from JSONB
   let founders: Array<{ name: string; role: string; linkedin: string; pedigree: string }> = [];
@@ -9209,6 +9371,12 @@ function CompanyCard({
     else if (Array.isArray(props.founders)) founders = props.founders;
   } catch { /* ignore */ }
 
+  // Fund-specific fields
+  const geoFocus = (props.geo_focus || []) as string[];
+  const industryPrefs = (props.industry_preferences || []) as string[];
+  const teamMembers = (props.team_members || []) as string[];
+  const chequeSize = props.cheque_size || "";
+
   return (
     <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
       isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
@@ -9216,29 +9384,43 @@ function CompanyCard({
       {/* ── A. Header: Identity ── */}
       <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
         <div className="flex items-start gap-3">
-          {/* Logo placeholder */}
-          <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/20">
+          {/* Logo / type icon */}
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/20"
+            style={{ backgroundColor: typeColor + "15" }}>
             {props.logo_url ? (
               <img src={props.logo_url} alt="" className="w-8 h-8 rounded object-cover" />
+            ) : isFund ? (
+              <DollarSign className="h-5 w-5" style={{ color: typeColor }} />
             ) : (
-              <Building2 className="h-5 w-5 text-[#FFED00]" />
+              <Building2 className="h-5 w-5" style={{ color: typeColor }} />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-base font-mono font-black text-white truncate">
-              {card.company_name}
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-mono font-black text-white truncate">
+                {card.company_name}
+              </CardTitle>
+              <Badge variant="outline" className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0"
+                style={{ borderColor: typeColor, color: typeColor }}>
+                {isFund ? "FUND" : "COMPANY"}
+              </Badge>
+            </div>
             <p className={`text-xs font-mono mt-0.5 ${props.bio ? "text-white/60" : "text-white/30 italic"} line-clamp-1`}>
-              {props.bio || "Click to add one-sentence bio..."}
+              {props.bio || (isFund && geoFocus.length ? geoFocus.slice(0, 3).join(", ") : "Click to add one-sentence bio...")}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {props.funding_stage && (
+            {!isFund && props.funding_stage && (
               <Badge
                 className="text-[10px] font-mono font-bold border-0 px-2 py-0.5"
                 style={{ backgroundColor: stageColor + "20", color: stageColor }}
               >
                 {props.funding_stage}
+              </Badge>
+            )}
+            {isFund && chequeSize && (
+              <Badge className="text-[10px] font-mono font-bold border-0 px-2 py-0.5 bg-blue-500/20 text-blue-400">
+                {chequeSize}
               </Badge>
             )}
             <ChevronDown className={`h-4 w-4 text-white/40 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
@@ -9247,23 +9429,60 @@ function CompanyCard({
       </CardHeader>
 
       <CardContent className="pt-3 space-y-3">
-        {/* Stats Row (always visible) */}
-        <div className="grid grid-cols-4 gap-1 text-center">
-          {[
-            { val: card.document_count, label: "Docs", icon: FileText },
-            { val: card.connection_count, label: "Links", icon: Link2 },
-            { val: card.kpi_count, label: "KPIs", icon: BarChart3 },
-            { val: card.relationship_count, label: "Rels", icon: Users },
-          ].map(({ val, label, icon: Ic }) => (
-            <div key={label}>
-              <div className="text-lg font-mono font-black text-[#FFED00]">{val}</div>
-              <div className="flex items-center justify-center gap-1">
-                <Ic className="h-2.5 w-2.5 text-white/40" />
-                <span className="text-[10px] text-white/50 font-mono">{label}</span>
+        {/* Quick info row (always visible) */}
+        {isFund ? (
+          /* Fund quick info: geo, verticals, team */
+          <div className="space-y-2">
+            {geoFocus.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <Globe className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
+                {geoFocus.slice(0, 6).map((g) => (
+                  <Badge key={g} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">
+                    {g}
+                  </Badge>
+                ))}
+                {geoFocus.length > 6 && <span className="text-[9px] text-white/40 font-mono">+{geoFocus.length - 6}</span>}
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+            {industryPrefs.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <Target className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
+                {industryPrefs.slice(0, 5).map((v) => (
+                  <Badge key={v} variant="outline" className="text-[9px] font-mono text-[#FFED00]/80 border-[#FFED00]/30 px-1.5 py-0">
+                    {v}
+                  </Badge>
+                ))}
+                {industryPrefs.length > 5 && <span className="text-[9px] text-white/40 font-mono">+{industryPrefs.length - 5}</span>}
+              </div>
+            )}
+            {teamMembers.length > 0 && (
+              <div className="flex flex-wrap gap-1 items-center">
+                <User className="h-3 w-3 text-white/40 flex-shrink-0" />
+                <span className="text-[10px] text-white/60 font-mono">
+                  {teamMembers.join(", ")}
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Company quick info: stats row */
+          <div className="grid grid-cols-4 gap-1 text-center">
+            {[
+              { val: card.document_count || 0, label: "Docs", icon: FileText },
+              { val: card.connection_count || 0, label: "Links", icon: Link2 },
+              { val: card.kpi_count || 0, label: "KPIs", icon: BarChart3 },
+              { val: card.relationship_count || 0, label: "Rels", icon: Users },
+            ].map(({ val, label, icon: Ic }) => (
+              <div key={label}>
+                <div className="text-lg font-mono font-black text-[#FFED00]">{val}</div>
+                <div className="flex items-center justify-center gap-1">
+                  <Ic className="h-2.5 w-2.5 text-white/40" />
+                  <span className="text-[10px] text-white/50 font-mono">{label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ── Expanded view ── */}
         {isExpanded && (

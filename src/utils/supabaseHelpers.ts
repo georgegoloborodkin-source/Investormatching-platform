@@ -294,6 +294,332 @@ export async function updateCompanyCardProperties(entityId: string, newPropertie
   return { error };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// STRUCTURED CSV INGESTION → kg_entities + kg_edges
+// Takes parsed rows from CSV conversion and creates proper structured records
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface StructuredCSVIngestionResult {
+  entitiesCreated: number;
+  edgesCreated: number;
+  skipped: number;
+  errors: string[];
+}
+
+/**
+ * Ingest structured investor rows from CSV conversion into kg_entities.
+ * Creates a 'fund' entity for each unique firm, a 'person' entity for each team member,
+ * and edges linking them.
+ */
+export async function ingestInvestorCSVRows(
+  eventId: string,
+  investors: Array<{
+    firmName: string;
+    memberName?: string;
+    geoFocus?: string[];
+    industryPreferences?: string[];
+    stagePreferences?: string[];
+    minTicketSize?: number;
+    maxTicketSize?: number;
+  }>,
+  documentId: string | null,
+  createdBy: string | null
+): Promise<StructuredCSVIngestionResult> {
+  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, edgesCreated: 0, skipped: 0, errors: [] };
+
+  // Group investors by firm name (one firm can have multiple team members)
+  const firmMap = new Map<string, typeof investors>();
+  for (const inv of investors) {
+    if (!inv.firmName || inv.firmName.trim().length < 2) {
+      result.skipped++;
+      continue;
+    }
+    const key = inv.firmName.trim().toLowerCase();
+    if (!firmMap.has(key)) firmMap.set(key, []);
+    firmMap.get(key)!.push(inv);
+  }
+
+  for (const [normalizedName, firmInvestors] of firmMap) {
+    const firstInv = firmInvestors[0];
+    const firmName = firstInv.firmName.trim();
+
+    // Collect all team members across rows for this firm
+    const teamMembers = firmInvestors
+      .map((i) => i.memberName?.trim())
+      .filter((n): n is string => !!n && n !== "UNKNOWN" && n.length > 1);
+    const uniqueTeamMembers = [...new Set(teamMembers)];
+
+    // Merge all geo/industry/stage from all rows
+    const allGeo = [...new Set(firmInvestors.flatMap((i) => i.geoFocus || []))];
+    const allIndustry = [...new Set(firmInvestors.flatMap((i) => i.industryPreferences || []))];
+    const allStage = [...new Set(firmInvestors.flatMap((i) => i.stagePreferences || []))];
+
+    // Determine cheque size range
+    const minTickets = firmInvestors.map((i) => i.minTicketSize || 0).filter((v) => v > 0);
+    const maxTickets = firmInvestors.map((i) => i.maxTicketSize || 0).filter((v) => v > 0);
+    const minTicket = minTickets.length ? Math.min(...minTickets) : 0;
+    const maxTicket = maxTickets.length ? Math.max(...maxTickets) : 0;
+
+    // Format cheque size for display
+    const formatAmount = (n: number) => {
+      if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+      if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+      return `$${n}`;
+    };
+    const chequeDisplay =
+      minTicket && maxTicket && minTicket !== maxTicket
+        ? `${formatAmount(minTicket)} - ${formatAmount(maxTicket)}`
+        : maxTicket
+        ? formatAmount(maxTicket)
+        : minTicket
+        ? formatAmount(minTicket)
+        : "";
+
+    // Check if fund entity already exists
+    const { data: existing } = await supabase
+      .from("kg_entities")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("normalized_name", normalizedName)
+      .eq("entity_type", "fund")
+      .limit(1)
+      .single();
+
+    let fundEntityId: string;
+
+    if (existing?.id) {
+      fundEntityId = existing.id;
+      // Update properties with merged data
+      await supabase
+        .from("kg_entities")
+        .update({
+          properties: {
+            auto_created: true,
+            source: "csv_import",
+            geo_focus: allGeo,
+            industry_preferences: allIndustry,
+            stage_preferences: allStage,
+            cheque_size: chequeDisplay,
+            min_ticket_size: minTicket,
+            max_ticket_size: maxTicket,
+            team_members: uniqueTeamMembers,
+            bio: "",
+            website: "",
+            logo_url: "",
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", fundEntityId);
+      result.skipped++;
+    } else {
+      const { data: newEntity, error: insertErr } = await supabase
+        .from("kg_entities")
+        .insert({
+          event_id: eventId,
+          entity_type: "fund",
+          name: firmName,
+          normalized_name: normalizedName,
+          properties: {
+            auto_created: true,
+            source: "csv_import",
+            geo_focus: allGeo,
+            industry_preferences: allIndustry,
+            stage_preferences: allStage,
+            cheque_size: chequeDisplay,
+            min_ticket_size: minTicket,
+            max_ticket_size: maxTicket,
+            team_members: uniqueTeamMembers,
+            bio: "",
+            website: "",
+            logo_url: "",
+          },
+          source_document_id: documentId,
+          confidence: 0.9,
+          created_by: createdBy,
+        })
+        .select("id")
+        .single();
+
+      if (insertErr || !newEntity) {
+        result.errors.push(`Failed to create fund entity for "${firmName}": ${insertErr?.message || "unknown"}`);
+        continue;
+      }
+      fundEntityId = newEntity.id;
+      result.entitiesCreated++;
+    }
+
+    // Create person entities and edges for team members
+    for (const memberName of uniqueTeamMembers) {
+      const memberNormalized = memberName.toLowerCase().trim();
+
+      const { data: existingPerson } = await supabase
+        .from("kg_entities")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("normalized_name", memberNormalized)
+        .eq("entity_type", "person")
+        .limit(1)
+        .single();
+
+      let personEntityId: string;
+      if (existingPerson?.id) {
+        personEntityId = existingPerson.id;
+      } else {
+        const { data: newPerson, error: personErr } = await supabase
+          .from("kg_entities")
+          .insert({
+            event_id: eventId,
+            entity_type: "person",
+            name: memberName,
+            normalized_name: memberNormalized,
+            properties: { auto_created: true, source: "csv_import", role: "team_member" },
+            source_document_id: documentId,
+            confidence: 0.9,
+            created_by: createdBy,
+          })
+          .select("id")
+          .single();
+        if (personErr || !newPerson) continue;
+        personEntityId = newPerson.id;
+        result.entitiesCreated++;
+      }
+
+      // Create "works_at" edge: person → fund
+      const { error: edgeErr } = await supabase.from("kg_edges").insert({
+        event_id: eventId,
+        source_entity_id: personEntityId,
+        target_entity_id: fundEntityId,
+        relation_type: "works_at",
+        properties: { role: "team_member" },
+        source_document_id: documentId,
+        confidence: 0.9,
+        created_by: createdBy,
+      });
+      if (!edgeErr) result.edgesCreated++;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Ingest structured startup rows from CSV conversion into kg_entities.
+ */
+export async function ingestStartupCSVRows(
+  eventId: string,
+  startups: Array<{
+    companyName: string;
+    geoMarkets?: string[];
+    industry?: string;
+    fundingTarget?: number;
+    fundingStage?: string;
+  }>,
+  documentId: string | null,
+  createdBy: string | null
+): Promise<StructuredCSVIngestionResult> {
+  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, edgesCreated: 0, skipped: 0, errors: [] };
+
+  for (const startup of startups) {
+    if (!startup.companyName || startup.companyName.trim().length < 2) {
+      result.skipped++;
+      continue;
+    }
+    const name = startup.companyName.trim();
+    const normalizedName = name.toLowerCase();
+
+    const { data: existing } = await supabase
+      .from("kg_entities")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("normalized_name", normalizedName)
+      .eq("entity_type", "company")
+      .limit(1)
+      .single();
+
+    if (existing?.id) {
+      result.skipped++;
+      continue;
+    }
+
+    const { error: insertErr } = await supabase.from("kg_entities").insert({
+      event_id: eventId,
+      entity_type: "company",
+      name,
+      normalized_name: normalizedName,
+      properties: {
+        auto_created: true,
+        source: "csv_import",
+        bio: "",
+        funding_stage: startup.fundingStage || "",
+        amount_seeking: startup.fundingTarget ? `$${startup.fundingTarget}` : "",
+        valuation: "",
+        arr: "",
+        burn_rate: "",
+        runway_months: "",
+        problem: "",
+        solution: "",
+        tam: "",
+        competitive_edge: "",
+        founders: [],
+        ai_rationale: "",
+        website: "",
+        logo_url: "",
+        geo_markets: startup.geoMarkets || [],
+        industry: startup.industry || "",
+      },
+      source_document_id: documentId,
+      confidence: 0.9,
+      created_by: createdBy,
+    });
+
+    if (insertErr) {
+      result.errors.push(`Failed to create company "${name}": ${insertErr.message}`);
+    } else {
+      result.entitiesCreated++;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get all entity cards (both 'company' and 'fund' types) for display.
+ */
+export async function getAllEntityCards(eventId: string) {
+  const { data: entities, error } = await supabase
+    .from("kg_entities")
+    .select("id, name, entity_type, properties, event_id, created_at")
+    .eq("event_id", eventId)
+    .in("entity_type", ["company", "fund"])
+    .order("name", { ascending: true });
+
+  if (error || !entities) return { data: [], error };
+
+  // Get document counts per entity
+  const entityIds = entities.map((e: any) => e.id);
+  const { data: docLinks } = await supabase
+    .from("documents")
+    .select("company_entity_id")
+    .in("company_entity_id", entityIds.length ? entityIds : ["__none__"]);
+
+  const docCountMap = new Map<string, number>();
+  (docLinks || []).forEach((d: any) => {
+    const id = d.company_entity_id;
+    docCountMap.set(id, (docCountMap.get(id) || 0) + 1);
+  });
+
+  const cards = entities.map((e: any) => ({
+    company_id: e.id,
+    company_name: e.name,
+    entity_type: e.entity_type,
+    company_properties: e.properties || {},
+    document_count: docCountMap.get(e.id) || 0,
+    created_at: e.created_at,
+  }));
+
+  return { data: cards, error: null };
+}
+
 export async function getPendingRelationshipReviews(eventId: string) {
   try {
     // First, try to get edges with joined entities
