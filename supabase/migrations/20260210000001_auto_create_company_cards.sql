@@ -8,6 +8,7 @@ ALTER TABLE documents
 CREATE INDEX IF NOT EXISTS idx_documents_company_entity ON documents(company_entity_id);
 
 -- Function: Auto-create company entity from document title
+-- Uses AFTER INSERT so the document row exists when we reference it via FK
 CREATE OR REPLACE FUNCTION auto_create_company_from_document()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -18,7 +19,7 @@ DECLARE
 BEGIN
   -- Only process if document has a title and no company_entity_id yet
   IF NEW.title IS NULL OR NEW.title = '' OR NEW.company_entity_id IS NOT NULL THEN
-    RETURN NEW;
+    RETURN NULL;
   END IF;
 
   v_doc_title := TRIM(NEW.title);
@@ -29,7 +30,7 @@ BEGIN
      v_doc_title ILIKE '%file%' OR
      v_doc_title ILIKE 'untitled%' OR
      LENGTH(v_doc_title) < 2 THEN
-    RETURN NEW;
+    RETURN NULL;
   END IF;
 
   -- Clean up title: remove common file extensions and suffixes
@@ -39,7 +40,7 @@ BEGIN
   
   -- Skip if too short after cleaning
   IF LENGTH(v_company_name) < 2 THEN
-    RETURN NEW;
+    RETURN NULL;
   END IF;
 
   v_normalized_name := LOWER(TRIM(v_company_name));
@@ -90,17 +91,17 @@ BEGIN
     WHERE id = v_company_entity_id;
   END IF;
 
-  -- Link document to company entity
-  NEW.company_entity_id := v_company_entity_id;
+  -- Link document to company entity (UPDATE since row already exists in AFTER trigger)
+  UPDATE documents SET company_entity_id = v_company_entity_id WHERE id = NEW.id;
 
-  RETURN NEW;
+  RETURN NULL; -- AFTER triggers return NULL
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger: Auto-create company on document insert
+-- Trigger: Auto-create company AFTER document insert (document must exist for FK)
 DROP TRIGGER IF EXISTS trigger_auto_create_company_from_document ON documents;
 CREATE TRIGGER trigger_auto_create_company_from_document
-  BEFORE INSERT OR UPDATE OF title ON documents
+  AFTER INSERT OR UPDATE OF title ON documents
   FOR EACH ROW
   WHEN (NEW.title IS NOT NULL AND NEW.title != '')
   EXECUTE FUNCTION auto_create_company_from_document();
