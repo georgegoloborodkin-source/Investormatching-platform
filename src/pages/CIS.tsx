@@ -1736,6 +1736,11 @@ function SourcesTab({
       reader.readAsText(file);
     });
 
+  const isCSVFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    return file.type === "text/csv" || name.endsWith(".csv");
+  };
+
   const isTextFile = (file: File) => {
     const name = file.name.toLowerCase();
     return (
@@ -1824,6 +1829,27 @@ function SourcesTab({
             } catch (err) {
               console.error("Error reading text file:", err);
               rawContent = null;
+            }
+
+            // CSV files: ALSO send through the converter API for structured extraction
+            // (investors, startups, mentors, corporates) — raw text alone doesn't give us that
+            if (isCSVFile(file)) {
+              try {
+                console.log("[CSV] Sending CSV to converter API for structured extraction…");
+                const conversion = await convertFileWithAI(file);
+                extractedJson = conversion as unknown as Record<string, any>;
+                detectedType = conversion.detectedType || detectedType;
+                // If converter gave us richer raw content, prefer it
+                if (conversion.raw_content && (!rawContent || conversion.raw_content.length > rawContent.length)) {
+                  rawContent = conversion.raw_content;
+                }
+                console.log("[CSV] Converter detected:", conversion.detectedType,
+                  "| investors:", (conversion.investors || []).length,
+                  "| startups:", (conversion.startups || []).length);
+              } catch (csvErr) {
+                console.error("[CSV] Converter API failed (non-fatal):", csvErr);
+                // Non-fatal — the raw text is still stored
+              }
             }
           } else {
             // For non-text files, try converter API (PDF/DOCX/XLSX/etc.)
