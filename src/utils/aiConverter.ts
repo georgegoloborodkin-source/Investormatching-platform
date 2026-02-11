@@ -237,13 +237,15 @@ export async function askClaudeAnswerStream(
     decisions: AskFundDecision[];
     connections?: AskFundConnection[];
     previousMessages?: ChatMessage[];
+    webSearchEnabled?: boolean;
   },
   onChunk: (text: string) => void,
   onError?: (error: Error) => void
 ): Promise<void> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
-  const timeoutMs = 70000;
+  // Give more time when web search is enabled (Claude may perform multiple searches)
+  const timeoutMs = input.webSearchEnabled ? 120000 : 70000;
   let timeoutFired = false;
   const timeout = window.setTimeout(() => {
     timeoutFired = true;
@@ -258,6 +260,7 @@ export async function askClaudeAnswerStream(
       connections: input.connections || [],
       // Backend expects snake_case
       previous_messages: input.previousMessages || [],
+      web_search_enabled: input.webSearchEnabled || false,
     };
     const response = await fetch(`${baseUrl}/ask/stream`, {
       method: "POST",
@@ -318,6 +321,10 @@ export async function askClaudeAnswerStream(
               const data = JSON.parse(dataStr);
               if (data.text) {
                 onChunk(data.text);
+              } else if (data.status) {
+                // Status updates from backend (e.g. "🌐 Searching the web...")
+                // Pass as a visual indicator to the user
+                onChunk(`\n*${data.status}*\n`);
               } else if (data.error) {
                 onError?.(new Error(data.error));
                 return;

@@ -143,7 +143,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, webSearch, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type WebSearchResult } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -7347,31 +7347,14 @@ export default function CIS() {
           // Get previous messages from this thread for context
           const threadMessages = await getThreadMessages(threadId, 10);
           
-          // ── WEB SEARCH in no-docs path: If enabled, fetch web results ──
-          let noDocSources = portfolioSources.length > 0 ? [...portfolioSources] : [] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
-          if (webSearchEnabled) {
-            try {
-              console.log("[DEBUG] 🌐 Web search (no-docs path) — searching for:", searchQuestion);
-              const webResults = await webSearch(searchQuestion, 5);
-              if (webResults.length > 0) {
-                const webSources = webResults.map((r) => ({
-                  title: `[WEB] ${r.title}`,
-                  file_name: r.url as string | null,
-                  snippet: r.snippet,
-                }));
-                noDocSources = [...noDocSources, ...webSources];
-                console.log("[DEBUG] 🌐 Added", webResults.length, "web search results (no-docs path)");
-              }
-            } catch (err) {
-              console.warn("[DEBUG] Web search failed (non-blocking):", err);
-            }
-          }
+          // Call Claude with portfolio context (web search is handled natively by Anthropic when enabled)
+          const noDocSources = portfolioSources.length > 0 ? [...portfolioSources] : [] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
           
-          // Call Claude with portfolio context + web results, or empty sources otherwise
           await askClaudeAnswerStream(
             {
               question,
               sources: noDocSources,
+              webSearchEnabled,
               decisions: decisionIntent
                 ? decisionMatches.map((d) => ({
                     startup_name: d.startupName,
@@ -7500,24 +7483,7 @@ export default function CIS() {
             console.log("[DEBUG] 🔗 Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
           }
         }
-        // ── WEB SEARCH: If enabled, fetch web results and append as [WEB] sources ──
-        if (webSearchEnabled) {
-          try {
-            console.log("[DEBUG] 🌐 Web search enabled — searching for:", searchQuestion);
-            const webResults = await webSearch(searchQuestion, 5);
-            if (webResults.length > 0) {
-              const webSources = webResults.map((r) => ({
-                title: `[WEB] ${r.title}`,
-                file_name: r.url as string | null,
-                snippet: r.snippet,
-              }));
-              sources = [...sources, ...webSources];
-              console.log("[DEBUG] 🌐 Added", webResults.length, "web search results to sources");
-            }
-          } catch (err) {
-            console.warn("[DEBUG] Web search failed (non-blocking):", err);
-          }
-        }
+        // Web search is now handled natively by Anthropic's web_search tool (no manual DuckDuckGo needed)
 
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({
@@ -7545,6 +7511,7 @@ export default function CIS() {
             decisions: decisionsForClaude,
             connections: connectionsForChat,
             previousMessages: threadMessages,
+            webSearchEnabled,
           },
           (chunk) => {
             if (!streamCompleted) {

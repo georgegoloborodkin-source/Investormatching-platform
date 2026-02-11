@@ -564,6 +564,7 @@ class AskRequest(BaseModel):
     decisions: List[AskDecision] = []
     connections: List[AskConnection] = Field(default_factory=list)
     previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
+    web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
 
     model_config = {"populate_by_name": True}
 
@@ -1881,6 +1882,55 @@ TOOLS_FOR_ANSWERS = [
     },
 ]
 
+# ── Anthropic native Web Search tool (server-side, Claude handles searching) ──
+ANTHROPIC_WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 5,
+}
+
+# Models that support Anthropic native web search
+WEB_SEARCH_COMPATIBLE_MODELS = [
+    "claude-sonnet-4-20250514",
+    "claude-opus-4-20250514",
+    "claude-haiku-4-5-20251001",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-haiku-latest",
+]
+
+def get_web_search_model_list() -> List[str]:
+    """Return model list prioritizing web-search-compatible models."""
+    # Start with the default model if it's compatible
+    models = []
+    if ANTHROPIC_MODEL in WEB_SEARCH_COMPATIBLE_MODELS:
+        models.append(ANTHROPIC_MODEL)
+    # Add other compatible models
+    for m in WEB_SEARCH_COMPATIBLE_MODELS:
+        if m not in models:
+            models.append(m)
+    return models
+
+
+def _append_web_citations(content_blocks, text: str) -> str:
+    """Extract web search citations from Claude's response and append source links."""
+    citations_seen: Dict[str, str] = {}  # url -> title
+    for block in content_blocks:
+        block_citations = getattr(block, "citations", None)
+        if not block_citations:
+            continue
+        for cite in block_citations:
+            cite_type = getattr(cite, "type", "")
+            if cite_type == "web_search_result_location":
+                url = getattr(cite, "url", "")
+                title = getattr(cite, "title", "")
+                if url and url not in citations_seen:
+                    citations_seen[url] = title
+    if citations_seen:
+        text += "\n\n**Web Sources:**"
+        for i, (url, title) in enumerate(citations_seen.items(), 1):
+            text += f"\n[{i}] [{title}]({url})"
+    return text
+
 
 async def execute_tool_call(tool_name: str, tool_input: Dict[str, Any], event_id: Optional[str] = None) -> str:
     """
@@ -1907,10 +1957,11 @@ async def execute_tool_call(tool_name: str, tool_input: Dict[str, Any], event_id
     return json.dumps({"status": "error", "message": f"Unknown tool: {tool_name}"})
 
 
-async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None) -> str:
+async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None, web_search_enabled: bool = False) -> str:
     """
     Call Claude to answer a user question with tool-augmented RAG.
     Uses the Anthropic SDK when available (faster, automatic retries, prompt caching) with httpx fallback.
+    When web_search_enabled=True, adds Anthropic's native web search tool so Claude can search the internet.
     """
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
@@ -1920,8 +1971,17 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
 
     # Choose model based on question complexity (Haiku is 3-5x faster)
     use_haiku = question and sources and is_simple_question(question, sources)
-    model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
+    if web_search_enabled:
+        # Web search requires compatible models — override model list
+        model_list = get_web_search_model_list()
+    else:
+        model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
     max_tokens = 10000 if use_haiku else ASK_MAX_TOKENS
+
+    # Build tools list — add native web search if enabled
+    tools = list(TOOLS_FOR_ANSWERS)
+    if web_search_enabled:
+        tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
@@ -1929,8 +1989,9 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
         "When a user asks about a company, check the Connections Graph for relationships. "
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
-        "Sources marked [WEB] are web search results — use them to answer questions about companies not in internal documents. "
-        "Be helpful, concise, and answer the actual question asked."
+        + ("You have web search enabled. Use it to find up-to-date information about companies, markets, or topics "
+           "not covered by the provided internal documents. Always cite web sources. " if web_search_enabled else "")
+        + "Be helpful, concise, and answer the actual question asked."
     )
 
     # ── SDK path (preferred) — with tool calling ──
@@ -1939,20 +2000,21 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
         last_error: Optional[str] = None
         for model_name in model_list:
             try:
-                # First call: Claude may request tools
+                # First call: Claude may request tools (+ native web search if enabled)
                 message = await client.messages.create(
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=0.5,
                     system=system_msg,
                     messages=[{"role": "user", "content": prompt}],
-                    tools=TOOLS_FOR_ANSWERS,
+                    tools=tools,
                 )
                 
-                # Handle tool use if present
+                # Handle tool use if present (skip server_tool_use — web search is handled by Anthropic)
                 tool_results = []
                 for content_block in message.content:
-                    if hasattr(content_block, "type") and content_block.type == "tool_use":
+                    block_type = getattr(content_block, "type", "")
+                    if block_type == "tool_use":
                         tool_id = getattr(content_block, "id", "")
                         tool_name = getattr(content_block, "name", "")
                         tool_input = getattr(content_block, "input", {})
@@ -1962,6 +2024,8 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                             "tool_use_id": tool_id,
                             "content": result,
                         })
+                    # server_tool_use (web_search) and web_search_tool_result are handled
+                    # automatically by the Anthropic API — no action needed from us
                 
                 # If tools were used, make a follow-up call with results
                 if tool_results:
@@ -1981,9 +2045,15 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                     if text:
                         return text
                 else:
-                    # No tools used — return direct answer
+                    # No client-side tools used — return direct answer
+                    # (web search results are already incorporated by Anthropic server)
                     text_parts = [b.text for b in message.content if hasattr(b, "text")]
                     text = "\n".join(text_parts).strip()
+                    
+                    # Append web search citation URLs if present
+                    if web_search_enabled:
+                        text = _append_web_citations(message.content, text)
+                    
                     if text:
                         return text
                 
@@ -2006,7 +2076,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
     default_url = "https://api.anthropic.com/v1/messages"
 
     last_error = None
-    async with httpx.AsyncClient(timeout=60.0) as http_client:
+    async with httpx.AsyncClient(timeout=120.0) as http_client:
         for model_name in [m for m in model_list if m]:
             payload = {
                 "model": model_name,
@@ -2014,7 +2084,7 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                 "temperature": 0.5,
                 "system": system_msg,
                 "messages": [{"role": "user", "content": prompt}],
-                "tools": TOOLS_FOR_ANSWERS,  # Tools available but execution requires SDK
+                "tools": tools,
             }
 
             res = await http_client.post(url, headers=headers, json=payload)
@@ -3611,10 +3681,11 @@ async def list_clickup_lists(request: ClickUpListsRequest):
 
     return ClickUpListsResponse(lists=lists)
 
-async def stream_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+async def stream_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None, web_search_enabled: bool = False) -> AsyncGenerator[str, None]:
     """
     Stream Claude's response token by token for ChatGPT-like experience with tool-augmented RAG.
     Uses Anthropic SDK streaming when available, httpx SSE fallback otherwise.
+    When web_search_enabled=True, adds Anthropic's native web search tool.
     """
     if not ANTHROPIC_API_KEY:
         yield json.dumps({"error": "ANTHROPIC_API_KEY not set"})
@@ -3622,44 +3693,78 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
 
     is_comp = is_comprehensive_question(question)
     use_haiku = question and sources and is_simple_question(question, sources) and not is_comp
-    model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
+    if web_search_enabled:
+        model_list = get_web_search_model_list()
+    else:
+        model_list = ([HAIKU_MODEL] + ANTHROPIC_MODEL_FALLBACKS) if use_haiku else ANTHROPIC_MODEL_FALLBACKS
     max_tokens = 8000 if is_comp else (2000 if use_haiku else ASK_MAX_TOKENS)
+
+    # Build tools list — add native web search if enabled
+    tools = list(TOOLS_FOR_ANSWERS)
+    if web_search_enabled:
+        tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
+
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
         "When a user asks about a company, check the Connections Graph for relationships. "
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
-        "Sources marked [WEB] are web search results — use them to answer questions about companies not in internal documents. "
-        "Be helpful, concise, and answer the actual question asked."
+        + ("You have web search enabled. Use it to find up-to-date information about companies, markets, or topics "
+           "not covered by the provided internal documents. Always cite web sources. " if web_search_enabled else "")
+        + "Be helpful, concise, and answer the actual question asked."
     )
 
-    # ── SDK streaming (preferred) — with tool support ──
+    # ── SDK streaming (preferred) — with tool support + native web search ──
     if _anthropic_sdk_available:
         client = _get_anthropic_async_client()
         for model_name in model_list:
             try:
-                # First stream: Claude may request tools
+                # Stream: Claude may use tools or web search (native search is handled server-side)
                 async with client.messages.stream(
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=0.1,
                     system=system_msg,
                     messages=[{"role": "user", "content": prompt}],
-                    tools=TOOLS_FOR_ANSWERS,
+                    tools=tools,
                 ) as stream:
                     tool_uses = []
+                    web_search_citations: Dict[str, str] = {}  # url -> title
                     async for event in stream:
-                        if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                            yield json.dumps({"text": event.delta.text})
-                        elif event.type == "content_block_start" and hasattr(event.content_block, "type") and getattr(event.content_block, "type") == "tool_use":
-                            tool_uses.append({
-                                "id": getattr(event.content_block, "id", ""),
-                                "name": getattr(event.content_block, "name", ""),
-                                "input": getattr(event.content_block, "input", {}),
-                            })
+                        if event.type == "content_block_delta" and hasattr(event.delta, "type"):
+                            if event.delta.type == "text_delta":
+                                yield json.dumps({"text": event.delta.text})
+                        elif event.type == "content_block_start" and hasattr(event.content_block, "type"):
+                            block_type = getattr(event.content_block, "type", "")
+                            if block_type == "tool_use":
+                                tool_uses.append({
+                                    "id": getattr(event.content_block, "id", ""),
+                                    "name": getattr(event.content_block, "name", ""),
+                                    "input": getattr(event.content_block, "input", {}),
+                                })
+                            elif block_type == "server_tool_use":
+                                # Native web search is executing — notify frontend
+                                yield json.dumps({"status": "🌐 Searching the web..."})
+                            elif block_type == "web_search_tool_result":
+                                # Collect web search result citations
+                                result_content = getattr(event.content_block, "content", [])
+                                if isinstance(result_content, list):
+                                    for item in result_content:
+                                        if hasattr(item, "type") and getattr(item, "type", "") == "web_search_result":
+                                            url = getattr(item, "url", "")
+                                            title = getattr(item, "title", "")
+                                            if url:
+                                                web_search_citations[url] = title
                     
-                    # If tools were used, execute and stream follow-up
+                    # Append web search source links at the end
+                    if web_search_citations:
+                        sources_text = "\n\n**Web Sources:**"
+                        for i, (url, title) in enumerate(web_search_citations.items(), 1):
+                            sources_text += f"\n[{i}] [{title}]({url})"
+                        yield json.dumps({"text": sources_text})
+                    
+                    # If client-side tools were used, execute and stream follow-up
                     if tool_uses:
                         yield json.dumps({"status": "tool_execution", "tools": len(tool_uses)})
                         tool_results = []
@@ -3704,7 +3809,8 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     url = get_anthropic_api_url()
     default_url = "https://api.anthropic.com/v1/messages"
 
-    async with httpx.AsyncClient(timeout=60.0) as http_client:
+    http_timeout = 120.0 if web_search_enabled else 60.0
+    async with httpx.AsyncClient(timeout=http_timeout) as http_client:
         for model_name in [m for m in model_list if m]:
             payload = {
                 "model": model_name,
@@ -3713,6 +3819,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                 "stream": True,
                 "system": system_msg,
                 "messages": [{"role": "user", "content": prompt}],
+                "tools": tools,
             }
 
             try:
@@ -3750,8 +3857,16 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                                 return
                             try:
                                 data = json.loads(data_str)
-                                if "delta" in data and "text" in data["delta"]:
+                                delta = data.get("delta", {})
+                                if delta.get("type") == "text_delta" and "text" in delta:
+                                    yield json.dumps({"text": delta["text"]})
+                                elif "delta" in data and "text" in data["delta"]:
                                     yield json.dumps({"text": data["delta"]["text"]})
+                                # Handle web search events in httpx fallback
+                                elif data.get("type") == "content_block_start":
+                                    cb = data.get("content_block", {})
+                                    if cb.get("type") == "server_tool_use" and cb.get("name") == "web_search":
+                                        yield json.dumps({"status": "🌐 Searching the web..."})
                                 elif "error" in data:
                                     yield json.dumps({"error": str(data["error"])})
                                     return
@@ -3796,7 +3911,7 @@ async def ask_fund(request: AskRequest, auth: AuthContext = Depends(get_auth_con
         first_source = request.sources[0]
         if hasattr(first_source, "metadata") and isinstance(first_source.metadata, dict):
             event_id = first_source.metadata.get("event_id")
-    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources, event_id=event_id)
+    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources, event_id=event_id, web_search_enabled=request.web_search_enabled)
     return AskResponse(answer=answer)
 
 
@@ -3885,7 +4000,7 @@ async def ask_fund_stream(request: AskRequest, auth: AuthContext = Depends(get_a
                     if hasattr(first_source, "metadata") and isinstance(first_source.metadata, dict):
                         event_id = first_source.metadata.get("event_id")
 
-                async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or [], event_id=event_id):
+                async for chunk in stream_anthropic_answer(prompt, question=question, sources=request.sources or [], event_id=event_id, web_search_enabled=request.web_search_enabled):
                     yield f"data: {chunk}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
@@ -4135,7 +4250,9 @@ async def ingest_document_stream(file: UploadFile = File(...), dataType: Optiona
 
 
 # ---------------------------------------------------------------------------
-#  Web Search — DuckDuckGo HTML search (no API key required)
+#  Web Search — DuckDuckGo HTML search (LEGACY — kept as fallback)
+#  Primary web search now uses Anthropic native web_search_20250305 tool
+#  which is passed directly in /ask and /ask/stream when web_search_enabled=true
 # ---------------------------------------------------------------------------
 
 class WebSearchRequest(BaseModel):
@@ -5430,7 +5547,8 @@ async def startup_event():
     print(f"   /contextualize-chunk  — Contextual Retrieval headers")
     print(f"   /graphrag/retrieve    — LazyGraphRAG retrieval pipeline")
     print(f"   /ingest/document-stream — SSE streaming document ingestion")
-    print(f"   /web-search           — DuckDuckGo web search (no API key)")
+    print(f"   /web-search           — DuckDuckGo web search (legacy fallback)")
+    print(f"   🌐 Native web search — Anthropic web_search_20250305 (in /ask, /ask/stream)")
     print("=" * 60)
 
 if __name__ == "__main__":
