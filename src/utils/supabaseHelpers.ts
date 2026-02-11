@@ -383,7 +383,7 @@ export async function ingestInvestorCSVRows(
       .eq("normalized_name", normalizedName)
       .eq("entity_type", "fund")
       .limit(1)
-      .single();
+      .maybeSingle();
 
     let fundEntityId: string;
 
@@ -459,7 +459,7 @@ export async function ingestInvestorCSVRows(
         .eq("normalized_name", memberNormalized)
         .eq("entity_type", "person")
         .limit(1)
-        .single();
+        .maybeSingle();
 
       let personEntityId: string;
       if (existingPerson?.id) {
@@ -534,7 +534,7 @@ export async function ingestStartupCSVRows(
       .eq("normalized_name", normalizedName)
       .eq("entity_type", "company")
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (existing?.id) {
       result.skipped++;

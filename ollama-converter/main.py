@@ -2162,24 +2162,36 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         []
     )
     
-    # Handle cheque/ticket size - may be a range like "100K-500K" or ">1M"
+    # Handle cheque/ticket size - may be comma-separated ranges like ">1M, 100K-500K"
     cheque_size_raw = data.get('[INV] Cheque Size (labels)') or data.get('Cheque Size') or data.get('Check Size') or ''
     
     if cheque_size_raw and isinstance(cheque_size_raw, str):
-        # Parse ranges like "100K-500K" or ">1M"
-        if '-' in cheque_size_raw:
-            parts = cheque_size_raw.split('-')
-            min_ticket = parse_number(parts[0]) if len(parts) > 0 else 0
-            max_ticket = parse_number(parts[1]) if len(parts) > 1 else min_ticket * 10
-        elif '>' in cheque_size_raw:
-            min_ticket = parse_number(cheque_size_raw.replace('>', ''))
-            max_ticket = min_ticket * 10
-        elif '<' in cheque_size_raw:
-            max_ticket = parse_number(cheque_size_raw.replace('<', ''))
-            min_ticket = max_ticket // 10
-        else:
-            min_ticket = parse_number(cheque_size_raw)
-            max_ticket = min_ticket * 5
+        # Split on comma first to handle multi-value entries like ">1M, 100K-500K"
+        all_mins = []
+        all_maxs = []
+        for part in re.split(r'[,;]', cheque_size_raw):
+            part = part.strip()
+            if not part:
+                continue
+            if '-' in part:
+                range_parts = part.split('-', 1)
+                pmin = parse_number(range_parts[0])
+                pmax = parse_number(range_parts[1]) if len(range_parts) > 1 else pmin * 10
+                if pmin: all_mins.append(pmin)
+                if pmax: all_maxs.append(pmax)
+            elif '>' in part:
+                val = parse_number(part.replace('>', ''))
+                if val: all_mins.append(val)
+            elif '<' in part:
+                val = parse_number(part.replace('<', ''))
+                if val: all_maxs.append(val)
+            else:
+                val = parse_number(part)
+                if val:
+                    all_mins.append(val)
+                    all_maxs.append(val)
+        min_ticket = min(all_mins) if all_mins else 0
+        max_ticket = max(all_maxs) if all_maxs else (min_ticket * 10 if min_ticket else 0)
     else:
         min_ticket = parse_number(data.get('minTicketSize') or data.get('min_ticket_size') or data.get('minInvestment') or 0)
         max_ticket = parse_number(data.get('maxTicketSize') or data.get('max_ticket_size') or data.get('maxInvestment') or 10000000)

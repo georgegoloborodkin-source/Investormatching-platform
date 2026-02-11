@@ -1540,7 +1540,7 @@ function SourcesTab({
   activeEventId: string | null;
   ensureActiveEventId: () => Promise<string | null>;
   currentUserId: string | null;
-  indexDocumentEmbeddings: (documentId: string, rawContent?: string | null) => Promise<void>;
+  indexDocumentEmbeddings: (documentId: string, rawContent?: string | null, docTitle?: string | null) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [clickUpListId, setClickUpListId] = useState(() => {
@@ -5184,7 +5184,9 @@ export default function CIS() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    embeddingsDisabledRef.current = localStorage.getItem("disable_embeddings") === "true";
+    // Clear legacy permanent disable flag — we now use session-only failure tracking
+    localStorage.removeItem("disable_embeddings");
+    embeddingsDisabledRef.current = false;
     const existing = localStorage.getItem("ventureos_cost_log");
     if (existing) {
       try {
@@ -5248,13 +5250,19 @@ export default function CIS() {
     [chunkTextWithOverlap]
   );
 
+  // Track transient failures per session (NOT permanently in localStorage)
+  const embeddingFailCountRef = useRef(0);
+  const MAX_EMBEDDING_FAILURES = 5; // disable only after 5 consecutive failures in this session
+
   const disableEmbeddings = useCallback((reason?: string) => {
-    embeddingsDisabledRef.current = true;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("disable_embeddings", "true");
-    }
+    embeddingFailCountRef.current++;
     if (reason) {
-      console.warn("Embeddings disabled:", reason);
+      console.warn(`[EMBED] Failure #${embeddingFailCountRef.current}: ${reason}`);
+    }
+    // Only disable for this session after repeated failures — never persist to localStorage
+    if (embeddingFailCountRef.current >= MAX_EMBEDDING_FAILURES) {
+      embeddingsDisabledRef.current = true;
+      console.error(`[EMBED] Disabled for this session after ${MAX_EMBEDDING_FAILURES} failures. Refresh page to retry.`);
     }
   }, []);
 
@@ -5486,16 +5494,19 @@ export default function CIS() {
                   });
                   if (retryError) {
                     disableEmbeddings(retryError.message || "Embedding insert failed");
-                    return;
+                    // Skip this chunk but continue with others
+                    continue;
                   }
                 } else {
                   disableEmbeddings(error.message || "Embedding insert failed");
-                  return;
+                  // Skip this chunk but continue with others
+                  continue;
                 }
               }
             } catch (chunkErr) {
               disableEmbeddings(chunkErr instanceof Error ? chunkErr.message : "Embedding error");
-              return;
+              // Skip this chunk but continue with others
+              continue;
             }
           }
           console.log(`[EMBED] ✅ Indexed ${pairs.length} chunks for doc ${documentId} (contextual enrichment enabled)`);
