@@ -320,7 +320,7 @@ OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")  # 1536 dimensions
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY") or os.getenv("VOYAGER_API_KEY")
-VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3")
+VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-large-2")
 
 # Auto-detect embedding dimension based on model
 # Voyage model dimensions: voyage-3-lite=512, voyage-3=1024, voyage-large-2=1536, voyage-finance-2=1024
@@ -4526,6 +4526,213 @@ async def extract_entities(request: EntityExtractionRequest):
     except Exception as e:
         print(f"[EXTRACT] Entity extraction failed: {e}")
         return EntityExtractionResponse()
+
+
+# ---------------------------------------------------------------------------
+#  Company Property Extraction — auto-populate company cards from documents
+# ---------------------------------------------------------------------------
+
+class CompanyPropertyExtractionRequest(BaseModel):
+    """Extract structured company properties from a document."""
+    raw_content: str = Field(..., description="Document text content")
+    document_title: str = ""
+    document_type: str = ""  # pitch_deck, investment_memo, data_room, email
+    existing_properties: Dict[str, Any] = Field(default_factory=dict, description="Current card properties (for context)")
+
+
+class CompanyPropertyExtractionResponse(BaseModel):
+    properties: Dict[str, Any] = Field(default_factory=dict)
+    confidence: Dict[str, float] = Field(default_factory=dict)
+    document_type_detected: str = ""
+
+
+@app.post("/extract-company-properties", response_model=CompanyPropertyExtractionResponse)
+async def extract_company_properties(request: CompanyPropertyExtractionRequest):
+    """
+    Extract structured company card properties from document text.
+    Uses Claude with structured output to fill: bio, funding_stage, amount_seeking,
+    valuation, arr, burn_rate, runway_months, problem, solution, tam,
+    competitive_edge, founders, website, industry, geo_markets.
+    Returns per-field confidence scores.
+    """
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return CompanyPropertyExtractionResponse()
+
+    text = (request.raw_content or "").strip()
+    if not text:
+        return CompanyPropertyExtractionResponse()
+
+    # Truncate to fit context window
+    text = text[:MAX_MODEL_INPUT_CHARS]
+
+    # Step 1: Detect document type if not provided
+    doc_type = (request.document_type or "").strip()
+    if not doc_type:
+        doc_type_prompt = (
+            f"Document title: {request.document_title}\n"
+            f"First 500 chars:\n{text[:500]}\n\n"
+            "Classify this document as ONE of: pitch_deck, investment_memo, data_room, email, report, other\n"
+            "Return ONLY the classification word, nothing else."
+        )
+        try:
+            client = _get_anthropic_async_client()
+            msg = await client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=20,
+                temperature=0.0,
+                messages=[{"role": "user", "content": doc_type_prompt}],
+            )
+            doc_type = "".join(b.text for b in msg.content if hasattr(b, "text")).strip().lower()
+            doc_type = doc_type.replace('"', '').replace("'", "").strip()
+        except Exception:
+            doc_type = "unknown"
+
+    # Step 2: Build extraction prompt based on document type
+    field_guidance = ""
+    if doc_type == "pitch_deck":
+        field_guidance = (
+            "This is a pitch deck. Focus on extracting: bio (company description), "
+            "problem, solution, TAM, competitive_edge, founders, funding_stage, amount_seeking, "
+            "industry, geo_markets, website."
+        )
+    elif doc_type == "investment_memo":
+        field_guidance = (
+            "This is an investment memo. Focus on extracting: valuation, amount_seeking, "
+            "funding_stage, arr, burn_rate, runway_months, competitive_edge, founders, "
+            "industry, geo_markets."
+        )
+    elif doc_type == "data_room":
+        field_guidance = (
+            "This is a data room document. Focus on extracting: arr, burn_rate, "
+            "runway_months, valuation, founders, industry."
+        )
+    else:
+        field_guidance = "Extract all available company properties from this document."
+
+    existing_context = ""
+    if request.existing_properties:
+        non_empty = {k: v for k, v in request.existing_properties.items()
+                     if v and not k.startswith("_") and k not in ("auto_created", "source", "first_seen_document", "last_seen_document", "document_count")}
+        if non_empty:
+            existing_context = (
+                f"\n\nExisting card data (for context — extract NEW information not already here):\n"
+                f"{json.dumps(non_empty, indent=2, default=str)}\n"
+            )
+
+    prompt = (
+        f"Document title: {request.document_title}\n"
+        f"Document type: {doc_type}\n"
+        f"{field_guidance}\n{existing_context}\n"
+        f"Document text:\n---\n{text}\n---\n\n"
+        "Extract company properties from this document into the following JSON structure.\n"
+        "For each field, also provide a confidence score (0.0-1.0) indicating how sure you are.\n"
+        "Leave fields as empty string or empty array if the information is NOT in the document.\n"
+        "Do NOT make up information — only extract what's explicitly stated or strongly implied.\n\n"
+        "Required JSON format:\n"
+        "{\n"
+        '  "properties": {\n'
+        '    "bio": "1-3 sentence company description",\n'
+        '    "funding_stage": "Pre-seed|Seed|Series A|Series B+|etc",\n'
+        '    "amount_seeking": "$X.XM or $XXK",\n'
+        '    "valuation": "$X.XM pre/post-money",\n'
+        '    "arr": "$X.XM or $XXK",\n'
+        '    "burn_rate": "$XXK/month",\n'
+        '    "runway_months": "XX",\n'
+        '    "problem": "the problem being solved",\n'
+        '    "solution": "how the company solves it",\n'
+        '    "tam": "total addressable market size",\n'
+        '    "competitive_edge": "moat / differentiation",\n'
+        '    "founders": [{"name": "...", "role": "CEO/CTO/etc", "background": "..."}],\n'
+        '    "website": "https://...",\n'
+        '    "industry": "Fintech|SaaS|AI/ML|etc",\n'
+        '    "geo_markets": ["North America", "Europe", ...]\n'
+        "  },\n"
+        '  "confidence": {\n'
+        '    "bio": 0.9,\n'
+        '    "funding_stage": 0.8,\n'
+        "    ...(one entry per non-empty field)\n"
+        "  }\n"
+        "}\n\n"
+        "Return ONLY valid JSON. No markdown, no explanation."
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=4096,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+
+        # Parse JSON from response
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            # Try to extract JSON block
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                print(f"[EXTRACT-PROPS] Could not parse JSON from response: {raw[:300]}")
+                return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
+
+        properties = data.get("properties", data)
+        confidence = data.get("confidence", {})
+
+        # Normalize: remove None values, convert to strings where expected
+        clean_props: Dict[str, Any] = {}
+        string_fields = ["bio", "funding_stage", "amount_seeking", "valuation", "arr",
+                         "burn_rate", "runway_months", "problem", "solution", "tam",
+                         "competitive_edge", "website", "industry"]
+        list_fields = ["geo_markets"]
+        json_fields = ["founders"]
+
+        for field in string_fields:
+            val = properties.get(field, "")
+            if val is None:
+                val = ""
+            if isinstance(val, (int, float)):
+                val = str(val)
+            if isinstance(val, str) and val.strip():
+                clean_props[field] = val.strip()
+
+        for field in list_fields:
+            val = properties.get(field, [])
+            if isinstance(val, list) and val:
+                clean_props[field] = [str(v).strip() for v in val if v]
+
+        for field in json_fields:
+            val = properties.get(field, [])
+            if isinstance(val, list) and val:
+                clean_props[field] = val
+            elif isinstance(val, str) and val.strip():
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        clean_props[field] = parsed
+                except json.JSONDecodeError:
+                    pass
+
+        # Clean confidence: only keep entries for fields we actually extracted
+        clean_confidence = {}
+        for field, score in confidence.items():
+            if field in clean_props:
+                try:
+                    clean_confidence[field] = float(score)
+                except (ValueError, TypeError):
+                    clean_confidence[field] = 0.5
+
+        return CompanyPropertyExtractionResponse(
+            properties=clean_props,
+            confidence=clean_confidence,
+            document_type_detected=doc_type,
+        )
+
+    except Exception as e:
+        print(f"[EXTRACT-PROPS] Company property extraction failed: {e}")
+        return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
 
 
 # ---------------------------------------------------------------------------
