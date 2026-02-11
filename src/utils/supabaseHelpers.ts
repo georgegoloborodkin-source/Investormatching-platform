@@ -295,6 +295,177 @@ export async function updateCompanyCardProperties(entityId: string, newPropertie
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// SMART PROPERTY MERGE — auto-populate company cards from AI extraction
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface PropertyConflict {
+  field: string;
+  oldValue: any;
+  newValue: any;
+  newDocumentId: string;
+  newConfidence: number;
+}
+
+export interface MergeResult {
+  updated: string[];
+  skipped: string[];
+  conflicts: PropertyConflict[];
+  entityId: string;
+  companyName: string;
+}
+
+/**
+ * Fetch the company_entity_id linked to a document (set by the DB trigger).
+ * Returns null if the document has no linked entity.
+ */
+export async function getDocumentCompanyEntityId(documentId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("company_entity_id")
+    .eq("id", documentId)
+    .single();
+  if (error || !data) return null;
+  return (data as any).company_entity_id || null;
+}
+
+/**
+ * Fetch current properties for a kg_entity.
+ */
+export async function getEntityProperties(entityId: string): Promise<{ name: string; properties: Record<string, any> } | null> {
+  const { data, error } = await supabase
+    .from("kg_entities")
+    .select("name, properties")
+    .eq("id", entityId)
+    .single();
+  if (error || !data) return null;
+  return { name: (data as any).name, properties: (data as any).properties || {} };
+}
+
+/**
+ * Smart merge: fill empty fields from AI extraction, never overwrite user edits,
+ * detect conflicts, and track property sources.
+ *
+ * Merge strategy:
+ * - Empty field on card + extracted value exists → fill it
+ * - Non-empty field on card + extracted value differs → record as conflict, don't overwrite
+ * - Fields in _edited_fields → never overwrite (user wins)
+ * - Store _property_sources: { field: { document_id, confidence, extracted_at } }
+ */
+export async function mergeCompanyCardFromExtraction(
+  entityId: string,
+  extractedProps: Record<string, any>,
+  confidence: Record<string, number>,
+  sourceDocumentId: string,
+  options?: { overwriteExisting?: boolean }
+): Promise<MergeResult> {
+  const entity = await getEntityProperties(entityId);
+  if (!entity) {
+    return { updated: [], skipped: [], conflicts: [], entityId, companyName: "" };
+  }
+
+  const current = entity.properties;
+  const editedFields: string[] = current._edited_fields || [];
+  const propertySources: Record<string, any> = current._property_sources || {};
+  const propertyConflicts: any[] = current._property_conflicts || [];
+
+  const updated: string[] = [];
+  const skipped: string[] = [];
+  const conflicts: PropertyConflict[] = [];
+  const mergedProps: Record<string, any> = {};
+
+  // Fields that are internal metadata — skip them
+  const metaFields = new Set([
+    "_edited_fields", "_property_sources", "_property_conflicts",
+    "auto_created", "source", "first_seen_document", "last_seen_document", "document_count",
+  ]);
+
+  for (const [field, newValue] of Object.entries(extractedProps)) {
+    if (metaFields.has(field)) continue;
+
+    // Skip if no meaningful value extracted
+    if (newValue === "" || newValue === null || newValue === undefined) continue;
+    if (Array.isArray(newValue) && newValue.length === 0) continue;
+
+    // Skip if user manually edited this field
+    if (editedFields.includes(field)) {
+      skipped.push(field);
+      continue;
+    }
+
+    const currentValue = current[field];
+    const isEmpty = (v: any) => {
+      if (v === "" || v === null || v === undefined) return true;
+      if (Array.isArray(v) && v.length === 0) return true;
+      if (typeof v === "string" && v === "[]") return true;
+      return false;
+    };
+
+    if (isEmpty(currentValue)) {
+      // Empty → fill it
+      mergedProps[field] = newValue;
+      updated.push(field);
+      propertySources[field] = {
+        document_id: sourceDocumentId,
+        confidence: confidence[field] ?? 0.5,
+        extracted_at: new Date().toISOString(),
+      };
+    } else if (options?.overwriteExisting) {
+      // Force overwrite mode
+      mergedProps[field] = newValue;
+      updated.push(field);
+      propertySources[field] = {
+        document_id: sourceDocumentId,
+        confidence: confidence[field] ?? 0.5,
+        extracted_at: new Date().toISOString(),
+      };
+    } else {
+      // Non-empty → check if values differ
+      const valuesMatch = JSON.stringify(currentValue) === JSON.stringify(newValue);
+      if (!valuesMatch) {
+        conflicts.push({
+          field,
+          oldValue: currentValue,
+          newValue,
+          newDocumentId: sourceDocumentId,
+          newConfidence: confidence[field] ?? 0.5,
+        });
+        // Store conflict for later resolution
+        propertyConflicts.push({
+          field,
+          values: [
+            { value: currentValue, source: propertySources[field]?.document_id || "existing" },
+            { value: newValue, source: sourceDocumentId, confidence: confidence[field] ?? 0.5 },
+          ],
+          detected_at: new Date().toISOString(),
+        });
+      } else {
+        skipped.push(field);
+      }
+    }
+  }
+
+  // Build the update payload
+  if (updated.length > 0 || conflicts.length > 0) {
+    const updatePayload: Record<string, any> = {
+      ...mergedProps,
+      _property_sources: propertySources,
+      _property_conflicts: propertyConflicts,
+    };
+
+    const { error } = await supabase.rpc("update_company_card_properties", {
+      p_entity_id: entityId,
+      p_new_properties: updatePayload,
+    } as any);
+
+    if (error) {
+      console.error("[mergeCompanyCard] Update failed:", error);
+    }
+  }
+
+  return { updated, skipped, conflicts, entityId, companyName: entity.name };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // STRUCTURED CSV INGESTION → kg_entities + kg_edges
 // Takes parsed rows from CSV conversion and creates proper structured records
 // ─────────────────────────────────────────────────────────────────────────

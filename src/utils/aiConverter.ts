@@ -381,6 +381,45 @@ export async function rerankDocuments(input: {
   return data?.results || [];
 }
 
+// ---------------------------------------------------------------------------
+// Web Search — calls /web-search on the backend (DuckDuckGo, no API key)
+// ---------------------------------------------------------------------------
+
+export interface WebSearchResult {
+  title: string;
+  snippet: string;
+  url: string;
+}
+
+export async function webSearch(
+  query: string,
+  maxResults: number = 5
+): Promise<WebSearchResult[]> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/web-search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, max_results: maxResults }),
+      },
+      15000
+    );
+
+    if (!response.ok) {
+      console.warn("[webSearch] HTTP error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    return data?.results || [];
+  } catch (err) {
+    console.warn("[webSearch] Error:", err);
+    return [];
+  }
+}
+
 export async function rewriteQueryWithLLM(
   question: string,
   previousMessages?: ChatMessage[]
@@ -868,6 +907,50 @@ export async function suggestConnections(input: {
       return { suggestions: [], contextSummary: "AI suggestions require Anthropic API configuration. Please set ANTHROPIC_API_KEY in your backend environment." };
     }
     return { suggestions: [], contextSummary: "Connection suggestions unavailable. Please check backend configuration." };
+  }
+}
+
+/**
+ * Extract structured company card properties from document text.
+ * Calls the backend /extract-company-properties endpoint.
+ */
+export interface CompanyPropertyExtractionResult {
+  properties: Record<string, any>;
+  confidence: Record<string, number>;
+  document_type_detected: string;
+}
+
+export async function extractCompanyProperties(input: {
+  rawContent: string;
+  documentTitle?: string;
+  documentType?: string;
+  existingProperties?: Record<string, any>;
+}): Promise<CompanyPropertyExtractionResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetch(`${baseUrl}/extract-company-properties`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        raw_content: input.rawContent,
+        document_title: input.documentTitle || "",
+        document_type: input.documentType || "",
+        existing_properties: input.existingProperties || {},
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      properties: data.properties || {},
+      confidence: data.confidence || {},
+      document_type_detected: data.document_type_detected || "",
+    };
+  } catch (error) {
+    console.error("[extractCompanyProperties] Error:", error);
+    return { properties: {}, confidence: {}, document_type_detected: "" };
   }
 }
 

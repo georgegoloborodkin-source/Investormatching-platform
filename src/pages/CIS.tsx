@@ -136,11 +136,14 @@ import {
   deleteDecision,
   deleteSource,
   getDocumentById,
+  getDocumentCompanyEntityId,
+  getEntityProperties,
+  mergeCompanyCardFromExtraction,
   type ConnectionType,
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, webSearch, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type WebSearchResult } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1501,6 +1504,7 @@ function SourcesTab({
   ensureActiveEventId,
   currentUserId,
   indexDocumentEmbeddings,
+  onRefreshCompanyCards,
 }: {
   sources: SourceRecord[];
   documents: Array<{
@@ -1541,6 +1545,7 @@ function SourcesTab({
   ensureActiveEventId: () => Promise<string | null>;
   currentUserId: string | null;
   indexDocumentEmbeddings: (documentId: string, rawContent?: string | null, docTitle?: string | null) => Promise<void>;
+  onRefreshCompanyCards?: () => Promise<void>;
 }) {
   const { toast } = useToast();
   const [clickUpListId, setClickUpListId] = useState(() => {
@@ -1555,6 +1560,12 @@ function SourcesTab({
   const [isImportingClickUp, setIsImportingClickUp] = useState(false);
   const [isImportingDrive, setIsImportingDrive] = useState(false);
   const [isUploadingLocal, setIsUploadingLocal] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; currentFile: string; results: Array<{ name: string; updated: number; conflicts: number; created: boolean }> } | null>(null);
+  const [batchReviewData, setBatchReviewData] = useState<Array<{
+    companyName: string;
+    entityId: string;
+    fields: Array<{ field: string; value: any; confidence: number; approved: boolean }>;
+  }> | null>(null);
   const [autoExtract, setAutoExtract] = useState(true);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("none");
   const [newFolderName, setNewFolderName] = useState("");
@@ -1804,11 +1815,15 @@ function SourcesTab({
       }
 
       setIsUploadingLocal(true);
+      setUploadProgress({ current: 0, total: files.length, currentFile: "", results: [] });
       try {
         let successCount = 0;
         const uploadedDocs: Array<{ id: string; title: string | null }> = [];
+        const batchResults: Array<{ name: string; updated: number; conflicts: number; created: boolean }> = [];
 
-        for (const file of files) {
+        for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
+          const file = files[fileIdx];
+          setUploadProgress((prev) => prev ? { ...prev, current: fileIdx + 1, currentFile: file.name } : null);
           // Better sanitization: replace spaces and special chars, keep extension
           const ext = file.name.includes(".") ? file.name.substring(file.name.lastIndexOf(".")) : "";
           const baseName = file.name.replace(ext, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
@@ -2027,17 +2042,102 @@ function SourcesTab({
             }
           }
 
+          // ── Auto-extract company properties into company card ──
+          // The DB trigger auto-creates a company entity from the document title.
+          // Now we use AI to extract structured properties and merge them into the card.
+          if (rawContent && docRecord.id) {
+            try {
+              // Small delay to let the DB trigger create the entity
+              await new Promise((r) => setTimeout(r, 500));
+
+              const companyEntityId = await getDocumentCompanyEntityId(docRecord.id);
+              if (companyEntityId) {
+                const existing = await getEntityProperties(companyEntityId);
+                const extraction = await extractCompanyProperties({
+                  rawContent: rawContent,
+                  documentTitle: docRecord.title || file.name,
+                  existingProperties: existing?.properties || {},
+                });
+
+                if (Object.keys(extraction.properties).length > 0) {
+                  const mergeResult = await mergeCompanyCardFromExtraction(
+                    companyEntityId,
+                    extraction.properties,
+                    extraction.confidence,
+                    docRecord.id,
+                  );
+                  console.log(`[AutoExtract] ${mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
+                  batchResults.push({
+                    name: mergeResult.companyName || file.name,
+                    updated: mergeResult.updated.length,
+                    conflicts: mergeResult.conflicts.length,
+                    created: !!companyEntityId,
+                  });
+                } else {
+                  batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: !!companyEntityId });
+                }
+              } else {
+                batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
+              }
+            } catch (extractErr) {
+              console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
+              batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
+            }
+          }
+
           successCount += 1;
         }
 
+        // Update progress with final results
+        setUploadProgress((prev) => prev ? { ...prev, current: files.length, results: batchResults } : null);
+
         if (successCount > 0) {
+          const totalUpdated = batchResults.reduce((s, r) => s + r.updated, 0);
+          const totalConflicts = batchResults.reduce((s, r) => s + r.conflicts, 0);
+          const companiesUpdated = batchResults.filter((r) => r.updated > 0).length;
+          const companiesCreated = batchResults.filter((r) => r.created).length;
+
+          let description = `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}.`;
+          if (totalUpdated > 0 || companiesCreated > 0) {
+            description += ` Updated ${companiesUpdated} compan${companiesUpdated === 1 ? "y" : "ies"} (${totalUpdated} properties).`;
+          }
+          if (totalConflicts > 0) {
+            description += ` ${totalConflicts} conflict${totalConflicts > 1 ? "s" : ""} to review.`;
+          }
+
           toast({
             title: "Upload complete",
-            description: `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}.`,
+            description,
           });
         }
         if (uploadedDocs.length > 0) {
           openFolderAssignmentDialog(uploadedDocs);
+        }
+
+        // If multiple files were uploaded and we have results, open the review dialog
+        if (batchResults.length > 0 && batchResults.some((r) => r.updated > 0 || r.conflicts > 0)) {
+          // Build review data from the batch results by re-fetching the entities
+          const reviewItems: typeof batchReviewData = [];
+          for (const result of batchResults) {
+            if (result.updated > 0 || result.conflicts > 0) {
+              // We can't access merge details directly, so we show a summary
+              reviewItems.push({
+                companyName: result.name,
+                entityId: "", // not critical for display
+                fields: [],
+              });
+            }
+          }
+          // Only show review if meaningful results
+          if (reviewItems.length > 0 && files.length > 1) {
+            // The review is informational for batch uploads — toast is enough for single files
+            setBatchReviewData(reviewItems);
+          }
+        }
+
+        // Refresh company cards to reflect auto-extraction
+        if (onRefreshCompanyCards) {
+          await onRefreshCompanyCards();
         }
       } catch (err) {
         toast({
@@ -2047,10 +2147,11 @@ function SourcesTab({
         });
       } finally {
         setIsUploadingLocal(false);
+        setUploadProgress(null);
         e.target.value = "";
       }
     },
-    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onCreateSource, onDocumentSaved, openFolderAssignmentDialog, toast]
+    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onCreateSource, onDocumentSaved, onRefreshCompanyCards, openFolderAssignmentDialog, toast]
   );
 
   const importDriveUrl = useCallback(async (url: string) => {
@@ -2515,6 +2616,36 @@ function SourcesTab({
             onChange={handleLocalUpload}
             accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
           />
+          {uploadProgress && (
+            <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-white/80">
+                  Processing {uploadProgress.current}/{uploadProgress.total}: <span className="text-[#FFED00]">{uploadProgress.currentFile}</span>
+                </span>
+                <span className="text-xs font-mono text-white/50">
+                  {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+              {uploadProgress.results.length > 0 && (
+                <div className="text-[10px] font-mono text-white/50 space-y-0.5 max-h-20 overflow-auto">
+                  {uploadProgress.results.map((r, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-white/70">{r.name}:</span>
+                      {r.updated > 0 && <span className="text-emerald-400">{r.updated} updated</span>}
+                      {r.conflicts > 0 && <span className="text-orange-400">{r.conflicts} conflicts</span>}
+                      {r.updated === 0 && r.conflicts === 0 && <span className="text-white/40">no changes</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <p className="text-xs text-white/70 font-mono">
             Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) — all are indexed for AI search.
           </p>
@@ -2708,6 +2839,54 @@ function SourcesTab({
             >
               {isAssigningFolders ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
               Assign folders
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Batch Review Dialog ── */}
+      <Dialog
+        open={batchReviewData !== null && batchReviewData.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setBatchReviewData(null);
+        }}
+      >
+        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#FFED00]" />
+              Batch Extraction Summary
+            </DialogTitle>
+            <DialogDescription className="text-white/70 font-mono">
+              Properties auto-extracted from uploaded documents.
+              Review in the Companies tab for details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {batchReviewData?.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-md border border-white/10 bg-white/5">
+                <Building2 className="h-4 w-4 text-[#FFED00] flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-mono font-bold text-white truncate">{item.companyName}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge className="text-[9px] font-mono bg-emerald-500/20 text-emerald-400 border-0">
+                    <Check className="h-2.5 w-2.5 mr-0.5" />
+                    processed
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-[10px] font-mono text-white/50">
+              Switch to the Companies tab to review details and resolve conflicts.
+            </p>
+            <Button
+              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              onClick={() => setBatchReviewData(null)}
+            >
+              Got it
             </Button>
           </div>
         </DialogContent>
@@ -4005,6 +4184,7 @@ export default function CIS() {
   } | null>(null);
   const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   
   // Company Connections state for visual graph and decision logging
   const [companyConnections, setCompanyConnections] = useState<Array<{
@@ -7167,11 +7347,31 @@ export default function CIS() {
           // Get previous messages from this thread for context
           const threadMessages = await getThreadMessages(threadId, 10);
           
-          // Call Claude with portfolio context for connection-intent, or empty sources otherwise
+          // ── WEB SEARCH in no-docs path: If enabled, fetch web results ──
+          let noDocSources = portfolioSources.length > 0 ? [...portfolioSources] : [] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
+          if (webSearchEnabled) {
+            try {
+              console.log("[DEBUG] 🌐 Web search (no-docs path) — searching for:", searchQuestion);
+              const webResults = await webSearch(searchQuestion, 5);
+              if (webResults.length > 0) {
+                const webSources = webResults.map((r) => ({
+                  title: `[WEB] ${r.title}`,
+                  file_name: r.url as string | null,
+                  snippet: r.snippet,
+                }));
+                noDocSources = [...noDocSources, ...webSources];
+                console.log("[DEBUG] 🌐 Added", webResults.length, "web search results (no-docs path)");
+              }
+            } catch (err) {
+              console.warn("[DEBUG] Web search failed (non-blocking):", err);
+            }
+          }
+          
+          // Call Claude with portfolio context + web results, or empty sources otherwise
           await askClaudeAnswerStream(
             {
               question,
-              sources: portfolioSources.length > 0 ? portfolioSources : [],
+              sources: noDocSources,
               decisions: decisionIntent
                 ? decisionMatches.map((d) => ({
                     startup_name: d.startupName,
@@ -7300,6 +7500,25 @@ export default function CIS() {
             console.log("[DEBUG] 🔗 Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
           }
         }
+        // ── WEB SEARCH: If enabled, fetch web results and append as [WEB] sources ──
+        if (webSearchEnabled) {
+          try {
+            console.log("[DEBUG] 🌐 Web search enabled — searching for:", searchQuestion);
+            const webResults = await webSearch(searchQuestion, 5);
+            if (webResults.length > 0) {
+              const webSources = webResults.map((r) => ({
+                title: `[WEB] ${r.title}`,
+                file_name: r.url as string | null,
+                snippet: r.snippet,
+              }));
+              sources = [...sources, ...webSources];
+              console.log("[DEBUG] 🌐 Added", webResults.length, "web search results to sources");
+            }
+          } catch (err) {
+            console.warn("[DEBUG] Web search failed (non-blocking):", err);
+          }
+        }
+
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({
               startup_name: d.startupName,
@@ -7412,6 +7631,7 @@ export default function CIS() {
       documents,
       persistCostLog,
       getThreadMessages,
+      webSearchEnabled,
     ]
   );
 
@@ -8252,6 +8472,19 @@ export default function CIS() {
                         </Button>
                       </div>
                       <div className="flex items-center justify-between mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setWebSearchEnabled((prev) => !prev)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border-2 ${
+                            webSearchEnabled
+                              ? "border-[#FFED00] bg-[#FFED00]/20 text-[#FFED00]"
+                              : "border-white/30 bg-transparent text-white/50 hover:border-white/60 hover:text-white/80"
+                          }`}
+                          title="Enable web search to find information about companies not in your documents"
+                        >
+                          <Globe className="h-3.5 w-3.5" />
+                          Web Search {webSearchEnabled ? "ON" : "OFF"}
+                        </button>
                         <span className="text-xs text-white/70 font-mono">
                           {chatIsLoading ? "Searching..." : "Press Enter to send"}
                         </span>
@@ -8283,6 +8516,12 @@ export default function CIS() {
               ensureActiveEventId={ensureActiveEventId}
               currentUserId={profile?.id || user?.id || null}
               indexDocumentEmbeddings={indexDocumentEmbeddings}
+              onRefreshCompanyCards={async () => {
+                if (activeEventId) {
+                  const res = await getAllEntityCards(activeEventId);
+                  if (res.data) setCompanyCards(res.data as typeof companyCards);
+                }
+              }}
             />
           </TabsContent>
 
@@ -8318,7 +8557,16 @@ export default function CIS() {
               onOpenDocument={handleOpenDocument}
               onNavigateToConnections={() => setActiveTab("connections")}
               onUpdateCard={async (entityId, properties) => {
-                await updateCompanyCardProperties(entityId, properties);
+                // Track which fields the user manually edited so auto-extraction never overwrites them
+                const editedFieldNames = Object.keys(properties).filter((k) => !k.startsWith("_"));
+                const entity = await getEntityProperties(entityId);
+                const currentEditedFields: string[] = entity?.properties?._edited_fields || [];
+                const mergedEditedFields = [...new Set([...currentEditedFields, ...editedFieldNames])];
+
+                await updateCompanyCardProperties(entityId, {
+                  ...properties,
+                  _edited_fields: mergedEditedFields,
+                });
                 // Refresh card data
                 if (event) {
                   const res = await getAllEntityCards(event.id);
@@ -9414,9 +9662,27 @@ function CompanyCard({
   const teamMembers = (props.team_members || []) as string[];
   const chequeSize = props.cheque_size || "";
 
+  // Property tracking
+  const propertySources: Record<string, { document_id: string; confidence: number; extracted_at: string }> = props._property_sources || {};
+  const propertyConflicts: Array<{ field: string; values: Array<{ value: any; source: string; confidence?: number }>; detected_at: string }> = props._property_conflicts || [];
+  const hasConflicts = propertyConflicts.length > 0;
+
+  // Count auto-filled properties
+  const autoFilledCount = Object.keys(propertySources).length;
+
+  // Resolve a conflict by choosing a value
+  const resolveConflict = (field: string, chosenValue: any) => {
+    // Remove this conflict from the list
+    const remaining = propertyConflicts.filter((c) => c.field !== field);
+    onUpdateCard(card.company_id, {
+      [field]: chosenValue,
+      _property_conflicts: remaining,
+    });
+  };
+
   return (
     <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
-      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
+      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : hasConflicts ? "border-orange-500/60 hover:border-orange-400" : "border-white/60 hover:border-[#FFED00]"
     }`}>
       {/* ── A. Header: Identity ── */}
       <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
@@ -9441,6 +9707,18 @@ function CompanyCard({
                 style={{ borderColor: typeColor, color: typeColor }}>
                 {isFund ? "FUND" : "COMPANY"}
               </Badge>
+              {hasConflicts && (
+                <Badge className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0 bg-orange-500/20 text-orange-400 border-orange-500/40">
+                  <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                  {propertyConflicts.length} conflict{propertyConflicts.length > 1 ? "s" : ""}
+                </Badge>
+              )}
+              {autoFilledCount > 0 && !hasConflicts && (
+                <Badge className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/40">
+                  <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                  {autoFilledCount} auto-filled
+                </Badge>
+              )}
             </div>
             <p className={`text-xs font-mono mt-0.5 ${props.bio ? "text-white/60" : "text-white/30 italic"} line-clamp-1`}>
               {props.bio || (isFund && geoFocus.length ? geoFocus.slice(0, 3).join(", ") : "Click to add one-sentence bio...")}
@@ -9623,6 +9901,90 @@ function CompanyCard({
               <EditableField label="Website" value={props.website || ""} placeholder="https://..." icon={Globe} onSave={(v) => saveField("website", v)} />
               <EditableField label="Logo URL" value={props.logo_url || ""} placeholder="https://logo.png" onSave={(v) => saveField("logo_url", v)} />
             </div>
+
+            {/* Conflict Resolution */}
+            {hasConflicts && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />
+                  <span className="text-xs font-mono font-black text-orange-400 uppercase tracking-wider">
+                    Conflicting Values ({propertyConflicts.length})
+                  </span>
+                </div>
+                <div className="space-y-2 pl-1">
+                  {propertyConflicts.map((conflict, ci) => (
+                    <div key={ci} className="bg-orange-500/5 border border-orange-500/20 rounded-md p-2 space-y-1">
+                      <div className="text-[10px] font-mono font-bold text-white/80 uppercase">
+                        {conflict.field.replace(/_/g, " ")}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {conflict.values.map((v, vi) => (
+                          <button
+                            key={vi}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              resolveConflict(conflict.field, v.value);
+                            }}
+                            className="text-[10px] font-mono px-2 py-1 rounded border border-white/20 text-white/80 hover:border-[#FFED00] hover:text-[#FFED00] hover:bg-[#FFED00]/10 transition-colors"
+                            title={`Source: ${v.source}${v.confidence ? ` (${(v.confidence * 100).toFixed(0)}% confidence)` : ""}`}
+                          >
+                            {typeof v.value === "string" ? v.value : JSON.stringify(v.value)}
+                            {v.confidence != null && (
+                              <span className={`ml-1 ${v.confidence >= 0.8 ? "text-emerald-400" : v.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
+                                ({(v.confidence * 100).toFixed(0)}%)
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Property Sources (auto-fill info) */}
+            {autoFilledCount > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
+                    Auto-filled from {autoFilledCount} field{autoFilledCount > 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 pl-1">
+                  {Object.entries(propertySources).map(([field, source]) => {
+                    const doc = documents.find((d) => d.id === source.document_id);
+                    const conf = source.confidence || 0;
+                    return (
+                      <TooltipProvider key={field}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className={`text-[9px] font-mono px-1.5 py-0 cursor-help ${
+                                conf >= 0.8
+                                  ? "border-emerald-500/30 text-emerald-400/80"
+                                  : conf >= 0.5
+                                  ? "border-yellow-500/30 text-yellow-400/80"
+                                  : "border-red-500/30 text-red-400/80"
+                              }`}
+                            >
+                              {field.replace(/_/g, " ")}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs font-mono max-w-xs">
+                            <p>Source: {doc?.title || source.document_id?.slice(0, 8) || "unknown"}</p>
+                            <p>Confidence: {(conf * 100).toFixed(0)}%</p>
+                            {source.extracted_at && <p>Extracted: {new Date(source.extracted_at).toLocaleDateString()}</p>}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <Separator className="bg-white/10" />
 

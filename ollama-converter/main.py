@@ -1780,12 +1780,12 @@ CRITICAL RULES:
 11. Do NOT be overly apologetic. If you have information, present it confidently and thoroughly. Only apologize if you truly have no relevant information.
 12. When the user asks about something mentioned in the conversation (e.g., "tell me more about him" after discussing George), search the sources for information about that person/entity, even if the current question is vague.
 
-🔗 **CONNECTIONS & PARTNERSHIP RULES (CRITICAL)**:
+🔗 **CONNECTIONS & PARTNERSHIP RULES**:
 13. **ALWAYS CHECK THE CONNECTIONS GRAPH** below when the user mentions ANY company name. If the company has connections in the graph, list them with type and status.
-14. **SUGGEST NEW CONNECTIONS PROACTIVELY.** If the user asks about a company (e.g., "Ridelink") and sources list OTHER companies (like "Giga Energy", "Crypto Strategy Marketplace"), suggest potential connections between them. Explain WHY they could partner based on their industries, stages, markets, or complementary capabilities.
-15. **Sources labeled [Portfolio company/document: ...]** represent companies/documents in the user's portfolio. Use them to suggest partnerships even if they don't directly mention the company being asked about.
-16. When sources are available but none mention the company asked about, DO NOT just say "I don't have information." Instead: list the portfolio companies you DO see in the sources and suggest which ones could connect with the asked-about company, and why.
-17. **NEVER say "I cannot find information about X" when there are sources AND a connections graph available.** Instead, use what you have: mention what companies ARE in the portfolio, suggest connections, and explain potential synergies.{comprehensive_instruction}{raw_text_instruction}{source_ref_instruction}
+14. If the user explicitly asks about a SPECIFIC company (e.g., "help me understand Ridelink") and the sources do NOT contain information about that company, DO NOT talk about unrelated companies like they are the answer. Instead: (a) state clearly what you found in the Connections Graph for that company, (b) briefly mention that no detailed documents about this company were found, (c) suggest the user enable Web Search or upload relevant documents. Do NOT ramble about other companies as if they were the answer.
+15. **Sources labeled [Portfolio company/document: ...]** represent companies in the user's portfolio. ONLY suggest partnerships or connections between them and the asked-about company when the user specifically asks about connections, partnerships, or synergies — not when they ask general questions like "what is this company about."
+16. When suggesting connections, explain WHY they could partner based on their industries, stages, markets, or complementary capabilities. Use connection types: BD, Investment, Knowledge, Partnership, Portfolio.
+17. If web search results are provided (marked as [WEB] sources), use them to answer the question. Web results are real-time internet data and should be treated as trustworthy supplementary context.{comprehensive_instruction}{raw_text_instruction}{source_ref_instruction}
 
 Answer style:
 - Prioritize comprehensive, coherent narrative answers grounded in sources.
@@ -1811,10 +1811,10 @@ Company Connections Graph (use to answer questions about company relationships, 
 Remember: 
 - ALWAYS check the conversation history above to understand pronouns and context.
 - ALWAYS check the Connections Graph for the company being asked about. Report ALL known connections.
-- If a company is NOT in the graph, look at the Sources for OTHER companies and SUGGEST connections. For example: "Ridelink isn't in your connections graph yet. Based on your portfolio, here's who they could connect with: [Company A] because [reason], [Company B] because [reason]."
-- When sources list portfolio companies (even if they don't mention the company being asked about), USE that portfolio data to suggest connections and synergies.
-- Be proactive: suggest connection types (BD, Investment, Knowledge, Partnership, Portfolio) and explain the reasoning.
-- NEVER just say "I don't have information" if there are sources OR connections available. Always suggest, always be helpful.
+- If a company is NOT in the Connections Graph and NOT in the sources, say so honestly. Do NOT fabricate information or ramble about unrelated companies.
+- ONLY suggest portfolio connections/partnerships when the user asks about connections, partnerships, or synergies — not when they ask "what is this company."
+- If [WEB] sources are present, use them confidently to answer questions about companies not found in internal documents.
+- Be helpful and concise. Answer the actual question asked.
 """
 
 # Fast model for simple questions (3-5x faster)
@@ -1926,14 +1926,11 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
-        "When a user asks about a company, always check the Connections Graph for relationships. "
-        "If a company isn't in the graph, suggest potential connections based on sources. "
-        "Sources labeled [Portfolio company/document: ...] represent companies in the user's "
-        "portfolio — use them to suggest partnerships, introductions, and synergies. "
-        "NEVER say 'I don't have information' when you have portfolio sources or connections data. "
-        "Be helpful, proactive, and reference company relationships whenever relevant. "
-        "You have access to tools: query_kpis (for financial metrics) and search_graph (for entity relationships). "
-        "Use them when users ask about specific numbers or connections."
+        "When a user asks about a company, check the Connections Graph for relationships. "
+        "If the user asks WHAT a company IS or what it does, focus on answering that question — "
+        "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
+        "Sources marked [WEB] are web search results — use them to answer questions about companies not in internal documents. "
+        "Be helpful, concise, and answer the actual question asked."
     )
 
     # ── SDK path (preferred) — with tool calling ──
@@ -3630,14 +3627,11 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
-        "When a user asks about a company, always check the Connections Graph for relationships. "
-        "If a company isn't in the graph, suggest potential connections based on sources. "
-        "Sources labeled [Portfolio company/document: ...] represent companies in the user's "
-        "portfolio — use them to suggest partnerships, introductions, and synergies. "
-        "NEVER say 'I don't have information' when you have portfolio sources or connections data. "
-        "Be helpful, proactive, and reference company relationships whenever relevant. "
-        "You have access to tools: query_kpis (for financial metrics) and search_graph (for entity relationships). "
-        "Use them when users ask about specific numbers or connections."
+        "When a user asks about a company, check the Connections Graph for relationships. "
+        "If the user asks WHAT a company IS or what it does, focus on answering that question — "
+        "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
+        "Sources marked [WEB] are web search results — use them to answer questions about companies not in internal documents. "
+        "Be helpful, concise, and answer the actual question asked."
     )
 
     # ── SDK streaming (preferred) — with tool support ──
@@ -4138,6 +4132,131 @@ async def ingest_document_stream(file: UploadFile = File(...), dataType: Optiona
             "Access-Control-Allow-Origin": "*",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+#  Web Search — DuckDuckGo HTML search (no API key required)
+# ---------------------------------------------------------------------------
+
+class WebSearchRequest(BaseModel):
+    query: str
+    max_results: int = Field(default=5, ge=1, le=10)
+
+class WebSearchResult(BaseModel):
+    title: str
+    snippet: str
+    url: str
+
+class WebSearchResponse(BaseModel):
+    results: List[WebSearchResult]
+    query: str
+
+
+@app.post("/web-search", response_model=WebSearchResponse)
+async def web_search_endpoint(request: WebSearchRequest):
+    """
+    Search the web using DuckDuckGo HTML (no API key needed).
+    Returns titles, snippets, and URLs for the top results.
+    """
+    query = (request.query or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required.")
+
+    results: List[WebSearchResult] = []
+    try:
+        import re as _re
+        import html as _html
+
+        # Use DuckDuckGo HTML search (no API key needed)
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+            )
+            resp.raise_for_status()
+            body = resp.text
+
+            # Parse results from HTML
+            # DuckDuckGo HTML results are in <div class="result"> blocks
+            result_blocks = _re.findall(
+                r'<div[^>]*class="[^"]*result__body[^"]*"[^>]*>(.*?)</div>\s*</div>',
+                body,
+                _re.DOTALL,
+            )
+
+            if not result_blocks:
+                # Alternative parsing: look for result titles and snippets separately
+                titles_raw = _re.findall(
+                    r'<a[^>]*class="result__a"[^>]*>(.*?)</a>',
+                    body,
+                    _re.DOTALL,
+                )
+                snippets_raw = _re.findall(
+                    r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+                    body,
+                    _re.DOTALL,
+                )
+                urls_raw = _re.findall(
+                    r'<a[^>]*class="result__a"[^>]*href="([^"]*)"',
+                    body,
+                )
+
+                for i in range(min(len(titles_raw), len(snippets_raw), request.max_results)):
+                    title = _re.sub(r'<[^>]+>', '', titles_raw[i]).strip()
+                    snippet = _re.sub(r'<[^>]+>', '', snippets_raw[i]).strip()
+                    url = urls_raw[i] if i < len(urls_raw) else ""
+
+                    # DuckDuckGo wraps URLs in a redirect — extract the actual URL
+                    url_match = _re.search(r'uddg=([^&]+)', url)
+                    if url_match:
+                        from urllib.parse import unquote
+                        url = unquote(url_match.group(1))
+
+                    title = _html.unescape(title)
+                    snippet = _html.unescape(snippet)
+
+                    if title and snippet:
+                        results.append(WebSearchResult(
+                            title=title,
+                            snippet=snippet,
+                            url=url,
+                        ))
+            else:
+                for block in result_blocks[:request.max_results]:
+                    title_m = _re.search(r'<a[^>]*class="result__a"[^>]*>(.*?)</a>', block, _re.DOTALL)
+                    snippet_m = _re.search(r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>', block, _re.DOTALL)
+                    url_m = _re.search(r'<a[^>]*class="result__a"[^>]*href="([^"]*)"', block)
+
+                    title = _re.sub(r'<[^>]+>', '', title_m.group(1)).strip() if title_m else ""
+                    snippet = _re.sub(r'<[^>]+>', '', snippet_m.group(1)).strip() if snippet_m else ""
+                    url = url_m.group(1) if url_m else ""
+
+                    url_match = _re.search(r'uddg=([^&]+)', url)
+                    if url_match:
+                        from urllib.parse import unquote
+                        url = unquote(url_match.group(1))
+
+                    title = _html.unescape(title)
+                    snippet = _html.unescape(snippet)
+
+                    if title and snippet:
+                        results.append(WebSearchResult(
+                            title=title,
+                            snippet=snippet,
+                            url=url,
+                        ))
+
+        print(f"[WEB-SEARCH] query='{query}', results={len(results)}")
+
+    except Exception as e:
+        print(f"[WEB-SEARCH] Error: {e}")
+        # Return empty results rather than failing the whole request
+        pass
+
+    return WebSearchResponse(results=results, query=query)
 
 
 @app.post("/rewrite-query", response_model=RewriteQueryResponse)
@@ -5311,6 +5430,7 @@ async def startup_event():
     print(f"   /contextualize-chunk  — Contextual Retrieval headers")
     print(f"   /graphrag/retrieve    — LazyGraphRAG retrieval pipeline")
     print(f"   /ingest/document-stream — SSE streaming document ingestion")
+    print(f"   /web-search           — DuckDuckGo web search (no API key)")
     print("=" * 60)
 
 if __name__ == "__main__":
