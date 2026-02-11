@@ -375,15 +375,15 @@ export async function ingestInvestorCSVRows(
         ? formatAmount(minTicket)
         : "";
 
-    // Check if fund entity already exists
-    const { data: existing } = await supabase
+    // Check if fund entity already exists (use array query to avoid 406 from PostgREST)
+    const { data: existingArr } = await supabase
       .from("kg_entities")
       .select("id")
       .eq("event_id", eventId)
       .eq("normalized_name", normalizedName)
       .eq("entity_type", "fund")
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    const existing = existingArr?.[0] ?? null;
 
     let fundEntityId: string;
 
@@ -452,14 +452,15 @@ export async function ingestInvestorCSVRows(
     for (const memberName of uniqueTeamMembers) {
       const memberNormalized = memberName.toLowerCase().trim();
 
-      const { data: existingPerson } = await supabase
+      // Use array query to avoid 406 from PostgREST when no rows found
+      const { data: existingPersonArr } = await supabase
         .from("kg_entities")
         .select("id")
         .eq("event_id", eventId)
         .eq("normalized_name", memberNormalized)
         .eq("entity_type", "person")
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      const existingPerson = existingPersonArr?.[0] ?? null;
 
       let personEntityId: string;
       if (existingPerson?.id) {
@@ -527,14 +528,15 @@ export async function ingestStartupCSVRows(
     const name = startup.companyName.trim();
     const normalizedName = name.toLowerCase();
 
-    const { data: existing } = await supabase
+    // Use array query to avoid 406 from PostgREST when no rows found
+    const { data: existingArr } = await supabase
       .from("kg_entities")
       .select("id")
       .eq("event_id", eventId)
       .eq("normalized_name", normalizedName)
       .eq("entity_type", "company")
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    const existing = existingArr?.[0] ?? null;
 
     if (existing?.id) {
       result.skipped++;
