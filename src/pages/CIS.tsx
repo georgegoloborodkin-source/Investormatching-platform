@@ -5970,7 +5970,7 @@ export default function CIS() {
       }
       
       // Use cleaned query if it's not empty, otherwise use original
-      const finalSearchQuery = cleanedSearchQuery || searchQuestion;
+      let finalSearchQuery = cleanedSearchQuery || searchQuestion;
       
       // PHASE 2: Query intent classification
       const classifyQueryIntent = (query: string): string => {
@@ -9494,7 +9494,7 @@ function CompanyCard({
             )}
             {teamMembers.length > 0 && (
               <div className="flex flex-wrap gap-1 items-center">
-                <User className="h-3 w-3 text-white/40 flex-shrink-0" />
+                <Users className="h-3 w-3 text-white/40 flex-shrink-0" />
                 <span className="text-[10px] text-white/60 font-mono">
                   {teamMembers.join(", ")}
                 </span>
