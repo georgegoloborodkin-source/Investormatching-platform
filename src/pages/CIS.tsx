@@ -2000,11 +2000,11 @@ function SourcesTab({
                 const ingResult = await ingestInvestorCSVRows(
                   eventId, investorRows, docRecord.id, currentUserId || null
                 );
-                console.log(`[StructuredCSV] Investors: ${ingResult.entitiesCreated} created, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
-                if (ingResult.entitiesCreated > 0) {
+                console.log(`[StructuredCSV] Investors: ${ingResult.entitiesCreated} created, ${ingResult.entitiesUpdated} updated, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
+                if (ingResult.entitiesCreated > 0 || ingResult.entitiesUpdated > 0) {
                   toast({
-                    title: "Structured data extracted",
-                    description: `Created ${ingResult.entitiesCreated} investor/fund entities from CSV rows.`,
+                    title: "Structured data processed",
+                    description: `${ingResult.entitiesCreated} new + ${ingResult.entitiesUpdated} updated investor/fund entities from CSV.`,
                   });
                 }
               }
@@ -2013,11 +2013,11 @@ function SourcesTab({
                 const ingResult = await ingestStartupCSVRows(
                   eventId, startupRows, docRecord.id, currentUserId || null
                 );
-                console.log(`[StructuredCSV] Startups: ${ingResult.entitiesCreated} created, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
-                if (ingResult.entitiesCreated > 0) {
+                console.log(`[StructuredCSV] Startups: ${ingResult.entitiesCreated} created, ${ingResult.entitiesUpdated} updated, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
+                if (ingResult.entitiesCreated > 0 || ingResult.entitiesUpdated > 0) {
                   toast({
-                    title: "Structured data extracted",
-                    description: `Created ${ingResult.entitiesCreated} company entities from CSV rows.`,
+                    title: "Structured data processed",
+                    description: `${ingResult.entitiesCreated} new + ${ingResult.entitiesUpdated} updated company entities from CSV.`,
                   });
                 }
               }

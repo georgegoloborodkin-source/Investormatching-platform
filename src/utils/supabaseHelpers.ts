@@ -301,6 +301,7 @@ export async function updateCompanyCardProperties(entityId: string, newPropertie
 
 export interface StructuredCSVIngestionResult {
   entitiesCreated: number;
+  entitiesUpdated: number;
   edgesCreated: number;
   skipped: number;
   errors: string[];
@@ -325,7 +326,7 @@ export async function ingestInvestorCSVRows(
   documentId: string | null,
   createdBy: string | null
 ): Promise<StructuredCSVIngestionResult> {
-  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, edgesCreated: 0, skipped: 0, errors: [] };
+  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, entitiesUpdated: 0, edgesCreated: 0, skipped: 0, errors: [] };
 
   // Group investors by firm name (one firm can have multiple team members)
   const firmMap = new Map<string, typeof investors>();
@@ -389,28 +390,38 @@ export async function ingestInvestorCSVRows(
 
     if (existing?.id) {
       fundEntityId = existing.id;
-      // Update properties with merged data
+      // Fetch current properties so we can merge without overwriting user edits
+      const { data: currentArr } = await supabase
+        .from("kg_entities")
+        .select("properties")
+        .eq("id", fundEntityId)
+        .limit(1);
+      const currentProps = (currentArr?.[0] as any)?.properties || {};
+      
+      // Merge: CSV data fills in gaps but doesn't overwrite non-empty user edits
       await supabase
         .from("kg_entities")
         .update({
           properties: {
+            ...currentProps,
             auto_created: true,
             source: "csv_import",
-            geo_focus: allGeo,
-            industry_preferences: allIndustry,
-            stage_preferences: allStage,
-            cheque_size: chequeDisplay,
-            min_ticket_size: minTicket,
-            max_ticket_size: maxTicket,
-            team_members: uniqueTeamMembers,
-            bio: "",
-            website: "",
-            logo_url: "",
+            geo_focus: allGeo.length ? allGeo : (currentProps.geo_focus || []),
+            industry_preferences: allIndustry.length ? allIndustry : (currentProps.industry_preferences || []),
+            stage_preferences: allStage.length ? allStage : (currentProps.stage_preferences || []),
+            cheque_size: chequeDisplay || currentProps.cheque_size || "",
+            min_ticket_size: minTicket || currentProps.min_ticket_size || 0,
+            max_ticket_size: maxTicket || currentProps.max_ticket_size || 0,
+            team_members: uniqueTeamMembers.length ? uniqueTeamMembers : (currentProps.team_members || []),
+            // Preserve user-edited fields — only set if currently empty
+            bio: currentProps.bio || "",
+            website: currentProps.website || "",
+            logo_url: currentProps.logo_url || "",
           },
           updated_at: new Date().toISOString(),
         })
         .eq("id", fundEntityId);
-      result.skipped++;
+      result.entitiesUpdated++;
     } else {
       const { data: newEntity, error: insertErr } = await supabase
         .from("kg_entities")
@@ -518,7 +529,7 @@ export async function ingestStartupCSVRows(
   documentId: string | null,
   createdBy: string | null
 ): Promise<StructuredCSVIngestionResult> {
-  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, edgesCreated: 0, skipped: 0, errors: [] };
+  const result: StructuredCSVIngestionResult = { entitiesCreated: 0, entitiesUpdated: 0, edgesCreated: 0, skipped: 0, errors: [] };
 
   for (const startup of startups) {
     if (!startup.companyName || startup.companyName.trim().length < 2) {
@@ -539,7 +550,7 @@ export async function ingestStartupCSVRows(
     const existing = existingArr?.[0] ?? null;
 
     if (existing?.id) {
-      result.skipped++;
+      result.entitiesUpdated++;
       continue;
     }
 
