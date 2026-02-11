@@ -2002,7 +2002,7 @@ function SourcesTab({
                 );
                 console.log(`[StructuredCSV] Investors: ${ingResult.entitiesCreated} created, ${ingResult.entitiesUpdated} updated, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
                 if (ingResult.entitiesCreated > 0 || ingResult.entitiesUpdated > 0) {
-                  toast({
+                  toast({ 
                     title: "Structured data processed",
                     description: `${ingResult.entitiesCreated} new + ${ingResult.entitiesUpdated} updated investor/fund entities from CSV.`,
                   });
@@ -9524,21 +9524,44 @@ function CompanyCard({
         {/* ── Expanded view ── */}
         {isExpanded && (
           <div className="space-y-4 pt-2 border-t border-white/10">
-            {/* B. Investment Snapshot */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Investment Snapshot</span>
+            {/* B. Fund Details OR Investment Snapshot (company) */}
+            {isFund ? (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Fund Details</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                  <EditableField label="Cheque Size Range" value={chequeSize || ""} placeholder="e.g. $500K - $1M" icon={DollarSign} onSave={(v) => saveField("cheque_size", v)} />
+                  <EditableField label="Min Ticket Size" value={props.min_ticket_size ? `$${(props.min_ticket_size / 1000).toFixed(0)}K` : ""} placeholder="e.g. $100K" icon={TrendingDown} onSave={(v) => {
+                    const num = parseInt(v.replace(/[^0-9]/g, '')) || 0;
+                    saveField("min_ticket_size", num.toString());
+                  }} />
+                  <EditableField label="Max Ticket Size" value={props.max_ticket_size ? `$${(props.max_ticket_size / 1000000).toFixed(1)}M` : ""} placeholder="e.g. $5M" icon={TrendingUp} onSave={(v) => {
+                    const num = parseInt(v.replace(/[^0-9]/g, '')) || 0;
+                    saveField("max_ticket_size", num.toString());
+                  }} />
+                  <EditableField label="Fund Stage" value={props.fund_stage || ""} placeholder="e.g. Fund I, Fund II" icon={Rocket} onSave={(v) => saveField("fund_stage", v)} />
+                  <EditableField label="AUM / Fund Size" value={props.aum || ""} placeholder="e.g. $50M" icon={BarChart3} onSave={(v) => saveField("aum", v)} />
+                  <EditableField label="Portfolio Companies" value={props.portfolio_count ? props.portfolio_count.toString() : ""} placeholder="e.g. 25" icon={Building2} onSave={(v) => saveField("portfolio_count", v)} />
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                <EditableField label="Funding Stage" value={props.funding_stage || ""} placeholder="e.g. Seed, Series A" icon={Rocket} onSave={(v) => saveField("funding_stage", v)} />
-                <EditableField label="Amount Seeking" value={props.amount_seeking || ""} placeholder="e.g. $2M" icon={DollarSign} onSave={(v) => saveField("amount_seeking", v)} />
-                <EditableField label="Valuation" value={props.valuation || ""} placeholder="e.g. $10M pre-money" icon={TrendingUp} onSave={(v) => saveField("valuation", v)} />
-                <EditableField label="ARR" value={props.arr || ""} placeholder="e.g. $500K" icon={BarChart3} onSave={(v) => saveField("arr", v)} />
-                <EditableField label="Burn Rate" value={props.burn_rate || ""} placeholder="e.g. $80K/mo" icon={TrendingDown} onSave={(v) => saveField("burn_rate", v)} />
-                <EditableField label="Runway" value={props.runway_months || ""} placeholder="e.g. 18 months" icon={Clock} onSave={(v) => saveField("runway_months", v)} />
+            ) : (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Investment Snapshot</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                  <EditableField label="Funding Stage" value={props.funding_stage || ""} placeholder="e.g. Seed, Series A" icon={Rocket} onSave={(v) => saveField("funding_stage", v)} />
+                  <EditableField label="Amount Seeking" value={props.amount_seeking || ""} placeholder="e.g. $2M" icon={DollarSign} onSave={(v) => saveField("amount_seeking", v)} />
+                  <EditableField label="Valuation" value={props.valuation || ""} placeholder="e.g. $10M pre-money" icon={TrendingUp} onSave={(v) => saveField("valuation", v)} />
+                  <EditableField label="ARR" value={props.arr || ""} placeholder="e.g. $500K" icon={BarChart3} onSave={(v) => saveField("arr", v)} />
+                  <EditableField label="Burn Rate" value={props.burn_rate || ""} placeholder="e.g. $80K/mo" icon={TrendingDown} onSave={(v) => saveField("burn_rate", v)} />
+                  <EditableField label="Runway" value={props.runway_months || ""} placeholder="e.g. 18 months" icon={Clock} onSave={(v) => saveField("runway_months", v)} />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* One-Sentence Bio */}
             <EditableField label="One-Sentence Bio" value={props.bio || ""} placeholder="High-level pitch, e.g. 'AI-powered logistics for MENA'" icon={Sparkles} onSave={(v) => saveField("bio", v)} multiline />
