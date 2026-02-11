@@ -2107,9 +2107,13 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
     # Handle lists
     def parse_list(value):
         if isinstance(value, list):
-            return value
+            return [str(item).strip().strip('[]').strip() for item in value if str(item).strip()]
         if isinstance(value, str):
-            return [item.strip() for item in re.split(r'[,;|]', value) if item.strip()]
+            # Strip outer ClickUp brackets: "[USA, Europe, SEA]" → "USA, Europe, SEA"
+            cleaned = value.strip()
+            if cleaned.startswith('[') and cleaned.endswith(']'):
+                cleaned = cleaned[1:-1]
+            return [item.strip() for item in re.split(r'[,;|]', cleaned) if item.strip()]
         return []
     
     # Handle numbers
@@ -2145,15 +2149,20 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         data.get('geography') or 
         []
     )
+    # Clean ClickUp bracket wrappers from list items: "[USA, Europe]" → ["USA", "Europe"]
+    geo_focus = [item.strip().strip('[]').strip() for item in geo_focus if item.strip().strip('[]').strip()]
     
     industry_prefs = parse_list(
         data.get('industryPreferences') or 
         data.get('industry_preferences') or 
         data.get('[BD] Vertical Interests / Vertical (labels)') or  # Orbit CSV format
+        data.get('[BD] Partner Industry (labels)') or  # Orbit CSV format (alternative)
         data.get('Vertical Interests') or
         data.get('industries') or 
         []
     )
+    # Clean ClickUp bracket wrappers from list items: "[Fintech, Agnostic]" → ["Fintech", "Agnostic"]
+    industry_prefs = [item.strip().strip('[]').strip() for item in industry_prefs if item.strip().strip('[]').strip()]
     
     stage_prefs = parse_list(
         data.get('stagePreferences') or 
@@ -2164,6 +2173,9 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
     
     # Handle cheque/ticket size - may be comma-separated ranges like ">1M, 100K-500K"
     cheque_size_raw = data.get('[INV] Cheque Size (labels)') or data.get('Cheque Size') or data.get('Check Size') or ''
+    # Strip ClickUp outer brackets: "[>1M, 100K-500K]" → ">1M, 100K-500K"
+    if isinstance(cheque_size_raw, str):
+        cheque_size_raw = cheque_size_raw.strip().strip('[]').strip()
     
     if cheque_size_raw and isinstance(cheque_size_raw, str):
         # Split on comma first to handle multi-value entries like ">1M, 100K-500K"
@@ -2198,22 +2210,40 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
     
     total_slots = safe_int(data.get('totalSlots') or data.get('total_slots') or data.get('slots') or 3, 3)
 
+    # Helper: strip ClickUp bracket wrappers like "[Nikita Ponomarev]" → "Nikita Ponomarev"
+    def strip_brackets(val: str) -> str:
+        if not val:
+            return val
+        val = val.strip()
+        if val.startswith('[') and val.endswith(']'):
+            val = val[1:-1].strip()
+        # Also handle multiple names: "[Name1, Name2]" → take first
+        if ',' in val:
+            parts = [p.strip() for p in val.split(',') if p.strip()]
+            val = parts[0] if parts else val
+        return val
+
     # Handle various column name formats from different sources
     firm_name = safe_str(
         data.get('firmName') or 
         data.get('firm_name') or 
         data.get('Investor name') or  # Orbit CSV format
+        data.get('Task Name') or  # ClickUp export format
         data.get('name') or 
         data.get('firm') or 
         data.get('Company Name') or
         ''
     )
+    # Clean up firm name: remove ClickUp task ID artifacts, parenthetical notes
+    if firm_name:
+        # Strip leading/trailing quotes and whitespace
+        firm_name = firm_name.strip().strip('"').strip()
     
-    member_name = safe_str(
+    member_name_raw = safe_str(
         data.get('memberName') or 
         data.get('member_name') or 
-        data.get('🦅 [INV] Team Member (users)') or  # Orbit CSV format
-        data.get('[INV] Team Member (users)') or
+        data.get('🦅 [INV] Team Member (users)') or  # Orbit CSV format (with emoji)
+        data.get('[INV] Team Member (users)') or  # Orbit CSV format (without emoji)
         data.get('Team Member') or
         data.get('investment_member') or 
         data.get('investorMemberName') or 
@@ -2222,6 +2252,13 @@ def normalize_investor_data(data: Dict[str, Any]) -> InvestorData:
         data.get('personName') or 
         ''
     )
+    # ClickUp wraps names in brackets: "[Nikita Ponomarev]" → "Nikita Ponomarev"
+    member_name = strip_brackets(member_name_raw)
+    
+    # If member_name is empty, try Assignee column (ClickUp fallback)
+    if not member_name:
+        assignee_raw = safe_str(data.get('Assignee') or '')
+        member_name = strip_brackets(assignee_raw)
     
     return InvestorData(
         firmName=firm_name,
@@ -2858,6 +2895,13 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
             ):
                 header_idx = idx
                 break
+            # ClickUp/Orbit format: "task name" + investor signals
+            if (
+                "task name" in normalized and 
+                any("team member" in h or "cheque size" in h or "orbit relationship" in h for h in normalized)
+            ):
+                header_idx = idx
+                break
             if ("company name" in normalized and any("funding" in h or "stage" == h for h in normalized)):
                 header_idx = idx
                 break
@@ -2891,13 +2935,33 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
         
         print(f"[DEBUG] CSV Headers detected: {list(headers_lower.keys())}")
         
-        # Detect type based on headers
+        # Helper: check if ANY normalized header contains a given substring
+        def any_header_contains(substring: str) -> bool:
+            return any(substring in h for h in headers_lower)
+        
+        # Detect type based on headers (use both exact and substring matching)
         has_mentor_headers = any(h in headers_lower for h in ['full name', 'fullname']) and any(h in headers_lower for h in ['email'])
         has_corporate_headers = any(h in headers_lower for h in ['contact name', 'contactname']) and any(h in headers_lower for h in ['firm name', 'firmname', 'company name', 'companyname'])
-        has_investor_headers = any(h in headers_lower for h in ['investor name', 'firm name', 'firmname']) and any(h in headers_lower for h in ['member name', 'membername', 'team member'])
+        
+        # Investor detection: standard headers OR ClickUp/Orbit format
+        has_investor_headers_standard = (
+            any(h in headers_lower for h in ['investor name', 'firm name', 'firmname']) and 
+            any(h in headers_lower for h in ['member name', 'membername', 'team member'])
+        )
+        # ClickUp/Orbit CSV: "Task Name" column + investor signals (cheque size, team member, orbit relationship type with INV)
+        has_investor_headers_clickup = (
+            any(h in headers_lower for h in ['task name']) and 
+            (any_header_contains('cheque size') or any_header_contains('team member') or any_header_contains('syndicates'))
+        )
+        # Also detect if headers contain "orbit relationship" — strong signal for Orbit ClickUp export
+        has_orbit_relationship = any_header_contains('orbit relationship') or any_header_contains('relationship type')
+        has_investor_headers = has_investor_headers_standard or has_investor_headers_clickup or (
+            any(h in headers_lower for h in ['task name']) and has_orbit_relationship
+        )
+        
         has_startup_headers = any(h in headers_lower for h in ['company name', 'companyname']) and any(h in headers_lower for h in ['funding', 'stage'])
         
-        print(f"[DEBUG] Mentor headers: {has_mentor_headers}, Corporate: {has_corporate_headers}, Investor: {has_investor_headers}, Startup: {has_startup_headers}")
+        print(f"[DEBUG] Mentor: {has_mentor_headers}, Corporate: {has_corporate_headers}, Investor: {has_investor_headers} (std={has_investor_headers_standard}, clickup={has_investor_headers_clickup}), Startup: {has_startup_headers}")
         
         startups = []
         investors = []
@@ -2948,15 +3012,24 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
                 )
         
         elif has_investor_headers:
-            for row in rows:
+            print(f"[CSV] Parsing {len(rows)} rows as investors...")
+            skipped_no_name = 0
+            for row_idx, row in enumerate(rows):
                 try:
                     inv = normalize_investor_data(row)
                     if inv.firmName:
                         if not inv.memberName:
                             inv.memberName = "UNKNOWN"
                         investors.append(inv)
+                    else:
+                        skipped_no_name += 1
+                        if row_idx < 3:  # Log first few skips for debugging
+                            print(f"[CSV] Row {row_idx}: skipped (no firm name). Keys: {list(row.keys())[:5]}")
                 except Exception as e:
-                    warnings.append(f"Error parsing investor row: {str(e)}")
+                    warnings.append(f"Error parsing investor row {row_idx}: {str(e)}")
+                    print(f"[CSV] Row {row_idx} error: {e}")
+            
+            print(f"[CSV] ✅ Parsed {len(investors)} investors, skipped {skipped_no_name} (no name), {len(warnings)} warnings")
             
             if investors:
                 return ConversionResponse(
