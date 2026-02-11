@@ -1928,7 +1928,8 @@ def _append_web_citations(content_blocks, text: str) -> str:
     if citations_seen:
         text += "\n\n**Web Sources:**"
         for i, (url, title) in enumerate(citations_seen.items(), 1):
-            text += f"\n[{i}] [{title}]({url})"
+            # Format: [number] **Title** - [clickable URL](url)
+            text += f"\n[{i}] **{title}** - [{url}]({url})"
     return text
 
 
@@ -3762,6 +3763,16 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                             elif block_type == "text":
                                 # Track text blocks for citation extraction
                                 text_content_blocks.append(event.content_block)
+                                # Also check if this text block has citations attached
+                                block_citations = getattr(event.content_block, "citations", None)
+                                if block_citations:
+                                    for cite in block_citations:
+                                        cite_type = getattr(cite, "type", "")
+                                        if cite_type == "web_search_result_location":
+                                            url = getattr(cite, "url", "")
+                                            title = getattr(cite, "title", "")
+                                            if url and url not in web_search_citations:
+                                                web_search_citations[url] = title
                         # Handle message delta (final message content)
                         elif event.type == "message_delta" and hasattr(event.delta, "stop_reason"):
                             # Message is completing
@@ -3772,7 +3783,9 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                     if web_search_citations:
                         sources_text = "\n\n**Web Sources:**"
                         for i, (url, title) in enumerate(web_search_citations.items(), 1):
-                            sources_text += f"\n[{i}] [{title}]({url})"
+                            # Format: [number] **Title** - [clickable URL](url)
+                            # Shows title in bold and URL as clickable link
+                            sources_text += f"\n[{i}] **{title}** - [{url}]({url})"
                         yield json.dumps({"text": sources_text})
                     
                     # If client-side tools were used, execute and stream follow-up
