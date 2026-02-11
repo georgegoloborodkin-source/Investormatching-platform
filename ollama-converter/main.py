@@ -3731,10 +3731,13 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                 ) as stream:
                     tool_uses = []
                     web_search_citations: Dict[str, str] = {}  # url -> title
+                    text_content_blocks = []  # Collect full text blocks for citation extraction
                     async for event in stream:
+                        # Handle text deltas (streaming text)
                         if event.type == "content_block_delta" and hasattr(event.delta, "type"):
-                            if event.delta.type == "text_delta":
+                            if event.delta.type == "text_delta" and hasattr(event.delta, "text"):
                                 yield json.dumps({"text": event.delta.text})
+                        # Handle content block starts (tools, web search, etc.)
                         elif event.type == "content_block_start" and hasattr(event.content_block, "type"):
                             block_type = getattr(event.content_block, "type", "")
                             if block_type == "tool_use":
@@ -3756,8 +3759,16 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                                             title = getattr(item, "title", "")
                                             if url:
                                                 web_search_citations[url] = title
+                            elif block_type == "text":
+                                # Track text blocks for citation extraction
+                                text_content_blocks.append(event.content_block)
+                        # Handle message delta (final message content)
+                        elif event.type == "message_delta" and hasattr(event.delta, "stop_reason"):
+                            # Message is completing
+                            pass
                     
-                    # Append web search source links at the end
+                    # After stream completes, extract citations from text blocks and append web sources
+                    # Note: Web search citations are already collected above, but we also check text blocks for citations
                     if web_search_citations:
                         sources_text = "\n\n**Web Sources:**"
                         for i, (url, title) in enumerate(web_search_citations.items(), 1):

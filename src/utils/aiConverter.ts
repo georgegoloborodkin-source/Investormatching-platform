@@ -251,6 +251,9 @@ export async function askClaudeAnswerStream(
     timeoutFired = true;
     controller.abort();
   }, timeoutMs);
+  
+  // Store timeout value for error messages
+  const timeoutSeconds = Math.round(timeoutMs / 1000);
 
   try {
     const payload = {
@@ -299,7 +302,7 @@ export async function askClaudeAnswerStream(
         // Check if timeout fired during read
         if (timeoutFired) {
           reader.cancel();
-          onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+          onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
           return;
         }
 
@@ -322,9 +325,15 @@ export async function askClaudeAnswerStream(
               if (data.text) {
                 onChunk(data.text);
               } else if (data.status) {
-                // Status updates from backend (e.g. "🌐 Searching the web...")
-                // Pass as a visual indicator to the user
-                onChunk(`\n*${data.status}*\n`);
+                // Status updates from backend (e.g. "🌐 Searching the web...", "tool_execution")
+                if (typeof data.status === "string") {
+                  // String status (e.g. "🌐 Searching the web...")
+                  onChunk(`\n*${data.status}*\n`);
+                } else if (data.status === "tool_execution" || (typeof data.status === "object" && data.status.tools)) {
+                  // Tool execution status - show progress indicator
+                  const toolCount = typeof data.status === "object" ? data.status.tools : data.tools || 1;
+                  onChunk(`\n*Executing ${toolCount} tool${toolCount > 1 ? 's' : ''}...*\n`);
+                }
               } else if (data.error) {
                 onError?.(new Error(data.error));
                 return;
@@ -342,7 +351,7 @@ export async function askClaudeAnswerStream(
       // If timeout fired, we already handled it above
       if (!timeoutFired) {
         if (readError instanceof DOMException && readError.name === "AbortError") {
-          onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+          onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
         } else {
           onError?.(readError instanceof Error ? readError : new Error("Stream read error"));
         }
@@ -350,9 +359,9 @@ export async function askClaudeAnswerStream(
     }
   } catch (error) {
     if (timeoutFired) {
-      onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+      onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
     } else if (error instanceof DOMException && error.name === "AbortError") {
-      onError?.(new Error("Request timed out after 70 seconds. The response is taking too long. Please try again with a simpler question."));
+      onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
     } else {
       onError?.(error instanceof Error ? error : new Error("Unknown error"));
     }

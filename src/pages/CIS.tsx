@@ -5923,15 +5923,17 @@ export default function CIS() {
       setLastEvidence(null);
       let timedOut = false;
       let searchTimeoutId: number | null = null;
-      // Increased timeout to 90 seconds (20s for search + 70s for Claude)
+      // Increased timeout: 60s for document search (90s when web search enabled)
+      // This timeout is cleared once documents are found or Claude starts processing
+      const searchTimeoutMs = webSearchEnabled ? 90000 : 60000;
       const searchTimeoutId_temp = window.setTimeout(() => {
         timedOut = true;
         setChatIsLoading(false);
         createAssistantMessage(
-          "Search is taking too long. Please try a more specific query.",
+          `Search is taking too long (${Math.round(searchTimeoutMs / 1000)}s timeout). Please try a more specific query or check your connection.`,
           threadId
         );
-      }, 20000);
+      }, searchTimeoutMs);
       searchTimeoutId = searchTimeoutId_temp;
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
@@ -6245,6 +6247,12 @@ export default function CIS() {
         queryAnalysis = null;
       }
 
+      // Clear search timeout as soon as we start document search (search is in progress)
+      if (searchTimeoutId !== null) {
+        window.clearTimeout(searchTimeoutId);
+        searchTimeoutId = null;
+      }
+      
       if (canSemantic) {
         try {
           // Add timeout to embedding query (15s max)
