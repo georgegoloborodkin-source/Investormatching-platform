@@ -1928,8 +1928,8 @@ def _append_web_citations(content_blocks, text: str) -> str:
     if citations_seen:
         text += "\n\n**Web Sources:**"
         for i, (url, title) in enumerate(citations_seen.items(), 1):
-            # Format: [number] **Title** - [clickable URL](url)
-            text += f"\n[{i}] **{title}** - [{url}]({url})"
+            # Format: [number] [Title](url) - only title is visible, clicking opens URL
+            text += f"\n[{i}] [{title}]({url})"
     return text
 
 
@@ -1991,7 +1991,9 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
         + ("You have web search enabled. Use it to find up-to-date information about companies, markets, or topics "
-           "not covered by the provided internal documents. Always cite web sources. " if web_search_enabled else "")
+           "not covered by the provided internal documents. CRITICAL: Prioritize the most recent information (2026, 2025) "
+           "when searching. When performing web searches, include terms like '2026', 'latest', 'recent', or 'current' "
+           "in your search queries to ensure you get the freshest data. Always cite web sources. " if web_search_enabled else "")
         + "Be helpful, concise, and answer the actual question asked."
     )
 
@@ -3712,7 +3714,9 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
         + ("You have web search enabled. Use it to find up-to-date information about companies, markets, or topics "
-           "not covered by the provided internal documents. Always cite web sources. " if web_search_enabled else "")
+           "not covered by the provided internal documents. CRITICAL: Prioritize the most recent information (2026, 2025) "
+           "when searching. When performing web searches, include terms like '2026', 'latest', 'recent', or 'current' "
+           "in your search queries to ensure you get the freshest data. Always cite web sources. " if web_search_enabled else "")
         + "Be helpful, concise, and answer the actual question asked."
     )
 
@@ -3783,9 +3787,8 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                     if web_search_citations:
                         sources_text = "\n\n**Web Sources:**"
                         for i, (url, title) in enumerate(web_search_citations.items(), 1):
-                            # Format: [number] **Title** - [clickable URL](url)
-                            # Shows title in bold and URL as clickable link
-                            sources_text += f"\n[{i}] **{title}** - [{url}]({url})"
+                            # Format: [number] [Title](url) - only title is visible, clicking opens URL
+                            sources_text += f"\n[{i}] [{title}]({url})"
                         yield json.dumps({"text": sources_text})
                     
                     # If client-side tools were used, execute and stream follow-up
