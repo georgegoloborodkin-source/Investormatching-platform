@@ -7811,54 +7811,94 @@ export default function CIS() {
     // Converts **bold**, *italic*, `code`, [n] references into React elements
     const renderInline = (raw: string, keyPrefix: string = ""): React.ReactNode[] => {
       const parts: React.ReactNode[] = [];
-      // First, handle markdown links [text](url) - must come before other bracket patterns
-      // Then handle: bold+italic (***), bold (**), italic (*), code (`), source ref [n]
-      // Order matters: links first, then other patterns
-      const inlineRegex = /(\[([^\]]+)\]\(([^)]+)\)|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[(\d+)\])/g;
+      // Process in two passes: first links, then other markdown
+      // This ensures [text](url) links are always matched correctly
+      
+      // Pass 1: Extract and replace markdown links [text](url) with placeholders
+      const linkPlaceholders: { [key: string]: { text: string; url: string } } = {};
+      let linkCounter = 0;
+      let processedText = raw.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+        const placeholder = `__LINK_${linkCounter}__`;
+        linkPlaceholders[placeholder] = { text, url };
+        linkCounter++;
+        return placeholder;
+      });
+      
+      // Pass 2: Process remaining markdown (bold, italic, code, source refs)
+      const inlineRegex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[(\d+)\])/g;
       let lastIndex = 0;
       let match: RegExpExecArray | null;
       let i = 0;
-      while ((match = inlineRegex.exec(raw)) !== null) {
-        // Text before the match
+      while ((match = inlineRegex.exec(processedText)) !== null) {
+        // Text before the match (check for link placeholders)
         if (match.index > lastIndex) {
-          parts.push(<span key={`${keyPrefix}t${i}`}>{raw.slice(lastIndex, match.index)}</span>);
+          const beforeText = processedText.slice(lastIndex, match.index);
+          // Replace link placeholders with actual links
+          const beforeParts = beforeText.split(/(__LINK_\d+__)/g);
+          beforeParts.forEach((part, idx) => {
+            if (part.startsWith('__LINK_') && part.endsWith('__')) {
+              const linkData = linkPlaceholders[part];
+              if (linkData) {
+                parts.push(
+                  <a
+                    key={`${keyPrefix}link-${i}-${idx}`}
+                    href={linkData.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
+                  >
+                    {linkData.text}
+                  </a>
+                );
+              }
+            } else if (part) {
+              parts.push(<span key={`${keyPrefix}t-${i}-${idx}`}>{part}</span>);
+            }
+          });
         }
-        // Check if this is a markdown link [text](url)
-        // match[1] is the full match, match[2] is link text, match[3] is URL
-        if (match[2] && match[3] && match[0].startsWith('[') && match[0].includes('](')) {
-          // [text](url) markdown link
-          parts.push(
-            <a
-              key={`${keyPrefix}link${i}`}
-              href={match[3]}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
-            >
-              {match[2]}
-            </a>
-          );
-        } else if (match[4]) {
+        if (match[2]) {
           // ***bold italic***
-          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-[#FFED00]">{match[4]}</strong>);
-        } else if (match[5]) {
+          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-[#FFED00]">{match[2]}</strong>);
+        } else if (match[3]) {
           // **bold**
-          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-[#FFED00]">{match[5]}</strong>);
-        } else if (match[6]) {
+          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-[#FFED00]">{match[3]}</strong>);
+        } else if (match[4]) {
           // *italic*
-          parts.push(<em key={`${keyPrefix}i${i}`} className="italic text-white/90">{match[6]}</em>);
-        } else if (match[7]) {
+          parts.push(<em key={`${keyPrefix}i${i}`} className="italic text-white/90">{match[4]}</em>);
+        } else if (match[5]) {
           // `code`
-          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-[#FFED00] font-mono">{match[7]}</code>);
-        } else if (match[8]) {
-          // [1] source reference (only if not part of a link)
-          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-[#FFED00]/20 text-[#FFED00] text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[8]}</span>);
+          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-[#FFED00] font-mono">{match[5]}</code>);
+        } else if (match[6]) {
+          // [1] source reference
+          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-[#FFED00]/20 text-[#FFED00] text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[6]}</span>);
         }
         lastIndex = match.index + match[0].length;
         i++;
       }
-      if (lastIndex < raw.length) {
-        parts.push(<span key={`${keyPrefix}end`}>{raw.slice(lastIndex)}</span>);
+      // Handle remaining text after last match (check for link placeholders)
+      if (lastIndex < processedText.length) {
+        const remainingText = processedText.slice(lastIndex);
+        const remainingParts = remainingText.split(/(__LINK_\d+__)/g);
+        remainingParts.forEach((part, idx) => {
+          if (part.startsWith('__LINK_') && part.endsWith('__')) {
+            const linkData = linkPlaceholders[part];
+            if (linkData) {
+              parts.push(
+                <a
+                  key={`${keyPrefix}link-end-${idx}`}
+                  href={linkData.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
+                >
+                  {linkData.text}
+                </a>
+              );
+            }
+          } else if (part) {
+            parts.push(<span key={`${keyPrefix}end-${idx}`}>{part}</span>);
+          }
+        });
       }
       return parts.length > 0 ? parts : [<span key={`${keyPrefix}plain`}>{raw}</span>];
     };
