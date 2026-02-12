@@ -6050,6 +6050,27 @@ export default function CIS() {
               console.log("[DEBUG] Injected name into vague follow-up:", searchQuestion);
             }
           }
+          
+          // CRITICAL: Extract company name from the LAST USER QUESTION (most important context)
+          // This ensures we filter out documents about other companies
+          const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.content || "";
+          const companyNameFromLastQ = (() => {
+            // Look for capitalized words that might be company names
+            const matches = lastUserQuestion.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g) || [];
+            // Filter out common words
+            const commonWords = new Set(['The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please', 'User', 'Assistant', 'How', 'Help', 'Make', 'Go', 'On', 'Given', 'Resources', 'Have', 'Right', 'Now']);
+            return matches.filter(m => !commonWords.has(m) && m.length > 2)[0] || null;
+          })();
+          
+          if (companyNameFromLastQ) {
+            console.log("[DEBUG] 🎯 Company from last user question:", companyNameFromLastQ);
+            // Ensure the rewritten query includes this company name
+            const searchLower = searchQuestion.toLowerCase();
+            if (!searchLower.includes(companyNameFromLastQ.toLowerCase())) {
+              searchQuestion = `${companyNameFromLastQ} ${searchQuestion}`.replace(/\s+/g, " ").trim();
+              console.log("[DEBUG] ✅ Injected company name into search query:", searchQuestion);
+            }
+          }
         } catch (rewriteError) {
           console.warn("[DEBUG] Query rewriting failed:", rewriteError);
           // FALLBACK: If we have pronouns and names in history, replace pronouns with the most recent name
@@ -6238,9 +6259,28 @@ export default function CIS() {
           strategy: queryAnalysis.retrieval_strategy,
           entities: queryAnalysis.entities.length,
         });
-        // Use rewritten query from router if available
+        // Use rewritten query from router if available, BUT ensure it includes company name from conversation
         if (queryAnalysis.rewritten_query && queryAnalysis.rewritten_query !== question) {
-          finalSearchQuery = queryAnalysis.rewritten_query;
+          // Extract company name from last user question
+          const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.content || "";
+          const companyNameFromLastQ = (() => {
+            const matches = lastUserQuestion.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g) || [];
+            const commonWords = new Set(['The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please', 'User', 'Assistant', 'How', 'Help', 'Make', 'Go', 'On', 'Given', 'Resources', 'Have', 'Right', 'Now', 'About', 'Tell', 'Me']);
+            return matches.filter(m => !commonWords.has(m) && m.length > 2)[0] || null;
+          })();
+          
+          if (companyNameFromLastQ) {
+            const rewrittenLower = queryAnalysis.rewritten_query.toLowerCase();
+            if (!rewrittenLower.includes(companyNameFromLastQ.toLowerCase())) {
+              // Inject company name into router's rewritten query
+              finalSearchQuery = `${companyNameFromLastQ} ${queryAnalysis.rewritten_query}`.replace(/\s+/g, " ").trim();
+              console.log("[DEBUG] ✅ Injected company name into router query:", finalSearchQuery);
+            } else {
+              finalSearchQuery = queryAnalysis.rewritten_query;
+            }
+          } else {
+            finalSearchQuery = queryAnalysis.rewritten_query;
+          }
         }
       } catch (routerErr) {
         console.warn("[ROUTER] Analysis failed, using fallback:", routerErr);
@@ -6343,6 +6383,86 @@ export default function CIS() {
                 const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
                 console.log("[DEBUG] Filtering with threshold:", { hasName, SIMILARITY_THRESHOLD, detectedNames });
                 filteredMatches = filteredMatches.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+              }
+              
+              // CRITICAL: Post-retrieval filtering - exclude documents about wrong companies
+              // Extract company name from conversation history (last user question)
+              const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.text || "";
+              const targetCompanyName = (() => {
+                // Look for capitalized words that might be company names in the last user question
+                const matches = lastUserQuestion.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g) || [];
+                const commonWords = new Set(['The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please', 'User', 'Assistant', 'How', 'Help', 'Make', 'Go', 'On', 'Given', 'Resources', 'Have', 'Right', 'Now', 'About', 'Tell', 'Me']);
+                const companies = matches.filter(m => !commonWords.has(m) && m.length > 2);
+                return companies[0] || null;
+              })();
+              
+              if (targetCompanyName) {
+                console.log("[DEBUG] 🎯 Target company from conversation:", targetCompanyName);
+                // Fetch document titles to check which company they're about
+                const docIds = filteredMatches.map(m => m.document_id);
+                if (docIds.length > 0) {
+                  const { data: docTitles } = await supabase
+                    .from("documents")
+                    .select("id,title,file_name,raw_content")
+                    .in("id", docIds)
+                    .eq("event_id", eventId);
+                  
+                  if (docTitles) {
+                    const docTitleMap = new Map(docTitles.map((d: any) => [d.id, d]));
+                    const targetCompanyLower = targetCompanyName.toLowerCase();
+                    
+                    // Filter and boost: prioritize documents that mention the target company
+                    filteredMatches = filteredMatches
+                      .map(m => {
+                        const doc = docTitleMap.get(m.document_id);
+                        if (!doc) return { ...m, companyRelevance: 0 };
+                        
+                        const titleText = `${doc.title || ""} ${doc.file_name || ""}`.toLowerCase();
+                        const contentText = (doc.raw_content || "").toLowerCase().substring(0, 2000);
+                        const fullText = `${titleText} ${contentText}`;
+                        const mentionsTarget = fullText.includes(targetCompanyLower);
+                        
+                        // Check for other common company names that might be wrong
+                        const otherCompanies = ['giga energy', 'ridelink', 'yindii', 'weego'];
+                        const mentionsOtherCompany = otherCompanies
+                          .filter(c => c !== targetCompanyLower)
+                          .some(c => fullText.includes(c));
+                        
+                        // If document mentions other company but not target, heavily penalize
+                        if (mentionsOtherCompany && !mentionsTarget) {
+                          return { ...m, companyRelevance: -1, similarity: m.similarity * 0.1 };
+                        }
+                        
+                        // Boost documents that mention target company
+                        if (mentionsTarget) {
+                          return { ...m, companyRelevance: 1, similarity: Math.min(m.similarity * 1.5, 1.0) };
+                        }
+                        
+                        return { ...m, companyRelevance: 0 };
+                      })
+                      .filter(m => {
+                        // Exclude documents that are clearly about other companies
+                        if (m.companyRelevance === -1) {
+                          console.log("[DEBUG] 🚫 Excluding document about wrong company:", m.document_id);
+                          return false;
+                        }
+                        return true;
+                      })
+                      .sort((a, b) => {
+                        // Sort by: company relevance first, then similarity
+                        if (a.companyRelevance !== b.companyRelevance) {
+                          return b.companyRelevance - a.companyRelevance;
+                        }
+                        return b.similarity - a.similarity;
+                      });
+                    
+                    console.log("[DEBUG] ✅ Post-filtered matches:", {
+                      original: filteredMatches.length,
+                      afterFilter: filteredMatches.length,
+                      targetCompany: targetCompanyName
+                    });
+                  }
+                }
               }
               
               semanticMatches = filteredMatches;
