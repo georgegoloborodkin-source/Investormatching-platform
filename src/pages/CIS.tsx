@@ -6387,7 +6387,7 @@ export default function CIS() {
               
               // CRITICAL: Post-retrieval filtering - exclude documents about wrong companies
               // Extract company name from conversation history (last user question)
-              const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.text || "";
+              const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.content || "";
               const targetCompanyName = (() => {
                 // Look for capitalized words that might be company names in the last user question
                 const matches = lastUserQuestion.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g) || [];
