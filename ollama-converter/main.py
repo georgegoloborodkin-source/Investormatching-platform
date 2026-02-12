@@ -1369,8 +1369,10 @@ Your task is to rewrite the "Follow-up Question" into a standalone, specific sea
 CRITICAL INSTRUCTIONS:
 1. **RESOLVE PRONOUNS**: If the Follow-up Question contains "him", "her", "it", "they", replace it with the specific NAME or ENTITY from the *immediately preceding* User/Assistant exchange.
 2. **IGNORE OLD TOPICS**: If the chat started about "Giga Energy" but the last message was about "George", and the user asks "tell me about him", you MUST ask about "George". Ignore Giga Energy.
-3. **BE EXPLICIT**: The output must be a full sentence that can be searched in a database.
-4. **DO NOT ANSWER**: Do not answer the question. Only output the rewritten query.
+3. **EXTRACT COMPANY/ENTITY NAMES**: If the user's original question mentions a specific company, person, or entity (e.g., "Weego", "Ridelink", "George Goloborodkin"), you MUST include that name in the rewritten query, even if the follow-up question doesn't mention it explicitly.
+4. **PRESERVE CONTEXT**: If the original question was "how to make Weego go on IPO" and the follow-up is "you have it, just give the answer", rewrite to "how to make Weego go on IPO" - preserve the original entity and intent.
+5. **BE EXPLICIT**: The output must be a full sentence that can be searched in a database, with all entity names explicitly stated.
+6. **DO NOT ANSWER**: Do not answer the question. Only output the rewritten query.
 
 ---
 EXAMPLES (Follow these patterns):
@@ -1496,7 +1498,27 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
     common_words = {'The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please'}
     single_names = [n for n in single_names if n not in common_words]
     
+    # CRITICAL: Extract company/entity names from the LAST USER QUESTION (most important context)
+    # This ensures we get the right company even if the follow-up is vague
+    last_user_question = next((m.content for m in reversed(previous_messages) if m.role == "user"), "")
+    company_names_in_last_q = []
+    if last_user_question:
+        # Look for company names (capitalized words that might be companies)
+        # Common company name patterns: "Weego", "Ridelink", "Giga Energy", etc.
+        company_patterns = [
+            r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',  # "Weego" or "Giga Energy"
+        ]
+        for pattern in company_patterns:
+            matches = re.findall(pattern, last_user_question)
+            # Filter out common words and keep potential company names
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = match[0] if match[0] else match[1] if len(match) > 1 else ""
+                if match and match not in common_words and len(match) > 2:
+                    company_names_in_last_q.append(match)
+    
     print(f"[DEBUG] Names found in history - Full names: {all_names}, Single names: {single_names[:5]}")
+    print(f"[DEBUG] Company names in last user question: {company_names_in_last_q}")
     
     # Format the history into a clean dialogue string (last 4 messages for better context)
     history_text = ""
@@ -1564,23 +1586,60 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
                 
                 if rewritten and rewritten != question:
                     print(f"[DEBUG] Query rewritten by LLM: '{question}' -> '{rewritten}'")
-                    # Validate: if original had "him" and rewritten doesn't contain any name from history, force fix it
-                    if has_pronouns and (all_names or single_names):
-                        # Check if rewritten contains any of the names we found in history
-                        rewritten_lower = rewritten.lower()
-                        has_name_from_history = any(name.lower() in rewritten_lower for name in all_names) or \
-                                               any(name.lower() in rewritten_lower for name in single_names[:5])
-                        
-                        if not has_name_from_history:
-                            print(f"[DEBUG] ⚠️ WARNING: LLM rewrite doesn't contain names from history, using fallback")
-                            # Use the most recent full name, or fall back to single name
-                            main_subject = all_names[-1] if all_names else single_names[-1] if single_names else None
-                            if main_subject:
-                                print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
-                                rewritten = question
-                                for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
-                                    rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
-                                return rewritten
+                    
+                    # CRITICAL VALIDATION: Check if rewritten query contains company/entity names from conversation
+                    # This prevents confusion between different companies (e.g., Weego vs Giga Energy)
+                    rewritten_lower = rewritten.lower()
+                    
+                    # Check if rewritten contains any company name from the last user question
+                    has_company_from_last_q = False
+                    if company_names_in_last_q:
+                        has_company_from_last_q = any(name.lower() in rewritten_lower for name in company_names_in_last_q)
+                    
+                    # Check if rewritten contains any name from history
+                    has_name_from_history = any(name.lower() in rewritten_lower for name in all_names) or \
+                                           any(name.lower() in rewritten_lower for name in single_names[:5])
+                    
+                    # If the last user question mentioned a company but the rewritten query doesn't include it, fix it
+                    if company_names_in_last_q and not has_company_from_last_q:
+                        print(f"[DEBUG] ⚠️ WARNING: Last user question mentioned '{company_names_in_last_q[0]}' but rewritten query doesn't include it!")
+                        print(f"[DEBUG] Original question was about: {last_user_question[:100]}")
+                        # For vague follow-ups like "you have it, just give the answer", use the last user question's company
+                        if has_vague_pattern or affirmative_only:
+                            main_company = company_names_in_last_q[0]
+                            print(f"[DEBUG] Fixing: Using company '{main_company}' from last user question")
+                            # If the rewritten query is too generic, replace it with the original question's intent
+                            if len(rewritten.split()) < 5:  # Very short/generic rewrite
+                                # Try to extract the intent from the last user question
+                                if "ipo" in last_user_question.lower() or "go public" in last_user_question.lower():
+                                    rewritten = f"how to make {main_company} go on IPO"
+                                elif "about" in last_user_question.lower():
+                                    # Extract the topic after "about"
+                                    about_match = re.search(r'about\s+([^?]+)', last_user_question.lower())
+                                    if about_match:
+                                        topic = about_match.group(1).strip()
+                                        rewritten = f"tell me about {main_company} {topic}"
+                                    else:
+                                        rewritten = f"tell me about {main_company}"
+                                else:
+                                    rewritten = f"{last_user_question} {rewritten}"
+                            else:
+                                # Insert company name into the rewritten query
+                                rewritten = f"{main_company} {rewritten}"
+                    
+                    # Validate: if original had pronouns and rewritten doesn't contain any name from history, force fix it
+                    elif has_pronouns and (all_names or single_names) and not has_name_from_history:
+                        print(f"[DEBUG] ⚠️ WARNING: LLM rewrite doesn't contain names from history, using fallback")
+                        # Use the most recent full name, or fall back to single name, or company from last question
+                        main_subject = (company_names_in_last_q[0] if company_names_in_last_q else 
+                                       (all_names[-1] if all_names else single_names[-1] if single_names else None))
+                        if main_subject:
+                            print(f"[DEBUG] Using fallback: replacing pronouns with '{main_subject}'")
+                            rewritten = question
+                            for pronoun in ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]:
+                                rewritten = re.sub(rf'\b{pronoun}\b', main_subject, rewritten, flags=re.IGNORECASE)
+                            return rewritten
+                    
                     return rewritten
     except Exception as e:
         # Fallback to simple replacement on error
@@ -1758,18 +1817,40 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         if source_ref:
             source_ref_instruction = f"\n\nIMPORTANT: The user is asking about SOURCE [{source_ref}]. Focus primarily on that source and provide a COMPREHENSIVE overview of everything in that document. Include all key details, sections, data points, and information from source [{source_ref}]."
         
+        # Extract company/entity names from conversation history for explicit highlighting
+        company_highlight = ""
+        if previous_messages and len(previous_messages) > 0:
+            all_conv_text = " ".join([m.content for m in previous_messages[-10:]])
+            # Look for company names (capitalized words, common company patterns)
+            import re
+            company_matches = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b', all_conv_text)
+            # Filter out common words
+            common_words = {'The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please', 'User', 'Assistant'}
+            company_names = [m for m in company_matches if m not in common_words and len(m) > 2]
+            # Get unique company names, prioritizing those in the last user question
+            if company_names:
+                unique_companies = list(dict.fromkeys(company_names))  # Preserve order, remove duplicates
+                # Check last user question for the most relevant company
+                last_user_q = next((m.content for m in reversed(previous_messages) if m.role == "user"), "")
+                if last_user_q:
+                    companies_in_last_q = [c for c in unique_companies if c.lower() in last_user_q.lower()]
+                    if companies_in_last_q:
+                        primary_company = companies_in_last_q[0]
+                        company_highlight = f"\n\n🎯 **PRIMARY COMPANY/ENTITY FROM CONVERSATION: {primary_company}**\n⚠️ The user's question is about **{primary_company}**. Make sure you answer about **{primary_company}**, NOT about other companies mentioned in the sources (e.g., Giga Energy, Ridelink, etc.). If sources mention other companies, ignore them unless they are directly related to {primary_company}.\n"
+        
         # Build the prompt with conversation history at the top
         history_section = conversation_context if conversation_context else "\n\n=== PREVIOUS CONVERSATION HISTORY ===\n(No previous conversation history available)\n=== END OF CONVERSATION HISTORY ===\n"
         
         return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
 {history_section}
-
+{company_highlight}
 🚨 CRITICAL: READ THE CONVERSATION HISTORY ABOVE CAREFULLY BEFORE ANSWERING!
 
 CRITICAL RULES:
 1. **MANDATORY: CHECK CONVERSATION HISTORY FIRST**. If the user uses pronouns like "him", "her", "it", "they", "them", "his", "her", "their", "this", "that", "these", "those", you MUST look in the conversation history above to find what they're referring to. The conversation history shows the full context of what was discussed previously.
 2. **IF YOU SEE "tell me more about him" AND THE HISTORY SHOWS A PREVIOUS QUESTION ABOUT "George Goloborodkin"**, then "him" = "George Goloborodkin". Use the conversation history to resolve ALL pronouns. **NEVER say "I cannot determine who 'him' refers to" if there is conversation history above - ALWAYS check it first!**
+3. **COMPANY NAME RESOLUTION**: If the conversation history shows the user asked about a specific company (e.g., "Weego"), and the current question is vague (e.g., "you have it, just give the answer"), you MUST answer about that specific company (Weego), NOT about other companies mentioned in the sources (e.g., Giga Energy). **DO NOT confuse different companies - if the user asked about Weego, answer about Weego, not Giga Energy!**
 3. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
 4. If the user references a specific source (e.g., "source 1", "source [1]", "document 1"), focus on that source and provide comprehensive details from it. Recognize that [1] refers to the first source, [2] to the second, etc.
 5. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
