@@ -117,6 +117,7 @@ import {
   getDocumentsByEvent,
   getSourcesByEvent,
   getSourceFoldersByEvent,
+  ensureDefaultFoldersForEvent,
   getCompanyConnectionsByEvent,
   getPendingRelationshipReviews,
   updateKgEdgeReview,

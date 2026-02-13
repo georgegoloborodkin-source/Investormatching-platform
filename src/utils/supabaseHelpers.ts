@@ -191,6 +191,44 @@ export async function getSourceFoldersByEvent(eventId: string) {
     .order("created_at", { ascending: false });
 }
 
+/**
+ * Ensure default folders exist for an event (safety net if trigger didn't run)
+ * Default folders: Portfolio Companies, Investors, Funds, Deals, Market Research, Due Diligence
+ */
+export async function ensureDefaultFoldersForEvent(eventId: string): Promise<void> {
+  const defaultFolders = [
+    'Portfolio Companies',
+    'Investors',
+    'Funds',
+    'Deals',
+    'Market Research',
+    'Due Diligence'
+  ];
+
+  // Get existing folders for this event
+  const { data: existingFolders } = await supabase
+    .from("source_folders")
+    .select("name")
+    .eq("event_id", eventId);
+
+  const existingNames = new Set((existingFolders || []).map(f => f.name.toLowerCase()));
+
+  // Create missing folders
+  const foldersToCreate = defaultFolders.filter(name => !existingNames.has(name.toLowerCase()));
+  
+  if (foldersToCreate.length > 0) {
+    await supabase
+      .from("source_folders")
+      .insert(
+        foldersToCreate.map(name => ({
+          event_id: eventId,
+          name,
+          created_by: null, // System-created
+        }))
+      );
+  }
+}
+
 export async function insertSourceFolder(
   eventId: string,
   payload: { name: string; created_by: string | null }
