@@ -2058,10 +2058,13 @@ function SourcesTab({
           // ── Auto-extract company properties into company card ──
           // The DB trigger auto-creates a company entity from the document title.
           // If folder-based detection is enabled, force-create entity even if title doesn't match.
+          // Run in background - don't block upload completion
           if (rawContent && docRecord.id) {
-            try {
-              // Small delay to let the DB trigger create the entity
-              await new Promise((r) => setTimeout(r, 500));
+            // Fire and forget - run property extraction in background
+            (async () => {
+              try {
+                // Small delay to let the DB trigger create the entity
+                await new Promise((r) => setTimeout(r, 500));
 
               let companyEntityId = await getDocumentCompanyEntityId(docRecord.id);
               
@@ -2167,12 +2170,19 @@ function SourcesTab({
                   batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: !!companyEntityId });
                 }
               } else {
-                batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
+                // Don't update batchResults here - it's already been processed
+                console.log(`[AutoExtract] No entity found for ${file.name}`);
               }
-            } catch (extractErr) {
-              console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
-              batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
-            }
+              } catch (extractErr) {
+                console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
+                // Don't update batchResults - extraction runs in background
+              }
+            })().catch((err) => {
+              console.error("[AutoExtract] Background extraction error:", err);
+            });
+          } else {
+            // No content - add to batch results immediately
+            batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
           }
 
           successCount += 1;
