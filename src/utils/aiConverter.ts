@@ -610,6 +610,8 @@ export async function contextualizeChunk(
 ): Promise<ContextualizeChunkResult> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
+    // Fast timeout: 3s max - if backend is slow/down, skip enrichment immediately
+    // This prevents blocking document uploads
     const response = await fetchWithTimeout(
       `${baseUrl}/contextualize-chunk`,
       {
@@ -617,7 +619,7 @@ export async function contextualizeChunk(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       },
-      20000 // 20s — Haiku is fast but network can be slow
+      3000 // 3s — fail fast if backend is slow/down
     );
     if (!response.ok) {
       // Fall back to raw chunk
@@ -625,7 +627,7 @@ export async function contextualizeChunk(
     }
     return await response.json();
   } catch {
-    // Fail silently — return raw chunk
+    // Fail silently — return raw chunk (non-blocking)
     return { enriched_chunk: input.chunk_text, contextual_header: "" };
   }
 }

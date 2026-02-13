@@ -2006,13 +2006,13 @@ function SourcesTab({
           }
 
           // Index embeddings if we have content (with contextual enrichment)
+          // Run in background - don't block upload completion
           if (rawContent && docRecord.id) {
-            try {
-              await indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name);
-            } catch (embedErr) {
-              console.error("Error indexing embeddings:", embedErr);
-              // Non-fatal - document is saved
-            }
+            // Fire and forget - don't await, let it run in background
+            indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name).catch((embedErr) => {
+              console.error("Error indexing embeddings (non-fatal):", embedErr);
+              // Non-fatal - document is saved, embeddings can be regenerated later
+            });
           }
 
           // ── Structured CSV ingestion: extract rows into kg_entities ──
@@ -2426,7 +2426,10 @@ function SourcesTab({
               storage_path: docRecord.storage_path || null,
             });
             toast({ title: "Document saved", description: "Raw content stored in Documents." });
-            await indexDocumentEmbeddings(docRecord.id, rawContent || null, docRecord.title || cleanedTitle);
+            // Index embeddings in background (non-blocking)
+            indexDocumentEmbeddings(docRecord.id, rawContent || null, docRecord.title || cleanedTitle).catch((err) => {
+              console.error("Error indexing embeddings (non-fatal):", err);
+            });
             assignmentDoc = { id: docRecord.id, title: docRecord.title || cleanedTitle };
           }
         } catch (err) {
@@ -4718,7 +4721,10 @@ export default function CIS() {
         return;
       }
 
-      await indexDocumentEmbeddings(docId, input.rawContent || null, docRecord?.title || input.title || null);
+      // Index embeddings in background (non-blocking)
+      indexDocumentEmbeddings(docId, input.rawContent || null, docRecord?.title || input.title || null).catch((err) => {
+        console.error("Error indexing embeddings (non-fatal):", err);
+      });
       setDocuments((prev) => [
         {
           id: docId,
@@ -5728,27 +5734,46 @@ export default function CIS() {
             try {
               // ── Contextual Retrieval: enrich chunk with a Claude-generated header ──
               // This dramatically improves embedding quality (per Anthropic's paper)
+              // BUT: Use fast timeout (3s) and skip if backend is slow to prevent blocking
               let textToEmbed = pair.childText;
               let contextualHeader = "";
               try {
-                const ctx = await contextualizeChunk({
+                // Fast timeout: if contextual enrichment takes > 3s, skip it
+                const ctxPromise = contextualizeChunk({
                   document_title: title,
                   document_summary: docSummary,
                   chunk_text: pair.childText,
                   chunk_index: i,
                   total_chunks: pairs.length,
                 });
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error("Contextual enrichment timeout")), 3000)
+                );
+                const ctx = await Promise.race([ctxPromise, timeoutPromise]);
                 if (ctx.enriched_chunk) {
                   textToEmbed = ctx.enriched_chunk;
                   contextualHeader = ctx.contextual_header || "";
                 }
               } catch {
-                // Contextual enrichment failed — embed raw chunk (still works, just less precise)
-                console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length}`);
+                // Contextual enrichment failed or timed out — embed raw chunk (still works, just less precise)
+                // This is non-fatal and shouldn't block the upload
+                console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length} (timeout or error)`);
               }
 
-              const embedding = await embedQuery(textToEmbed, "document");
-              if (!embedding.length) continue;
+              // Generate embedding with timeout
+              let embedding: number[] | null = null;
+              try {
+                const embeddingPromise = embedQuery(textToEmbed, "document");
+                const embeddingTimeout = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error("Embedding timeout")), 10000)
+                );
+                embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
+              } catch (embedErr) {
+                console.warn(`[EMBED] Embedding failed for chunk ${i + 1}/${pairs.length}:`, embedErr);
+                continue; // Skip this chunk
+              }
+              
+              if (!embedding || embedding.length === 0) continue;
 
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
