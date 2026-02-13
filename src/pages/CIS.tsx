@@ -4933,8 +4933,17 @@ export default function CIS() {
         return { ...source, tags };
       });
       setSources(normalizedSources as SourceRecord[]);
-      // Load source folders
-      setSourceFolders((foldersRes.data || []) as SourceFolder[]);
+      // Load source folders and ensure default folders exist
+      try {
+        await ensureDefaultFoldersForEvent(event.id);
+        // Reload folders after ensuring defaults
+        const { data: refreshedFolders } = await getSourceFoldersByEvent(event.id);
+        setSourceFolders((refreshedFolders || []) as SourceFolder[]);
+      } catch (folderErr) {
+        console.warn("[FOLDERS] Failed to ensure default folders:", folderErr);
+        // Fallback to original folders
+        setSourceFolders((foldersRes.data || []) as SourceFolder[]);
+      }
       
       // Load company connections for graph view
       setCompanyConnections((connectionsRes.data || []) as typeof companyConnections);
