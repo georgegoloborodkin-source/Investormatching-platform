@@ -1927,6 +1927,18 @@ function SourcesTab({
             return cleaned;
           };
 
+          // ── Detect folder-based entity type ──
+          // If document is uploaded to a folder with "portfolio", "company", "investor", or "fund" in name,
+          // we'll force-create a company card even if the title doesn't match the pattern
+          const currentSelectedFolder = selectedFolderId !== "none" 
+            ? sourceFolders.find(f => f.id === selectedFolderId)
+            : null;
+          const folderName = currentSelectedFolder?.name?.toLowerCase() || "";
+          const isPortfolioFolder = folderName.includes("portfolio") || folderName.includes("company");
+          const isInvestorFolder = folderName.includes("investor") || folderName.includes("fund");
+          const shouldForceCreateCard = isPortfolioFolder || isInvestorFolder;
+          const entityTypeHint = isInvestorFolder ? "fund" : "company";
+
           // Save document record (even if storage upload failed)
           const { data: doc, error: docError } = await insertDocument(eventId, {
             title: getDocumentTitle(file.name),
@@ -1937,7 +1949,7 @@ function SourcesTab({
             extracted_json: extractedJson,
             raw_content: rawContent,
             created_by: currentUserId || null,
-            folder_id: null,
+            folder_id: selectedFolderId !== "none" ? selectedFolderId : null,
           });
 
           if (docError || !doc) {
@@ -2044,13 +2056,90 @@ function SourcesTab({
 
           // ── Auto-extract company properties into company card ──
           // The DB trigger auto-creates a company entity from the document title.
-          // Now we use AI to extract structured properties and merge them into the card.
+          // If folder-based detection is enabled, force-create entity even if title doesn't match.
           if (rawContent && docRecord.id) {
             try {
               // Small delay to let the DB trigger create the entity
               await new Promise((r) => setTimeout(r, 500));
 
-              const companyEntityId = await getDocumentCompanyEntityId(docRecord.id);
+              let companyEntityId = await getDocumentCompanyEntityId(docRecord.id);
+              
+              // ── Folder-based card creation ──
+              // If document is in a portfolio/investor folder but no entity was created,
+              // force-create one using the document title as company name
+              if (!companyEntityId && shouldForceCreateCard && docRecord.title) {
+                try {
+                  const companyName = getDocumentTitle(file.name);
+                  const normalizedName = companyName.toLowerCase().trim();
+                  
+                  // Check if entity already exists
+                  const { data: existingEntity } = await supabase
+                    .from("kg_entities")
+                    .select("id")
+                    .eq("event_id", eventId)
+                    .eq("normalized_name", normalizedName)
+                    .eq("entity_type", entityTypeHint)
+                    .single();
+                  
+                  if (existingEntity) {
+                    companyEntityId = existingEntity.id;
+                    // Link document to existing entity
+                    await supabase
+                      .from("documents")
+                      .update({ company_entity_id: companyEntityId })
+                      .eq("id", docRecord.id);
+                  } else {
+                    // Create new entity
+                    const { data: newEntity, error: createErr } = await supabase
+                      .from("kg_entities")
+                      .insert({
+                        event_id: eventId,
+                        entity_type: entityTypeHint,
+                        name: companyName,
+                        normalized_name: normalizedName,
+                        properties: {
+                          auto_created: true,
+                          source: "folder_based",
+                          folder_name: currentSelectedFolder?.name || null,
+                          first_seen_document: docRecord.id,
+                          bio: "",
+                          funding_stage: "",
+                          amount_seeking: "",
+                          valuation: "",
+                          arr: "",
+                          burn_rate: "",
+                          runway_months: "",
+                          problem: "",
+                          solution: "",
+                          tam: "",
+                          competitive_edge: "",
+                          founders: "[]",
+                          ai_rationale: "",
+                          website: "",
+                          logo_url: "",
+                        },
+                        source_document_id: docRecord.id,
+                        confidence: 0.8,
+                        created_by: currentUserId || null,
+                      })
+                      .select("id")
+                      .single();
+                    
+                    if (!createErr && newEntity) {
+                      companyEntityId = newEntity.id;
+                      // Link document to new entity
+                      await supabase
+                        .from("documents")
+                        .update({ company_entity_id: companyEntityId })
+                        .eq("id", docRecord.id);
+                      console.log(`[FolderCard] Created ${entityTypeHint} entity "${companyName}" from folder "${currentSelectedFolder?.name}"`);
+                    }
+                  }
+                } catch (folderErr) {
+                  console.error("[FolderCard] Failed to create entity from folder:", folderErr);
+                }
+              }
+
               if (companyEntityId) {
                 const existing = await getEntityProperties(companyEntityId);
                 const extraction = await extractCompanyProperties({
@@ -2151,7 +2240,7 @@ function SourcesTab({
         e.target.value = "";
       }
     },
-    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onCreateSource, onDocumentSaved, onRefreshCompanyCards, openFolderAssignmentDialog, toast]
+    [activeEventId, currentUserId, ensureActiveEventId, indexDocumentEmbeddings, onCreateSource, onDocumentSaved, onRefreshCompanyCards, openFolderAssignmentDialog, selectedFolderId, sourceFolders, toast]
   );
 
   const importDriveUrl = useCallback(async (url: string) => {
