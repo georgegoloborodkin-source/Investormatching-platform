@@ -2061,17 +2061,23 @@ function SourcesTab({
           // Run in background - don't block upload completion
           if (rawContent && docRecord.id) {
             // Fire and forget - run property extraction in background
+            // Capture variables needed for async execution
+            const docId = docRecord.id;
+            const docTitle = docRecord.title || file.name;
+            const fileContent = rawContent;
+            const folderInfo = { shouldForceCreateCard, entityTypeHint, currentSelectedFolder };
+            
             (async () => {
               try {
                 // Small delay to let the DB trigger create the entity
                 await new Promise((r) => setTimeout(r, 500));
 
-              let companyEntityId = await getDocumentCompanyEntityId(docRecord.id);
+                let companyEntityId = await getDocumentCompanyEntityId(docId);
               
               // ── Folder-based card creation ──
               // If document is in a portfolio/investor folder but no entity was created,
               // force-create one using the document title as company name
-              if (!companyEntityId && shouldForceCreateCard && docRecord.title) {
+              if (!companyEntityId && folderInfo.shouldForceCreateCard && docTitle) {
                 try {
                   const companyName = getDocumentTitle(file.name);
                   const normalizedName = companyName.toLowerCase().trim();
@@ -2087,11 +2093,11 @@ function SourcesTab({
                   
                   if (existingEntity) {
                     companyEntityId = existingEntity.id;
-                    // Link document to existing entity
-                    await supabase
-                      .from("documents")
-                      .update({ company_entity_id: companyEntityId })
-                      .eq("id", docRecord.id);
+                  // Link document to existing entity
+                  await supabase
+                    .from("documents")
+                    .update({ company_entity_id: companyEntityId })
+                    .eq("id", docId);
                   } else {
                     // Create new entity
                     const { data: newEntity, error: createErr } = await supabase
@@ -2103,9 +2109,9 @@ function SourcesTab({
                         normalized_name: normalizedName,
                         properties: {
                           auto_created: true,
-                          source: "folder_based",
-                          folder_name: currentSelectedFolder?.name || null,
-                          first_seen_document: docRecord.id,
+                        source: "folder_based",
+                        folder_name: folderInfo.currentSelectedFolder?.name || null,
+                        first_seen_document: docId,
                           bio: "",
                           funding_stage: "",
                           amount_seeking: "",
@@ -2122,7 +2128,7 @@ function SourcesTab({
                           website: "",
                           logo_url: "",
                         },
-                        source_document_id: docRecord.id,
+                        source_document_id: docId,
                         confidence: 0.8,
                         created_by: currentUserId || null,
                       })
@@ -2135,8 +2141,8 @@ function SourcesTab({
                       await supabase
                         .from("documents")
                         .update({ company_entity_id: companyEntityId })
-                        .eq("id", docRecord.id);
-                      console.log(`[FolderCard] Created ${entityTypeHint} entity "${companyName}" from folder "${currentSelectedFolder?.name}"`);
+                        .eq("id", docId);
+                      console.log(`[FolderCard] Created ${folderInfo.entityTypeHint} entity "${companyName}" from folder "${folderInfo.currentSelectedFolder?.name}"`);
                     }
                   }
                 } catch (folderErr) {
@@ -2147,8 +2153,8 @@ function SourcesTab({
               if (companyEntityId) {
                 const existing = await getEntityProperties(companyEntityId);
                 const extraction = await extractCompanyProperties({
-                  rawContent: rawContent,
-                  documentTitle: docRecord.title || file.name,
+                  rawContent: fileContent,
+                  documentTitle: docTitle,
                   existingProperties: existing?.properties || {},
                 });
 
@@ -2157,32 +2163,22 @@ function SourcesTab({
                     companyEntityId,
                     extraction.properties,
                     extraction.confidence,
-                    docRecord.id,
+                    docId,
                   );
                   console.log(`[AutoExtract] ${mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
-                  batchResults.push({
-                    name: mergeResult.companyName || file.name,
-                    updated: mergeResult.updated.length,
-                    conflicts: mergeResult.conflicts.length,
-                    created: !!companyEntityId,
-                  });
+                  // Note: batchResults updates happen in background, won't affect upload speed
                 } else {
-                  batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: !!companyEntityId });
+                  console.log(`[AutoExtract] No properties extracted for ${file.name}`);
                 }
               } else {
-                // Don't update batchResults here - it's already been processed
                 console.log(`[AutoExtract] No entity found for ${file.name}`);
               }
               } catch (extractErr) {
                 console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
-                // Don't update batchResults - extraction runs in background
               }
             })().catch((err) => {
               console.error("[AutoExtract] Background extraction error:", err);
             });
-          } else {
-            // No content - add to batch results immediately
-            batchResults.push({ name: file.name, updated: 0, conflicts: 0, created: false });
           }
 
           successCount += 1;
