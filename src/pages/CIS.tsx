@@ -11109,31 +11109,54 @@ function CompanyCard({
                     Conflicting Values ({propertyConflicts.length})
                   </span>
                 </div>
+                {/* Quick action: apply all highest-confidence values */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    for (const conflict of propertyConflicts) {
+                      const best = [...conflict.values].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+                      if (best) resolveConflict(conflict.field, best.value);
+                    }
+                  }}
+                  className="text-[10px] font-mono font-bold px-3 py-1 rounded border border-orange-400/60 text-orange-300 hover:bg-orange-500/20 hover:text-orange-200 transition-colors mb-1"
+                >
+                  Apply All Highest-Confidence ({propertyConflicts.length})
+                </button>
                 <div className="space-y-2 pl-1">
                   {propertyConflicts.map((conflict, ci) => (
                     <div key={ci} className="bg-orange-500/5 border border-orange-500/20 rounded-md p-2 space-y-1">
                       <div className="text-[10px] font-mono font-bold text-white/80 uppercase">
                         {conflict.field.replace(/_/g, " ")}
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {conflict.values.map((v, vi) => (
-                          <button
-                            key={vi}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resolveConflict(conflict.field, v.value);
-                            }}
-                            className="text-[10px] font-mono px-2 py-1 rounded border border-white/20 text-white/80 hover:border-[#FFED00] hover:text-[#FFED00] hover:bg-[#FFED00]/10 transition-colors"
-                            title={`Source: ${v.source}${v.confidence ? ` (${(v.confidence * 100).toFixed(0)}% confidence)` : ""}`}
-                          >
-                            {typeof v.value === "string" ? v.value : JSON.stringify(v.value)}
-                            {v.confidence != null && (
-                              <span className={`ml-1 ${v.confidence >= 0.8 ? "text-emerald-400" : v.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
-                                ({(v.confidence * 100).toFixed(0)}%)
-                              </span>
-                            )}
-                          </button>
-                        ))}
+                      <div className="space-y-1">
+                        {conflict.values.map((v, vi) => {
+                          const isHighest = conflict.values.every((other) => (v.confidence || 0) >= (other.confidence || 0));
+                          return (
+                            <div key={vi} className="flex items-start gap-2">
+                              <div className={`flex-1 text-[10px] font-mono px-2 py-1 rounded border ${isHighest ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/10"} text-white/80`}>
+                                {typeof v.value === "string" ? v.value : JSON.stringify(v.value)}
+                                {v.confidence != null && (
+                                  <span className={`ml-1 ${v.confidence >= 0.8 ? "text-emerald-400" : v.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
+                                    ({(v.confidence * 100).toFixed(0)}%)
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  resolveConflict(conflict.field, v.value);
+                                }}
+                                className={`text-[9px] font-mono font-bold px-2 py-1 rounded border transition-colors flex-shrink-0 ${
+                                  isHighest
+                                    ? "border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/20"
+                                    : "border-white/20 text-white/60 hover:border-[#FFED00] hover:text-[#FFED00] hover:bg-[#FFED00]/10"
+                                }`}
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
