@@ -946,16 +946,20 @@ export async function extractCompanyProperties(input: {
 }): Promise<CompanyPropertyExtractionResult> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
-    const response = await fetch(`${baseUrl}/extract-company-properties`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        raw_content: input.rawContent,
-        document_title: input.documentTitle || "",
-        document_type: input.documentType || "",
-        existing_properties: input.existingProperties || {},
-      }),
-    });
+    const response = await fetchWithTimeout(
+      `${baseUrl}/extract-company-properties`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw_content: input.rawContent,
+          document_title: input.documentTitle || "",
+          document_type: input.documentType || "",
+          existing_properties: input.existingProperties || {},
+        }),
+      },
+      45000 // 45s — Sonnet extraction can be slow on large pitch decks
+    );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${response.status}`);

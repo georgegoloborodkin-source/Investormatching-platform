@@ -2087,9 +2087,10 @@ function SourcesTab({
             (async () => {
               try {
                 // Small delay to let the DB trigger create the entity
-                await new Promise((r) => setTimeout(r, 500));
+                await new Promise((r) => setTimeout(r, 1000));
 
                 let companyEntityId = await getDocumentCompanyEntityId(docId);
+                console.log(`[AutoExtract] After DB trigger delay, entity ID: ${companyEntityId || "none"}`);
               
               // ── Folder-based card creation ──
               // If document is in a portfolio/investor folder but no entity was created,
@@ -2110,11 +2111,12 @@ function SourcesTab({
                   
                   if (existingEntity) {
                     companyEntityId = existingEntity.id;
-                  // Link document to existing entity
-                  await supabase
-                    .from("documents")
-                    .update({ company_entity_id: companyEntityId })
-                    .eq("id", docId);
+                    // Link document to existing entity
+                    await supabase
+                      .from("documents")
+                      .update({ company_entity_id: companyEntityId })
+                      .eq("id", docId);
+                    console.log(`[FolderCard] Linked to existing ${entityTypeHint} entity "${companyName}"`);
                   } else {
                     // Create new entity
                     const { data: newEntity, error: createErr } = await supabase
@@ -2126,9 +2128,9 @@ function SourcesTab({
                         normalized_name: normalizedName,
                         properties: {
                           auto_created: true,
-                        source: "folder_based",
-                        folder_name: folderInfo.currentSelectedFolder?.name || null,
-                        first_seen_document: docId,
+                          source: "folder_based",
+                          folder_name: folderInfo.currentSelectedFolder?.name || null,
+                          first_seen_document: docId,
                           bio: "",
                           funding_stage: "",
                           amount_seeking: "",
@@ -2160,6 +2162,8 @@ function SourcesTab({
                         .update({ company_entity_id: companyEntityId })
                         .eq("id", docId);
                       console.log(`[FolderCard] Created ${folderInfo.entityTypeHint} entity "${companyName}" from folder "${folderInfo.currentSelectedFolder?.name}"`);
+                    } else {
+                      console.error("[FolderCard] Failed to create entity:", createErr);
                     }
                   }
                 } catch (folderErr) {
@@ -2167,13 +2171,103 @@ function SourcesTab({
                 }
               }
 
+              // ── Fallback: If no entity exists, create one from cleaned document title ──
+              // This handles cases where the DB trigger didn't fire or the title pattern didn't match
+              if (!companyEntityId && docTitle) {
+                try {
+                  console.log(`[AutoExtract] No entity found, creating from document title: "${docTitle}"`);
+                  // Clean the title: remove "Deck", "Pitch", dates, etc.
+                  let companyName = docTitle
+                    .replace(/\s*(deck|pitch|presentation|memo|report|summary|overview).*$/i, "")
+                    .replace(/\s*[-–]\s*.*$/, "") // Remove everything after " - " or " – "
+                    .replace(/\s*\d{4,}\s*$/, "") // Remove trailing years like "2025"
+                    .replace(/\s*\(.*\)\s*$/, "") // Remove trailing parentheses like "(2)"
+                    .trim();
+                  
+                  // If title is too generic, skip
+                  if (companyName && companyName.length > 2 && 
+                      !companyName.toLowerCase().match(/^(document|uploaded|file|untitled)/i)) {
+                    const normalizedName = companyName.toLowerCase().trim();
+                    
+                    // Check if entity already exists
+                    const { data: existingEntity } = await supabase
+                      .from("kg_entities")
+                      .select("id")
+                      .eq("event_id", eventId)
+                      .eq("normalized_name", normalizedName)
+                      .eq("entity_type", "company")
+                      .single();
+                    
+                    if (existingEntity) {
+                      companyEntityId = existingEntity.id;
+                      await supabase
+                        .from("documents")
+                        .update({ company_entity_id: companyEntityId })
+                        .eq("id", docId);
+                      console.log(`[AutoExtract] Linked to existing company entity "${companyName}"`);
+                    } else {
+                      // Create new entity
+                      const { data: newEntity, error: createErr } = await supabase
+                        .from("kg_entities")
+                        .insert({
+                          event_id: eventId,
+                          entity_type: "company",
+                          name: companyName,
+                          normalized_name: normalizedName,
+                          properties: {
+                            auto_created: true,
+                            source: "document_title_fallback",
+                            first_seen_document: docId,
+                            bio: "",
+                            funding_stage: "",
+                            amount_seeking: "",
+                            valuation: "",
+                            arr: "",
+                            burn_rate: "",
+                            runway_months: "",
+                            problem: "",
+                            solution: "",
+                            tam: "",
+                            competitive_edge: "",
+                            founders: "[]",
+                            ai_rationale: "",
+                            website: "",
+                            logo_url: "",
+                          },
+                          source_document_id: docId,
+                          confidence: 0.6,
+                          created_by: currentUserId || null,
+                        })
+                        .select("id")
+                        .single();
+                      
+                      if (!createErr && newEntity) {
+                        companyEntityId = newEntity.id;
+                        await supabase
+                          .from("documents")
+                          .update({ company_entity_id: companyEntityId })
+                          .eq("id", docId);
+                        console.log(`[AutoExtract] Created company entity "${companyName}" from document title`);
+                      } else {
+                        console.error("[AutoExtract] Failed to create entity from title:", createErr);
+                      }
+                    }
+                  }
+                } catch (fallbackErr) {
+                  console.warn("[AutoExtract] Failed to create entity from title (non-fatal):", fallbackErr);
+                }
+              }
+
               if (companyEntityId) {
+                console.log(`[AutoExtract] Running property extraction for entity ${companyEntityId}...`);
                 const existing = await getEntityProperties(companyEntityId);
                 const extraction = await extractCompanyProperties({
                   rawContent: fileContent,
                   documentTitle: docTitle,
                   existingProperties: existing?.properties || {},
                 });
+
+                console.log(`[AutoExtract] Extraction result: ${Object.keys(extraction.properties).length} properties, type: ${extraction.document_type_detected}`);
 
                 if (Object.keys(extraction.properties).length > 0) {
                   const mergeResult = await mergeCompanyCardFromExtraction(
@@ -2182,13 +2276,16 @@ function SourcesTab({
                     extraction.confidence,
                     docId,
                   );
-                  console.log(`[AutoExtract] ${mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
-                  // Note: batchResults updates happen in background, won't affect upload speed
+                  console.log(`[AutoExtract] ✅ ${mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
+                  // Refresh company cards if callback available
+                  if (onRefreshCompanyCards) {
+                    onRefreshCompanyCards().catch(err => console.warn("[AutoExtract] Failed to refresh cards:", err));
+                  }
                 } else {
-                  console.log(`[AutoExtract] No properties extracted for ${file.name}`);
+                  console.warn(`[AutoExtract] ⚠️ No properties extracted for ${file.name} (backend may be down or document type not recognized)`);
                 }
               } else {
-                console.log(`[AutoExtract] No entity found for ${file.name}`);
+                console.warn(`[AutoExtract] ⚠️ No entity found for ${file.name} - cannot extract properties`);
               }
               } catch (extractErr) {
                 console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
