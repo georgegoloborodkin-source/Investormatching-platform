@@ -1944,80 +1944,118 @@ function SourcesTab({
               onDocumentSaved({ id: docRow.id, title: fileTitle, storage_path: null, folder_id: platformFolderId || undefined });
 
               // 8. Run embedding + entity extraction pipeline (same as local upload)
+              // This also calls extractEntities which may create company entities with proper names
               await indexDocumentEmbeddings(docRow.id, downloaded.raw_content, fileTitle, null);
 
               // 9. Find or create company entity
-              // Use folder name if it looks like a company; otherwise derive from file title
+              // FIRST: check if extractEntities already linked this doc to an entity
               try {
-                const cleanFileTitle = (t: string) => {
-                  let s = t.replace(/^copy\s+of\s+/i, "").trim();
-                  s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet).*$/i, "").trim();
-                  s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s*\(.*\)\s*$/, "").replace(/\.\w+$/, "").trim();
-                  return s || t;
-                };
-                const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
-                const normalizedName = entityName.toLowerCase().trim();
                 let companyEntityId: string | null = null;
-                const { data: entityArr } = await supabase
-                  .from("kg_entities")
-                  .select("id")
-                  .eq("event_id", eventId)
-                  .eq("normalized_name", normalizedName)
-                  .eq("entity_type", "company")
-                  .limit(1);
-                companyEntityId = entityArr?.[0]?.id || null;
+                const { data: linkedDoc } = await supabase
+                  .from("documents")
+                  .select("company_entity_id")
+                  .eq("id", docRow.id)
+                  .single();
+                if (linkedDoc?.company_entity_id) {
+                  companyEntityId = linkedDoc.company_entity_id;
+                  console.log(`[DriveSync] Doc already linked to entity ${companyEntityId} by extractEntities`);
+                }
 
+                // If not linked yet, try folder name or file title
                 if (!companyEntityId) {
-                  const { data: newEntity, error: createErr } = await supabase
+                  const cleanFileTitle = (t: string) => {
+                    let s = t.replace(/^copy\s+of\s+/i, "").trim();
+                    s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet).*$/i, "").trim();
+                    s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s*\(.*\)\s*$/, "").replace(/\.\w+$/, "").trim();
+                    return s || t;
+                  };
+                  const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
+                  const normalizedName = entityName.toLowerCase().trim();
+                  console.log(`[DriveSync] Looking up entity by name: "${entityName}" (folder: "${companyName}", file: "${fileTitle}")`);
+                  const { data: entityArr } = await supabase
                     .from("kg_entities")
-                    .insert({
-                      event_id: eventId,
-                      entity_type: "company",
-                      name: entityName,
-                      normalized_name: normalizedName,
-                      properties: {
-                        auto_created: true,
-                        source: "folder_based",
-                        folder_name: companyName,
-                        first_seen_document: docRow.id,
-                        bio: "",
-                        funding_stage: "",
-                        amount_seeking: "",
-                        valuation: "",
-                        arr: "",
-                        burn_rate: "",
-                        runway_months: "",
-                        problem: "",
-                        solution: "",
-                        tam: "",
-                        competitive_edge: "",
-                        founders: "[]",
-                        ai_rationale: "",
-                        website: "",
-                        logo_url: "",
-                      },
-                      source_document_id: docRow.id,
-                      confidence: 0.8,
-                      created_by: currentUserId || null,
-                    })
                     .select("id")
-                    .single();
-                  if (!createErr && newEntity) {
-                    companyEntityId = newEntity.id;
+                    .eq("event_id", eventId)
+                    .eq("normalized_name", normalizedName)
+                    .eq("entity_type", "company")
+                    .limit(1);
+                  companyEntityId = entityArr?.[0]?.id || null;
+
+                  // Still not found? Try matching by source_document_id (extractEntities may have created one)
+                  if (!companyEntityId) {
+                    const { data: entByDoc } = await supabase
+                      .from("kg_entities")
+                      .select("id, name")
+                      .eq("event_id", eventId)
+                      .eq("source_document_id", docRow.id)
+                      .eq("entity_type", "company")
+                      .limit(1);
+                    if (entByDoc?.[0]) {
+                      companyEntityId = entByDoc[0].id;
+                      console.log(`[DriveSync] Found entity "${entByDoc[0].name}" by source_document_id`);
+                    }
+                  }
+
+                  if (!companyEntityId) {
+                    const { data: newEntity, error: createErr } = await supabase
+                      .from("kg_entities")
+                      .insert({
+                        event_id: eventId,
+                        entity_type: "company",
+                        name: entityName,
+                        normalized_name: normalizedName,
+                        properties: {
+                          auto_created: true,
+                          source: "folder_based",
+                          folder_name: companyName,
+                          first_seen_document: docRow.id,
+                          bio: "",
+                          funding_stage: "",
+                          amount_seeking: "",
+                          valuation: "",
+                          arr: "",
+                          burn_rate: "",
+                          runway_months: "",
+                          problem: "",
+                          solution: "",
+                          tam: "",
+                          competitive_edge: "",
+                          founders: "[]",
+                          ai_rationale: "",
+                          website: "",
+                          logo_url: "",
+                        },
+                        source_document_id: docRow.id,
+                        confidence: 0.8,
+                        created_by: currentUserId || null,
+                      })
+                      .select("id")
+                      .single();
+                    if (!createErr && newEntity) {
+                      companyEntityId = newEntity.id;
+                      console.log(`[DriveSync] Created company entity "${entityName}" (folder: "${companyName}")`);
+                    }
+                  }
+
+                  // Link document to entity
+                  if (companyEntityId) {
                     await supabase
                       .from("documents")
                       .update({ company_entity_id: companyEntityId })
                       .eq("id", docRow.id);
-                    console.log(`[DriveSync] Created company entity "${entityName}" (folder: "${companyName}")`);
                   }
-                } else {
-                  await supabase
-                    .from("documents")
-                    .update({ company_entity_id: companyEntityId })
-                    .eq("id", docRow.id);
                 }
 
                 if (companyEntityId) {
+                  // Get current entity name for logging / rename comparison
+                  const { data: currentEntityRow } = await supabase
+                    .from("kg_entities")
+                    .select("name")
+                    .eq("id", companyEntityId)
+                    .single();
+                  const currentEntityName = currentEntityRow?.name || fileTitle;
+
+                  console.log(`[DriveSync] Running property extraction for entity "${currentEntityName}" (${companyEntityId}), raw_content: ${(downloaded.raw_content || "").length} chars`);
                   const existing = await getEntityProperties(companyEntityId);
                   const extraction = await extractCompanyProperties({
                     rawContent: downloaded.raw_content,
@@ -2025,13 +2063,14 @@ function SourcesTab({
                     existingProperties: existing?.properties || {},
                   });
 
+                  console.log(`[DriveSync] Extraction result: ${Object.keys(extraction.properties).length} properties`);
+
                   if (Object.keys(extraction.properties).length > 0) {
                     // If AI identified a better company_name, rename the entity
                     const aiCompanyName = (extraction.properties.company_name || "").trim();
                     if (aiCompanyName && aiCompanyName.length >= 2) {
-                      const currentName = entityName;
                       const aiNorm = aiCompanyName.toLowerCase();
-                      const curNorm = currentName.toLowerCase();
+                      const curNorm = currentEntityName.toLowerCase().trim();
                       // Only rename if AI name differs meaningfully and isn't the doc title
                       if (aiNorm !== curNorm && !aiNorm.includes("copy of")) {
                         // Check if an entity with AI name already exists
@@ -2047,14 +2086,14 @@ function SourcesTab({
                           const targetId = existingByAiName[0].id;
                           await supabase.from("documents").update({ company_entity_id: targetId }).eq("id", docRow.id);
                           companyEntityId = targetId;
-                          console.log(`[DriveSync] Merged into existing entity "${aiCompanyName}" (was "${currentName}")`);
+                          console.log(`[DriveSync] Merged into existing entity "${aiCompanyName}" (was "${currentEntityName}")`);
                         } else {
                           // Rename entity to AI-detected name
                           await supabase
                             .from("kg_entities")
                             .update({ name: aiCompanyName, normalized_name: aiNorm })
                             .eq("id", companyEntityId);
-                          console.log(`[DriveSync] Renamed entity "${currentName}" → "${aiCompanyName}"`);
+                          console.log(`[DriveSync] Renamed entity "${currentEntityName}" → "${aiCompanyName}"`);
                         }
                       }
                       // Remove company_name from properties (it's stored as entity name, not a card field)
@@ -2069,8 +2108,12 @@ function SourcesTab({
                       docRow.id,
                       { isMeetingNotes },
                     );
-                    console.log(`[DriveSync] Card merge for ${aiCompanyName || entityName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
+                    console.log(`[DriveSync] Card merge for ${aiCompanyName || currentEntityName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
+                  } else {
+                    console.warn(`[DriveSync] No properties extracted for "${currentEntityName}" from file "${file.name}"`);
                   }
+                } else {
+                  console.warn(`[DriveSync] No entity found/created for file "${file.name}" — skipping property extraction`);
                 }
               } catch (extractErr) {
                 console.warn(`[DriveSync] Property extraction for ${file.name} failed (non-fatal):`, extractErr);
