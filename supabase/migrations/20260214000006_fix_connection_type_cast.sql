@@ -1,7 +1,6 @@
--- Fix: "source_company_name is ambiguous" error when approving pending relationship reviews.
--- The sync_approved_edges_to_connections trigger function used local variable names
--- (source_company_name, target_company_name, connection_type) that collide with
--- the column names in company_connections. Renamed variables to v_* to avoid ambiguity.
+-- Fix: "type connection_type does not exist" when approving relationships.
+-- The column company_connections.connection_type is TEXT with a CHECK constraint,
+-- NOT a custom PostgreSQL type. Remove the ::connection_type cast.
 
 CREATE OR REPLACE FUNCTION sync_approved_edges_to_connections()
 RETURNS TRIGGER AS $$
@@ -10,9 +9,7 @@ DECLARE
   v_target_company_name TEXT;
   v_connection_type TEXT;
 BEGIN
-  -- Only process if review_status changed to 'approved'
   IF NEW.review_status = 'approved' AND (OLD.review_status IS NULL OR OLD.review_status != 'approved') THEN
-    -- Get company names from entities
     SELECT 
       se.name,
       te.name,
@@ -24,9 +21,7 @@ BEGIN
       AND se.entity_type = 'company'
       AND te.entity_type = 'company';
     
-    -- Only create connection if both are companies
     IF v_source_company_name IS NOT NULL AND v_target_company_name IS NOT NULL THEN
-      -- Check if connection already exists
       IF NOT EXISTS (
         SELECT 1 FROM company_connections
         WHERE event_id = NEW.event_id

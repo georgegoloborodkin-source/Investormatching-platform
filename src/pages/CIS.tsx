@@ -1831,6 +1831,15 @@ function SourcesTab({
 
       setDriveSyncProgress({ phase: "Syncing companies...", current: 0, total: subFolders.length, currentItem: "" });
 
+      // Helper: check if a folder name looks like a real company name
+      const isLikelyCompanyName = (name: string): boolean => {
+        const words = name.trim().split(/\s+/);
+        if (words.length > 4) return false; // company names are short
+        const generic = /^(sourcing|intern|interns|team|notes|docs|documents|shared|misc|general|archive|old|new|temp|draft|test|admin|meeting|meetings|portfolio|companies|investors?|funds?|deals?|research|diligence|dd)$/i;
+        if (words.some((w) => generic.test(w))) return false;
+        return true;
+      };
+
       for (let fi = 0; fi < subFolders.length; fi++) {
         const companyFolder = subFolders[fi];
         const companyName = companyFolder.name;
@@ -1932,9 +1941,17 @@ function SourcesTab({
               // 8. Run embedding + entity extraction pipeline (same as local upload)
               await indexDocumentEmbeddings(docRow.id, downloaded.raw_content, fileTitle, null);
 
-              // 9. Find or create company entity by FOLDER name (so card is "TBE" not "Copy of TBE Due Diligence")
+              // 9. Find or create company entity
+              // Use folder name if it looks like a company; otherwise derive from file title
               try {
-                const normalizedName = companyName.toLowerCase().trim();
+                const cleanFileTitle = (t: string) => {
+                  let s = t.replace(/^copy\s+of\s+/i, "").trim();
+                  s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet).*$/i, "").trim();
+                  s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s*\(.*\)\s*$/, "").replace(/\.\w+$/, "").trim();
+                  return s || t;
+                };
+                const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
+                const normalizedName = entityName.toLowerCase().trim();
                 let companyEntityId: string | null = null;
                 const { data: entityArr } = await supabase
                   .from("kg_entities")
@@ -1951,7 +1968,7 @@ function SourcesTab({
                     .insert({
                       event_id: eventId,
                       entity_type: "company",
-                      name: companyName,
+                      name: entityName,
                       normalized_name: normalizedName,
                       properties: {
                         auto_created: true,
@@ -1986,7 +2003,7 @@ function SourcesTab({
                       .from("documents")
                       .update({ company_entity_id: companyEntityId })
                       .eq("id", docRow.id);
-                    console.log(`[DriveSync] Created company entity "${companyName}" for folder`);
+                    console.log(`[DriveSync] Created company entity "${entityName}" (folder: "${companyName}")`);
                   }
                 } else {
                   await supabase
