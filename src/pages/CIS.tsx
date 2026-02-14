@@ -1618,12 +1618,17 @@ function SourcesTab({
     if (!activeEventId) return;
     (async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("sync_configurations")
           .select("config, last_sync_at")
           .eq("event_id", activeEventId)
           .eq("source_type", "google_drive")
           .limit(1);
+        // Table may not exist yet (404) — ignore gracefully
+        if (error) {
+          console.warn("[DriveSync] sync_configurations not available:", error.message);
+          return;
+        }
         const row = data?.[0];
         if (row?.config?.google_drive_folder_id) {
           setConnectedDriveFolderId(row.config.google_drive_folder_id);
@@ -2021,6 +2026,42 @@ function SourcesTab({
                   });
 
                   if (Object.keys(extraction.properties).length > 0) {
+                    // If AI identified a better company_name, rename the entity
+                    const aiCompanyName = (extraction.properties.company_name || "").trim();
+                    if (aiCompanyName && aiCompanyName.length >= 2) {
+                      const currentName = entityName;
+                      const aiNorm = aiCompanyName.toLowerCase();
+                      const curNorm = currentName.toLowerCase();
+                      // Only rename if AI name differs meaningfully and isn't the doc title
+                      if (aiNorm !== curNorm && !aiNorm.includes("copy of")) {
+                        // Check if an entity with AI name already exists
+                        const { data: existingByAiName } = await supabase
+                          .from("kg_entities")
+                          .select("id")
+                          .eq("event_id", eventId)
+                          .eq("normalized_name", aiNorm)
+                          .eq("entity_type", "company")
+                          .limit(1);
+                        if (existingByAiName && existingByAiName.length > 0) {
+                          // Merge: re-link document to the existing entity with the AI name
+                          const targetId = existingByAiName[0].id;
+                          await supabase.from("documents").update({ company_entity_id: targetId }).eq("id", docRow.id);
+                          companyEntityId = targetId;
+                          console.log(`[DriveSync] Merged into existing entity "${aiCompanyName}" (was "${currentName}")`);
+                        } else {
+                          // Rename entity to AI-detected name
+                          await supabase
+                            .from("kg_entities")
+                            .update({ name: aiCompanyName, normalized_name: aiNorm })
+                            .eq("id", companyEntityId);
+                          console.log(`[DriveSync] Renamed entity "${currentName}" → "${aiCompanyName}"`);
+                        }
+                      }
+                      // Remove company_name from properties (it's stored as entity name, not a card field)
+                      delete extraction.properties.company_name;
+                      delete extraction.confidence.company_name;
+                    }
+
                     const mergeResult = await mergeCompanyCardFromExtraction(
                       companyEntityId,
                       extraction.properties,
@@ -2028,7 +2069,7 @@ function SourcesTab({
                       docRow.id,
                       { isMeetingNotes },
                     );
-                    console.log(`[DriveSync] Card merge for ${companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
+                    console.log(`[DriveSync] Card merge for ${aiCompanyName || entityName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
                   }
                 }
               } catch (extractErr) {
@@ -2755,13 +2796,44 @@ function SourcesTab({
                 console.log(`[AutoExtract] Extraction result: ${Object.keys(extraction.properties).length} properties, type: ${extraction.document_type_detected}`);
 
                 if (Object.keys(extraction.properties).length > 0) {
+                  // If AI identified a better company_name, rename the entity
+                  const aiName = (extraction.properties.company_name || "").trim();
+                  if (aiName && aiName.length >= 2) {
+                    const aiNorm = aiName.toLowerCase();
+                    const currentEntity = existing;
+                    const curNorm = (currentEntity?.name || "").toLowerCase().trim();
+                    if (aiNorm !== curNorm && !aiNorm.includes("copy of")) {
+                      const { data: existingByAiName } = await supabase
+                        .from("kg_entities")
+                        .select("id")
+                        .eq("event_id", activeEventId!)
+                        .eq("normalized_name", aiNorm)
+                        .eq("entity_type", "company")
+                        .limit(1);
+                      if (existingByAiName && existingByAiName.length > 0) {
+                        const targetId = existingByAiName[0].id;
+                        await supabase.from("documents").update({ company_entity_id: targetId }).eq("id", docId);
+                        companyEntityId = targetId;
+                        console.log(`[AutoExtract] Merged into existing entity "${aiName}" (was "${curNorm}")`);
+                      } else {
+                        await supabase
+                          .from("kg_entities")
+                          .update({ name: aiName, normalized_name: aiNorm })
+                          .eq("id", companyEntityId);
+                        console.log(`[AutoExtract] Renamed entity "${curNorm}" → "${aiName}"`);
+                      }
+                    }
+                    delete extraction.properties.company_name;
+                    delete extraction.confidence.company_name;
+                  }
+
                   const mergeResult = await mergeCompanyCardFromExtraction(
                     companyEntityId,
                     extraction.properties,
                     extraction.confidence,
                     docId,
                   );
-                  console.log(`[AutoExtract] ✅ ${mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
+                  console.log(`[AutoExtract] ✅ ${aiName || mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
                   // Refresh company cards if callback available
                   if (onRefreshCompanyCards) {
                     onRefreshCompanyCards().catch(err => console.warn("[AutoExtract] Failed to refresh cards:", err));

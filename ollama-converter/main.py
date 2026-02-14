@@ -5131,9 +5131,14 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         "Leave fields as empty string or empty array if the information is NOT in the document.\n"
         "Do NOT make up information — only extract what's explicitly stated or strongly implied.\n"
         "Extract as MUCH as possible — every data point matters for investment analysis.\n\n"
+        "IMPORTANT: The 'company_name' field is CRITICAL. It must be the SHORT, official name of "
+        "the PRIMARY company this document is about (e.g. 'TBE', 'UniToni', 'Weego'). "
+        "Do NOT use the document title, folder name, or investor name. "
+        "If the document covers multiple companies, pick the MAIN subject company.\n\n"
         "Required JSON format:\n"
         "{\n"
         '  "properties": {\n'
+        '    "company_name": "Short official company name (e.g. TBE, UniToni, Payd)",\n'
         '    "bio": "1-3 sentence company description",\n'
         '    "funding_stage": "Pre-seed|Seed|Series A|Series B+|etc",\n'
         '    "amount_seeking": "$X.XM or $XXK",\n'
@@ -5259,6 +5264,7 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         # Normalize: remove None values, convert to strings where expected
         clean_props: Dict[str, Any] = {}
         string_fields = [
+            "company_name",
             "bio", "funding_stage", "amount_seeking", "valuation", "arr", "mrr",
             "burn_rate", "runway_months", "problem", "solution", "tam", "sam", "som",
             "market_growth_rate", "competitive_edge", "business_model", "revenue_model",
