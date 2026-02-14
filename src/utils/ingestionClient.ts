@@ -124,3 +124,97 @@ export async function ingestGoogleDrive(
   }
 }
 
+// ─── Google Drive Folder-Sync Helpers ────────────────────────────────────────
+
+export interface GDriveFolderEntry {
+  id: string;
+  name: string;
+  modifiedTime?: string | null;
+}
+
+export interface GDriveFileEntry {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime?: string | null;
+  size?: string | null;
+}
+
+export async function listDriveFolders(
+  accessToken: string,
+  folderId: string
+): Promise<GDriveFolderEntry[]> {
+  try {
+    const baseUrl = await resolveIngestionBaseUrl();
+    const response = await fetch(`${baseUrl}/gdrive/list-folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    return data.folders ?? [];
+  } catch (error) {
+    throw new Error(
+      `Drive list-folders failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+export async function listDriveFiles(
+  accessToken: string,
+  folderId: string
+): Promise<GDriveFileEntry[]> {
+  try {
+    const baseUrl = await resolveIngestionBaseUrl();
+    const response = await fetch(`${baseUrl}/gdrive/list-files`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    return data.files ?? [];
+  } catch (error) {
+    throw new Error(
+      `Drive list-files failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+export async function downloadDriveFile(
+  accessToken: string,
+  fileId: string,
+  mimeType?: string,
+  fileName?: string
+): Promise<{ title: string; content: string; raw_content: string; sourceType: string; mimeType: string }> {
+  try {
+    const baseUrl = await resolveIngestionBaseUrl();
+    const response = await fetch(`${baseUrl}/gdrive/download-file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_token: accessToken,
+        file_id: fileId,
+        mime_type: mimeType || null,
+        file_name: fileName || null,
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    throw new Error(
+      `Drive download-file failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+

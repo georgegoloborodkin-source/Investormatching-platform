@@ -678,6 +678,47 @@ class GoogleDriveIngestResponse(BaseModel):
     raw_content: str  # Alias for content, for clarity
     sourceType: str
 
+# ---------- Google Drive Folder-Sync Models ----------
+
+class GDriveListFoldersRequest(BaseModel):
+    access_token: str
+    folder_id: str  # root folder ID
+
+class GDriveFolderEntry(BaseModel):
+    id: str
+    name: str
+    modifiedTime: Optional[str] = None
+
+class GDriveListFoldersResponse(BaseModel):
+    folders: List[GDriveFolderEntry] = []
+
+class GDriveListFilesRequest(BaseModel):
+    access_token: str
+    folder_id: str
+
+class GDriveFileEntry(BaseModel):
+    id: str
+    name: str
+    mimeType: str
+    modifiedTime: Optional[str] = None
+    size: Optional[str] = None
+
+class GDriveListFilesResponse(BaseModel):
+    files: List[GDriveFileEntry] = []
+
+class GDriveDownloadFileRequest(BaseModel):
+    access_token: str
+    file_id: str
+    mime_type: Optional[str] = None
+    file_name: Optional[str] = None
+
+class GDriveDownloadFileResponse(BaseModel):
+    title: str
+    content: str
+    raw_content: str
+    sourceType: str
+    mimeType: str
+
 # System prompt for Ollama
 SYSTEM_PROMPT = """You are a data extraction and conversion expert. Your task is to extract structured information from unstructured text and convert it into JSON format.
 
@@ -5941,6 +5982,206 @@ async def ingest_google_drive(request: GoogleDriveIngestRequest):
 
     title = f"{kind}-{file_id[:8]}"
     return GoogleDriveIngestResponse(title=title, content=content, raw_content=content, sourceType=source_type)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Google Drive Folder-Sync Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+GDRIVE_API = "https://www.googleapis.com/drive/v3/files"
+
+@app.post("/gdrive/list-folders", response_model=GDriveListFoldersResponse)
+async def gdrive_list_folders(request: GDriveListFoldersRequest):
+    """List sub-folders inside a given Google Drive folder."""
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+    query = f"'{request.folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    params = {
+        "q": query,
+        "fields": "files(id,name,modifiedTime)",
+        "pageSize": "1000",
+        "supportsAllDrives": "true",
+        "includeItemsFromAllDrives": "true",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(GDRIVE_API, headers=headers, params=params)
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code, detail=f"Drive API error: {res.text[:500]}")
+        data = res.json()
+    folders = [
+        GDriveFolderEntry(id=f["id"], name=f["name"], modifiedTime=f.get("modifiedTime"))
+        for f in data.get("files", [])
+    ]
+    folders.sort(key=lambda f: (f.name or "").lower())
+    return GDriveListFoldersResponse(folders=folders)
+
+
+@app.post("/gdrive/list-files", response_model=GDriveListFilesResponse)
+async def gdrive_list_files(request: GDriveListFilesRequest):
+    """List all non-folder files inside a given Google Drive folder."""
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+    query = f"'{request.folder_id}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false"
+    params = {
+        "q": query,
+        "fields": "files(id,name,mimeType,modifiedTime,size)",
+        "pageSize": "1000",
+        "supportsAllDrives": "true",
+        "includeItemsFromAllDrives": "true",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(GDRIVE_API, headers=headers, params=params)
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code, detail=f"Drive API error: {res.text[:500]}")
+        data = res.json()
+    files = [
+        GDriveFileEntry(
+            id=f["id"],
+            name=f["name"],
+            mimeType=f.get("mimeType", ""),
+            modifiedTime=f.get("modifiedTime"),
+            size=f.get("size"),
+        )
+        for f in data.get("files", [])
+    ]
+    files.sort(key=lambda f: (f.name or "").lower())
+    return GDriveListFilesResponse(files=files)
+
+
+# Mime-type mappings for Google-native → export
+_GOOGLE_EXPORT_MAP = {
+    "application/vnd.google-apps.document": ("text/plain", "notes"),
+    "application/vnd.google-apps.presentation": ("text/plain", "deck"),
+    "application/vnd.google-apps.spreadsheet": ("text/csv", "notes"),
+}
+
+# Supported binary/text types we can handle
+_SUPPORTED_BINARY = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/msword",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "text/plain",
+    "text/csv",
+    "text/markdown",
+    "application/json",
+}
+
+
+@app.post("/gdrive/download-file", response_model=GDriveDownloadFileResponse)
+async def gdrive_download_file(request: GDriveDownloadFileRequest):
+    """Download or export a single Google Drive file by its ID.
+
+    Google-native types (Docs/Sheets/Slides) are exported to text.
+    Binary types (PDF, DOCX, PPTX, etc.) are downloaded and have text extracted.
+    """
+    mime = request.mime_type or ""
+    file_id = request.file_id
+    file_name = request.file_name or file_id[:12]
+    auth_headers = {"Authorization": f"Bearer {request.access_token}"}
+
+    content = ""
+    source_type = "notes"
+    final_mime = mime
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        # ── Google-native: export as text ──
+        if mime in _GOOGLE_EXPORT_MAP:
+            export_mime, source_type = _GOOGLE_EXPORT_MAP[mime]
+            url = f"{GDRIVE_API}/{file_id}/export"
+            res = await client.get(url, headers=auth_headers, params={"mimeType": export_mime})
+            if res.status_code >= 400:
+                raise HTTPException(status_code=res.status_code, detail=f"Drive export error: {res.text[:500]}")
+            content = res.text
+            final_mime = export_mime
+
+        # ── Binary / text files: download raw ──
+        elif mime in _SUPPORTED_BINARY or mime.startswith("text/"):
+            url = f"{GDRIVE_API}/{file_id}"
+            res = await client.get(url, headers=auth_headers, params={"alt": "media"})
+            if res.status_code >= 400:
+                raise HTTPException(status_code=res.status_code, detail=f"Drive download error: {res.text[:500]}")
+
+            if mime.startswith("text/") or mime == "application/json":
+                content = res.text
+                source_type = "notes"
+            elif mime == "application/pdf":
+                # Extract text from PDF bytes
+                try:
+                    import fitz  # PyMuPDF
+                    pdf_bytes = res.content
+                    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    pages = []
+                    for page in doc:
+                        pages.append(page.get_text())
+                    content = "\n\n".join(pages)
+                    doc.close()
+                    source_type = "deck"
+                except ImportError:
+                    content = f"[PDF file: {file_name} — PyMuPDF not available for extraction]"
+                    source_type = "deck"
+                except Exception as e:
+                    content = f"[PDF extraction failed for {file_name}: {str(e)[:200]}]"
+                    source_type = "deck"
+            else:
+                # For DOCX/PPTX/XLS — attempt basic text extraction
+                try:
+                    raw_bytes = res.content
+                    # Try python-docx for docx
+                    if "wordprocessingml" in mime or mime == "application/msword":
+                        try:
+                            from docx import Document as DocxDocument
+                            doc = DocxDocument(BytesIO(raw_bytes))
+                            content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                            source_type = "notes"
+                        except Exception:
+                            content = f"[Word document: {file_name} — text extraction failed]"
+                    elif "presentationml" in mime or mime == "application/vnd.ms-powerpoint":
+                        try:
+                            from pptx import Presentation
+                            prs = Presentation(BytesIO(raw_bytes))
+                            slides_text = []
+                            for slide in prs.slides:
+                                for shape in slide.shapes:
+                                    if shape.has_text_frame:
+                                        slides_text.append(shape.text_frame.text)
+                            content = "\n\n".join(slides_text)
+                            source_type = "deck"
+                        except Exception:
+                            content = f"[Presentation: {file_name} — text extraction failed]"
+                            source_type = "deck"
+                    elif "spreadsheetml" in mime or mime == "application/vnd.ms-excel":
+                        try:
+                            import openpyxl
+                            wb = openpyxl.load_workbook(BytesIO(raw_bytes), read_only=True, data_only=True)
+                            rows = []
+                            for sheet in wb.sheetnames:
+                                ws = wb[sheet]
+                                for row in ws.iter_rows(values_only=True):
+                                    rows.append(",".join(str(c) if c is not None else "" for c in row))
+                            content = "\n".join(rows)
+                            source_type = "notes"
+                        except Exception:
+                            content = f"[Spreadsheet: {file_name} — text extraction failed]"
+                    else:
+                        content = f"[Unsupported binary type: {mime} for file {file_name}]"
+                except Exception as e:
+                    content = f"[File extraction failed for {file_name}: {str(e)[:200]}]"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {mime}")
+
+    if not content or len(content.strip()) == 0:
+        content = f"[Empty content from Drive file: {file_name}]"
+
+    return GDriveDownloadFileResponse(
+        title=file_name,
+        content=content,
+        raw_content=content,
+        sourceType=source_type,
+        mimeType=final_mime,
+    )
+
 
 class ValidationRequest(BaseModel):
     data: str

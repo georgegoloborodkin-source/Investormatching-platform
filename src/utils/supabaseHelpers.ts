@@ -394,7 +394,7 @@ export async function mergeCompanyCardFromExtraction(
   extractedProps: Record<string, any>,
   confidence: Record<string, number>,
   sourceDocumentId: string,
-  options?: { overwriteExisting?: boolean }
+  options?: { overwriteExisting?: boolean; isMeetingNotes?: boolean }
 ): Promise<MergeResult> {
   const entity = await getEntityProperties(entityId);
   if (!entity) {
@@ -417,6 +417,13 @@ export async function mergeCompanyCardFromExtraction(
     "auto_created", "source", "first_seen_document", "last_seen_document", "document_count",
   ]);
 
+  // Meeting-note–specific fields: always overwrite with latest when source is meeting notes
+  const MEETING_OVERWRITE_FIELDS = new Set([
+    "meeting_summary", "last_meeting", "next_steps", "concerns",
+    "decision", "meeting_notes", "action_items", "key_decisions",
+    "last_meeting_date", "meeting_date",
+  ]);
+
   for (const [field, newValue] of Object.entries(extractedProps)) {
     if (metaFields.has(field)) continue;
 
@@ -424,8 +431,11 @@ export async function mergeCompanyCardFromExtraction(
     if (newValue === "" || newValue === null || newValue === undefined) continue;
     if (Array.isArray(newValue) && newValue.length === 0) continue;
 
-    // Skip if user manually edited this field
-    if (editedFields.includes(field)) {
+    // For meeting notes: always overwrite meeting-specific fields, even if user edited
+    const isMeetingOverwrite = options?.isMeetingNotes && MEETING_OVERWRITE_FIELDS.has(field);
+
+    // Skip if user manually edited this field (unless it's a meeting overwrite field)
+    if (editedFields.includes(field) && !isMeetingOverwrite) {
       skipped.push(field);
       continue;
     }
@@ -447,8 +457,8 @@ export async function mergeCompanyCardFromExtraction(
         confidence: confidence[field] ?? 0.5,
         extracted_at: new Date().toISOString(),
       };
-    } else if (options?.overwriteExisting) {
-      // Force overwrite mode
+    } else if (options?.overwriteExisting || isMeetingOverwrite) {
+      // Force overwrite mode OR meeting-note overwrite for specific fields
       mergedProps[field] = newValue;
       updated.push(field);
       propertySources[field] = {

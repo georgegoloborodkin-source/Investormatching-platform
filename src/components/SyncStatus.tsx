@@ -1,13 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { RefreshCw, CheckCircle, AlertCircle, Clock, Cloud, Database } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Clock, Cloud, Database, Folder } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 
 interface SyncConfig {
   id: string;
@@ -15,13 +14,16 @@ interface SyncConfig {
   config: {
     clickup_list_id?: string;
     google_drive_folder_id?: string;
-    sync_frequency?: "hourly" | "daily" | "manual";
+    google_drive_folder_name?: string;
+    sync_frequency?: string;
   };
+  sync_frequency: string | null;
   last_sync_at: string | null;
   last_sync_status: "success" | "error" | "pending" | null;
   last_sync_error: string | null;
   next_sync_at: string | null;
   event_id: string;
+  is_active: boolean;
 }
 
 export function SyncStatus() {
@@ -34,67 +36,63 @@ export function SyncStatus() {
   const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
   const orgId = profile?.organization_id;
 
+  const loadSyncConfigs = useCallback(async () => {
+    if (!orgId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("sync_configurations")
+        .select("*")
+        .eq("organization_id", orgId)
+        .eq("is_active", true);
+
+      if (error) {
+        console.warn("[SyncStatus] Failed to load configs:", error);
+        setSyncConfigs([]);
+      } else {
+        setSyncConfigs((data as SyncConfig[]) || []);
+      }
+    } catch (err) {
+      console.warn("[SyncStatus] Error loading sync configs:", err);
+      setSyncConfigs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
+
   useEffect(() => {
     if (isMD && orgId) {
       loadSyncConfigs();
+    } else {
+      setLoading(false);
     }
-  }, [isMD, orgId]);
-
-  const loadSyncConfigs = async () => {
-    // For now, we'll use localStorage to track sync configs
-    // In production, this should be in a database table
-    const clickupListId = localStorage.getItem("clickup_list_id");
-    const clickupUrl = localStorage.getItem("clickup_list_url");
-    
-    const configs: SyncConfig[] = [];
-    
-    if (clickupListId || clickupUrl) {
-      configs.push({
-        id: "clickup-1",
-        source_type: "clickup",
-        config: {
-          clickup_list_id: clickupListId || undefined,
-          sync_frequency: "daily",
-        },
-        last_sync_at: localStorage.getItem("clickup_last_sync") || null,
-        last_sync_status: (localStorage.getItem("clickup_sync_status") as any) || null,
-        last_sync_error: localStorage.getItem("clickup_sync_error") || null,
-        next_sync_at: null,
-        event_id: "", // Will be set from active event
-      });
-    }
-
-    setSyncConfigs(configs);
-    setLoading(false);
-  };
+  }, [isMD, orgId, loadSyncConfigs]);
 
   const triggerSync = async (configId: string, sourceType: "clickup" | "google_drive") => {
     setSyncing(configId);
     try {
-      const clickupListId = localStorage.getItem("clickup_list_id");
-      if (!clickupListId && sourceType === "clickup") {
-        throw new Error("ClickUp list ID not configured");
+      if (sourceType === "google_drive") {
+        // Mark as pending — the actual sync is handled by SourcesTab's syncGoogleDriveFolder
+        await supabase
+          .from("sync_configurations")
+          .update({ last_sync_status: "pending" })
+          .eq("id", configId);
+
+        toast({
+          title: "Sync triggered",
+          description: "Google Drive sync has been queued. Go to the Sources tab to see progress.",
+        });
+      } else if (sourceType === "clickup") {
+        toast({
+          title: "ClickUp sync",
+          description: "ClickUp sync should be triggered from the Sources tab.",
+        });
       }
-
-      // Call sync endpoint (would be a backend job in production)
-      // For now, we'll just update the last sync time
-      const now = new Date().toISOString();
-      localStorage.setItem(`${sourceType}_last_sync`, now);
-      localStorage.setItem(`${sourceType}_sync_status`, "success");
-      localStorage.removeItem(`${sourceType}_sync_error`);
-
-      toast({
-        title: "Sync triggered",
-        description: `${sourceType === "clickup" ? "ClickUp" : "Google Drive"} sync has been started.`,
-      });
-
-      // Reload configs
       await loadSyncConfigs();
     } catch (err: any) {
       console.error("Sync error:", err);
-      const sourceType = configId.includes("clickup") ? "clickup" : "google_drive";
-      localStorage.setItem(`${sourceType}_sync_status`, "error");
-      localStorage.setItem(`${sourceType}_sync_error`, err.message || "Sync failed");
       toast({
         title: "Sync failed",
         description: err.message || "Failed to trigger sync.",
@@ -167,7 +165,7 @@ export function SyncStatus() {
         {syncConfigs.length === 0 ? (
           <Alert>
             <AlertDescription>
-              No sync configurations found. Configure ClickUp or Google Drive sync in the Sources tab.
+              No sync configurations found. Configure Google Drive sync in the Sources tab.
             </AlertDescription>
           </Alert>
         ) : (
@@ -206,14 +204,23 @@ export function SyncStatus() {
               </div>
 
               <div className="space-y-1 text-sm text-muted-foreground">
+                {config.source_type === "google_drive" && config.config.google_drive_folder_name && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Folder className="h-3 w-3" />
+                      Folder:
+                    </span>
+                    <span className="font-medium">{config.config.google_drive_folder_name}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span>Last sync:</span>
                   <span>{formatLastSync(config.last_sync_at)}</span>
                 </div>
-                {config.config.sync_frequency && (
+                {config.sync_frequency && (
                   <div className="flex items-center justify-between">
                     <span>Frequency:</span>
-                    <span className="capitalize">{config.config.sync_frequency}</span>
+                    <span className="capitalize">{config.sync_frequency === "on_login" ? "On login" : config.sync_frequency}</span>
                   </div>
                 )}
                 {config.last_sync_error && (
@@ -231,8 +238,8 @@ export function SyncStatus() {
 
         <Alert>
           <AlertDescription className="text-xs">
-            <strong>Auto-sync:</strong> Documents are automatically synchronized when team members upload files.
-            Scheduled syncs for ClickUp and Google Drive will be available soon.
+            <strong>Auto-sync:</strong> Google Drive folders are automatically synced on login.
+            Use the Sources tab to connect folders and trigger manual syncs.
           </AlertDescription>
         </Alert>
       </CardContent>

@@ -95,6 +95,8 @@ import {
   Trophy,
   Megaphone,
   Percent,
+  Cloud,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -158,7 +160,7 @@ import {
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
-import { getClickUpLists, ingestClickUpList, ingestGoogleDrive } from "@/utils/ingestionClient";
+import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
 // ============================================================================
@@ -1588,6 +1590,15 @@ function SourcesTab({
   const [folderAssignmentIds, setFolderAssignmentIds] = useState<string[]>([]);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isAssigningFolders, setIsAssigningFolders] = useState(false);
+
+  // ── Google Drive Folder Sync state ──
+  const [connectedDriveFolderId, setConnectedDriveFolderId] = useState<string | null>(null);
+  const [connectedDriveFolderName, setConnectedDriveFolderName] = useState<string | null>(null);
+  const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+  const [driveSyncProgress, setDriveSyncProgress] = useState<{ phase: string; current: number; total: number; currentItem: string } | null>(null);
+  const [driveSyncResults, setDriveSyncResults] = useState<Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }>>([]);
+  const [lastDriveSyncAt, setLastDriveSyncAt] = useState<string | null>(null);
+
   const MAX_IMPORT_CHARS = 24000;
   const MAX_PDF_PAGES = 6;
   const canImport = Boolean(activeEventId);
@@ -1601,6 +1612,29 @@ function SourcesTab({
       console.log('Google Client ID present:', !!googleClientId);
     }
   }, [googleApiKey, googleClientId]);
+
+  // ── Load existing Drive sync configuration on mount ──
+  useEffect(() => {
+    if (!activeEventId) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("sync_configurations")
+          .select("config, last_sync_at")
+          .eq("event_id", activeEventId)
+          .eq("source_type", "google_drive")
+          .limit(1);
+        const row = data?.[0];
+        if (row?.config?.google_drive_folder_id) {
+          setConnectedDriveFolderId(row.config.google_drive_folder_id);
+          setConnectedDriveFolderName(row.config.google_drive_folder_name || "Portfolio folder");
+          setLastDriveSyncAt(row.last_sync_at || null);
+        }
+      } catch (err) {
+        console.warn("[DriveSync] Failed to load sync config:", err);
+      }
+    })();
+  }, [activeEventId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1674,6 +1708,357 @@ function SourcesTab({
       return prev.filter((id) => id !== folderId);
     });
   }, []);
+
+  // ── Connect a Google Drive root portfolio folder via Picker ──
+  const connectDrivePortfolioFolder = useCallback(async () => {
+    if (!googleApiKey || !googleClientId) {
+      toast({
+        title: "Google Picker not configured",
+        description: "Set VITE_GOOGLE_API_KEY and VITE_GOOGLE_CLIENT_ID to use Drive picker.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const accessToken = await getGoogleAccessToken();
+    if (!accessToken) {
+      toast({
+        title: "Google Drive access needed",
+        description: "Please sign in again with Google Drive access enabled.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await loadGooglePicker();
+      // Folder-only view
+      const folderView = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMimeTypes("application/vnd.google-apps.folder")
+        .setMode(window.google.picker.DocsViewMode.LIST);
+
+      const picker = new window.google.picker.PickerBuilder()
+        .setDeveloperKey(googleApiKey)
+        .setOAuthToken(accessToken)
+        .setAppId(googleClientId.split("-")[0])
+        .addView(folderView)
+        .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
+        .setTitle("Select your Portfolio root folder")
+        .setCallback(async (data: any) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const folder = data.docs?.[0];
+            if (!folder?.id) return;
+            const folderId = folder.id;
+            const folderName = folder.name || "Portfolio folder";
+            console.log("[DriveSync] Connected folder:", folderName, folderId);
+            setConnectedDriveFolderId(folderId);
+            setConnectedDriveFolderName(folderName);
+
+            // Persist to sync_configurations
+            const eventId = activeEventId || (await ensureActiveEventId());
+            if (!eventId) return;
+            const { data: profile } = await supabase.auth.getUser();
+            const userId = profile?.user?.id || null;
+            // Look up org
+            let orgId: string | null = null;
+            if (userId) {
+              const { data: up } = await supabase
+                .from("user_profiles")
+                .select("organization_id")
+                .eq("id", userId)
+                .limit(1);
+              orgId = up?.[0]?.organization_id || null;
+            }
+            if (!orgId) {
+              toast({ title: "Org not found", description: "Cannot save sync config without an organization.", variant: "destructive" });
+              return;
+            }
+            await supabase.from("sync_configurations").upsert(
+              {
+                organization_id: orgId,
+                event_id: eventId,
+                source_type: "google_drive",
+                config: { google_drive_folder_id: folderId, google_drive_folder_name: folderName },
+                sync_frequency: "on_login",
+                is_active: true,
+                created_by: userId,
+              },
+              { onConflict: "organization_id,event_id,source_type" }
+            );
+
+            toast({ title: "Portfolio folder connected", description: `Connected to "${folderName}". Click "Sync Now" to import.` });
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (err) {
+      toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
+    }
+  }, [activeEventId, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
+
+  // ── Core folder sync logic ──
+  const syncGoogleDriveFolder = useCallback(async () => {
+    if (!connectedDriveFolderId) {
+      toast({ title: "No folder connected", description: "Connect a Google Drive portfolio folder first.", variant: "destructive" });
+      return;
+    }
+    const accessToken = await getGoogleAccessToken();
+    if (!accessToken) {
+      toast({ title: "Google Drive access needed", description: "Please sign in again with Google Drive access enabled.", variant: "destructive" });
+      return;
+    }
+    const eventId = activeEventId || (await ensureActiveEventId());
+    if (!eventId) {
+      toast({ title: "No active event", description: "Create or activate an event before syncing.", variant: "destructive" });
+      return;
+    }
+
+    setIsSyncingDrive(true);
+    setDriveSyncProgress({ phase: "Discovering folders...", current: 0, total: 0, currentItem: "" });
+    setDriveSyncResults([]);
+    const results: Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }> = [];
+
+    try {
+      // 1. List sub-folders (each = one portfolio company)
+      const subFolders = await listDriveFolders(accessToken, connectedDriveFolderId);
+      console.log(`[DriveSync] Found ${subFolders.length} company sub-folders`);
+      if (subFolders.length === 0) {
+        toast({ title: "No sub-folders found", description: "The connected folder has no company sub-folders yet." });
+        setIsSyncingDrive(false);
+        setDriveSyncProgress(null);
+        return;
+      }
+
+      setDriveSyncProgress({ phase: "Syncing companies...", current: 0, total: subFolders.length, currentItem: "" });
+
+      for (let fi = 0; fi < subFolders.length; fi++) {
+        const companyFolder = subFolders[fi];
+        const companyName = companyFolder.name;
+        setDriveSyncProgress({ phase: "Syncing companies...", current: fi + 1, total: subFolders.length, currentItem: companyName });
+        console.log(`[DriveSync] Processing folder: ${companyName} (${fi + 1}/${subFolders.length})`);
+
+        let newFiles = 0;
+        let updatedFiles = 0;
+        let skippedFiles = 0;
+
+        try {
+          // 2. List files in this company folder
+          const files = await listDriveFiles(accessToken, companyFolder.id);
+          console.log(`[DriveSync] ${companyName}: ${files.length} files`);
+
+          // 3. Ensure a source_folder exists for this company
+          let platformFolderId: string | null = null;
+          const normalizedCompanyName = companyName.trim();
+          const existingFolder = sourceFolders.find(
+            (f) => f.name.toLowerCase() === normalizedCompanyName.toLowerCase()
+          );
+          if (existingFolder) {
+            platformFolderId = existingFolder.id;
+          } else {
+            const created = await onCreateFolder(normalizedCompanyName);
+            if (created) platformFolderId = created.id;
+          }
+
+          // 4. For each file: check if already synced, download if new/updated
+          for (const file of files) {
+            try {
+              // Check existing document with same google_drive_file_id
+              const { data: existingDocs } = await supabase
+                .from("documents")
+                .select("id, google_drive_modified_at")
+                .eq("event_id", eventId)
+                .eq("google_drive_file_id", file.id)
+                .order("created_at", { ascending: false })
+                .limit(1);
+              const existingDoc = existingDocs?.[0] ?? null;
+
+              const driveModifiedAt = file.modifiedTime || null;
+              if (existingDoc && driveModifiedAt) {
+                const existingModified = existingDoc.google_drive_modified_at;
+                if (existingModified && new Date(existingModified).getTime() >= new Date(driveModifiedAt).getTime()) {
+                  skippedFiles++;
+                  continue; // Already synced and up to date
+                }
+              }
+
+              // 5. Download file content
+              const downloaded = await downloadDriveFile(accessToken, file.id, file.mimeType, file.name);
+              if (!downloaded.content || downloaded.content.startsWith("[Empty")) {
+                console.warn(`[DriveSync] Skipping empty file: ${file.name}`);
+                skippedFiles++;
+                continue;
+              }
+
+              const isUpdate = !!existingDoc;
+              const fileTitle = file.name?.replace(/\.[^/.]+$/, "") || downloaded.title;
+
+              // 6. Detect meeting notes
+              const isMeetingNotes = /meeting|minutes|notes|standup|sync|recap|weekly|1-on-1|check.?in/i.test(file.name);
+
+              // 7. Insert document row (always new row to preserve history)
+              const { data: docRow, error: docError } = await supabase
+                .from("documents")
+                .insert({
+                  event_id: eventId,
+                  title: fileTitle,
+                  source_type: "google_drive" as any,
+                  file_name: file.name,
+                  google_drive_file_id: file.id,
+                  google_drive_modified_at: driveModifiedAt,
+                  created_by: currentUserId,
+                  folder_id: platformFolderId,
+                  raw_content: downloaded.raw_content?.substring(0, 50000) || null,
+                })
+                .select("id")
+                .single();
+
+              if (docError || !docRow) {
+                console.error(`[DriveSync] Failed to insert doc for ${file.name}:`, docError);
+                continue;
+              }
+
+              // Link to folder
+              if (platformFolderId) {
+                await supabase.from("document_folder_links").insert({
+                  document_id: docRow.id,
+                  folder_id: platformFolderId,
+                  created_by: currentUserId,
+                }).then(() => {});
+              }
+
+              // Notify parent of new doc
+              onDocumentSaved({ id: docRow.id, title: fileTitle, storage_path: null, folder_id: platformFolderId || undefined });
+
+              // 8. Run embedding + entity extraction pipeline (same as local upload)
+              await indexDocumentEmbeddings(docRow.id, downloaded.raw_content, fileTitle, null);
+
+              // 9. Run property extraction + card merge
+              try {
+                // Find or create company entity for this doc
+                const normalizedName = companyName.toLowerCase().trim();
+                const { data: entityArr } = await supabase
+                  .from("kg_entities")
+                  .select("id")
+                  .eq("event_id", eventId)
+                  .eq("normalized_name", normalizedName)
+                  .eq("entity_type", "company")
+                  .limit(1);
+                let companyEntityId = entityArr?.[0]?.id || null;
+
+                // If no entity yet, the auto-create trigger on documents table should have made one
+                if (!companyEntityId) {
+                  const { data: docCheck } = await supabase
+                    .from("documents")
+                    .select("company_entity_id")
+                    .eq("id", docRow.id)
+                    .limit(1);
+                  companyEntityId = docCheck?.[0]?.company_entity_id || null;
+                }
+
+                if (companyEntityId) {
+                  const existing = await getEntityProperties(companyEntityId);
+                  const extraction = await extractCompanyProperties({
+                    rawContent: downloaded.raw_content,
+                    documentTitle: fileTitle,
+                    existingProperties: existing?.properties || {},
+                  });
+
+                  if (Object.keys(extraction.properties).length > 0) {
+                    const mergeResult = await mergeCompanyCardFromExtraction(
+                      companyEntityId,
+                      extraction.properties,
+                      extraction.confidence,
+                      docRow.id,
+                      { isMeetingNotes },
+                    );
+                    console.log(`[DriveSync] Card merge for ${companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
+                  }
+                }
+              } catch (extractErr) {
+                console.warn(`[DriveSync] Property extraction for ${file.name} failed (non-fatal):`, extractErr);
+              }
+
+              if (isUpdate) {
+                updatedFiles++;
+              } else {
+                newFiles++;
+              }
+            } catch (fileErr) {
+              console.error(`[DriveSync] Error processing file ${file.name}:`, fileErr);
+            }
+          }
+        } catch (folderErr) {
+          console.error(`[DriveSync] Error processing folder ${companyName}:`, folderErr);
+        }
+
+        results.push({ companyName, newFiles, updatedFiles, skippedFiles });
+        setDriveSyncResults([...results]);
+      }
+
+      // 9. Update sync_configurations last_sync_at
+      const now = new Date().toISOString();
+      await supabase
+        .from("sync_configurations")
+        .update({ last_sync_at: now, last_sync_status: "success", last_sync_error: null })
+        .eq("event_id", eventId)
+        .eq("source_type", "google_drive");
+      setLastDriveSyncAt(now);
+
+      // Refresh company cards
+      if (onRefreshCompanyCards) {
+        await onRefreshCompanyCards();
+      }
+
+      const totalNew = results.reduce((s, r) => s + r.newFiles, 0);
+      const totalUpdated = results.reduce((s, r) => s + r.updatedFiles, 0);
+      const totalSkipped = results.reduce((s, r) => s + r.skippedFiles, 0);
+      toast({
+        title: "Drive sync complete",
+        description: `${results.length} companies — ${totalNew} new, ${totalUpdated} updated, ${totalSkipped} unchanged.`,
+      });
+    } catch (err) {
+      console.error("[DriveSync] Sync failed:", err);
+      // Record error
+      if (activeEventId) {
+        await supabase
+          .from("sync_configurations")
+          .update({ last_sync_status: "error", last_sync_error: err instanceof Error ? err.message : "Unknown error" })
+          .eq("event_id", activeEventId)
+          .eq("source_type", "google_drive");
+      }
+      toast({
+        title: "Drive sync failed",
+        description: err instanceof Error ? err.message : "Could not sync Google Drive folder.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingDrive(false);
+      setDriveSyncProgress(null);
+    }
+  }, [activeEventId, connectedDriveFolderId, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onRefreshCompanyCards, sourceFolders, toast]);
+
+  // ── Auto-sync on login: fire once per session when config + token are available ──
+  const autoSyncFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoSyncFiredRef.current) return;
+    if (!connectedDriveFolderId || !activeEventId || isSyncingDrive) return;
+    (async () => {
+      const token = await getGoogleAccessToken();
+      if (!token) return;
+      // Only auto-sync if last sync was > 1 hour ago (or never synced)
+      if (lastDriveSyncAt) {
+        const elapsed = Date.now() - new Date(lastDriveSyncAt).getTime();
+        if (elapsed < 60 * 60 * 1000) {
+          console.log("[DriveSync] Auto-sync skipped: last sync was less than 1 hour ago");
+          autoSyncFiredRef.current = true;
+          return;
+        }
+      }
+      autoSyncFiredRef.current = true;
+      console.log("[DriveSync] Auto-sync on login triggered");
+      syncGoogleDriveFolder();
+    })();
+  }, [connectedDriveFolderId, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -2948,6 +3333,131 @@ function SourcesTab({
           <p className="text-xs text-white/70 font-mono">
             Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* ── Google Drive Portfolio Folder Sync ── */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
+            <Cloud className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            Google Drive Folder Sync
+          </CardTitle>
+          <CardDescription className="text-white/70 font-mono">
+            Connect a root portfolio folder from Google Drive. Each sub-folder = one portfolio company.
+            All documents are automatically fetched, embedded, and extracted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {connectedDriveFolderId ? (
+            <>
+              <div className="flex items-center justify-between p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5">
+                <div className="flex items-center gap-3">
+                  <Folder className="h-5 w-5 text-[#FFED00]" />
+                  <div>
+                    <div className="font-mono font-bold text-white text-sm">{connectedDriveFolderName}</div>
+                    <div className="text-[10px] text-white/50 font-mono">
+                      {lastDriveSyncAt
+                        ? `Last synced: ${new Date(lastDriveSyncAt).toLocaleString()}`
+                        : "Never synced"}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={connectDrivePortfolioFolder}
+                    className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold text-xs"
+                  >
+                    Change Folder
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={syncGoogleDriveFolder}
+                    disabled={isSyncingDrive || !canImport}
+                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                  >
+                    {isSyncingDrive ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Sync Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Sync progress */}
+              {driveSyncProgress && (
+                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-white/80">
+                      {driveSyncProgress.phase}{" "}
+                      {driveSyncProgress.total > 0 && (
+                        <>
+                          {driveSyncProgress.current}/{driveSyncProgress.total}:{" "}
+                          <span className="text-[#FFED00]">{driveSyncProgress.currentItem}</span>
+                        </>
+                      )}
+                    </span>
+                    {driveSyncProgress.total > 0 && (
+                      <span className="text-xs font-mono text-white/50">
+                        {Math.round((driveSyncProgress.current / driveSyncProgress.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {driveSyncProgress.total > 0 && (
+                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${(driveSyncProgress.current / driveSyncProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sync results */}
+              {driveSyncResults.length > 0 && !driveSyncProgress && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {driveSyncResults.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/70 px-2 py-1 rounded bg-white/5">
+                      <Building2 className="h-3 w-3 text-[#FFED00] flex-shrink-0" />
+                      <span className="font-bold text-white/90">{r.companyName}</span>
+                      {r.newFiles > 0 && <span className="text-emerald-400">+{r.newFiles} new</span>}
+                      {r.updatedFiles > 0 && <span className="text-blue-400">{r.updatedFiles} updated</span>}
+                      {r.skippedFiles > 0 && <span className="text-white/40">{r.skippedFiles} unchanged</span>}
+                      {r.newFiles === 0 && r.updatedFiles === 0 && r.skippedFiles === 0 && (
+                        <span className="text-white/40">empty folder</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-6 space-y-3">
+              <Cloud className="h-10 w-10 text-white/30 mx-auto" />
+              <p className="text-sm text-white/50 font-mono">No portfolio folder connected yet.</p>
+              <Button
+                onClick={connectDrivePortfolioFolder}
+                disabled={!canImport}
+                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              >
+                <Folder className="h-4 w-4 mr-2" />
+                Connect Portfolio Folder
+              </Button>
+              <p className="text-[10px] text-white/40 font-mono">
+                Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
