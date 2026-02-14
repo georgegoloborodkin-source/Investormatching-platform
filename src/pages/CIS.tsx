@@ -1849,10 +1849,15 @@ function SourcesTab({
 
             // CSV files: ALSO send through the converter API for structured extraction
             // (investors, startups, mentors, corporates) — raw text alone doesn't give us that
+            // Use shorter timeout to avoid blocking upload
             if (isCSVFile(file)) {
               try {
                 console.log("[CSV] Sending CSV to converter API for structured extraction…");
-                const conversion = await convertFileWithAI(file);
+                const conversionPromise = convertFileWithAI(file);
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error("CSV conversion timeout")), 10000)
+                );
+                const conversion = await Promise.race([conversionPromise, timeoutPromise]);
                 extractedJson = conversion as unknown as Record<string, any>;
                 detectedType = conversion.detectedType || detectedType;
                 // If converter gave us richer raw content, prefer it
@@ -1863,28 +1868,40 @@ function SourcesTab({
                   "| investors:", (conversion.investors || []).length,
                   "| startups:", (conversion.startups || []).length);
               } catch (csvErr) {
-                console.error("[CSV] Converter API failed (non-fatal):", csvErr);
-                // Non-fatal — the raw text is still stored
+                console.warn("[CSV] Converter API failed or timed out (non-fatal):", csvErr);
+                // Non-fatal — the raw text is already stored
               }
             }
           } else {
-            // For non-text files, try converter API (PDF/DOCX/XLSX/etc.)
-            try {
-              const conversion = await convertFileWithAI(file);
-              rawContent = conversion.raw_content ?? null;
-              extractedJson = conversion as unknown as Record<string, any>;
-              detectedType = conversion.detectedType || detectedType;
-            } catch (err) {
-              console.error("Error converting file:", err);
-              // Continue without content - will store file reference
-            }
-
-            // If PDF and still no text, try client-side fallback
-            if (!rawContent && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
+            // For PDFs: try client-side extraction FIRST (fast, no network), then AI conversion if needed
+            const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+            
+            if (isPDF) {
+              // Try client-side PDF extraction first (fast, no network delay)
               try {
                 rawContent = await extractPdfTextClientSide(file);
+                console.log("[PDF] Client-side extraction succeeded:", rawContent?.length || 0, "chars");
               } catch (err) {
-                console.error("Client-side PDF extraction failed:", err);
+                console.warn("[PDF] Client-side extraction failed, will try AI conversion:", err);
+              }
+            }
+
+            // For non-text files (or if PDF client-side failed), try converter API (PDF/DOCX/XLSX/etc.)
+            // Use a race condition: if AI conversion takes > 10s, skip it and continue with what we have
+            if (!rawContent || !isPDF) {
+              try {
+                const conversionPromise = convertFileWithAI(file);
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error("Conversion timeout")), 10000)
+                );
+                const conversion = await Promise.race([conversionPromise, timeoutPromise]);
+                rawContent = conversion.raw_content ?? rawContent; // Use AI content if better
+                extractedJson = conversion as unknown as Record<string, any>;
+                detectedType = conversion.detectedType || detectedType;
+                console.log("[AI] Conversion succeeded:", conversion.detectedType);
+              } catch (err) {
+                console.warn("[AI] Conversion failed or timed out (non-fatal):", err);
+                // Continue without AI conversion - we have client-side content or will store file reference
               }
             }
             if (!rawContent) {

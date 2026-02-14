@@ -517,7 +517,7 @@ export async function convertFileWithAI(
         method: "POST",
         body: formData,
       },
-      180000 // 3 min — Render cold-start + PDF/Claude ingestion can be slow
+      20000 // 20 seconds — fail fast if backend is slow/down
     );
 
     if (!response.ok) {
