@@ -240,6 +240,7 @@ export function SyncStatus() {
           <AlertDescription className="text-xs">
             <strong>Auto-sync:</strong> Google Drive folders are automatically synced on login.
             Use the Sources tab to connect folders and trigger manual syncs.
+            Re-login for Google Drive is normal when the token expires; reconnect via Sources if needed.
           </AlertDescription>
         </Alert>
       </CardContent>

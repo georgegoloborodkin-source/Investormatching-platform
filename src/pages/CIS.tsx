@@ -1932,10 +1932,10 @@ function SourcesTab({
               // 8. Run embedding + entity extraction pipeline (same as local upload)
               await indexDocumentEmbeddings(docRow.id, downloaded.raw_content, fileTitle, null);
 
-              // 9. Run property extraction + card merge
+              // 9. Find or create company entity by FOLDER name (so card is "TBE" not "Copy of TBE Due Diligence")
               try {
-                // Find or create company entity for this doc
                 const normalizedName = companyName.toLowerCase().trim();
+                let companyEntityId: string | null = null;
                 const { data: entityArr } = await supabase
                   .from("kg_entities")
                   .select("id")
@@ -1943,16 +1943,56 @@ function SourcesTab({
                   .eq("normalized_name", normalizedName)
                   .eq("entity_type", "company")
                   .limit(1);
-                let companyEntityId = entityArr?.[0]?.id || null;
+                companyEntityId = entityArr?.[0]?.id || null;
 
-                // If no entity yet, the auto-create trigger on documents table should have made one
                 if (!companyEntityId) {
-                  const { data: docCheck } = await supabase
+                  const { data: newEntity, error: createErr } = await supabase
+                    .from("kg_entities")
+                    .insert({
+                      event_id: eventId,
+                      entity_type: "company",
+                      name: companyName,
+                      normalized_name: normalizedName,
+                      properties: {
+                        auto_created: true,
+                        source: "folder_based",
+                        folder_name: companyName,
+                        first_seen_document: docRow.id,
+                        bio: "",
+                        funding_stage: "",
+                        amount_seeking: "",
+                        valuation: "",
+                        arr: "",
+                        burn_rate: "",
+                        runway_months: "",
+                        problem: "",
+                        solution: "",
+                        tam: "",
+                        competitive_edge: "",
+                        founders: "[]",
+                        ai_rationale: "",
+                        website: "",
+                        logo_url: "",
+                      },
+                      source_document_id: docRow.id,
+                      confidence: 0.8,
+                      created_by: currentUserId || null,
+                    })
+                    .select("id")
+                    .single();
+                  if (!createErr && newEntity) {
+                    companyEntityId = newEntity.id;
+                    await supabase
+                      .from("documents")
+                      .update({ company_entity_id: companyEntityId })
+                      .eq("id", docRow.id);
+                    console.log(`[DriveSync] Created company entity "${companyName}" for folder`);
+                  }
+                } else {
+                  await supabase
                     .from("documents")
-                    .select("company_entity_id")
-                    .eq("id", docRow.id)
-                    .limit(1);
-                  companyEntityId = docCheck?.[0]?.company_entity_id || null;
+                    .update({ company_entity_id: companyEntityId })
+                    .eq("id", docRow.id);
                 }
 
                 if (companyEntityId) {
@@ -2511,11 +2551,20 @@ function SourcesTab({
                 console.log(`[AutoExtract] After DB trigger delay, entity ID: ${companyEntityId || "none"}`);
               
               // ── Folder-based card creation ──
-              // If document is in a portfolio/investor folder but no entity was created,
-              // force-create one using the document title as company name
+              // Prefer folder name so card is "TBE" not "Copy of TBE Due Diligence"
               if (!companyEntityId && folderInfo.shouldForceCreateCard && docTitle) {
                 try {
-                  const companyName = getDocumentTitle(file.name);
+                  const rawTitle = getDocumentTitle(file.name);
+                  const deriveCompanyName = (t: string) => {
+                    let s = t.replace(/^copy\s+of\s+/i, "").trim();
+                    s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet|one[- ]?pager).*$/i, "").trim();
+                    s = s.replace(/\s*[-–—]\s*.*$/, "").trim();
+                    const first = s.split(/\s+/)[0];
+                    return (first && first.length > 1) ? first : s || rawTitle;
+                  };
+                  const companyName = folderInfo.currentSelectedFolder?.name && !folderInfo.currentSelectedFolder.name.toLowerCase().match(/^(portfolio|companies|investors?|funds?)$/)
+                    ? folderInfo.currentSelectedFolder.name
+                    : deriveCompanyName(rawTitle);
                   const normalizedName = companyName.toLowerCase().trim();
                   
                   // Check if entity already exists
@@ -2590,22 +2639,16 @@ function SourcesTab({
               }
 
               // ── Fallback: If no entity exists, create one from cleaned document title ──
-              // This handles cases where the DB trigger didn't fire or the title pattern didn't match
               if (!companyEntityId && docTitle) {
                 try {
-                  console.log(`[AutoExtract] No entity found, creating from document title: "${docTitle}"`);
-                  // Clean the title: remove "Deck", "Pitch", "Brochure", dates, suffixes, etc.
-                  let companyName = docTitle
-                    .replace(/\s*(deck|pitch|presentation|memo|report|summary|overview|brochure|profile|tearsheet|one[- ]?pager|factsheet|whitepaper|prospectus|dataroom|data\s*room).*$/i, "")
-                    .replace(/\s*[-–—]\s*.*$/, "") // Remove everything after " - " or " – " or " — "
-                    .replace(/\s+\d{4,}\s*$/i, "") // Remove trailing years like "2025"
-                    .replace(/\s+with\s+.*$/i, "") // Remove "with Case Study", "with Appendix", etc.
-                    .replace(/\s*\(.*\)\s*$/, "") // Remove trailing parentheses like "(2)"
-                    .replace(/\s*\[.*\]\s*$/, "") // Remove trailing brackets like "[v2]"
-                    .replace(/\s+v\d+(\.\d+)?$/i, "") // Remove version suffixes like "v2", "v1.1"
-                    .replace(/\s+Q[1-4]\s*\d{0,4}$/i, "") // Remove "Q1 2025" etc.
-                    .replace(/\s+\d{4,}\s*$/, "") // Second pass: trailing year after other removals
-                    .trim();
+                  const deriveCompanyName = (t: string) => {
+                    let s = t.replace(/^copy\s+of\s+/i, "").trim();
+                    s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet|one[- ]?pager|factsheet|whitepaper|prospectus|dataroom|data\s*room).*$/i, "").trim();
+                    s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s+\d{4,}\s*$/i, "").replace(/\s*\(.*\)\s*$/, "").replace(/\s*\[.*\]\s*$/, "").replace(/\s+v\d+(\.\d+)?$/i, "").trim();
+                    const first = s.split(/\s+/)[0];
+                    return (first && first.length > 1) ? first : s || t;
+                  };
+                  let companyName = deriveCompanyName(docTitle);
                   
                   // If title is too generic, skip
                   if (companyName && companyName.length > 2 && 
@@ -9612,11 +9655,24 @@ export default function CIS() {
                   return;
                 }
                 if (edgeIds.length === 0) return;
+                let succeeded = 0;
+                let failed = 0;
                 try {
                   for (const id of edgeIds) {
-                    await updateKgEdgeReview(id, status, userId);
+                    const { error } = await updateKgEdgeReview(id, status, userId);
+                    if (error) {
+                      console.warn(`[BatchReview] Edge ${id} failed:`, error.message);
+                      failed++;
+                    } else {
+                      succeeded++;
+                    }
                   }
-                  toast({ title: `${edgeIds.length} connection(s) ${status === "approved" ? "approved" : "rejected"}` });
+                  if (failed > 0) {
+                    toast({ title: `${succeeded} ${status}, ${failed} failed`, description: "Some reviews could not be processed. The trigger migration may need to be applied.", variant: "destructive" });
+                  } else {
+                    toast({ title: `${succeeded} connection(s) ${status === "approved" ? "approved" : "rejected"}` });
+                  }
+                  // Always reload regardless of partial failures
                   if (activeEventId) {
                     const { data } = await getPendingRelationshipReviews(activeEventId);
                     if (data) {
@@ -9630,6 +9686,8 @@ export default function CIS() {
                         source_entity: r.source_entity || null,
                         target_entity: r.target_entity || null,
                       })));
+                    } else {
+                      setPendingReviews([]);
                     }
                     const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
                     if (connData) setCompanyConnections(connData as typeof companyConnections);
@@ -10334,16 +10392,37 @@ function CompaniesTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<"all" | "company" | "fund">("all");
+  const [contentFilter, setContentFilter] = useState<"with_content" | "with_docs" | "all">("with_content");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+
+  // Helper: does a card have meaningful content?
+  const cardHasContent = (card: typeof companyCards[0]) => {
+    const props = card.company_properties || {};
+    const hasBio = !!props.bio && props.bio.length > 0;
+    const hasIndustry = !!props.industry;
+    const hasFundingStage = !!props.funding_stage;
+    const hasHQ = !!props.headquarters;
+    const hasAmount = !!props.amount_seeking;
+    const filledFields = [hasBio, hasIndustry, hasFundingStage, hasHQ, hasAmount].filter(Boolean).length;
+    return card.document_count > 0 || filledFields >= 2;
+  };
 
   const companyCounts = useMemo(() => {
     const companies = companyCards.filter((c) => (c.entity_type || "company") === "company").length;
     const funds = companyCards.filter((c) => c.entity_type === "fund").length;
-    return { companies, funds, total: companyCards.length };
+    const withContent = companyCards.filter(cardHasContent).length;
+    const withDocs = companyCards.filter((c) => c.document_count > 0).length;
+    return { companies, funds, total: companyCards.length, withContent, withDocs };
   }, [companyCards]);
   
   const filteredCards = useMemo(() => {
     let cards = companyCards;
+    // Content filter (default: with_content)
+    if (contentFilter === "with_content") {
+      cards = cards.filter(cardHasContent);
+    } else if (contentFilter === "with_docs") {
+      cards = cards.filter((c) => c.document_count > 0);
+    }
     if (filterType !== "all") {
       cards = cards.filter((c) => (c.entity_type || "company") === filterType);
     }
@@ -10359,7 +10438,7 @@ function CompaniesTab({
         (card.company_properties?.industry || "").toLowerCase().includes(q) ||
         (card.related_companies || []).some((c: string) => c.toLowerCase().includes(q))
     );
-  }, [companyCards, searchQuery, filterType]);
+  }, [companyCards, searchQuery, filterType, contentFilter]);
 
   return (
     <div className="space-y-6">
@@ -10387,6 +10466,26 @@ function CompaniesTab({
                 }`}
               >
                 {t === "all" ? `All (${companyCounts.total})` : t === "company" ? `Companies (${companyCounts.companies})` : `Funds (${companyCounts.funds})`}
+              </button>
+            ))}
+          </div>
+          {/* Content filter */}
+          <div className="flex border-2 border-white/40 rounded-md overflow-hidden">
+            {([
+              { key: "with_content" as const, label: `With Content (${companyCounts.withContent})` },
+              { key: "with_docs" as const, label: `With Docs (${companyCounts.withDocs})` },
+              { key: "all" as const, label: `All (${companyCounts.total})` },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setContentFilter(key)}
+                className={`px-3 py-1.5 text-xs font-mono font-bold transition-colors ${
+                  contentFilter === key
+                    ? "bg-[#FFED00] text-black"
+                    : "bg-transparent text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -11609,20 +11708,9 @@ function ConnectionsGraphTab({
                     size="sm"
                     variant="outline"
                     className="border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-mono text-xs"
-                    onClick={() => {
-                      const high = pendingReviews.filter((r) => (r.confidence || 0) >= 0.8).map((r) => r.id);
-                      if (high.length) onBatchReviewPending(high, "approved");
-                    }}
-                  >
-                    Approve all ≥80% ({pendingReviews.filter((r) => (r.confidence || 0) >= 0.8).length})
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-mono text-xs"
                     onClick={() => onBatchReviewPending(pendingReviews.map((r) => r.id), "approved")}
                   >
-                    Approve all
+                    Approve all ({pendingReviews.length})
                   </Button>
                   <Button
                     size="sm"
@@ -11672,12 +11760,9 @@ function ConnectionsGraphTab({
                         <Badge variant="outline" className="text-xs border-[#eab308] text-[#eab308] bg-transparent font-mono">
                           {connectionType}
                         </Badge>
-                        <span className="text-xs text-white/50 font-mono">
-                          Confidence: {Math.round(review.confidence * 100)}%
-                        </span>
                         {review.properties?.reasoning && (
-                          <span className="text-xs text-white/50 font-mono truncate max-w-[200px]">
-                            {review.properties.reasoning.substring(0, 50)}...
+                          <span className="text-xs text-white/50 font-mono truncate max-w-[300px]">
+                            {review.properties.reasoning.substring(0, 80)}
                           </span>
                         )}
                       </div>
