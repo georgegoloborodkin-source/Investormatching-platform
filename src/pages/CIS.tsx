@@ -1879,12 +1879,19 @@ function SourcesTab({
             
             if (isPDF) {
               // Capture PDF bytes as base64 for Claude native reading (much better than text extraction)
+              // Cap at 4MB base64 (~3MB binary) to keep extraction fast and within API limits
+              const MAX_PDF_BASE64_BYTES = 4 * 1024 * 1024; // 4MB base64
               try {
                 const buffer = await file.arrayBuffer();
-                pdfBase64 = btoa(
-                  new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-                );
-                console.log("[PDF] Captured PDF base64:", Math.round(pdfBase64.length / 1024), "KB");
+                const raw = new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "");
+                const encoded = btoa(raw);
+                if (encoded.length <= MAX_PDF_BASE64_BYTES) {
+                  pdfBase64 = encoded;
+                  console.log("[PDF] Captured PDF base64:", Math.round(pdfBase64.length / 1024), "KB");
+                } else {
+                  console.warn(`[PDF] PDF too large for extraction (${Math.round(encoded.length / 1024)}KB > ${MAX_PDF_BASE64_BYTES / 1024}KB), using text-only`);
+                  // Still use text extraction for large PDFs
+                }
               } catch (b64Err) {
                 console.warn("[PDF] Failed to capture PDF bytes:", b64Err);
               }
@@ -5692,7 +5699,8 @@ export default function CIS() {
       
       (async () => {
         try {
-          console.log(`[EXTRACT] Extracting entities from doc ${documentId} (PDF: ${pdfBase64ForExtraction ? "yes" : "no"})`);
+          const hasPdf = !!pdfBase64ForExtraction;
+          console.log(`[EXTRACT] Extracting entities from doc ${documentId} — PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
           const extraction = await extractEntities({
             document_title: docTitle,
             document_text: rawContent?.slice(0, 12000) || "", // Limit for API
@@ -5701,9 +5709,10 @@ export default function CIS() {
           });
 
           if (extraction.entities.length === 0 && extraction.relationships.length === 0 && extraction.kpis.length === 0) {
-            console.log("[EXTRACT] No entities/relationships/KPIs found");
+            console.warn("[EXTRACT] No entities/relationships/KPIs found — check backend logs for errors");
             return;
           }
+          console.log(`[EXTRACT] ✅ Found ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
 
           const userId = profile?.id || user?.id;
           if (!userId) {

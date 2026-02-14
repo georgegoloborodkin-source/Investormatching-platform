@@ -5160,6 +5160,246 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
 
 
 # ---------------------------------------------------------------------------
+#  SSE Streaming Extraction — keeps Render.com connection alive during long
+#  Claude API calls (Render free tier has ~30s request timeout; SSE avoids it
+#  because data is continuously streamed).
+# ---------------------------------------------------------------------------
+
+@app.post("/extract-company-properties/stream")
+async def extract_company_properties_stream(request: CompanyPropertyExtractionRequest):
+    """
+    Streaming version of /extract-company-properties.
+    Sends keepalive pings every 5s while Claude processes the PDF,
+    then sends the final JSON result.
+    Avoids Render.com's 30-second request timeout.
+    """
+    import asyncio
+
+    async def _do_extraction() -> dict:
+        """Run the actual extraction and return a dict."""
+        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+            return {"properties": {}, "confidence": {}, "document_type_detected": ""}
+
+        has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
+        text = (request.raw_content or "").strip()[:MAX_MODEL_INPUT_CHARS]
+
+        if not text and not has_pdf:
+            return {"properties": {}, "confidence": {}, "document_type_detected": ""}
+
+        doc_type = (request.document_type or "").strip() or ("pitch_deck" if has_pdf else "unknown")
+
+        field_guidance = ""
+        if doc_type == "pitch_deck":
+            field_guidance = (
+                "This is a pitch deck. Focus on extracting: bio (company description), "
+                "problem, solution, TAM, competitive_edge, founders, funding_stage, amount_seeking, "
+                "industry, geo_markets, website."
+            )
+        elif doc_type == "investment_memo":
+            field_guidance = (
+                "This is an investment memo. Focus on extracting: valuation, amount_seeking, "
+                "funding_stage, arr, burn_rate, runway_months, competitive_edge, founders, "
+                "industry, geo_markets."
+            )
+        else:
+            field_guidance = "Extract all available company properties from this document."
+
+        existing_context = ""
+        if request.existing_properties:
+            non_empty = {k: v for k, v in request.existing_properties.items()
+                         if v and not k.startswith("_") and k not in ("auto_created", "source", "first_seen_document", "last_seen_document", "document_count")}
+            if non_empty:
+                existing_context = f"\n\nExisting card data:\n{json.dumps(non_empty, indent=2, default=str)}\n"
+
+        json_instructions = (
+            "Extract company properties into JSON:\n"
+            '{"properties": {"bio": "...", "funding_stage": "...", "amount_seeking": "...", '
+            '"valuation": "...", "arr": "...", "burn_rate": "...", "runway_months": "...", '
+            '"problem": "...", "solution": "...", "tam": "...", "competitive_edge": "...", '
+            '"founders": [{"name": "...", "role": "...", "background": "..."}], '
+            '"website": "...", "industry": "...", "geo_markets": [...]}, '
+            '"confidence": {"bio": 0.9, ...}}\n'
+            "Leave fields empty if not in document. Return ONLY valid JSON."
+        )
+
+        client = _get_anthropic_async_client()
+
+        if has_pdf:
+            print(f"[EXTRACT-PROPS-STREAM] Using Claude native PDF for: {request.document_title}")
+            content_blocks = [
+                {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": request.pdf_base64}},
+                {"type": "text", "text": f"Document title: {request.document_title}\nType: {doc_type}\n{field_guidance}\n{existing_context}\n{json_instructions}"},
+            ]
+        else:
+            print(f"[EXTRACT-PROPS-STREAM] Using text-only for: {request.document_title}")
+            content_blocks = [
+                {"type": "text", "text": f"Document title: {request.document_title}\nType: {doc_type}\n{field_guidance}\n{existing_context}\nText:\n---\n{text}\n---\n\n{json_instructions}"},
+            ]
+
+        message = await client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=4096,
+            temperature=0.0,
+            messages=[{"role": "user", "content": content_blocks}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            data = json.loads(json_match.group()) if json_match else {}
+
+        properties = data.get("properties", data)
+        confidence = data.get("confidence", {})
+
+        # Normalize
+        clean_props: Dict[str, Any] = {}
+        for f in ["bio", "funding_stage", "amount_seeking", "valuation", "arr",
+                   "burn_rate", "runway_months", "problem", "solution", "tam",
+                   "competitive_edge", "website", "industry"]:
+            val = properties.get(f, "")
+            if val and isinstance(val, (str, int, float)):
+                clean_props[f] = str(val).strip()
+        for f in ["geo_markets"]:
+            val = properties.get(f, [])
+            if isinstance(val, list) and val:
+                clean_props[f] = [str(v).strip() for v in val if v]
+        for f in ["founders"]:
+            val = properties.get(f, [])
+            if isinstance(val, list) and val:
+                clean_props[f] = val
+            elif isinstance(val, str) and val.strip():
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        clean_props[f] = parsed
+                except json.JSONDecodeError:
+                    pass
+
+        clean_confidence = {}
+        for f, s in confidence.items():
+            if f in clean_props:
+                try:
+                    clean_confidence[f] = float(s)
+                except (ValueError, TypeError):
+                    clean_confidence[f] = 0.5
+
+        return {"properties": clean_props, "confidence": clean_confidence, "document_type_detected": doc_type}
+
+    async def generate():
+        """SSE generator: keepalive pings + final result."""
+        task = asyncio.create_task(_do_extraction())
+        try:
+            while not task.done():
+                yield f"data: {json.dumps({'status': 'processing'})}\n\n"
+                await asyncio.sleep(5)
+
+            result = await task
+            yield f"data: {json.dumps({'status': 'done', 'result': result})}\n\n"
+        except Exception as e:
+            print(f"[EXTRACT-PROPS-STREAM] Error: {e}")
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+    )
+
+
+@app.post("/extract-entities/stream")
+async def extract_entities_stream(request: EntityExtractionRequest):
+    """
+    Streaming version of /extract-entities.
+    Sends keepalive pings every 5s while Claude processes the document.
+    """
+    import asyncio
+
+    async def _do_extraction() -> dict:
+        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+            return {"entities": [], "relationships": [], "kpis": []}
+
+        has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
+        text = (request.document_text or "").strip()[:8000]
+
+        if not text and not has_pdf:
+            return {"entities": [], "relationships": [], "kpis": []}
+
+        extraction_instructions = (
+            "Extract ALL of the following from this VC/investment document:\n\n"
+            "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
+            '   Format: [{"name": "...", "type": "company|person|fund|round|sector|location", '
+            '"properties": {"industry": "...", "role": "...", etc.}, "confidence": 0.0-1.0}]\n\n'
+            "2. RELATIONSHIPS between entities:\n"
+            '   Format: [{"source_name": "...", "target_name": "...", '
+            '"relation_type": "founded|works_at|invested_in|raised|led_round|partner_of|'
+            'competitor_of|acquired|operates_in|located_in|board_member|advisor|portfolio_company", '
+            '"properties": {}, "confidence": 0.0-1.0}]\n\n'
+            "3. KPIs — any numbers, metrics, financial data:\n"
+            '   Format: [{"company_name": "...", "metric_name": "revenue|arr|mrr|valuation|'
+            'burn_rate|headcount|users|growth_rate|raise_amount|etc.", '
+            '"value": 123.0, "unit": "USD|%|count", "period": "2024-Q3", '
+            '"category": "financial|growth|fundraising|operational|market|tokenomics", '
+            '"confidence": 0.0-1.0}]\n\n'
+            'Return JSON with keys: "entities", "relationships", "kpis". Return ONLY valid JSON.'
+        )
+
+        client = _get_anthropic_async_client()
+
+        if has_pdf:
+            print(f"[EXTRACT-ENTITIES-STREAM] Using Claude native PDF for: {request.document_title}")
+            content_blocks = [
+                {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": request.pdf_base64}},
+                {"type": "text", "text": f"Document title: {request.document_title}\nType: {request.document_type or 'pitch_deck'}\n\n{extraction_instructions}"},
+            ]
+        else:
+            print(f"[EXTRACT-ENTITIES-STREAM] Using text-only for: {request.document_title}")
+            content_blocks = [
+                {"type": "text", "text": f"Document title: {request.document_title}\nType: {request.document_type or 'unknown'}\n\nText:\n{text}\n\n{extraction_instructions}"},
+            ]
+
+        message = await client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=4000,
+            temperature=0.0,
+            messages=[{"role": "user", "content": content_blocks}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            data = json.loads(json_match.group()) if json_match else {}
+
+        return {
+            "entities": [e for e in data.get("entities", []) if e.get("name")],
+            "relationships": [r for r in data.get("relationships", []) if r.get("source_name") and r.get("target_name")],
+            "kpis": [k for k in data.get("kpis", []) if k.get("company_name") and k.get("metric_name")],
+        }
+
+    async def generate():
+        task = asyncio.create_task(_do_extraction())
+        try:
+            while not task.done():
+                yield f"data: {json.dumps({'status': 'processing'})}\n\n"
+                await asyncio.sleep(5)
+
+            result = await task
+            yield f"data: {json.dumps({'status': 'done', 'result': result})}\n\n"
+        except Exception as e:
+            print(f"[EXTRACT-ENTITIES-STREAM] Error: {e}")
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+    )
+
+
+# ---------------------------------------------------------------------------
 #  GraphRAG / Contextual Retrieval — V2 retrieval pipeline
 # ---------------------------------------------------------------------------
 

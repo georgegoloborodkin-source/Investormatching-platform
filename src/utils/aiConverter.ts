@@ -821,31 +821,118 @@ export interface EntityExtractionResult {
   kpis: ExtractedKPI[];
 }
 
+/**
+ * Parse an SSE stream from a /stream endpoint.
+ * Returns the final result from the "done" event.
+ * Handles keepalive pings and errors gracefully.
+ */
+async function parseSSEExtractionStream<T>(response: Response, label: string): Promise<T | null> {
+  if (!response.body) {
+    console.warn(`[${label}] No response body`);
+    return null;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE events (separated by double newlines)
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || ""; // Keep incomplete event in buffer
+
+      for (const event of events) {
+        const dataLine = event.trim();
+        if (!dataLine.startsWith("data: ")) continue;
+        const jsonStr = dataLine.slice(6);
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.status === "processing") {
+            // Keepalive ping — connection is alive
+            continue;
+          }
+          if (parsed.status === "done" && parsed.result) {
+            console.log(`[${label}] ✅ Extraction complete via stream`);
+            return parsed.result as T;
+          }
+          if (parsed.status === "error") {
+            console.error(`[${label}] Backend error:`, parsed.error);
+            return null;
+          }
+        } catch {
+          // Ignore non-JSON lines
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[${label}] Stream read error:`, err);
+  }
+  return null;
+}
+
 export async function extractEntities(input: {
   document_title: string;
   document_text: string;
   document_type?: string;
   pdf_base64?: string;
 }): Promise<EntityExtractionResult> {
+  const empty: EntityExtractionResult = { entities: [], relationships: [], kpis: [] };
+  const hasPdf = !!input.pdf_base64;
+
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
-    const timeout = input.pdf_base64 ? 90000 : 45000; // PDF vision needs more time
+
+    // ── Try streaming endpoint first (avoids Render.com 30s timeout) ──
+    if (hasPdf) {
+      console.log(`[extractEntities] Using streaming PDF path (${Math.round((input.pdf_base64?.length || 0) / 1024)}KB base64)`);
+      try {
+        const streamResp = await fetchWithTimeout(
+          `${baseUrl}/extract-entities/stream`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(input),
+          },
+          120000 // 2 min — stream keepalives prevent Render timeout
+        );
+        if (streamResp.ok) {
+          const result = await parseSSEExtractionStream<EntityExtractionResult>(streamResp, "extractEntities-stream");
+          if (result && (result.entities?.length || result.relationships?.length || result.kpis?.length)) {
+            return result;
+          }
+          console.warn("[extractEntities] Stream returned empty, falling back to text-only");
+        } else {
+          console.warn(`[extractEntities] Stream endpoint returned HTTP ${streamResp.status}, falling back`);
+        }
+      } catch (streamErr) {
+        console.warn("[extractEntities] Stream endpoint failed, falling back:", streamErr);
+      }
+    }
+
+    // ── Fallback: regular (non-streaming) endpoint, text-only ──
+    const textOnlyInput = { ...input, pdf_base64: undefined };
+    console.log(`[extractEntities] Using regular text-only path (${(input.document_text?.length || 0)} chars)`);
     const response = await fetchWithTimeout(
       `${baseUrl}/extract-entities`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
+        body: JSON.stringify(textOnlyInput),
       },
-      timeout
+      45000
     );
     if (!response.ok) {
-      return { entities: [], relationships: [], kpis: [] };
+      console.error(`[extractEntities] HTTP ${response.status}: ${await response.text().catch(() => "")}`);
+      return empty;
     }
     return await response.json();
-  } catch {
-    console.warn("[extractEntities] Failed");
-    return { entities: [], relationships: [], kpis: [] };
+  } catch (err) {
+    console.error("[extractEntities] Failed:", err);
+    return empty;
   }
 }
 
@@ -947,27 +1034,67 @@ export async function extractCompanyProperties(input: {
   existingProperties?: Record<string, any>;
   pdfBase64?: string;
 }): Promise<CompanyPropertyExtractionResult> {
+  const empty: CompanyPropertyExtractionResult = { properties: {}, confidence: {}, document_type_detected: "" };
+  const hasPdf = !!input.pdfBase64;
+
+  const payload = {
+    raw_content: input.rawContent,
+    document_title: input.documentTitle || "",
+    document_type: input.documentType || "",
+    existing_properties: input.existingProperties || {},
+    pdf_base64: input.pdfBase64 || null,
+  };
+
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
-    const timeout = input.pdfBase64 ? 90000 : 45000; // PDF vision needs more time
+
+    // ── Try streaming endpoint first when PDF (avoids Render 30s timeout) ──
+    if (hasPdf) {
+      console.log(`[extractCompanyProperties] Using streaming PDF path (${Math.round((input.pdfBase64?.length || 0) / 1024)}KB base64)`);
+      try {
+        const streamResp = await fetchWithTimeout(
+          `${baseUrl}/extract-company-properties/stream`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+          120000 // 2 min — stream keepalives prevent Render timeout
+        );
+        if (streamResp.ok) {
+          const result = await parseSSEExtractionStream<CompanyPropertyExtractionResult>(streamResp, "extractProps-stream");
+          if (result && Object.keys(result.properties || {}).length > 0) {
+            return {
+              properties: result.properties || {},
+              confidence: result.confidence || {},
+              document_type_detected: result.document_type_detected || "",
+            };
+          }
+          console.warn("[extractCompanyProperties] Stream returned empty, falling back to text-only");
+        } else {
+          console.warn(`[extractCompanyProperties] Stream HTTP ${streamResp.status}, falling back`);
+        }
+      } catch (streamErr) {
+        console.warn("[extractCompanyProperties] Stream failed, falling back:", streamErr);
+      }
+    }
+
+    // ── Fallback: regular endpoint, text-only (no PDF) ──
+    const textPayload = { ...payload, pdf_base64: null };
+    console.log(`[extractCompanyProperties] Using regular text-only path (${(input.rawContent?.length || 0)} chars)`);
     const response = await fetchWithTimeout(
       `${baseUrl}/extract-company-properties`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          raw_content: input.rawContent,
-          document_title: input.documentTitle || "",
-          document_type: input.documentType || "",
-          existing_properties: input.existingProperties || {},
-          pdf_base64: input.pdfBase64 || null,
-        }),
+        body: JSON.stringify(textPayload),
       },
-      timeout
+      45000
     );
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${response.status}`);
+      const errText = await response.text().catch(() => "");
+      console.error(`[extractCompanyProperties] HTTP ${response.status}: ${errText}`);
+      return empty;
     }
     const data = await response.json();
     return {
@@ -977,7 +1104,7 @@ export async function extractCompanyProperties(input: {
     };
   } catch (error) {
     console.error("[extractCompanyProperties] Error:", error);
-    return { properties: {}, confidence: {}, document_type_detected: "" };
+    return empty;
   }
 }
 
