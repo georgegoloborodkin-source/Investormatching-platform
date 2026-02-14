@@ -825,9 +825,11 @@ export async function extractEntities(input: {
   document_title: string;
   document_text: string;
   document_type?: string;
+  pdf_base64?: string;
 }): Promise<EntityExtractionResult> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
+    const timeout = input.pdf_base64 ? 90000 : 45000; // PDF vision needs more time
     const response = await fetchWithTimeout(
       `${baseUrl}/extract-entities`,
       {
@@ -835,7 +837,7 @@ export async function extractEntities(input: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       },
-      45000 // 45s — Sonnet extraction can be slow on large docs
+      timeout
     );
     if (!response.ok) {
       return { entities: [], relationships: [], kpis: [] };
@@ -943,9 +945,11 @@ export async function extractCompanyProperties(input: {
   documentTitle?: string;
   documentType?: string;
   existingProperties?: Record<string, any>;
+  pdfBase64?: string;
 }): Promise<CompanyPropertyExtractionResult> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
+    const timeout = input.pdfBase64 ? 90000 : 45000; // PDF vision needs more time
     const response = await fetchWithTimeout(
       `${baseUrl}/extract-company-properties`,
       {
@@ -956,9 +960,10 @@ export async function extractCompanyProperties(input: {
           document_title: input.documentTitle || "",
           document_type: input.documentType || "",
           existing_properties: input.existingProperties || {},
+          pdf_base64: input.pdfBase64 || null,
         }),
       },
-      45000 // 45s — Sonnet extraction can be slow on large pitch decks
+      timeout
     );
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));

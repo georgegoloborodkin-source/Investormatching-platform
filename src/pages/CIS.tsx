@@ -1545,7 +1545,7 @@ function SourcesTab({
   activeEventId: string | null;
   ensureActiveEventId: () => Promise<string | null>;
   currentUserId: string | null;
-  indexDocumentEmbeddings: (documentId: string, rawContent?: string | null, docTitle?: string | null) => Promise<void>;
+  indexDocumentEmbeddings: (documentId: string, rawContent?: string | null, docTitle?: string | null, pdfBase64?: string | null) => Promise<void>;
   onRefreshCompanyCards?: () => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -1836,6 +1836,7 @@ function SourcesTab({
           let rawContent: string | null = null;
           let extractedJson: Record<string, any> = {};
           let detectedType: string | null = file.type || "file";
+          let pdfBase64: string | null = null; // For Claude native PDF reading
 
           if (isTextFile(file)) {
             // Read text files directly
@@ -1877,10 +1878,21 @@ function SourcesTab({
             const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
             
             if (isPDF) {
-              // Try client-side PDF extraction first (fast, no network delay)
+              // Capture PDF bytes as base64 for Claude native reading (much better than text extraction)
+              try {
+                const buffer = await file.arrayBuffer();
+                pdfBase64 = btoa(
+                  new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+                );
+                console.log("[PDF] Captured PDF base64:", Math.round(pdfBase64.length / 1024), "KB");
+              } catch (b64Err) {
+                console.warn("[PDF] Failed to capture PDF bytes:", b64Err);
+              }
+
+              // Try client-side PDF extraction as a quick text fallback (for embeddings)
               try {
                 rawContent = await extractPdfTextClientSide(file);
-                console.log("[PDF] Client-side extraction succeeded:", rawContent?.length || 0, "chars");
+                console.log("[PDF] Client-side text extraction:", rawContent?.length || 0, "chars");
               } catch (err) {
                 console.warn("[PDF] Client-side extraction failed, will try AI conversion:", err);
               }
@@ -2024,9 +2036,9 @@ function SourcesTab({
 
           // Index embeddings if we have content (with contextual enrichment)
           // Run in background - don't block upload completion
-          if (rawContent && docRecord.id) {
+          if ((rawContent || pdfBase64) && docRecord.id) {
             // Fire and forget - don't await, let it run in background
-            indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name).catch((embedErr) => {
+            indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name, pdfBase64).catch((embedErr) => {
               console.error("Error indexing embeddings (non-fatal):", embedErr);
               // Non-fatal - document is saved, embeddings can be regenerated later
             });
@@ -2076,12 +2088,13 @@ function SourcesTab({
           // The DB trigger auto-creates a company entity from the document title.
           // If folder-based detection is enabled, force-create entity even if title doesn't match.
           // Run in background - don't block upload completion
-          if (rawContent && docRecord.id) {
+          if ((rawContent || pdfBase64) && docRecord.id) {
             // Fire and forget - run property extraction in background
             // Capture variables needed for async execution
             const docId = docRecord.id;
             const docTitle = docRecord.title || file.name;
-            const fileContent = rawContent;
+            const fileContent = rawContent || "";
+            const filePdfBase64 = pdfBase64; // Capture PDF bytes for Claude native reading
             const folderInfo = { shouldForceCreateCard, entityTypeHint, currentSelectedFolder };
             
             (async () => {
@@ -2259,12 +2272,13 @@ function SourcesTab({
               }
 
               if (companyEntityId) {
-                console.log(`[AutoExtract] Running property extraction for entity ${companyEntityId}...`);
+                console.log(`[AutoExtract] Running property extraction for entity ${companyEntityId}... (PDF: ${filePdfBase64 ? "yes" : "no"})`);
                 const existing = await getEntityProperties(companyEntityId);
                 const extraction = await extractCompanyProperties({
                   rawContent: fileContent,
                   documentTitle: docTitle,
                   existingProperties: existing?.properties || {},
+                  pdfBase64: filePdfBase64 || undefined,
                 });
 
                 console.log(`[AutoExtract] Extraction result: ${Object.keys(extraction.properties).length} properties, type: ${extraction.document_type_detected}`);
@@ -5673,16 +5687,17 @@ export default function CIS() {
 
   // ── Entity extraction helper: populate knowledge graph + KPIs from documents ──
   const extractAndStoreEntities = useCallback(
-    async (documentId: string, rawContent: string, docTitle: string, eventId: string) => {
-      if (!rawContent?.trim() || !eventId) return;
+    async (documentId: string, rawContent: string, docTitle: string, eventId: string, pdfBase64ForExtraction?: string | null) => {
+      if ((!rawContent?.trim() && !pdfBase64ForExtraction) || !eventId) return;
       
       (async () => {
         try {
-          console.log(`[EXTRACT] Extracting entities from doc ${documentId}`);
+          console.log(`[EXTRACT] Extracting entities from doc ${documentId} (PDF: ${pdfBase64ForExtraction ? "yes" : "no"})`);
           const extraction = await extractEntities({
             document_title: docTitle,
-            document_text: rawContent.slice(0, 12000), // Limit for API
+            document_text: rawContent?.slice(0, 12000) || "", // Limit for API
             document_type: "pitch_deck", // Could be smarter — detect from filename
+            pdf_base64: pdfBase64ForExtraction || undefined,
           });
 
           if (extraction.entities.length === 0 && extraction.relationships.length === 0 && extraction.kpis.length === 0) {
@@ -5829,7 +5844,7 @@ export default function CIS() {
   );
 
   const indexDocumentEmbeddings = useCallback(
-    async (documentId: string, rawContent?: string | null, docTitle?: string | null) => {
+    async (documentId: string, rawContent?: string | null, docTitle?: string | null, pdfBase64ForExtraction?: string | null) => {
       if (embeddingsDisabledRef.current) return;
       if (!rawContent?.trim()) return;
       (async () => {
@@ -5937,8 +5952,8 @@ export default function CIS() {
           
           // ── Trigger entity extraction after embeddings are done ──
           const eventId = activeEventId || (await ensureActiveEventId());
-          if (eventId && rawContent && docTitle) {
-            void extractAndStoreEntities(documentId, rawContent, docTitle, eventId);
+          if (eventId && (rawContent || pdfBase64ForExtraction) && docTitle) {
+            void extractAndStoreEntities(documentId, rawContent || "", docTitle, eventId, pdfBase64ForExtraction);
           }
         } catch (err) {
           disableEmbeddings(err instanceof Error ? err.message : "Embedding setup failed");

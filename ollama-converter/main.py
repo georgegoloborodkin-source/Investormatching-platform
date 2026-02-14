@@ -4780,8 +4780,9 @@ class ExtractedKPI(BaseModel):
 
 class EntityExtractionRequest(BaseModel):
     document_title: str = ""
-    document_text: str
+    document_text: str = ""
     document_type: str = ""  # pitch_deck, memo, email, report
+    pdf_base64: Optional[str] = Field(default=None, description="Base64-encoded PDF bytes for visual extraction")
 
 class EntityExtractionResponse(BaseModel):
     entities: List[ExtractedEntity] = []
@@ -4793,20 +4794,20 @@ class EntityExtractionResponse(BaseModel):
 async def extract_entities(request: EntityExtractionRequest):
     """
     Extract entities, relationships, and KPIs from a document using Claude.
-    This populates the knowledge graph and structured KPI store.
-    Call this after document ingestion for each new document.
+    
+    When `pdf_base64` is provided, Claude reads the PDF visually for much better
+    extraction of companies, people, metrics from pitch decks.
     """
     if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
         return EntityExtractionResponse()
 
+    has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
     text = (request.document_text or "").strip()[:8000]
-    if not text:
+    
+    if not text and not has_pdf:
         return EntityExtractionResponse()
 
-    prompt = (
-        f"Document title: {request.document_title}\n"
-        f"Document type: {request.document_type or 'unknown'}\n\n"
-        f"Text:\n{text}\n\n"
+    extraction_instructions = (
         "Extract ALL of the following from this VC/investment document:\n\n"
         "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
         '   Format: [{{"name": "...", "type": "company|person|fund|round|sector|location", '
@@ -4827,12 +4828,48 @@ async def extract_entities(request: EntityExtractionRequest):
 
     try:
         client = _get_anthropic_async_client()
+        
+        # Build content blocks — PDF visual or text-only
+        if has_pdf:
+            print(f"[EXTRACT-ENTITIES] Using Claude native PDF reading for: {request.document_title}")
+            content_blocks = [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": request.pdf_base64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {request.document_type or 'pitch_deck'}\n\n"
+                        f"{extraction_instructions}"
+                    ),
+                },
+            ]
+        else:
+            print(f"[EXTRACT-ENTITIES] Using text-only extraction for: {request.document_title}")
+            content_blocks = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {request.document_type or 'unknown'}\n\n"
+                        f"Text:\n{text}\n\n"
+                        f"{extraction_instructions}"
+                    ),
+                },
+            ]
+        
         # Use Sonnet for higher quality extraction
         message = await client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=4000,
             temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
 
@@ -4878,10 +4915,11 @@ async def extract_entities(request: EntityExtractionRequest):
 
 class CompanyPropertyExtractionRequest(BaseModel):
     """Extract structured company properties from a document."""
-    raw_content: str = Field(..., description="Document text content")
+    raw_content: str = Field(default="", description="Document text content")
     document_title: str = ""
     document_type: str = ""  # pitch_deck, investment_memo, data_room, email
     existing_properties: Dict[str, Any] = Field(default_factory=dict, description="Current card properties (for context)")
+    pdf_base64: Optional[str] = Field(default=None, description="Base64-encoded PDF bytes — Claude reads the PDF directly for much better extraction")
 
 
 class CompanyPropertyExtractionResponse(BaseModel):
@@ -4893,43 +4931,48 @@ class CompanyPropertyExtractionResponse(BaseModel):
 @app.post("/extract-company-properties", response_model=CompanyPropertyExtractionResponse)
 async def extract_company_properties(request: CompanyPropertyExtractionRequest):
     """
-    Extract structured company card properties from document text.
-    Uses Claude with structured output to fill: bio, funding_stage, amount_seeking,
-    valuation, arr, burn_rate, runway_months, problem, solution, tam,
-    competitive_edge, founders, website, industry, geo_markets.
-    Returns per-field confidence scores.
+    Extract structured company card properties from document text or PDF.
+    
+    When `pdf_base64` is provided, Claude reads the PDF visually (native document block)
+    for dramatically better extraction of pitch decks with tables, charts, and layouts.
+    Falls back to text-based extraction when only `raw_content` is provided.
     """
     if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
         return CompanyPropertyExtractionResponse()
 
+    has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
     text = (request.raw_content or "").strip()
-    if not text:
+    
+    if not text and not has_pdf:
         return CompanyPropertyExtractionResponse()
 
-    # Truncate to fit context window
+    # Truncate text to fit context window (only used as fallback or supplement)
     text = text[:MAX_MODEL_INPUT_CHARS]
 
-    # Step 1: Detect document type if not provided
+    # Step 1: Detect document type — skip LLM call if we have a PDF (it's almost certainly a pitch deck)
     doc_type = (request.document_type or "").strip()
     if not doc_type:
-        doc_type_prompt = (
-            f"Document title: {request.document_title}\n"
-            f"First 500 chars:\n{text[:500]}\n\n"
-            "Classify this document as ONE of: pitch_deck, investment_memo, data_room, email, report, other\n"
-            "Return ONLY the classification word, nothing else."
-        )
-        try:
-            client = _get_anthropic_async_client()
-            msg = await client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=20,
-                temperature=0.0,
-                messages=[{"role": "user", "content": doc_type_prompt}],
+        if has_pdf:
+            doc_type = "pitch_deck"  # PDFs uploaded to VC platform are almost always pitch decks
+        elif text:
+            doc_type_prompt = (
+                f"Document title: {request.document_title}\n"
+                f"First 500 chars:\n{text[:500]}\n\n"
+                "Classify this document as ONE of: pitch_deck, investment_memo, data_room, email, report, other\n"
+                "Return ONLY the classification word, nothing else."
             )
-            doc_type = "".join(b.text for b in msg.content if hasattr(b, "text")).strip().lower()
-            doc_type = doc_type.replace('"', '').replace("'", "").strip()
-        except Exception:
-            doc_type = "unknown"
+            try:
+                client = _get_anthropic_async_client()
+                msg = await client.messages.create(
+                    model=HAIKU_MODEL,
+                    max_tokens=20,
+                    temperature=0.0,
+                    messages=[{"role": "user", "content": doc_type_prompt}],
+                )
+                doc_type = "".join(b.text for b in msg.content if hasattr(b, "text")).strip().lower()
+                doc_type = doc_type.replace('"', '').replace("'", "").strip()
+            except Exception:
+                doc_type = "unknown"
 
     # Step 2: Build extraction prompt based on document type
     field_guidance = ""
@@ -4963,11 +5006,7 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
                 f"{json.dumps(non_empty, indent=2, default=str)}\n"
             )
 
-    prompt = (
-        f"Document title: {request.document_title}\n"
-        f"Document type: {doc_type}\n"
-        f"{field_guidance}\n{existing_context}\n"
-        f"Document text:\n---\n{text}\n---\n\n"
+    json_schema_instructions = (
         "Extract company properties from this document into the following JSON structure.\n"
         "For each field, also provide a confidence score (0.0-1.0) indicating how sure you are.\n"
         "Leave fields as empty string or empty array if the information is NOT in the document.\n"
@@ -5002,11 +5041,52 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
 
     try:
         client = _get_anthropic_async_client()
+        
+        # ── Build message content: PDF visual reading vs text-only ──
+        if has_pdf:
+            # BEST PATH: Send PDF as a native document block — Claude reads it visually
+            # This captures tables, charts, multi-column layouts, logos, etc.
+            print(f"[EXTRACT-PROPS] Using Claude native PDF reading for: {request.document_title}")
+            content_blocks = [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": request.pdf_base64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {doc_type}\n"
+                        f"{field_guidance}\n{existing_context}\n\n"
+                        f"{json_schema_instructions}"
+                    ),
+                },
+            ]
+        else:
+            # FALLBACK: Text-only extraction
+            print(f"[EXTRACT-PROPS] Using text-only extraction for: {request.document_title}")
+            content_blocks = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {doc_type}\n"
+                        f"{field_guidance}\n{existing_context}\n"
+                        f"Document text:\n---\n{text}\n---\n\n"
+                        f"{json_schema_instructions}"
+                    ),
+                },
+            ]
+        
         message = await client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=4096,
             temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
 
