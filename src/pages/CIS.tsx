@@ -82,6 +82,19 @@ import {
   TrendingDown,
   Award,
   Briefcase,
+  Mail,
+  Phone,
+  Twitter,
+  Hash,
+  Zap,
+  ShoppingCart,
+  Repeat,
+  MapPin,
+  Calendar,
+  Handshake,
+  Trophy,
+  Megaphone,
+  Percent,
 } from "lucide-react";
 import {
   BarChart,
@@ -9852,10 +9865,11 @@ function CompaniesTab({
                 <tr className="border-b-2 border-white/30 bg-white/5">
                   <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Name</th>
                   <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Type</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Geographies</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Verticals</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Cheque / Stage</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Team</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Industry</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Stage</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">ARR</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Market</th>
+                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">HQ</th>
                   <th className="text-right p-3 text-white/70 font-bold uppercase text-xs">Docs</th>
                 </tr>
               </thead>
@@ -9864,8 +9878,6 @@ function CompaniesTab({
                   const props = card.company_properties || {};
                   const isFund = (card.entity_type || "company") === "fund";
                   const geos = (props.geo_focus || props.geo_markets || []) as string[];
-                  const verticals = (props.industry_preferences || []) as string[];
-                  const teamMembers = (props.team_members || []) as string[];
                   const chequeOrStage = isFund
                     ? props.cheque_size || ""
                     : props.funding_stage || "";
@@ -9879,25 +9891,24 @@ function CompaniesTab({
                         )
                       }
                     >
-                      <td className="p-3 text-white font-bold">{card.company_name}</td>
+                      <td className="p-3 text-white font-bold">
+                        <div>{card.company_name}</div>
+                        {props.bio && <div className="text-[10px] text-white/40 truncate max-w-[200px] mt-0.5">{props.bio}</div>}
+                      </td>
                       <td className="p-3">
                         <Badge variant="outline" className={`text-xs font-mono ${isFund ? "border-blue-400 text-blue-400" : "border-green-400 text-green-400"}`}>
                           {isFund ? "Fund" : "Company"}
                         </Badge>
                       </td>
-                      <td className="p-3 text-white/70 max-w-[200px] truncate">
-                        {geos.slice(0, 4).join(", ")}
-                        {geos.length > 4 && ` +${geos.length - 4}`}
+                      <td className="p-3 text-white/70 max-w-[120px] truncate">
+                        {props.industry || "—"}
                       </td>
-                      <td className="p-3 text-white/70 max-w-[200px] truncate">
-                        {verticals.slice(0, 3).join(", ")}
-                        {verticals.length > 3 && ` +${verticals.length - 3}`}
-                      </td>
-                      <td className="p-3 text-white/70">{chequeOrStage}</td>
+                      <td className="p-3 text-white/70">{chequeOrStage || "—"}</td>
+                      <td className="p-3 text-white/70">{props.arr || props.mrr || "—"}</td>
                       <td className="p-3 text-white/70 max-w-[150px] truncate">
-                        {teamMembers.slice(0, 2).join(", ")}
-                        {teamMembers.length > 2 && ` +${teamMembers.length - 2}`}
+                        {geos.slice(0, 3).join(", ") || "—"}
                       </td>
+                      <td className="p-3 text-white/70 max-w-[120px] truncate">{props.headquarters || "—"}</td>
                       <td className="p-3 text-right text-white/70">{card.document_count || 0}</td>
                     </tr>
                   );
@@ -10070,10 +10081,17 @@ function CompanyCard({
   const typeColor = isFund ? "#60a5fa" : "#34d399";
 
   // Parse founders from JSONB
-  let founders: Array<{ name: string; role: string; linkedin: string; pedigree: string }> = [];
+  let founders: Array<{ name: string; role: string; linkedin: string; pedigree: string; background: string }> = [];
   try {
     if (typeof props.founders === "string") founders = JSON.parse(props.founders);
     else if (Array.isArray(props.founders)) founders = props.founders;
+  } catch { /* ignore */ }
+
+  // Parse competitors from JSONB
+  let competitors: Array<{ name: string; differentiator: string }> = [];
+  try {
+    if (typeof props.competitors === "string") competitors = JSON.parse(props.competitors);
+    else if (Array.isArray(props.competitors)) competitors = props.competitors;
   } catch { /* ignore */ }
 
   // Fund-specific fields
@@ -10081,6 +10099,8 @@ function CompanyCard({
   const industryPrefs = (props.industry_preferences || []) as string[];
   const teamMembers = (props.team_members || []) as string[];
   const chequeSize = props.cheque_size || "";
+  const keyPartnerships = (props.key_partnerships || []) as string[];
+  const geoMarkets = (props.geo_markets || []) as string[];
 
   // Property tracking
   const propertySources: Record<string, { document_id: string; confidence: number; extracted_at: string }> = props._property_sources || {};
@@ -10143,6 +10163,27 @@ function CompanyCard({
             <p className={`text-xs font-mono mt-0.5 ${props.bio ? "text-white/60" : "text-white/30 italic"} line-clamp-1`}>
               {props.bio || (isFund && geoFocus.length ? geoFocus.slice(0, 3).join(", ") : "Click to add one-sentence bio...")}
             </p>
+            {/* Quick meta tags */}
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {props.industry && (
+                <span className="text-[9px] font-mono text-white/40 bg-white/5 px-1.5 py-0.5 rounded">{props.industry}</span>
+              )}
+              {props.headquarters && (
+                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
+                  <MapPin className="h-2.5 w-2.5" />{props.headquarters}
+                </span>
+              )}
+              {props.founded_year && (
+                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
+                  <Calendar className="h-2.5 w-2.5" />{props.founded_year}
+                </span>
+              )}
+              {props.team_size && (
+                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
+                  <Users className="h-2.5 w-2.5" />{props.team_size} people
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {!isFund && props.funding_stage && (
@@ -10255,8 +10296,10 @@ function CompanyCard({
                   <EditableField label="Amount Seeking" value={props.amount_seeking || ""} placeholder="e.g. $2M" icon={DollarSign} onSave={(v) => saveField("amount_seeking", v)} />
                   <EditableField label="Valuation" value={props.valuation || ""} placeholder="e.g. $10M pre-money" icon={TrendingUp} onSave={(v) => saveField("valuation", v)} />
                   <EditableField label="ARR" value={props.arr || ""} placeholder="e.g. $500K" icon={BarChart3} onSave={(v) => saveField("arr", v)} />
+                  <EditableField label="MRR" value={props.mrr || ""} placeholder="e.g. $40K" icon={BarChart3} onSave={(v) => saveField("mrr", v)} />
                   <EditableField label="Burn Rate" value={props.burn_rate || ""} placeholder="e.g. $80K/mo" icon={TrendingDown} onSave={(v) => saveField("burn_rate", v)} />
                   <EditableField label="Runway" value={props.runway_months || ""} placeholder="e.g. 18 months" icon={Clock} onSave={(v) => saveField("runway_months", v)} />
+                  <EditableField label="Use of Funds" value={props.use_of_funds || ""} placeholder="e.g. 40% product, 30% growth, 30% ops" icon={PieChart} onSave={(v) => saveField("use_of_funds", v)} />
                 </div>
               </div>
             )}
@@ -10273,11 +10316,99 @@ function CompanyCard({
               <div className="space-y-2 pl-1">
                 <EditableField label="Problem" value={props.problem || ""} placeholder="What gap exists in the market?" onSave={(v) => saveField("problem", v)} multiline />
                 <EditableField label="Solution" value={props.solution || ""} placeholder="How do they fix it?" onSave={(v) => saveField("solution", v)} multiline />
-                <div className="grid grid-cols-2 gap-x-4">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <EditableField label="TAM" value={props.tam || ""} placeholder="e.g. $4.5B" icon={PieChart} onSave={(v) => saveField("tam", v)} />
-                  <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win" icon={Award} onSave={(v) => saveField("competitive_edge", v)} />
+                  <EditableField label="SAM" value={props.sam || ""} placeholder="e.g. $1.2B" icon={PieChart} onSave={(v) => saveField("sam", v)} />
+                  <EditableField label="SOM" value={props.som || ""} placeholder="e.g. $200M" icon={PieChart} onSave={(v) => saveField("som", v)} />
+                  <EditableField label="Market Growth Rate" value={props.market_growth_rate || ""} placeholder="e.g. 25% CAGR" icon={TrendingUp} onSave={(v) => saveField("market_growth_rate", v)} />
+                </div>
+                <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win — unfair advantage" icon={Award} onSave={(v) => saveField("competitive_edge", v)} multiline />
+              </div>
+            </div>
+
+            {/* Business Model & GTM */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <ShoppingCart className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Business Model & GTM</span>
+              </div>
+              <div className="space-y-2 pl-1">
+                <EditableField label="Business Model" value={props.business_model || ""} placeholder="How the company makes money (SaaS, marketplace, etc.)" onSave={(v) => saveField("business_model", v)} multiline />
+                <EditableField label="Revenue Model" value={props.revenue_model || ""} placeholder="Revenue streams and pricing model" onSave={(v) => saveField("revenue_model", v)} multiline />
+                <EditableField label="Pricing" value={props.pricing || ""} placeholder="Pricing tiers or strategy" onSave={(v) => saveField("pricing", v)} />
+                <EditableField label="GTM Strategy" value={props.gtm_strategy || ""} placeholder="Go-to-market approach, channels, customer acquisition" icon={Megaphone} onSave={(v) => saveField("gtm_strategy", v)} multiline />
+              </div>
+            </div>
+
+            {/* Unit Economics */}
+            {(props.cac || props.ltv || props.ltv_cac_ratio || props.gross_margin || props.net_margin || props.churn_rate || props.payback_period) ? (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Percent className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Unit Economics</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                  <EditableField label="CAC" value={props.cac || ""} placeholder="e.g. $50" icon={DollarSign} onSave={(v) => saveField("cac", v)} />
+                  <EditableField label="LTV" value={props.ltv || ""} placeholder="e.g. $500" icon={DollarSign} onSave={(v) => saveField("ltv", v)} />
+                  <EditableField label="LTV:CAC Ratio" value={props.ltv_cac_ratio || ""} placeholder="e.g. 10:1" icon={TrendingUp} onSave={(v) => saveField("ltv_cac_ratio", v)} />
+                  <EditableField label="Payback Period" value={props.payback_period || ""} placeholder="e.g. 3 months" icon={Clock} onSave={(v) => saveField("payback_period", v)} />
+                  <EditableField label="Gross Margin" value={props.gross_margin || ""} placeholder="e.g. 70%" icon={Percent} onSave={(v) => saveField("gross_margin", v)} />
+                  <EditableField label="Net Margin" value={props.net_margin || ""} placeholder="e.g. 15%" icon={Percent} onSave={(v) => saveField("net_margin", v)} />
+                  <EditableField label="Churn Rate" value={props.churn_rate || ""} placeholder="e.g. 3% monthly" icon={Repeat} onSave={(v) => saveField("churn_rate", v)} />
                 </div>
               </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Percent className="h-3.5 w-3.5 text-white/30" />
+                  <span className="text-xs font-mono font-bold text-white/30 uppercase tracking-wider">Unit Economics</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                  <EditableField label="CAC" value="" placeholder="e.g. $50" icon={DollarSign} onSave={(v) => saveField("cac", v)} />
+                  <EditableField label="LTV" value="" placeholder="e.g. $500" icon={DollarSign} onSave={(v) => saveField("ltv", v)} />
+                  <EditableField label="LTV:CAC Ratio" value="" placeholder="e.g. 10:1" icon={TrendingUp} onSave={(v) => saveField("ltv_cac_ratio", v)} />
+                  <EditableField label="Gross Margin" value="" placeholder="e.g. 70%" icon={Percent} onSave={(v) => saveField("gross_margin", v)} />
+                  <EditableField label="Churn Rate" value="" placeholder="e.g. 3% monthly" icon={Repeat} onSave={(v) => saveField("churn_rate", v)} />
+                </div>
+              </div>
+            )}
+
+            {/* Traction */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Zap className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Traction</span>
+              </div>
+              <div className="space-y-2 pl-1">
+                <EditableField label="Traction Summary" value={props.traction || ""} placeholder="Key milestones, user counts, revenue highlights" onSave={(v) => saveField("traction", v)} multiline />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <EditableField label="Customers / Users" value={props.customers_count || ""} placeholder="e.g. 10K users" icon={Users} onSave={(v) => saveField("customers_count", v)} />
+                  <EditableField label="Growth Rate" value={props.growth_rate || ""} placeholder="e.g. 20% MoM" icon={TrendingUp} onSave={(v) => saveField("growth_rate", v)} />
+                  {props.gmv && <EditableField label="GMV" value={props.gmv || ""} placeholder="e.g. $5M" icon={DollarSign} onSave={(v) => saveField("gmv", v)} />}
+                </div>
+              </div>
+            </div>
+
+            {/* Competitors */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Competitors</span>
+              </div>
+              {competitors.length > 0 ? (
+                <div className="space-y-1.5 pl-1">
+                  {competitors.map((c, i) => (
+                    <div key={i} className="text-xs font-mono bg-white/5 rounded-md px-2 py-1.5">
+                      <span className="text-white font-bold">{c.name}</span>
+                      {c.differentiator && (
+                        <span className="text-white/50"> — {c.differentiator}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-white/30 italic font-mono pl-1">No competitors extracted — enrich from deck or add manually</p>
+              )}
             </div>
 
             {/* D. Team / Founders */}
@@ -10285,21 +10416,24 @@ function CompanyCard({
               <div className="flex items-center gap-1.5 mb-2">
                 <Users className="h-3.5 w-3.5 text-[#FFED00]" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Team</span>
+                {props.team_size && <span className="text-[9px] font-mono text-white/40">({props.team_size} employees)</span>}
               </div>
               {founders.length > 0 ? (
                 <div className="space-y-2 pl-1">
                   {founders.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs font-mono">
+                    <div key={i} className="flex items-start gap-2 text-xs font-mono bg-white/5 rounded-md px-2 py-1.5">
                       <Briefcase className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <span className="text-white font-bold">{f.name}</span>
-                        {f.role && <span className="text-white/50"> — {f.role}</span>}
-                        {f.pedigree && (
-                          <Badge className="ml-1.5 text-[9px] bg-white/10 text-white/70 border-0 py-0">{f.pedigree}</Badge>
-                        )}
+                      <div className="flex-1">
+                        <div>
+                          <span className="text-white font-bold">{f.name}</span>
+                          {f.role && <span className="text-white/50"> — {f.role}</span>}
+                          {(f.pedigree || f.background) && (
+                            <Badge className="ml-1.5 text-[9px] bg-white/10 text-white/70 border-0 py-0">{f.pedigree || f.background}</Badge>
+                          )}
+                        </div>
                         {f.linkedin && (
-                          <a href={f.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex ml-1.5 text-blue-400 hover:text-blue-300">
-                            <Linkedin className="h-3 w-3" />
+                          <a href={f.linkedin.startsWith("http") ? f.linkedin : `https://${f.linkedin}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-0.5 text-blue-400 hover:text-blue-300 text-[10px]">
+                            <Linkedin className="h-3 w-3" /> LinkedIn
                           </a>
                         )}
                       </div>
@@ -10313,13 +10447,102 @@ function CompanyCard({
               )}
             </div>
 
+            {/* Geo Markets */}
+            {geoMarkets.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Target Markets</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pl-1">
+                  {geoMarkets.map((g, i) => (
+                    <Badge key={i} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">{g}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Key Partnerships */}
+            {keyPartnerships.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Handshake className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Key Partnerships</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pl-1">
+                  {keyPartnerships.map((p, i) => (
+                    <Badge key={i} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">{p}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Awards & Recognition */}
+            {props.awards_recognition && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Trophy className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Awards & Recognition</span>
+                </div>
+                <p className="text-xs font-mono text-white/60 pl-1">{props.awards_recognition}</p>
+              </div>
+            )}
+
             {/* E. AI Rationale */}
             <EditableField label="AI Rationale — Why this deal?" value={props.ai_rationale || ""} placeholder="Auto-filled when AI analyzes this company's documents" icon={Sparkles} onSave={(v) => saveField("ai_rationale", v)} multiline />
 
-            {/* Website */}
-            <div className="flex gap-4">
-              <EditableField label="Website" value={props.website || ""} placeholder="https://..." icon={Globe} onSave={(v) => saveField("website", v)} />
-              <EditableField label="Logo URL" value={props.logo_url || ""} placeholder="https://logo.png" onSave={(v) => saveField("logo_url", v)} />
+            {/* Contact & Social */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
+                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Contact & Social</span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                <EditableField label="Website" value={props.website || ""} placeholder="https://..." icon={Globe} onSave={(v) => saveField("website", v)} />
+                <EditableField label="Email" value={props.email || ""} placeholder="hello@company.com" icon={Mail} onSave={(v) => saveField("email", v)} />
+                <EditableField label="Phone" value={props.phone || ""} placeholder="+1 (555) 123-4567" icon={Phone} onSave={(v) => saveField("phone", v)} />
+                <EditableField label="LinkedIn" value={props.linkedin_url || ""} placeholder="https://linkedin.com/company/..." icon={Linkedin} onSave={(v) => saveField("linkedin_url", v)} />
+                <EditableField label="Twitter / X" value={props.twitter_url || ""} placeholder="@handle or URL" icon={Twitter} onSave={(v) => saveField("twitter_url", v)} />
+                <EditableField label="Logo URL" value={props.logo_url || ""} placeholder="https://logo.png" onSave={(v) => saveField("logo_url", v)} />
+              </div>
+              {/* Quick social links row */}
+              {(props.website || props.linkedin_url || props.twitter_url || props.email) && (
+                <div className="flex items-center gap-3 mt-2 pl-1">
+                  {props.website && (
+                    <a href={props.website.startsWith("http") ? props.website : `https://${props.website}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-[#FFED00] transition-colors" title={props.website}>
+                      <Globe className="h-4 w-4" />
+                    </a>
+                  )}
+                  {props.linkedin_url && (
+                    <a href={props.linkedin_url.startsWith("http") ? props.linkedin_url : `https://${props.linkedin_url}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-blue-400 transition-colors" title="LinkedIn">
+                      <Linkedin className="h-4 w-4" />
+                    </a>
+                  )}
+                  {props.twitter_url && (
+                    <a href={props.twitter_url.startsWith("http") ? props.twitter_url : `https://twitter.com/${props.twitter_url.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-sky-400 transition-colors" title="Twitter / X">
+                      <Twitter className="h-4 w-4" />
+                    </a>
+                  )}
+                  {props.email && (
+                    <a href={`mailto:${props.email}`} className="text-white/50 hover:text-emerald-400 transition-colors" title={props.email}>
+                      <Mail className="h-4 w-4" />
+                    </a>
+                  )}
+                  {props.phone && (
+                    <a href={`tel:${props.phone}`} className="text-white/50 hover:text-emerald-400 transition-colors" title={props.phone}>
+                      <Phone className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Company Details */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
+              <EditableField label="Founded Year" value={props.founded_year || ""} placeholder="e.g. 2022" icon={Calendar} onSave={(v) => saveField("founded_year", v)} />
+              <EditableField label="Headquarters" value={props.headquarters || ""} placeholder="e.g. San Francisco, CA" icon={MapPin} onSave={(v) => saveField("headquarters", v)} />
+              <EditableField label="Team Size" value={props.team_size || ""} placeholder="e.g. 25 employees" icon={Users} onSave={(v) => saveField("team_size", v)} />
+              <EditableField label="Industry" value={props.industry || ""} placeholder="e.g. Fintech, SaaS" icon={Building2} onSave={(v) => saveField("industry", v)} />
             </div>
 
             {/* Conflict Resolution */}

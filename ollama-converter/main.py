@@ -5047,23 +5047,32 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
     field_guidance = ""
     if doc_type == "pitch_deck":
         field_guidance = (
-            "This is a pitch deck. Focus on extracting: bio (company description), "
-            "problem, solution, TAM, competitive_edge, founders, funding_stage, amount_seeking, "
-            "industry, geo_markets, website."
+            "This is a pitch deck. Extract EVERYTHING available: bio, problem, solution, "
+            "TAM/SAM/SOM, market_growth_rate, competitive_edge, competitors, business_model, "
+            "revenue_model, pricing, gtm_strategy, traction, unit economics (cac, ltv, "
+            "ltv_cac_ratio, payback_period, gross_margin, net_margin, churn_rate), "
+            "founders (with LinkedIn if shown), funding_stage, amount_seeking, use_of_funds, "
+            "mrr, arr, customers_count, growth_rate, team_size, founded_year, headquarters, "
+            "industry, geo_markets, website, email, phone, linkedin_url, twitter_url, "
+            "key_partnerships, awards_recognition. Extract EVERY data point you can find."
         )
     elif doc_type == "investment_memo":
         field_guidance = (
-            "This is an investment memo. Focus on extracting: valuation, amount_seeking, "
-            "funding_stage, arr, burn_rate, runway_months, competitive_edge, founders, "
-            "industry, geo_markets."
+            "This is an investment memo. Extract EVERYTHING: valuation, amount_seeking, "
+            "funding_stage, arr, mrr, burn_rate, runway_months, competitive_edge, competitors, "
+            "business_model, revenue_model, traction, unit economics (cac, ltv, ltv_cac_ratio, "
+            "gross_margin, net_margin, churn_rate), founders, tam, sam, som, market_growth_rate, "
+            "gtm_strategy, use_of_funds, customers_count, growth_rate, industry, geo_markets, "
+            "headquarters, team_size, key_partnerships."
         )
     elif doc_type == "data_room":
         field_guidance = (
-            "This is a data room document. Focus on extracting: arr, burn_rate, "
-            "runway_months, valuation, founders, industry."
+            "This is a data room document. Extract: arr, mrr, burn_rate, runway_months, "
+            "valuation, founders, industry, unit economics (cac, ltv, gross_margin, "
+            "net_margin, churn_rate), customers_count, growth_rate, traction, team_size."
         )
     else:
-        field_guidance = "Extract all available company properties from this document."
+        field_guidance = "Extract ALL available company properties from this document — every data point matters."
 
     existing_context = ""
     if request.existing_properties:
@@ -5076,10 +5085,11 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
             )
 
     json_schema_instructions = (
-        "Extract company properties from this document into the following JSON structure.\n"
+        "Extract ALL available company properties from this document into JSON.\n"
         "For each field, also provide a confidence score (0.0-1.0) indicating how sure you are.\n"
         "Leave fields as empty string or empty array if the information is NOT in the document.\n"
-        "Do NOT make up information — only extract what's explicitly stated or strongly implied.\n\n"
+        "Do NOT make up information — only extract what's explicitly stated or strongly implied.\n"
+        "Extract as MUCH as possible — every data point matters for investment analysis.\n\n"
         "Required JSON format:\n"
         "{\n"
         '  "properties": {\n'
@@ -5087,17 +5097,47 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         '    "funding_stage": "Pre-seed|Seed|Series A|Series B+|etc",\n'
         '    "amount_seeking": "$X.XM or $XXK",\n'
         '    "valuation": "$X.XM pre/post-money",\n'
-        '    "arr": "$X.XM or $XXK",\n'
+        '    "arr": "$X.XM or $XXK annual recurring revenue",\n'
+        '    "mrr": "$XXK monthly recurring revenue",\n'
         '    "burn_rate": "$XXK/month",\n'
-        '    "runway_months": "XX",\n'
-        '    "problem": "the problem being solved",\n'
-        '    "solution": "how the company solves it",\n'
-        '    "tam": "total addressable market size",\n'
-        '    "competitive_edge": "moat / differentiation",\n'
-        '    "founders": [{"name": "...", "role": "CEO/CTO/etc", "background": "..."}],\n'
+        '    "runway_months": "XX months",\n'
+        '    "problem": "the problem being solved (detailed)",\n'
+        '    "solution": "how the company solves it (detailed)",\n'
+        '    "tam": "total addressable market size with $ figure",\n'
+        '    "sam": "serviceable addressable market size",\n'
+        '    "som": "serviceable obtainable market",\n'
+        '    "market_growth_rate": "market CAGR or growth rate %",\n'
+        '    "competitive_edge": "moat / differentiation / why they win",\n'
+        '    "business_model": "how the company makes money (subscription, marketplace, SaaS, etc.)",\n'
+        '    "revenue_model": "revenue streams and pricing model details",\n'
+        '    "pricing": "pricing tiers or strategy details",\n'
+        '    "gtm_strategy": "go-to-market strategy, channels, customer acquisition approach",\n'
+        '    "traction": "key traction summary — users, revenue milestones, growth highlights",\n'
+        '    "customers_count": "number of customers or users",\n'
+        '    "growth_rate": "user or revenue growth rate (MoM/YoY)",\n'
+        '    "gmv": "gross merchandise value if applicable",\n'
+        '    "cac": "customer acquisition cost",\n'
+        '    "ltv": "customer lifetime value",\n'
+        '    "ltv_cac_ratio": "LTV:CAC ratio",\n'
+        '    "payback_period": "months to recover CAC",\n'
+        '    "gross_margin": "gross margin percentage",\n'
+        '    "net_margin": "net margin percentage",\n'
+        '    "churn_rate": "monthly or annual churn rate",\n'
+        '    "use_of_funds": "how the raised capital will be allocated",\n'
+        '    "founded_year": "year the company was founded",\n'
+        '    "headquarters": "HQ city, country",\n'
+        '    "team_size": "number of employees",\n'
+        '    "founders": [{"name": "...", "role": "CEO/CTO/etc", "background": "notable experience, education", "linkedin": "LinkedIn URL if found"}],\n'
+        '    "competitors": [{"name": "competitor name", "differentiator": "how this company differs from them"}],\n'
         '    "website": "https://...",\n'
-        '    "industry": "Fintech|SaaS|AI/ML|etc",\n'
-        '    "geo_markets": ["North America", "Europe", ...]\n'
+        '    "email": "contact email address",\n'
+        '    "phone": "contact phone number",\n'
+        '    "linkedin_url": "company LinkedIn page URL",\n'
+        '    "twitter_url": "company Twitter/X URL or handle",\n'
+        '    "industry": "Fintech|SaaS|AI/ML|Healthcare|Logistics|etc",\n'
+        '    "geo_markets": ["market region 1", "market region 2", ...],\n'
+        '    "key_partnerships": ["partner 1", "partner 2", ...],\n'
+        '    "awards_recognition": "notable awards, accelerator programs, press mentions"\n'
         "  },\n"
         '  "confidence": {\n'
         '    "bio": 0.9,\n'
@@ -5153,7 +5193,7 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         
         message = await _call_claude_with_fallback(
             client,
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
@@ -5177,11 +5217,18 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
 
         # Normalize: remove None values, convert to strings where expected
         clean_props: Dict[str, Any] = {}
-        string_fields = ["bio", "funding_stage", "amount_seeking", "valuation", "arr",
-                         "burn_rate", "runway_months", "problem", "solution", "tam",
-                         "competitive_edge", "website", "industry"]
-        list_fields = ["geo_markets"]
-        json_fields = ["founders"]
+        string_fields = [
+            "bio", "funding_stage", "amount_seeking", "valuation", "arr", "mrr",
+            "burn_rate", "runway_months", "problem", "solution", "tam", "sam", "som",
+            "market_growth_rate", "competitive_edge", "business_model", "revenue_model",
+            "pricing", "gtm_strategy", "traction", "customers_count", "growth_rate",
+            "gmv", "cac", "ltv", "ltv_cac_ratio", "payback_period", "gross_margin",
+            "net_margin", "churn_rate", "use_of_funds", "founded_year", "headquarters",
+            "team_size", "website", "email", "phone", "linkedin_url", "twitter_url",
+            "industry", "awards_recognition",
+        ]
+        list_fields = ["geo_markets", "key_partnerships"]
+        json_fields = ["founders", "competitors"]
 
         for field in string_fields:
             val = properties.get(field, "")
@@ -5261,18 +5308,26 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
         field_guidance = ""
         if doc_type == "pitch_deck":
             field_guidance = (
-                "This is a pitch deck. Focus on extracting: bio (company description), "
-                "problem, solution, TAM, competitive_edge, founders, funding_stage, amount_seeking, "
-                "industry, geo_markets, website."
+                "This is a pitch deck. Extract EVERYTHING available: bio, problem, solution, "
+                "TAM/SAM/SOM, market_growth_rate, competitive_edge, competitors, business_model, "
+                "revenue_model, pricing, gtm_strategy, traction, unit economics (cac, ltv, "
+                "ltv_cac_ratio, payback_period, gross_margin, net_margin, churn_rate), "
+                "founders (with LinkedIn if shown), funding_stage, amount_seeking, use_of_funds, "
+                "mrr, arr, customers_count, growth_rate, team_size, founded_year, headquarters, "
+                "industry, geo_markets, website, email, phone, linkedin_url, twitter_url, "
+                "key_partnerships, awards_recognition. Extract EVERY data point you can find."
             )
         elif doc_type == "investment_memo":
             field_guidance = (
-                "This is an investment memo. Focus on extracting: valuation, amount_seeking, "
-                "funding_stage, arr, burn_rate, runway_months, competitive_edge, founders, "
-                "industry, geo_markets."
+                "This is an investment memo. Extract EVERYTHING: valuation, amount_seeking, "
+                "funding_stage, arr, mrr, burn_rate, runway_months, competitive_edge, competitors, "
+                "business_model, revenue_model, traction, unit economics (cac, ltv, ltv_cac_ratio, "
+                "gross_margin, net_margin, churn_rate), founders, tam, sam, som, market_growth_rate, "
+                "gtm_strategy, use_of_funds, customers_count, growth_rate, industry, geo_markets, "
+                "headquarters, team_size, key_partnerships."
             )
         else:
-            field_guidance = "Extract all available company properties from this document."
+            field_guidance = "Extract ALL available company properties from this document — every data point matters."
 
         existing_context = ""
         if request.existing_properties:
@@ -5282,12 +5337,23 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
                 existing_context = f"\n\nExisting card data:\n{json.dumps(non_empty, indent=2, default=str)}\n"
 
         json_instructions = (
-            "Extract company properties into JSON:\n"
+            "Extract ALL company properties into JSON. Extract every data point you can find:\n"
             '{"properties": {"bio": "...", "funding_stage": "...", "amount_seeking": "...", '
-            '"valuation": "...", "arr": "...", "burn_rate": "...", "runway_months": "...", '
-            '"problem": "...", "solution": "...", "tam": "...", "competitive_edge": "...", '
-            '"founders": [{"name": "...", "role": "...", "background": "..."}], '
-            '"website": "...", "industry": "...", "geo_markets": [...]}, '
+            '"valuation": "...", "arr": "...", "mrr": "...", "burn_rate": "...", "runway_months": "...", '
+            '"problem": "...", "solution": "...", "tam": "...", "sam": "...", "som": "...", '
+            '"market_growth_rate": "...", "competitive_edge": "...", '
+            '"business_model": "...", "revenue_model": "...", "pricing": "...", '
+            '"gtm_strategy": "...", "traction": "...", '
+            '"customers_count": "...", "growth_rate": "...", "gmv": "...", '
+            '"cac": "...", "ltv": "...", "ltv_cac_ratio": "...", "payback_period": "...", '
+            '"gross_margin": "...", "net_margin": "...", "churn_rate": "...", '
+            '"use_of_funds": "...", "founded_year": "...", "headquarters": "...", "team_size": "...", '
+            '"founders": [{"name": "...", "role": "...", "background": "...", "linkedin": "..."}], '
+            '"competitors": [{"name": "...", "differentiator": "..."}], '
+            '"website": "...", "email": "...", "phone": "...", '
+            '"linkedin_url": "...", "twitter_url": "...", '
+            '"industry": "...", "geo_markets": [...], '
+            '"key_partnerships": [...], "awards_recognition": "..."}, '
             '"confidence": {"bio": 0.9, ...}}\n'
             "Leave fields empty if not in document. Return ONLY valid JSON."
         )
@@ -5308,7 +5374,7 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
 
         message = await _call_claude_with_fallback(
             client,
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
@@ -5326,17 +5392,24 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
 
         # Normalize
         clean_props: Dict[str, Any] = {}
-        for f in ["bio", "funding_stage", "amount_seeking", "valuation", "arr",
-                   "burn_rate", "runway_months", "problem", "solution", "tam",
-                   "competitive_edge", "website", "industry"]:
+        for f in [
+            "bio", "funding_stage", "amount_seeking", "valuation", "arr", "mrr",
+            "burn_rate", "runway_months", "problem", "solution", "tam", "sam", "som",
+            "market_growth_rate", "competitive_edge", "business_model", "revenue_model",
+            "pricing", "gtm_strategy", "traction", "customers_count", "growth_rate",
+            "gmv", "cac", "ltv", "ltv_cac_ratio", "payback_period", "gross_margin",
+            "net_margin", "churn_rate", "use_of_funds", "founded_year", "headquarters",
+            "team_size", "website", "email", "phone", "linkedin_url", "twitter_url",
+            "industry", "awards_recognition",
+        ]:
             val = properties.get(f, "")
             if val and isinstance(val, (str, int, float)):
                 clean_props[f] = str(val).strip()
-        for f in ["geo_markets"]:
+        for f in ["geo_markets", "key_partnerships"]:
             val = properties.get(f, [])
             if isinstance(val, list) and val:
                 clean_props[f] = [str(v).strip() for v in val if v]
-        for f in ["founders"]:
+        for f in ["founders", "competitors"]:
             val = properties.get(f, [])
             if isinstance(val, list) and val:
                 clean_props[f] = val
