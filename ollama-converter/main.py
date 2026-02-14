@@ -163,6 +163,56 @@ def _get_anthropic_async_client() -> "anthropic.AsyncAnthropic":
     return anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 
+async def _call_claude_with_fallback(
+    client,
+    messages: list,
+    max_tokens: int = 4096,
+    temperature: float = 0.0,
+    system: str | None = None,
+    tools: list | None = None,
+    tool_choice: dict | None = None,
+    preferred_model: str | None = None,
+    **extra_kwargs,
+):
+    """
+    Call Claude with automatic model fallback on 404 (retired model).
+    Tries preferred_model → ANTHROPIC_MODEL → each fallback in ANTHROPIC_MODEL_FALLBACKS.
+    """
+    models_to_try = list(dict.fromkeys(filter(None, [
+        preferred_model,
+        ANTHROPIC_MODEL,
+        *ANTHROPIC_MODEL_FALLBACKS,
+    ])))
+
+    last_error = None
+    for model_name in models_to_try:
+        try:
+            kwargs = {
+                "model": model_name,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": messages,
+                **extra_kwargs,
+            }
+            if system:
+                kwargs["system"] = system
+            if tools:
+                kwargs["tools"] = tools
+            if tool_choice:
+                kwargs["tool_choice"] = tool_choice
+            result = await client.messages.create(**kwargs)
+            return result
+        except Exception as e:
+            err_str = str(e)
+            if "404" in err_str or "not_found" in err_str:
+                print(f"⚠️  Model '{model_name}' returned 404 (retired). Trying next fallback...")
+                last_error = e
+                continue
+            raise  # Non-404 error → don't retry
+
+    raise last_error or RuntimeError(f"All models failed: {models_to_try}")
+
+
 async def extract_pdf_with_claude_native(pdf_bytes: bytes, max_pages: int = 10) -> str:
     """
     Send a PDF directly to Claude 3.5/3.7 Sonnet as a *document content block*
@@ -195,8 +245,8 @@ async def extract_pdf_with_claude_native(pdf_bytes: bytes, max_pages: int = 10) 
 
     try:
         client = _get_anthropic_async_client()
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=8192,
             messages=[
                 {
@@ -251,8 +301,8 @@ async def _extract_pdf_as_page_images(pdf_bytes: bytes, max_pages: int = 10) -> 
             pix = page.get_pixmap(matrix=fitz.Matrix(200 / 72, 200 / 72))
             img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
 
-            message = await client.messages.create(
-                model=ANTHROPIC_MODEL,
+            message = await _call_claude_with_fallback(
+                client,
                 max_tokens=4096,
                 messages=[
                     {
@@ -294,18 +344,32 @@ PREFERRED_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vc-converter:latest")
 
 # Anthropic (Claude) settings
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+_raw_anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+
+# ── Validate the configured model: retired models get auto-replaced ──
+_RETIRED_MODELS = {
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+    "claude-3-opus-20240229",
+}
+if _raw_anthropic_model in _RETIRED_MODELS:
+    print(f"⚠️  ANTHROPIC_MODEL '{_raw_anthropic_model}' is RETIRED (404). Auto-replacing with 'claude-sonnet-4-20250514'")
+    ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+else:
+    ANTHROPIC_MODEL = _raw_anthropic_model
+
 ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages")
 
-# Model fallback chain — prefer latest Sonnet, fall back gracefully
+# Model fallback chain — only non-retired models
 ANTHROPIC_MODEL_FALLBACKS = [
-    m for m in [
+    m for m in dict.fromkeys([          # dedupe while preserving order
         ANTHROPIC_MODEL,
         "claude-sonnet-4-20250514",
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-sonnet-20240620",
-        "claude-3-5-haiku-20241022",
-    ] if m
+        "claude-3-7-sonnet-latest",
+        "claude-haiku-4-20250514",
+    ]) if m
 ]
 
 # Ask-the-fund settings (generous tokens for comprehensive answers)
@@ -1162,7 +1226,7 @@ User Request: "{user_query}"
 Output ONLY the search terms. Do not include explanations or additional text."""
 
         payload = {
-            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast extraction
+            "model": HAIKU_MODEL,  # Use Haiku for cheap, fast extraction
             "max_tokens": 1000,
             "messages": [
                 {
@@ -1558,7 +1622,7 @@ async def rewrite_query_with_llm(question: str, previous_messages: List[ChatMess
         
         # Use system message + user message (ChatGPT-style)
         payload = {
-            "model": "claude-3-5-haiku-20241022",  # Use Haiku for cheap, fast rewriting
+            "model": HAIKU_MODEL,  # Use Haiku for cheap, fast rewriting
             "max_tokens": 100,  # Reduced since we only want the query
             "system": CONTEXTUALIZE_SYSTEM_PROMPT,
             "messages": [
@@ -1900,7 +1964,7 @@ Remember:
 """
 
 # Fast model for simple questions (3-5x faster)
-HAIKU_MODEL = "claude-3-5-haiku-20241022"
+HAIKU_MODEL = "claude-haiku-4-20250514"
 
 def is_simple_question(question: str, sources: List[AskSource]) -> bool:
     """
@@ -1974,9 +2038,9 @@ ANTHROPIC_WEB_SEARCH_TOOL = {
 WEB_SEARCH_COMPATIBLE_MODELS = [
     "claude-sonnet-4-20250514",
     "claude-opus-4-20250514",
-    "claude-haiku-4-5-20251001",
+    "claude-haiku-4-20250514",
+    "claude-3-7-sonnet-latest",
     "claude-3-7-sonnet-20250219",
-    "claude-3-5-haiku-latest",
 ]
 
 def get_web_search_model_list() -> List[str]:
@@ -4566,8 +4630,9 @@ async def analyze_query_endpoint(request: AnalyzeQueryRequest):
                 "Return ONLY valid JSON."
             )
 
-            message = await client.messages.create(
-                model=HAIKU_MODEL,
+            message = await _call_claude_with_fallback(
+                client,
+                preferred_model=HAIKU_MODEL,
                 max_tokens=300,
                 temperature=0.0,
                 messages=[{"role": "user", "content": analysis_prompt}],
@@ -4864,14 +4929,15 @@ async def extract_entities(request: EntityExtractionRequest):
                 },
             ]
         
-        # Use Sonnet for higher quality extraction
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        # Use Sonnet for higher quality extraction — with 404 fallback
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=4000,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+        print(f"[EXTRACT-ENTITIES] Claude response length: {len(raw)} chars")
 
         try:
             data = json.loads(raw)
@@ -4880,6 +4946,7 @@ async def extract_entities(request: EntityExtractionRequest):
             if json_match:
                 data = json.loads(json_match.group())
             else:
+                print(f"[EXTRACT-ENTITIES] Could not parse JSON from: {raw[:300]}")
                 return EntityExtractionResponse()
 
         entities = [
@@ -4898,6 +4965,7 @@ async def extract_entities(request: EntityExtractionRequest):
             if k.get("company_name") and k.get("metric_name")
         ]
 
+        print(f"[EXTRACT-ENTITIES] ✅ Found {len(entities)} entities, {len(relationships)} relationships, {len(kpis)} KPIs")
         return EntityExtractionResponse(
             entities=entities,
             relationships=relationships,
@@ -4963,8 +5031,9 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
             )
             try:
                 client = _get_anthropic_async_client()
-                msg = await client.messages.create(
-                    model=HAIKU_MODEL,
+                msg = await _call_claude_with_fallback(
+                    client,
+                    preferred_model=HAIKU_MODEL,
                     max_tokens=20,
                     temperature=0.0,
                     messages=[{"role": "user", "content": doc_type_prompt}],
@@ -5082,13 +5151,14 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
                 },
             ]
         
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=4096,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+        print(f"[EXTRACT-PROPS] Claude response length: {len(raw)} chars")
 
         # Parse JSON from response
         try:
@@ -5236,13 +5306,14 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
                 {"type": "text", "text": f"Document title: {request.document_title}\nType: {doc_type}\n{field_guidance}\n{existing_context}\nText:\n---\n{text}\n---\n\n{json_instructions}"},
             ]
 
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=4096,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+        print(f"[EXTRACT-PROPS-STREAM] Claude response: {len(raw)} chars")
 
         try:
             data = json.loads(raw)
@@ -5285,6 +5356,7 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
                 except (ValueError, TypeError):
                     clean_confidence[f] = 0.5
 
+        print(f"[EXTRACT-PROPS-STREAM] ✅ Extracted {len(clean_props)} properties")
         return {"properties": clean_props, "confidence": clean_confidence, "document_type_detected": doc_type}
 
     async def generate():
@@ -5359,13 +5431,14 @@ async def extract_entities_stream(request: EntityExtractionRequest):
                 {"type": "text", "text": f"Document title: {request.document_title}\nType: {request.document_type or 'unknown'}\n\nText:\n{text}\n\n{extraction_instructions}"},
             ]
 
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=4000,
             temperature=0.0,
             messages=[{"role": "user", "content": content_blocks}],
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text"))
+        print(f"[EXTRACT-ENTITIES-STREAM] Claude response: {len(raw)} chars")
 
         try:
             data = json.loads(raw)
@@ -5373,11 +5446,13 @@ async def extract_entities_stream(request: EntityExtractionRequest):
             json_match = re.search(r'\{[\s\S]*\}', raw)
             data = json.loads(json_match.group()) if json_match else {}
 
-        return {
+        result = {
             "entities": [e for e in data.get("entities", []) if e.get("name")],
             "relationships": [r for r in data.get("relationships", []) if r.get("source_name") and r.get("target_name")],
             "kpis": [k for k in data.get("kpis", []) if k.get("company_name") and k.get("metric_name")],
         }
+        print(f"[EXTRACT-ENTITIES-STREAM] ✅ Found {len(result['entities'])} entities, {len(result['relationships'])} rels, {len(result['kpis'])} KPIs")
+        return result
 
     async def generate():
         task = asyncio.create_task(_do_extraction())
@@ -5445,8 +5520,9 @@ async def contextualize_chunk(request: ContextualChunkRequest):
     try:
         if _anthropic_sdk_available:
             client = _get_anthropic_async_client()
-            message = await client.messages.create(
-                model=HAIKU_MODEL,  # Haiku is fast+cheap for this
+            message = await _call_claude_with_fallback(
+                client,
+                preferred_model=HAIKU_MODEL,
                 max_tokens=200,
                 temperature=0.0,
                 messages=[{"role": "user", "content": prompt}],
@@ -5517,8 +5593,9 @@ async def graphrag_retrieve(request: GraphRAGRetrieveRequest, auth: AuthContext 
         chunk_text = chunk.get("text", "")[:1500]
         chunk_id = chunk.get("id", "unknown")
         try:
-            message = await client.messages.create(
-                model=HAIKU_MODEL,
+            message = await _call_claude_with_fallback(
+                client,
+                preferred_model=HAIKU_MODEL,
                 max_tokens=150,
                 temperature=0.0,
                 messages=[{
@@ -5708,8 +5785,8 @@ If you cannot suggest any meaningful connections, return an empty array: []"""
 
     try:
         client = _get_anthropic_async_client()
-        message = await client.messages.create(
-            model=ANTHROPIC_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
             max_tokens=2048,
             temperature=0.2,
             tools=[tool_def],
