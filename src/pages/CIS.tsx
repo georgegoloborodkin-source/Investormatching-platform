@@ -2209,12 +2209,17 @@ function SourcesTab({
               if (!companyEntityId && docTitle) {
                 try {
                   console.log(`[AutoExtract] No entity found, creating from document title: "${docTitle}"`);
-                  // Clean the title: remove "Deck", "Pitch", dates, etc.
+                  // Clean the title: remove "Deck", "Pitch", "Brochure", dates, suffixes, etc.
                   let companyName = docTitle
-                    .replace(/\s*(deck|pitch|presentation|memo|report|summary|overview).*$/i, "")
-                    .replace(/\s*[-–]\s*.*$/, "") // Remove everything after " - " or " – "
-                    .replace(/\s*\d{4,}\s*$/, "") // Remove trailing years like "2025"
+                    .replace(/\s*(deck|pitch|presentation|memo|report|summary|overview|brochure|profile|tearsheet|one[- ]?pager|factsheet|whitepaper|prospectus|dataroom|data\s*room).*$/i, "")
+                    .replace(/\s*[-–—]\s*.*$/, "") // Remove everything after " - " or " – " or " — "
+                    .replace(/\s+\d{4,}\s*$/i, "") // Remove trailing years like "2025"
+                    .replace(/\s+with\s+.*$/i, "") // Remove "with Case Study", "with Appendix", etc.
                     .replace(/\s*\(.*\)\s*$/, "") // Remove trailing parentheses like "(2)"
+                    .replace(/\s*\[.*\]\s*$/, "") // Remove trailing brackets like "[v2]"
+                    .replace(/\s+v\d+(\.\d+)?$/i, "") // Remove version suffixes like "v2", "v1.1"
+                    .replace(/\s+Q[1-4]\s*\d{0,4}$/i, "") // Remove "Q1 2025" etc.
+                    .replace(/\s+\d{4,}\s*$/, "") // Second pass: trailing year after other removals
                     .trim();
                   
                   // If title is too generic, skip
@@ -2222,14 +2227,15 @@ function SourcesTab({
                       !companyName.toLowerCase().match(/^(document|uploaded|file|untitled)/i)) {
                     const normalizedName = companyName.toLowerCase().trim();
                     
-                    // Check if entity already exists
-                    const { data: existingEntity } = await supabase
+                    // Check if entity already exists (use .limit(1) instead of .single() to avoid 406)
+                    const { data: existingArr } = await supabase
                       .from("kg_entities")
                       .select("id")
                       .eq("event_id", eventId)
                       .eq("normalized_name", normalizedName)
                       .eq("entity_type", "company")
-                      .single();
+                      .limit(1);
+                    const existingEntity = existingArr?.[0] ?? null;
                     
                     if (existingEntity) {
                       companyEntityId = existingEntity.id;
@@ -5776,6 +5782,31 @@ export default function CIS() {
           }
 
           // ── Step 2: Insert relationships ──
+          // Allowed relation types per DB CHECK constraint on kg_edges
+          const ALLOWED_RELATION_TYPES = new Set([
+            'founded', 'works_at', 'invested_in', 'raised', 'led_round',
+            'partner_of', 'competitor_of', 'acquired', 'operates_in',
+            'located_in', 'board_member', 'advisor', 'portfolio_company',
+          ]);
+          // Map common AI-generated variants to allowed types
+          const RELATION_TYPE_MAP: Record<string, string> = {
+            'founder': 'founded', 'co_founded': 'founded', 'co-founded': 'founded',
+            'employs': 'works_at', 'employed_at': 'works_at', 'works_for': 'works_at',
+            'member_of': 'works_at', 'team_member': 'works_at',
+            'invested': 'invested_in', 'investor': 'invested_in', 'invests_in': 'invested_in',
+            'backed_by': 'invested_in', 'funded_by': 'invested_in',
+            'partners_with': 'partner_of', 'partnership': 'partner_of', 'partnered_with': 'partner_of',
+            'competes_with': 'competitor_of', 'competition': 'competitor_of',
+            'acquired_by': 'acquired', 'acquisition': 'acquired',
+            'sector': 'operates_in', 'industry': 'operates_in', 'in_sector': 'operates_in',
+            'headquartered_in': 'located_in', 'based_in': 'located_in', 'hq': 'located_in',
+            'advises': 'advisor', 'advisor_to': 'advisor', 'advising': 'advisor',
+            'board': 'board_member', 'on_board': 'board_member',
+            'portfolio': 'portfolio_company', 'in_portfolio': 'portfolio_company',
+            'uses': 'partner_of', 'client_of': 'partner_of', 'customer_of': 'partner_of',
+            'provides_to': 'partner_of', 'supplies': 'partner_of',
+          };
+
           for (const rel of extraction.relationships) {
             const sourceNorm = rel.source_name.toLowerCase().trim();
             const targetNorm = rel.target_name.toLowerCase().trim();
@@ -5787,13 +5818,27 @@ export default function CIS() {
               continue;
             }
 
+            // Normalize relation_type: map AI variants to allowed DB types
+            let relationType = (rel.relation_type || '').toLowerCase().trim();
+            if (!ALLOWED_RELATION_TYPES.has(relationType)) {
+              const mapped = RELATION_TYPE_MAP[relationType];
+              if (mapped) {
+                console.log(`[EXTRACT] Mapped relation_type "${rel.relation_type}" → "${mapped}"`);
+                relationType = mapped;
+              } else {
+                // Default to partner_of for unknown types rather than failing
+                console.warn(`[EXTRACT] Unknown relation_type "${rel.relation_type}", defaulting to "partner_of"`);
+                relationType = 'partner_of';
+              }
+            }
+
             // Check if edge already exists
             const { data: existingEdge } = await supabase
               .from("kg_edges")
               .select("id")
               .eq("source_entity_id", sourceId)
               .eq("target_entity_id", targetId)
-              .eq("relation_type", rel.relation_type)
+              .eq("relation_type", relationType)
               .limit(1);
 
             if (!existingEdge || existingEdge.length === 0) {
@@ -5806,7 +5851,7 @@ export default function CIS() {
                 event_id: eventId,
                 source_entity_id: sourceId,
                 target_entity_id: targetId,
-                relation_type: rel.relation_type,
+                relation_type: relationType,
                 properties: rel.properties || {},
                 confidence: rel.confidence,
                 source_document_id: documentId,
@@ -5904,7 +5949,7 @@ export default function CIS() {
                   total_chunks: pairs.length,
                 });
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                  setTimeout(() => reject(new Error("Contextual enrichment timeout")), 3000)
+                  setTimeout(() => reject(new Error("Contextual enrichment timeout")), 6000)
                 );
                 const ctx = await Promise.race([ctxPromise, timeoutPromise]);
                 if (ctx.enriched_chunk) {
