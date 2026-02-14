@@ -6352,10 +6352,8 @@ export default function CIS() {
               .limit(1);
 
             if (!existingEdge || existingEdge.length === 0) {
-              // Auto-approve high-confidence extractions (confidence > 0.9)
-              // Require review for low-confidence (confidence < 0.7)
-              const reviewStatus = rel.confidence > 0.9 ? 'approved' : 
-                                   rel.confidence < 0.7 ? 'pending' : 'pending';
+              // Auto-approve high-confidence extractions (≥85%) so fewer items need manual review
+              const reviewStatus = rel.confidence >= 0.85 ? 'approved' : 'pending';
               
               const { error: edgeErr } = await supabase.from("kg_edges").insert({
                 event_id: eventId,
@@ -9585,7 +9583,6 @@ export default function CIS() {
                     toast({ title: "Review failed", description: error.message, variant: "destructive" });
                   } else {
                     toast({ title: status === "approved" ? "Connection approved" : "Connection rejected" });
-                    // Reload pending reviews
                     if (activeEventId) {
                       const { data } = await getPendingRelationshipReviews(activeEventId);
                       if (data) {
@@ -9600,15 +9597,45 @@ export default function CIS() {
                           target_entity: r.target_entity || null,
                         })));
                       }
-                      // Reload connections (approved ones will auto-create)
                       const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
-                      if (connData) {
-                        setCompanyConnections(connData as typeof companyConnections);
-                      }
+                      if (connData) setCompanyConnections(connData as typeof companyConnections);
                     }
                   }
                 } catch (err) {
                   toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+                }
+              }}
+              onBatchReviewPending={async (edgeIds: string[], status: "approved" | "rejected") => {
+                const userId = profile?.id || user?.id;
+                if (!userId) {
+                  toast({ title: "Not authenticated", variant: "destructive" });
+                  return;
+                }
+                if (edgeIds.length === 0) return;
+                try {
+                  for (const id of edgeIds) {
+                    await updateKgEdgeReview(id, status, userId);
+                  }
+                  toast({ title: `${edgeIds.length} connection(s) ${status === "approved" ? "approved" : "rejected"}` });
+                  if (activeEventId) {
+                    const { data } = await getPendingRelationshipReviews(activeEventId);
+                    if (data) {
+                      setPendingReviews(data.map((r: any) => ({
+                        id: r.id,
+                        relation_type: r.relation_type,
+                        confidence: r.confidence || 0.5,
+                        properties: r.properties || {},
+                        source_document_id: r.source_document_id,
+                        created_at: r.created_at,
+                        source_entity: r.source_entity || null,
+                        target_entity: r.target_entity || null,
+                      })));
+                    }
+                    const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
+                    if (connData) setCompanyConnections(connData as typeof companyConnections);
+                  }
+                } catch (err) {
+                  toast({ title: "Batch failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
                 }
               }}
             />
@@ -11330,6 +11357,7 @@ function ConnectionsGraphTab({
   onAddConnection,
   onSuggestConnections,
   onReviewPending,
+  onBatchReviewPending,
 }: {
   connections: Array<{
     id: string;
@@ -11358,7 +11386,12 @@ function ConnectionsGraphTab({
   onAddConnection: () => void;
   onSuggestConnections?: () => void;
   onReviewPending: (edgeId: string, status: "approved" | "rejected") => Promise<void>;
+  onBatchReviewPending?: (edgeIds: string[], status: "approved" | "rejected") => Promise<void>;
 }) {
+  const [showAllPending, setShowAllPending] = useState(false);
+  const PENDING_PREVIEW_COUNT = 5;
+  const pendingToShow = showAllPending ? pendingReviews : pendingReviews.slice(0, PENDING_PREVIEW_COUNT);
+  const hasMorePending = pendingReviews.length > PENDING_PREVIEW_COUNT;
   // Extract unique companies from connections
   const companies = useMemo(() => {
     const companySet = new Set<string>();
@@ -11561,15 +11594,50 @@ function ConnectionsGraphTab({
       {pendingReviews.length > 0 && (
         <Card className="border-2 border-[#eab308] bg-transparent">
           <CardHeader className="pb-2 border-b-2 border-[#eab308]">
-            <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#eab308]">
-              ⚠️ Pending Reviews ({pendingReviews.length})
-            </CardTitle>
-            <CardDescription className="text-white/70 font-mono text-xs">
-              Auto-extracted relationships requiring your approval
-            </CardDescription>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#eab308]">
+                  ⚠️ Pending Reviews ({pendingReviews.length})
+                </CardTitle>
+                <CardDescription className="text-white/70 font-mono text-xs">
+                  Auto-extracted relationships — approve in bulk or one-by-one
+                </CardDescription>
+              </div>
+              {onBatchReviewPending && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-mono text-xs"
+                    onClick={() => {
+                      const high = pendingReviews.filter((r) => (r.confidence || 0) >= 0.8).map((r) => r.id);
+                      if (high.length) onBatchReviewPending(high, "approved");
+                    }}
+                  >
+                    Approve all ≥80% ({pendingReviews.filter((r) => (r.confidence || 0) >= 0.8).length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-mono text-xs"
+                    onClick={() => onBatchReviewPending(pendingReviews.map((r) => r.id), "approved")}
+                  >
+                    Approve all
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/10 font-mono text-xs"
+                    onClick={() => onBatchReviewPending(pendingReviews.map((r) => r.id), "rejected")}
+                  >
+                    Reject all
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="pt-4 space-y-3">
-            {pendingReviews.map((review) => {
+            {pendingToShow.map((review) => {
               const sourceName = review.source_entity?.name || "Unknown";
               const targetName = review.target_entity?.name || "Unknown";
               const isCompanyToCompany = review.source_entity?.entity_type === "company" && 
@@ -11638,6 +11706,15 @@ function ConnectionsGraphTab({
                 </div>
               );
             })}
+            {hasMorePending && (
+              <button
+                type="button"
+                onClick={() => setShowAllPending((prev) => !prev)}
+                className="text-xs font-mono text-[#eab308] hover:underline"
+              >
+                {showAllPending ? "Show less" : `Show all (${pendingReviews.length})`}
+              </button>
+            )}
           </CardContent>
         </Card>
       )}
