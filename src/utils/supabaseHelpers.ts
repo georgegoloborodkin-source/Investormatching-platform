@@ -14,6 +14,18 @@ function slugifyOrgName(value: string) {
     .slice(0, 50);
 }
 
+/**
+ * Normalize company name for matching/deduplication so "Trashcoin" and "Trashcoin Limited"
+ * map to the same canonical key and resolve to one entity.
+ */
+export function normalizeCompanyNameForMatch(name: string): string {
+  if (!name || typeof name !== "string") return "";
+  let s = name.toLowerCase().trim();
+  // Strip common company suffixes (with optional trailing dot and whitespace)
+  s = s.replace(/\s+(limited|ltd\.?|inc\.?|llc\.?|corp\.?|corporation|plc\.?|gmbh|co\.?|company|group)\s*$/i, "").trim();
+  return s.replace(/\s+/g, " ").trim();
+}
+
 export async function ensureOrganizationForUser(profile: UserProfile): Promise<SupabaseResult<{ organization: any; updatedProfile: UserProfile }>> {
   if (profile.organization_id) {
     const { data, error } = await supabase.from("organizations").select("*").eq("id", profile.organization_id).single();
@@ -410,6 +422,7 @@ export async function mergeCompanyCardFromExtraction(
   const skipped: string[] = [];
   const conflicts: PropertyConflict[] = [];
   const mergedProps: Record<string, any> = {};
+  let removedConflicts = false;
 
   // Fields that are internal metadata — skip them
   const metaFields = new Set([
@@ -467,25 +480,28 @@ export async function mergeCompanyCardFromExtraction(
         extracted_at: new Date().toISOString(),
       };
     } else {
-      // Non-empty → check if values differ
+      // Non-empty → check if values differ; auto-overwrite with higher confidence (no conflict UI)
       const valuesMatch = JSON.stringify(currentValue) === JSON.stringify(newValue);
       if (!valuesMatch) {
-        conflicts.push({
-          field,
-          oldValue: currentValue,
-          newValue,
-          newDocumentId: sourceDocumentId,
-          newConfidence: confidence[field] ?? 0.5,
-        });
-        // Store conflict for later resolution
-        propertyConflicts.push({
-          field,
-          values: [
-            { value: currentValue, source: propertySources[field]?.document_id || "existing" },
-            { value: newValue, source: sourceDocumentId, confidence: confidence[field] ?? 0.5 },
-          ],
-          detected_at: new Date().toISOString(),
-        });
+        const existingConf = propertySources[field]?.confidence ?? 0;
+        const newConf = confidence[field] ?? 0.5;
+        if (newConf >= existingConf) {
+          mergedProps[field] = newValue;
+          updated.push(field);
+          propertySources[field] = {
+            document_id: sourceDocumentId,
+            confidence: newConf,
+            extracted_at: new Date().toISOString(),
+          };
+        } else {
+          skipped.push(field);
+        }
+        // Remove any existing conflict for this field (we resolved by confidence)
+        const idx = propertyConflicts.findIndex((c) => c.field === field);
+        if (idx !== -1) {
+          propertyConflicts.splice(idx, 1);
+          removedConflicts = true;
+        }
       } else {
         skipped.push(field);
       }
@@ -493,7 +509,7 @@ export async function mergeCompanyCardFromExtraction(
   }
 
   // Build the update payload
-  if (updated.length > 0 || conflicts.length > 0) {
+  if (updated.length > 0 || removedConflicts) {
     const updatePayload: Record<string, any> = {
       ...mergedProps,
       _property_sources: propertySources,

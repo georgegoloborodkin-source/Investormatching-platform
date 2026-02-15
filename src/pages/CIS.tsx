@@ -164,6 +164,7 @@ import {
   getDocumentCompanyEntityId,
   getEntityProperties,
   mergeCompanyCardFromExtraction,
+  normalizeCompanyNameForMatch,
   type ConnectionType,
   type ConnectionStatus,
   type CompanyConnection,
@@ -2078,7 +2079,7 @@ function SourcesTab({
                     return s || t;
                   };
                   const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
-                  const normalizedName = entityName.toLowerCase().trim();
+                  const normalizedName = normalizeCompanyNameForMatch(entityName);
                   console.log(`[DriveSync] Looking up entity by name: "${entityName}" (folder: "${companyName}", file: "${fileTitle}")`);
                   const { data: entityArr } = await supabase
                     .from("kg_entities")
@@ -2177,8 +2178,8 @@ function SourcesTab({
                     // If AI identified a better company_name, rename the entity
                     const aiCompanyName = (extraction.properties.company_name || "").trim();
                     if (aiCompanyName && aiCompanyName.length >= 2) {
-                      const aiNorm = aiCompanyName.toLowerCase();
-                      const curNorm = currentEntityName.toLowerCase().trim();
+                      const aiNorm = normalizeCompanyNameForMatch(aiCompanyName);
+                      const curNorm = normalizeCompanyNameForMatch(currentEntityName);
                       // Only rename if AI name differs meaningfully and isn't the doc title
                       if (aiNorm !== curNorm && !aiNorm.includes("copy of")) {
                         // Check if an entity with AI name already exists
@@ -2814,7 +2815,7 @@ function SourcesTab({
                   const companyName = folderInfo.currentSelectedFolder?.name && !folderInfo.currentSelectedFolder.name.toLowerCase().match(/^(portfolio|companies|investors?|funds?)$/)
                     ? folderInfo.currentSelectedFolder.name
                     : deriveCompanyName(rawTitle);
-                  const normalizedName = companyName.toLowerCase().trim();
+                  const normalizedName = normalizeCompanyNameForMatch(companyName);
                   
                   // Check if entity already exists
                   const { data: existingEntity } = await supabase
@@ -2900,9 +2901,9 @@ function SourcesTab({
                   let companyName = deriveCompanyName(docTitle);
                   
                   // If title is too generic, skip
-                  if (companyName && companyName.length > 2 && 
+                  if (companyName && companyName.length > 2 &&
                       !companyName.toLowerCase().match(/^(document|uploaded|file|untitled)/i)) {
-                    const normalizedName = companyName.toLowerCase().trim();
+                    const normalizedName = normalizeCompanyNameForMatch(companyName);
                     
                     // Check if entity already exists (use .limit(1) instead of .single() to avoid 406)
                     const { data: existingArr } = await supabase
@@ -2990,9 +2991,9 @@ function SourcesTab({
                   // If AI identified a better company_name, rename the entity
                   const aiName = (extraction.properties.company_name || "").trim();
                   if (aiName && aiName.length >= 2) {
-                    const aiNorm = aiName.toLowerCase();
+                    const aiNorm = normalizeCompanyNameForMatch(aiName);
                     const currentEntity = existing;
-                    const curNorm = (currentEntity?.name || "").toLowerCase().trim();
+                    const curNorm = normalizeCompanyNameForMatch(currentEntity?.name || "");
                     if (aiNorm !== curNorm && !aiNorm.includes("copy of")) {
                       const { data: existingByAiName } = await supabase
                         .from("kg_entities")
@@ -6683,7 +6684,9 @@ export default function CIS() {
           const entityMap = new Map<string, string>(); // normalized_name → entity_id
           
           for (const entity of extraction.entities) {
-            const normalized = entity.name.toLowerCase().trim();
+            const normalized = (entity.type === "company" || entity.type === "fund")
+              ? normalizeCompanyNameForMatch(entity.name)
+              : entity.name.toLowerCase().trim();
             // Check if entity already exists
             const { data: existing } = await supabase
               .from("kg_entities")
@@ -6748,10 +6751,12 @@ export default function CIS() {
           };
 
           for (const rel of extraction.relationships) {
-            const sourceNorm = rel.source_name.toLowerCase().trim();
-            const targetNorm = rel.target_name.toLowerCase().trim();
-            const sourceId = entityMap.get(sourceNorm);
-            const targetId = entityMap.get(targetNorm);
+            const sourceKey = rel.source_name.toLowerCase().trim();
+            const targetKey = rel.target_name.toLowerCase().trim();
+            const sourceCanon = normalizeCompanyNameForMatch(rel.source_name);
+            const targetCanon = normalizeCompanyNameForMatch(rel.target_name);
+            const sourceId = entityMap.get(sourceKey) ?? entityMap.get(sourceCanon);
+            const targetId = entityMap.get(targetKey) ?? entityMap.get(targetCanon);
 
             if (!sourceId || !targetId) {
               console.warn(`[EXTRACT] Missing entity for relationship ${rel.source_name} → ${rel.target_name}`);
@@ -11311,22 +11316,29 @@ function CompanyCard({
   const propertyConflicts: Array<{ field: string; values: Array<{ value: any; source: string; confidence?: number }>; detected_at: string }> = props._property_conflicts || [];
   const hasConflicts = propertyConflicts.length > 0;
 
+  // Auto-resolve existing conflicts: apply highest-confidence value per field and persist (no manual UI)
+  useEffect(() => {
+    if (!hasConflicts || propertyConflicts.length === 0) return;
+    const updates: Record<string, any> = {};
+    for (const c of propertyConflicts) {
+      const withConf = c.values.map((v) => ({
+        ...v,
+        confidence: v.confidence ?? propertySources[c.field]?.confidence ?? 0,
+      }));
+      const best = [...withConf].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+      if (best) updates[c.field] = best.value;
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdateCard(card.company_id, { ...updates, _property_conflicts: [] });
+    }
+  }, [hasConflicts]); // eslint-disable-line react-hooks/exhaustive-deps -- run once when card has conflicts to auto-resolve
+
   // Count auto-filled properties
   const autoFilledCount = Object.keys(propertySources).length;
 
-  // Resolve a conflict by choosing a value
-  const resolveConflict = (field: string, chosenValue: any) => {
-    // Remove this conflict from the list
-    const remaining = propertyConflicts.filter((c) => c.field !== field);
-    onUpdateCard(card.company_id, {
-      [field]: chosenValue,
-      _property_conflicts: remaining,
-    });
-  };
-
   return (
     <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
-      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : hasConflicts ? "border-orange-500/60 hover:border-orange-400" : "border-white/60 hover:border-[#FFED00]"
+      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
     }`}>
       {/* ── A. Header: Identity ── */}
       <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
@@ -11351,13 +11363,7 @@ function CompanyCard({
                 style={{ borderColor: typeColor, color: typeColor }}>
                 {isFund ? "FUND" : "COMPANY"}
               </Badge>
-              {hasConflicts && (
-                <Badge className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0 bg-orange-500/20 text-orange-400 border-orange-500/40">
-                  <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
-                  {propertyConflicts.length} conflict{propertyConflicts.length > 1 ? "s" : ""}
-                </Badge>
-              )}
-              {autoFilledCount > 0 && !hasConflicts && (
+              {autoFilledCount > 0 && (
                 <Badge className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/40">
                   <Sparkles className="h-2.5 w-2.5 mr-0.5" />
                   {autoFilledCount} auto-filled
@@ -11748,70 +11754,6 @@ function CompanyCard({
               <EditableField label="Team Size" value={props.team_size || ""} placeholder="e.g. 25 employees" icon={Users} onSave={(v) => saveField("team_size", v)} />
               <EditableField label="Industry" value={props.industry || ""} placeholder="e.g. Fintech, SaaS" icon={Building2} onSave={(v) => saveField("industry", v)} />
             </div>
-
-            {/* Conflict Resolution */}
-            {hasConflicts && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />
-                  <span className="text-xs font-mono font-black text-orange-400 uppercase tracking-wider">
-                    Conflicting Values ({propertyConflicts.length})
-                  </span>
-                </div>
-                {/* Quick action: apply all highest-confidence values */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    for (const conflict of propertyConflicts) {
-                      const best = [...conflict.values].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
-                      if (best) resolveConflict(conflict.field, best.value);
-                    }
-                  }}
-                  className="text-[10px] font-mono font-bold px-3 py-1 rounded border border-orange-400/60 text-orange-300 hover:bg-orange-500/20 hover:text-orange-200 transition-colors mb-1"
-                >
-                  Apply All Highest-Confidence ({propertyConflicts.length})
-                </button>
-                <div className="space-y-2 pl-1">
-                  {propertyConflicts.map((conflict, ci) => (
-                    <div key={ci} className="bg-orange-500/5 border border-orange-500/20 rounded-md p-2 space-y-1">
-                      <div className="text-[10px] font-mono font-bold text-white/80 uppercase">
-                        {conflict.field.replace(/_/g, " ")}
-                      </div>
-                      <div className="space-y-1">
-                        {conflict.values.map((v, vi) => {
-                          const isHighest = conflict.values.every((other) => (v.confidence || 0) >= (other.confidence || 0));
-                          return (
-                            <div key={vi} className="flex items-start gap-2">
-                              <div className={`flex-1 text-[10px] font-mono px-2 py-1 rounded border ${isHighest ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/10"} text-white/80`}>
-                                {typeof v.value === "string" ? v.value : JSON.stringify(v.value)}
-                                {v.confidence != null && (
-                                  <span className={`ml-1 ${v.confidence >= 0.8 ? "text-emerald-400" : v.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
-                                    ({(v.confidence * 100).toFixed(0)}%)
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  resolveConflict(conflict.field, v.value);
-                                }}
-                                className={`text-[9px] font-mono font-bold px-2 py-1 rounded border transition-colors flex-shrink-0 ${
-                                  isHighest
-                                    ? "border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/20"
-                                    : "border-white/20 text-white/60 hover:border-[#FFED00] hover:text-[#FFED00] hover:bg-[#FFED00]/10"
-                                }`}
-                              >
-                                Apply
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Property Sources (auto-fill info) */}
             {autoFilledCount > 0 && (
