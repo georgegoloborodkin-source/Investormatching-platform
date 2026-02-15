@@ -9172,55 +9172,55 @@ export default function CIS() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden cis-app">
-      {/* Professional background: grid + subtle mesh */}
+    <div className="min-h-screen bg-black text-white relative overflow-hidden cis-app">
+      {/* Black + yellow background: grid + subtle mesh */}
       <div className="fixed inset-0 cis-grid-bg cis-mesh-bg pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header */}
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-700/60 pb-5 cis-fade-in">
+        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b-2 border-white/20 pb-5 cis-fade-in">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3 text-white tracking-tight">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 cis-accent-glow">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFED00]/15 text-[#FFED00] cis-accent-glow">
                 <Brain className="h-5 w-5" />
               </span>
               Company Intelligence System
             </h1>
-            <p className="text-sm text-slate-400 mt-1 font-medium">
+            <p className="text-sm text-white/60 mt-1 font-medium">
               AI-powered document extraction, decision tracking, and knowledge management
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center gap-2">
             <div className="cis-surface px-4 py-2.5 rounded-lg text-sm">
-              <div className="font-semibold text-slate-200">
+              <div className="font-semibold text-white">
                 {profile?.full_name || profile?.email || "Signed in"}
               </div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <Badge className="bg-amber-500/20 text-amber-400 border-amber-400/30 font-semibold">
+                <Badge className="bg-[#FFED00]/20 text-[#FFED00] border-[#FFED00]/40 font-semibold">
                   {profile?.role?.toUpperCase() || "MEMBER"}
                 </Badge>
                 {profile?.organization_id ? (
-                  <span className="text-slate-500 text-xs">Org: {profile.organization_id.slice(0, 8)}…</span>
+                  <span className="text-white/50 text-xs">Org: {profile.organization_id.slice(0, 8)}…</span>
                 ) : (
-                  <span className="text-slate-500 text-xs">Org: Pending</span>
+                  <span className="text-white/50 text-xs">Org: Pending</span>
                 )}
               </div>
-              <div className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+              <div className="mt-1 text-[10px] text-white/50 uppercase tracking-wider">
                 Build: {buildStamp}
               </div>
             </div>
             {(profile?.role as string) === "admin" && (
-              <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
+              <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
                 <Link to="/admin">
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Panel
                 </Link>
               </Button>
             )}
-            <Button variant="outline" onClick={signOut} className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
+            <Button variant="outline" onClick={signOut} className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
               Log out
             </Button>
-            <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
+            <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
               <a href="/">← Back to Matchmaking</a>
             </Button>
           </div>
@@ -9233,7 +9233,7 @@ export default function CIS() {
             {/* Chat Threads - Only show in chat tab */}
             {activeTab === "chat" && (
               <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
-                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
+                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
                   Chat Threads
                 </div>
                 <div className="space-y-3">
@@ -9279,7 +9279,7 @@ export default function CIS() {
                       />
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-500 text-center py-4">
+                    <div className="text-xs text-white/50 text-center py-4">
                       No threads yet
                     </div>
                   )}
@@ -9288,7 +9288,7 @@ export default function CIS() {
             )}
 
             <nav className="cis-surface p-4 space-y-1.5 sticky top-4 cis-fade-in-up cis-stagger-2 opacity-0 [animation-fill-mode:forwards]">
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
+              <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
                 Navigation
               </div>
               <button
@@ -9370,7 +9370,7 @@ export default function CIS() {
             {/* Knowledge Scope - Only show in chat tab */}
             {activeTab === "chat" && (
               <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
-                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
+                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
                   Knowledge Scope
                 </div>
                 <div className="space-y-2">
@@ -10227,7 +10227,7 @@ function LogDecisionForm({
               </SelectItem>
               <SelectItem value="INV" className="text-white font-mono">
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#FFED00]" />
                   INV (Investment)
                 </span>
               </SelectItem>
@@ -11545,7 +11545,7 @@ function CompanyCard({
 // Connections Graph Tab Component
 const CONNECTION_TYPE_COLORS: Record<ConnectionType, string> = {
   BD: "#22c55e",        // green
-  INV: "#f59e0b",       // amber
+  INV: "#FFED00",       // yellow (CIS brand)
   Knowledge: "#6366f1", // indigo
   Partnership: "#a855f7", // purple
   Portfolio: "#06b6d4",  // cyan
