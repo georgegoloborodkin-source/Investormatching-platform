@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -310,5 +310,112 @@
   .orbit-void * {
     will-change: transform;
     transform: translateZ(0);
+  }
+
+  /* ========== Professional CIS design system ========== */
+  .cis-app {
+    font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+  }
+
+  .cis-surface {
+    @apply rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-sm;
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 4px 24px -4px rgba(0, 0, 0, 0.4);
+    transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .cis-surface:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 0 0 rgba(255, 255, 255, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  }
+
+  .cis-card {
+    @apply rounded-xl border border-slate-700/60 bg-slate-900/50 backdrop-blur-sm;
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 4px 20px -4px rgba(0, 0, 0, 0.35);
+    transition: box-shadow 0.25s ease, transform 0.2s ease;
+  }
+
+  .cis-card:hover {
+    box-shadow: 0 4px 0 0 rgba(255, 255, 255, 0.05), 0 16px 40px -8px rgba(0, 0, 0, 0.45);
+    transform: translateY(-1px);
+  }
+
+  .cis-nav-btn {
+    @apply rounded-lg border border-transparent px-3 py-2.5 text-sm font-semibold transition-all duration-200;
+  }
+
+  .cis-nav-btn-active {
+    @apply bg-amber-500/20 text-amber-400 border-amber-400/30;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 0 20px -4px rgba(251, 191, 36, 0.15);
+  }
+
+  .cis-nav-btn-inactive {
+    @apply text-slate-400 border-slate-600/50 hover:bg-slate-700/40 hover:text-slate-200 hover:border-slate-500/50;
+  }
+
+  .cis-accent {
+    color: #f59e0b;
+  }
+
+  .cis-accent-glow {
+    box-shadow: 0 0 24px -4px rgba(245, 158, 11, 0.35);
+  }
+
+  .cis-btn-primary {
+    @apply rounded-lg font-semibold transition-all duration-200;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #0f172a;
+    box-shadow: 0 2px 8px -2px rgba(245, 158, 11, 0.5);
+  }
+
+  .cis-btn-primary:hover {
+    box-shadow: 0 4px 16px -4px rgba(245, 158, 11, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    transform: translateY(-0.5px);
+  }
+
+  .cis-fade-in {
+    animation: cis-fade-in 0.4s ease-out forwards;
+  }
+
+  .cis-fade-in-up {
+    animation: cis-fade-in-up 0.45s ease-out forwards;
+  }
+
+  .cis-stagger-1 { animation-delay: 0.05s; }
+  .cis-stagger-2 { animation-delay: 0.1s; }
+  .cis-stagger-3 { animation-delay: 0.15s; }
+  .cis-stagger-4 { animation-delay: 0.2s; }
+  .cis-stagger-5 { animation-delay: 0.25s; }
+  .cis-stagger-6 { animation-delay: 0.3s; }
+  .cis-stagger-7 { animation-delay: 0.35s; }
+  .cis-stagger-8 { animation-delay: 0.4s; }
+
+  @keyframes cis-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes cis-fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .cis-grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .cis-mesh-bg {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(59, 130, 246, 0.06), transparent),
+      radial-gradient(ellipse 60% 40% at 0% 0%, rgba(59, 130, 246, 0.05), transparent);
   }
 }

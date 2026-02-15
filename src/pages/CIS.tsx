@@ -9172,73 +9172,68 @@ export default function CIS() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
-      {/* Parallax Background */}
-      <div
-        className="fixed inset-0 opacity-5 pointer-events-none"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255, 237, 0, 0.2) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 237, 0, 0.2) 1px, transparent 1px)
-          `,
-          backgroundSize: "50px 50px",
-        }}
-      />
+    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden cis-app">
+      {/* Professional background: grid + subtle mesh */}
+      <div className="fixed inset-0 cis-grid-bg cis-mesh-bg pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b-2 border-white pb-4">
+        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-700/60 pb-5 cis-fade-in">
           <div>
-            <h1 className="text-3xl font-black font-mono flex items-center gap-2 text-white tracking-tight">
-              <Brain className="h-7 w-7 text-[#FFED00]" />
-              COMPANY INTELLIGENCE SYSTEM
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3 text-white tracking-tight">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 cis-accent-glow">
+                <Brain className="h-5 w-5" />
+              </span>
+              Company Intelligence System
             </h1>
-            <p className="text-xs text-white/70 uppercase tracking-wider font-semibold mt-1">
-              AI-POWERED DOCUMENT EXTRACTION, DECISION TRACKING, AND KNOWLEDGE MANAGEMENT
+            <p className="text-sm text-slate-400 mt-1 font-medium">
+              AI-powered document extraction, decision tracking, and knowledge management
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="border-2 border-white bg-transparent rounded-none px-3 py-2 text-xs text-white/70">
-              <div className="font-bold text-white uppercase tracking-wider">
-                {profile?.full_name || profile?.email || "SIGNED-IN USER"}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center gap-2">
+            <div className="cis-surface px-4 py-2.5 rounded-lg text-sm">
+              <div className="font-semibold text-slate-200">
+                {profile?.full_name || profile?.email || "Signed in"}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className="bg-[#FFED00] text-black font-bold">{profile?.role?.toUpperCase() || "MEMBER"}</Badge>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <Badge className="bg-amber-500/20 text-amber-400 border-amber-400/30 font-semibold">
+                  {profile?.role?.toUpperCase() || "MEMBER"}
+                </Badge>
                 {profile?.organization_id ? (
-                  <span className="truncate text-white/50">ORG: {profile.organization_id.slice(0, 8)}...</span>
+                  <span className="text-slate-500 text-xs">Org: {profile.organization_id.slice(0, 8)}…</span>
                 ) : (
-                  <span className="text-white/50">ORG: PENDING</span>
+                  <span className="text-slate-500 text-xs">Org: Pending</span>
                 )}
               </div>
-              <div className="mt-1 text-[10px] text-white/40 uppercase tracking-wider">
-                BUILD: {buildStamp}
+              <div className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+                Build: {buildStamp}
               </div>
             </div>
             {(profile?.role as string) === "admin" && (
-              <Button variant="outline" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
+              <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
                 <Link to="/admin">
                   <Shield className="h-4 w-4 mr-2" />
                   Admin Panel
                 </Link>
               </Button>
             )}
-            <Button variant="outline" onClick={signOut} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
+            <Button variant="outline" onClick={signOut} className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
               Log out
             </Button>
-            <Button variant="outline" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
+            <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-slate-600/50">
               <a href="/">← Back to Matchmaking</a>
             </Button>
           </div>
-        </div>
+        </header>
 
         {/* Main Layout with Left Sidebar */}
         <div className="flex gap-4">
           {/* Left Sidebar - Navigation */}
           <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-            {/* Chat Threads - Only show in chat tab, positioned between Knowledge Scope and Navigation */}
+            {/* Chat Threads - Only show in chat tab */}
             {activeTab === "chat" && (
-              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
-                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+              <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
+                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
                   Chat Threads
                 </div>
                 <div className="space-y-3">
@@ -9267,7 +9262,7 @@ export default function CIS() {
                         }
                       }
                     }}
-                    className="w-full border-2 border-[#FFED00] bg-[#FFED00] text-black hover:bg-[#FFED00]/80 hover:border-[#FFED00] font-bold font-mono text-sm transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+                    className="w-full cis-btn-primary text-sm py-2.5"
                   >
                     <MessageSquarePlus className="h-4 w-4 mr-2" />
                     Create New Chat
@@ -9284,7 +9279,7 @@ export default function CIS() {
                       />
                     </div>
                   ) : (
-                    <div className="text-xs text-white/50 font-mono text-center py-4">
+                    <div className="text-xs text-slate-500 text-center py-4">
                       No threads yet
                     </div>
                   )}
@@ -9292,106 +9287,90 @@ export default function CIS() {
               </div>
             )}
 
-            <div className="border-2 border-white bg-transparent p-4 space-y-2 sticky top-4">
-              <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+            <nav className="cis-surface p-4 space-y-1.5 sticky top-4 cis-fade-in-up cis-stagger-2 opacity-0 [animation-fill-mode:forwards]">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
                 Navigation
               </div>
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "chat"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "chat" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <Brain className="h-4 w-4" />
+                <Brain className="h-4 w-4 shrink-0" />
                 Intelligence Chat
               </button>
               {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
                 <button
                   onClick={() => setActiveTab("onboarding")}
-                  className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                    activeTab === "onboarding"
-                      ? "bg-[#FFED00] text-black border-[#FFED00]"
-                      : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                  className={`w-full flex items-center gap-2 cis-nav-btn ${
+                    activeTab === "onboarding" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                   }`}
                 >
-                  <Sparkles className="h-4 w-4" />
+                  <Sparkles className="h-4 w-4 shrink-0" />
                   Onboarding
                 </button>
               )}
               <button
                 onClick={() => setActiveTab("overview")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "overview"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "overview" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4 shrink-0" />
                 Dashboard
               </button>
               <button
                 onClick={() => setActiveTab("sources")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "sources"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "sources" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <Folder className="h-4 w-4" />
+                <Folder className="h-4 w-4 shrink-0" />
                 Sources
               </button>
               <button
                 onClick={() => setActiveTab("decisions")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "decisions"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "decisions" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <ClipboardList className="h-4 w-4" />
+                <ClipboardList className="h-4 w-4 shrink-0" />
                 Decision Logger
               </button>
               <button
                 onClick={() => setActiveTab("companies")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "companies"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "companies" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <Building2 className="h-4 w-4" />
+                <Building2 className="h-4 w-4 shrink-0" />
                 Company Cards
               </button>
               <button
                 onClick={() => setActiveTab("connections")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "connections"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "connections" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <Link2 className="h-4 w-4" />
+                <Link2 className="h-4 w-4 shrink-0" />
                 Connections Graph
               </button>
               <button
                 onClick={() => setActiveTab("dashboard")}
-                className={`w-full flex items-center gap-2 px-3 py-2 border-2 transition-all font-mono font-bold text-sm ${
-                  activeTab === "dashboard"
-                    ? "bg-[#FFED00] text-black border-[#FFED00]"
-                    : "bg-transparent text-white border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5"
+                className={`w-full flex items-center gap-2 cis-nav-btn ${
+                  activeTab === "dashboard" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
                 }`}
               >
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4 shrink-0" />
                 Decision Engine
               </button>
-            </div>
+            </nav>
 
             {/* Knowledge Scope - Only show in chat tab */}
             {activeTab === "chat" && (
-              <div className="border-2 border-white bg-transparent p-4 sticky top-4">
-                <div className="text-xs text-white/70 font-mono font-bold uppercase tracking-wider mb-4 pb-2 border-b border-white/30">
+              <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
+                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-slate-700/60">
                   Knowledge Scope
                 </div>
                 <div className="space-y-2">
@@ -9438,7 +9417,7 @@ export default function CIS() {
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 cis-fade-in-up cis-stagger-4 opacity-0 [animation-fill-mode:forwards]">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
           {/* Onboarding Tab */}
