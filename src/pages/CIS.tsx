@@ -9481,9 +9481,9 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            {/* Chat messages area — takes remaining space above the fixed input */}
-            <div className="flex flex-col" style={{ height: "calc(100vh - 260px)", minHeight: "400px" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl rounded-b-none border-b-0">
+            {/* Chat Container — fills viewport, input at bottom of card */}
+            <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)", minHeight: "600px" }}>
+              <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
                 {/* Chat header */}
                 <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/15 bg-black/40 flex-shrink-0">
                   <div className="flex items-center gap-3">
@@ -9657,68 +9657,66 @@ export default function CIS() {
                     </div>
                   </div>
                 )}
-              </Card>
-            </div>
 
-            {/* Input bar — FIXED to the very bottom of the page */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-[#FFED00]/20 bg-black/90 backdrop-blur-xl">
-              <div className="max-w-[1600px] mx-auto px-4">
-                <div className="flex gap-3 items-end py-3">
-                  <div className="flex-1 relative">
-                    <Textarea
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder="Ask a question about your portfolio..."
-                      className="min-h-[48px] max-h-[140px] resize-none border-2 border-white/20 bg-white/[0.06] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
-                          e.preventDefault();
-                          addMessage();
-                        }
-                      }}
-                    />
+                {/* Input bar — at bottom of card */}
+                <div className="border-t-2 border-white/15 bg-black/50 backdrop-blur-md p-4 flex-shrink-0">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1 relative">
+                      <Textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Ask a question about your portfolio..."
+                        className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
+                            e.preventDefault();
+                            addMessage();
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button 
+                      onClick={addMessage} 
+                      disabled={chatIsLoading || !input.trim()}
+                      size="lg"
+                      className="h-[52px] w-[52px] p-0 bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold border-2 border-[#FFED00] rounded-xl transition-all hover:shadow-[0_0_24px_rgba(255,237,0,0.4)] disabled:opacity-40 disabled:hover:shadow-none"
+                    >
+                      {chatIsLoading ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </Button>
                   </div>
-                  <Button 
-                    onClick={addMessage} 
-                    disabled={chatIsLoading || !input.trim()}
-                    size="lg"
-                    className="h-[48px] w-[48px] p-0 bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold border-2 border-[#FFED00] rounded-xl transition-all hover:shadow-[0_0_24px_rgba(255,237,0,0.4)] disabled:opacity-40 disabled:hover:shadow-none"
-                  >
-                    {chatIsLoading ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                    )}
-                  </Button>
+                  <div className="flex items-center justify-between mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setWebSearchEnabled((prev) => !prev)}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                        webSearchEnabled
+                          ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
+                          : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                      }`}
+                      title="Enable web search to find information about companies not in your documents"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      Web Search {webSearchEnabled ? "ON" : "OFF"}
+                    </button>
+                    <span className="text-[11px] text-white/40 font-mono">
+                      {chatIsLoading ? (
+                        <span className="text-[#FFED00]/70 flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {chatLoadingStage}
+                        </span>
+                      ) : (
+                        "Press Enter to send  •  Shift+Enter for new line"
+                      )}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between pb-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setWebSearchEnabled((prev) => !prev)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
-                      webSearchEnabled
-                        ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                        : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
-                    }`}
-                    title="Enable web search to find information about companies not in your documents"
-                  >
-                    <Globe className="h-3.5 w-3.5" />
-                    Web Search {webSearchEnabled ? "ON" : "OFF"}
-                  </button>
-                  <span className="text-[11px] text-white/40 font-mono">
-                    {chatIsLoading ? (
-                      <span className="text-[#FFED00]/70 flex items-center gap-1.5">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        {chatLoadingStage}
-                      </span>
-                    ) : (
-                      "Press Enter to send  •  Shift+Enter for new line"
-                    )}
-                  </span>
-                </div>
-              </div>
+              </Card>
             </div>
           </TabsContent>
 
