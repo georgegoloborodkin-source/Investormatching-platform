@@ -9660,10 +9660,10 @@ export default function CIS() {
                 </div>
               </div>
 
-            {/* Knowledge Scope — all items flat on one level */}
-            <div className="cis-surface p-3 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider">
+            {/* Knowledge Scope — compact, scrollable */}
+            <div className="cis-surface p-2 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards] max-h-[min(280px,40vh)] flex flex-col min-w-0">
+                <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
+                  <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider truncate">
                     Knowledge Scope
                   </div>
                   <button
@@ -9672,17 +9672,16 @@ export default function CIS() {
                       const allChecked = scopes.every((s) => s.checked);
                       setScopes((prev) => prev.map((s) => ({ ...s, checked: !allChecked })));
                     }}
-                    className="text-[10px] text-white/40 hover:text-[#FFED00] font-mono transition-colors"
+                    className="text-[10px] text-white/40 hover:text-[#FFED00] font-mono transition-colors shrink-0"
                   >
                     {scopes.every((s) => s.checked) ? "Deselect All" : "Select All"}
                   </button>
                 </div>
-                {/* All scopes displayed flat — no nesting, no collapsing */}
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1 overflow-y-auto min-h-0">
                   {scopes.map((s) => (
                     <label
                       key={s.id}
-                      className={`inline-flex items-center gap-1.5 text-[11px] border px-2 py-1 rounded-md cursor-pointer transition-all font-mono whitespace-nowrap ${
+                      className={`inline-flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono shrink-0 max-w-full min-w-0 ${
                         s.checked
                           ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
                           : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
@@ -9691,10 +9690,10 @@ export default function CIS() {
                       <Checkbox
                         checked={s.checked}
                         onCheckedChange={(val) => toggleScope(s.id, val === true)}
-                        className="h-3 w-3 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                        className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
                       />
-                      {s.type === "folder" && <Folder className="h-3 w-3 shrink-0" />}
-                      <span>{s.label}</span>
+                      {s.type === "folder" && <Folder className="h-2.5 w-2.5 shrink-0" />}
+                      <span className="truncate">{s.label}</span>
                     </label>
                   ))}
                 </div>
@@ -9758,10 +9757,15 @@ export default function CIS() {
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
                       <Brain className="h-4 w-4" />
                     </span>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-white tracking-tight">Intelligence Chat</div>
-                      <div className="text-[10px] text-white/50 font-mono uppercase tracking-wider">
-                        Scope: {scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}
+                      <div className="text-[10px] text-white/50 font-mono uppercase tracking-wider truncate" title={scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}>
+                        Scope: {(() => {
+                          const labels = scopes.filter((s) => s.checked).map((s) => s.label);
+                          if (labels.length === 0) return "None";
+                          if (labels.length <= 2) return labels.join(", ");
+                          return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
+                        })()}
                       </div>
                     </div>
                   </div>
