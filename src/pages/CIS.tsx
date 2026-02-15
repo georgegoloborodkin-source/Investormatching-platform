@@ -5096,6 +5096,7 @@ export default function CIS() {
   const [input, setInput] = useState("");
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
+  const [chatLoadingStage, setChatLoadingStage] = useState<string>("Analyzing your question...");
   const [chatLoaded, setChatLoaded] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [costLog, setCostLog] = useState<
@@ -5604,6 +5605,29 @@ export default function CIS() {
   );
 
   const scopedMessages = useMemo(() => messages.filter((m) => m.threadId === activeThread), [messages, activeThread]);
+
+  // Cycle through loading stage messages while chat is processing
+  useEffect(() => {
+    if (!chatIsLoading) {
+      setChatLoadingStage("Analyzing your question...");
+      return;
+    }
+    const stages = [
+      "Analyzing your question...",
+      "Searching documents...",
+      "Retrieving relevant context...",
+      "Thinking deeply...",
+      "Synthesizing answer...",
+      "Almost there...",
+    ];
+    let idx = 0;
+    setChatLoadingStage(stages[0]);
+    const interval = setInterval(() => {
+      idx = Math.min(idx + 1, stages.length - 1);
+      setChatLoadingStage(stages[idx]);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [chatIsLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -9432,9 +9456,9 @@ export default function CIS() {
           </TabsContent>
 
           {/* Chat Tab */}
-          <TabsContent value="chat" className="space-y-4 overflow-hidden">
+          <TabsContent value="chat" className="overflow-hidden">
             {isDeveloper && (
-              <Card className="border-2 border-white bg-transparent">
+              <Card className="border-2 border-white bg-transparent mb-3">
                 <CardHeader className="pb-2 border-b-2 border-white">
                   <CardTitle className="text-sm text-white font-mono font-black uppercase tracking-tight">Developer Cost Log</CardTitle>
                   <CardDescription className="text-xs text-white/70 font-mono">
@@ -9462,176 +9486,241 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            {/* Chat Container - Fixed height, scrollable within, no page scroll */}
-            <div className="flex flex-col overflow-hidden" style={{ height: "600px", maxHeight: "600px" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white bg-transparent min-h-0 h-full overflow-hidden">
-                <CardHeader className="pb-3 border-b-2 border-white flex-shrink-0">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-mono font-black uppercase tracking-tight text-white">Chat</CardTitle>
-                    <div className="text-xs text-white/70 font-mono">
-                      Scope: {scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}
+            {/* Chat Container — fills viewport, input pinned to bottom */}
+            <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}>
+              <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
+                {/* Chat header */}
+                <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/15 bg-black/40 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
+                      <Brain className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <div className="text-sm font-bold text-white tracking-tight">Intelligence Chat</div>
+                      <div className="text-[10px] text-white/50 font-mono uppercase tracking-wider">
+                        Scope: {scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}
+                      </div>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
-                  <div 
-                    ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-transparent"
-                    style={{ height: "100%", maxHeight: "100%" }}
-                  >
-                      {scopedMessages.length === 0 ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center space-y-2">
-                            <div className="text-lg font-mono font-bold text-white">Start a conversation</div>
-                            <div className="text-sm text-white/70 font-mono">Ask questions about your documents</div>
+                  {chatIsLoading && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFED00]/10 border border-[#FFED00]/25">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFED00] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFED00]" />
+                      </span>
+                      <span className="text-[11px] text-[#FFED00] font-mono font-semibold animate-pulse">Processing</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Messages area — scrollable */}
+                <div 
+                  ref={chatContainerRef}
+                  className="flex-1 overflow-y-auto px-5 py-5 space-y-5 bg-transparent scroll-smooth"
+                  style={{ height: "100%", maxHeight: "100%" }}
+                >
+                  {scopedMessages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center space-y-4 max-w-md">
+                        <div className="flex justify-center">
+                          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFED00]/10 border-2 border-[#FFED00]/20">
+                            <Brain className="h-8 w-8 text-[#FFED00]" />
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-white">Start a conversation</div>
+                        <div className="text-sm text-white/50 font-mono leading-relaxed">
+                          Ask questions about your documents, companies, and portfolio. The AI will search your knowledge base to provide intelligent answers.
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-center pt-2">
+                          {["Summarize recent deal flow", "Compare company financials", "What risks have been flagged?"].map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              onClick={() => { setInput(suggestion); }}
+                              className="text-xs px-3 py-1.5 rounded-full border border-white/20 text-white/60 hover:text-[#FFED00] hover:border-[#FFED00]/40 transition-all font-mono"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {scopedMessages.map((m, index) => (
+                        <div
+                          key={m.id}
+                          className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                            m.author === "user" ? "justify-end" : "justify-start"
+                          }`}
+                          style={{ animationDelay: `${Math.min(index, 5) * 50}ms` }}
+                        >
+                          {m.author === "assistant" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
+                              <Brain className="w-4 h-4 text-[#FFED00]" />
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                              m.author === "user"
+                                ? "bg-[#FFED00] text-black font-mono shadow-lg shadow-[#FFED00]/10"
+                                : "bg-white/[0.04] border border-white/15 text-white font-mono backdrop-blur-sm"
+                            }`}
+                          >
+                            {m.author === "assistant" ? (
+                              <>
+                                <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
+                                  {m.isStreaming && m.text === "..." ? (
+                                    <span className="inline-flex items-center gap-1 text-white">
+                                      <span className="animate-pulse">.</span>
+                                      <span className="animate-pulse delay-75">.</span>
+                                      <span className="animate-pulse delay-150">.</span>
+                                    </span>
+                                  ) : (
+                                    <>
+                                      {renderAssistantContent(m.text)}
+                                      {m.isStreaming && (
+                                        <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                {/* Log Decision button - appears after each AI response */}
+                                {!m.isStreaming && m.text && m.text !== "..." && (
+                                  <div className="mt-2 pt-2 border-t border-white/10">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleLogDecisionFromChat(m.text)}
+                                      className="text-xs h-6 px-2 text-white/50 hover:text-[#FFED00] hover:bg-white/5 font-mono"
+                                    >
+                                      <Link2 className="h-3 w-3 mr-1" />
+                                      Log Decision
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-black">{m.text}</div>
+                            )}
+                          </div>
+                          {m.author === "user" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
+                              <svg className="w-4 h-4 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Animated thinking indicator — shows while loading */}
+                      {chatIsLoading && (
+                        <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
+                            <Brain className="w-4 h-4 text-[#FFED00] animate-pulse" />
+                          </div>
+                          <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white/[0.04] border border-[#FFED00]/20 text-white font-mono backdrop-blur-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="flex gap-1">
+                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "0ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "150ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "300ms" }} />
+                              </div>
+                              <span className="text-sm text-[#FFED00]/80 font-semibold transition-all duration-500">
+                                {chatLoadingStage}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          {scopedMessages.map((m, index) => (
-                            <div
-                              key={m.id}
-                              className={`flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-                                m.author === "user" ? "justify-end" : "justify-start"
-                              }`}
-                              style={{ animationDelay: `${index * 50}ms` }}
-                            >
-                              {m.author === "assistant" && (
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/20 flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                  </svg>
-                                </div>
-                              )}
-                              <div
-                                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
-                                  m.author === "user"
-                                    ? "bg-[#FFED00] text-black font-mono"
-                                    : "bg-transparent border-2 border-white text-white font-mono"
-                                }`}
-                              >
-                                {m.author === "assistant" ? (
-                                  <>
-                                    <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
-                                      {m.isStreaming && m.text === "..." ? (
-                                        <span className="inline-flex items-center gap-1 text-white">
-                                          <span className="animate-pulse">.</span>
-                                          <span className="animate-pulse delay-75">.</span>
-                                          <span className="animate-pulse delay-150">.</span>
-                                        </span>
-                                      ) : (
-                                        <>
-                                          {renderAssistantContent(m.text)}
-                                          {m.isStreaming && (
-                                            <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                    {/* Log Decision button - appears after each AI response */}
-                                    {!m.isStreaming && m.text && m.text !== "..." && (
-                                      <div className="mt-2 pt-2 border-t border-white/20">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleLogDecisionFromChat(m.text)}
-                                          className="text-xs h-6 px-2 text-white/70 hover:text-[#FFED00] hover:bg-white/5 font-mono"
-                                        >
-                                          <Link2 className="h-3 w-3 mr-1" />
-                                          Log Decision
-                                        </Button>
-                                      </div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="text-sm leading-relaxed whitespace-pre-wrap text-black">{m.text}</div>
-                                )}
-                              </div>
-                              {m.author === "user" && (
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/20 flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                  </svg>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          <div ref={messagesEndRef} />
-                        </>
                       )}
+
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
+                </div>
+
+                {/* Sources Used — collapsible strip */}
+                {lastEvidence && lastEvidence.docs.length > 0 && (
+                  <div className="border-t border-white/10 bg-black/30 px-5 py-2.5 flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <FileText className="h-3 w-3 text-white/50" />
+                      <span className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">Sources Used</span>
                     </div>
-
-                    {lastEvidence && lastEvidence.docs.length > 0 && (
-                      <div className="border-t-2 border-white bg-transparent px-4 py-3 space-y-2 flex-shrink-0">
-                        <div className="text-xs font-mono font-bold text-white mb-2">
-                          Sources Used
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {lastEvidence.docs.slice(0, 3).map((doc, index) => (
-                            <Button
-                              key={doc.id}
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-auto py-1.5 px-3 border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-mono font-bold"
-                              onClick={() => handleOpenDocument(doc.id)}
-                            >
-                              {index + 1}. {doc.title || doc.file_name || "Untitled"}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="border-t-2 border-white p-4 bg-transparent flex-shrink-0">
-                      <div className="flex gap-2 items-end">
-                        <Textarea
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          placeholder="Ask a question..."
-                          className="min-h-[60px] max-h-[200px] resize-none border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
-                              e.preventDefault();
-                              addMessage();
-                            }
-                          }}
-                        />
-                        <Button 
-                          onClick={addMessage} 
-                          disabled={chatIsLoading || !input.trim()}
-                          size="lg"
-                          className="h-[60px] px-6 bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                    <div className="flex flex-wrap gap-1.5">
+                      {lastEvidence.docs.slice(0, 3).map((doc, index) => (
+                        <Button
+                          key={doc.id}
+                          size="sm"
+                          variant="outline"
+                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                          onClick={() => handleOpenDocument(doc.id)}
                         >
-                          {chatIsLoading ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : (
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                          )}
+                          {index + 1}. {doc.title || doc.file_name || "Untitled"}
                         </Button>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setWebSearchEnabled((prev) => !prev)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border-2 ${
-                            webSearchEnabled
-                              ? "border-[#FFED00] bg-[#FFED00]/20 text-[#FFED00]"
-                              : "border-white/30 bg-transparent text-white/50 hover:border-white/60 hover:text-white/80"
-                          }`}
-                          title="Enable web search to find information about companies not in your documents"
-                        >
-                          <Globe className="h-3.5 w-3.5" />
-                          Web Search {webSearchEnabled ? "ON" : "OFF"}
-                        </button>
-                        <span className="text-xs text-white/70 font-mono">
-                          {chatIsLoading ? "Searching..." : "Press Enter to send"}
-                        </span>
-                      </div>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                )}
+
+                {/* Input bar — pinned to bottom */}
+                <div className="border-t-2 border-white/15 bg-black/50 backdrop-blur-md p-4 flex-shrink-0">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1 relative">
+                      <Textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Ask a question about your portfolio..."
+                        className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
+                            e.preventDefault();
+                            addMessage();
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button 
+                      onClick={addMessage} 
+                      disabled={chatIsLoading || !input.trim()}
+                      size="lg"
+                      className="h-[52px] w-[52px] p-0 bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold border-2 border-[#FFED00] rounded-xl transition-all hover:shadow-[0_0_24px_rgba(255,237,0,0.4)] disabled:opacity-40 disabled:hover:shadow-none"
+                    >
+                      {chatIsLoading ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setWebSearchEnabled((prev) => !prev)}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                        webSearchEnabled
+                          ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
+                          : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                      }`}
+                      title="Enable web search to find information about companies not in your documents"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      Web Search {webSearchEnabled ? "ON" : "OFF"}
+                    </button>
+                    <span className="text-[11px] text-white/40 font-mono">
+                      {chatIsLoading ? (
+                        <span className="text-[#FFED00]/70 flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {chatLoadingStage}
+                        </span>
+                      ) : (
+                        "Press Enter to send  •  Shift+Enter for new line"
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </Card>
             </div>
           </TabsContent>
 
