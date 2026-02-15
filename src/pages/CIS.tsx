@@ -1827,7 +1827,9 @@ function SourcesTab({
               { onConflict: "organization_id,event_id,source_type" }
             );
 
-            toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Auto-sync runs every 15 minutes.` });
+            toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Starting sync and extraction...` });
+            // Run sync immediately so we extract and sync right away (state may not have updated yet)
+            syncGoogleDriveFolder(updatedFolders);
           }
         })
         .build();
@@ -1835,16 +1837,18 @@ function SourcesTab({
     } catch (err) {
       toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
     }
-  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, syncGoogleDriveFolder, toast]);
 
   // ── Core folder sync logic ──
-  const syncGoogleDriveFolder = useCallback(async () => {
-    // Support multiple folders — use array if available, fallback to single
-    const foldersToSync = connectedDriveFolders.length > 0
-      ? connectedDriveFolders
-      : connectedDriveFolderId
-        ? [{ id: connectedDriveFolderId, name: connectedDriveFolderName || "Portfolio folder" }]
-        : [];
+  const syncGoogleDriveFolder = useCallback(async (foldersOverride?: Array<{ id: string; name: string }>) => {
+    // Use override when e.g. we just added a folder and state may not have updated yet
+    const foldersToSync = (foldersOverride && foldersOverride.length > 0)
+      ? foldersOverride
+      : connectedDriveFolders.length > 0
+        ? connectedDriveFolders
+        : connectedDriveFolderId
+          ? [{ id: connectedDriveFolderId, name: connectedDriveFolderName || "Portfolio folder" }]
+          : [];
     if (foldersToSync.length === 0) {
       toast({ title: "No folder connected", description: "Connect a Google Drive portfolio folder first.", variant: "destructive" });
       return;
@@ -9758,7 +9762,7 @@ export default function CIS() {
                                     </>
                                   )}
                                 </div>
-                                {/* Log Decision button - appears after each AI response */}
+                                {/* Log Connection button - appears after each AI response */}
                                 {!m.isStreaming && m.text && m.text !== "..." && (
                                   <div className="mt-2 pt-2 border-t border-white/10">
                                     <Button
@@ -9768,7 +9772,7 @@ export default function CIS() {
                                       className="text-xs h-6 px-2 text-white/50 hover:text-[#FFED00] hover:bg-white/5 font-mono"
                                     >
                                       <Link2 className="h-3 w-3 mr-1" />
-                                      Log Decision
+                                      Log Connection
                                     </Button>
                                   </div>
                                 )}
