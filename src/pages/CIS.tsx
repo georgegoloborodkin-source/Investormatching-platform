@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
+import {  
   Select,
   SelectContent,
   SelectItem,
@@ -1836,7 +1836,7 @@ function SourcesTab({
                   google_drive_folder_name: updatedFolders[0].name,
                   folders: updatedFolders,
                 },
-                sync_frequency: "every_15_min",
+                sync_frequency: "hourly",
                 is_active: true,
                 created_by: userId,
               },
