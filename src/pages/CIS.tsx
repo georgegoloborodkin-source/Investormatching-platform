@@ -9508,13 +9508,15 @@ export default function CIS() {
                   )}
                 </div>
 
-                {/* Messages area — scrollable */}
+                {/* Messages area — scrollable, content aligned to bottom */}
                 <div 
                   ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto px-5 py-5 space-y-5 bg-transparent scroll-smooth"
+                  className="flex-1 overflow-y-auto px-5 py-5 bg-transparent scroll-smooth flex flex-col"
                 >
+                  {/* Spacer pushes messages to bottom when few messages */}
+                  <div className="flex-1" />
                   {scopedMessages.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
+                    <div className="flex items-center justify-center min-h-[300px]">
                       <div className="text-center space-y-4 max-w-md">
                         <div className="flex justify-center">
                           <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFED00]/10 border-2 border-[#FFED00]/20">
@@ -9539,7 +9541,7 @@ export default function CIS() {
                       </div>
                     </div>
                   ) : (
-                    <>
+                    <div className="space-y-5">
                       {scopedMessages.map((m, index) => (
                         <div
                           key={m.id}
@@ -9629,7 +9631,7 @@ export default function CIS() {
                       )}
 
                       <div ref={messagesEndRef} />
-                    </>
+                    </div>
                   )}
                 </div>
 
