@@ -1530,6 +1530,7 @@ function SourcesTab({
   currentUserId,
   indexDocumentEmbeddings,
   onRefreshCompanyCards,
+  initialDriveSyncConfig,
 }: {
   sources: SourceRecord[];
   documents: Array<{
@@ -1571,6 +1572,12 @@ function SourcesTab({
   currentUserId: string | null;
   indexDocumentEmbeddings: (documentId: string, rawContent?: string | null, docTitle?: string | null, pdfBase64?: string | null) => Promise<void>;
   onRefreshCompanyCards?: () => Promise<void>;
+  initialDriveSyncConfig?: {
+    folderId: string;
+    folderName: string;
+    folders: Array<{ id: string; name: string }>;
+    lastSyncAt: string | null;
+  } | null;
 }) {
   const { toast } = useToast();
   const [clickUpListId, setClickUpListId] = useState(() => {
@@ -1627,9 +1634,18 @@ function SourcesTab({
     }
   }, [googleApiKey, googleClientId]);
 
-  // ── Load existing Drive sync configuration on mount ──
+  // ── Restore Drive folders from parent-loaded config (so folder list survives reload) ──
   useEffect(() => {
-    if (!activeEventId) return;
+    if (!initialDriveSyncConfig) return;
+    setConnectedDriveFolderId(initialDriveSyncConfig.folderId);
+    setConnectedDriveFolderName(initialDriveSyncConfig.folderName);
+    setConnectedDriveFolders(initialDriveSyncConfig.folders);
+    setLastDriveSyncAt(initialDriveSyncConfig.lastSyncAt);
+  }, [initialDriveSyncConfig]);
+
+  // ── Load existing Drive sync configuration when activeEventId changes (fallback / tab switch) ──
+  useEffect(() => {
+    if (!activeEventId || initialDriveSyncConfig != null) return;
     (async () => {
       try {
         const { data, error } = await supabase
@@ -1638,22 +1654,19 @@ function SourcesTab({
           .eq("event_id", activeEventId)
           .eq("source_type", "google_drive")
           .limit(1);
-        // Table may not exist yet (404) — ignore gracefully
         if (error) {
           console.warn("[DriveSync] sync_configurations not available:", error.message);
           return;
         }
-        const row = data?.[0];
+        const row = data?.[0] as { config?: { google_drive_folder_id?: string; google_drive_folder_name?: string; folders?: Array<{ id: string; name: string }> }; last_sync_at?: string } | undefined;
         if (row?.config?.google_drive_folder_id) {
           setConnectedDriveFolderId(row.config.google_drive_folder_id);
           setConnectedDriveFolderName(row.config.google_drive_folder_name || "Portfolio folder");
           setLastDriveSyncAt(row.last_sync_at || null);
-          // Load multiple folders if stored
-          const folders = row.config.folders as Array<{ id: string; name: string }> | undefined;
+          const folders = row.config.folders;
           if (folders && Array.isArray(folders) && folders.length > 0) {
             setConnectedDriveFolders(folders);
           } else {
-            // Backward compat: single folder → array
             setConnectedDriveFolders([{
               id: row.config.google_drive_folder_id,
               name: row.config.google_drive_folder_name || "Portfolio folder",
@@ -1664,7 +1677,7 @@ function SourcesTab({
         console.warn("[DriveSync] Failed to load sync config:", err);
       }
     })();
-  }, [activeEventId]);
+  }, [activeEventId, initialDriveSyncConfig]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1813,7 +1826,7 @@ function SourcesTab({
               toast({ title: "Org not found", description: "Cannot save sync config without an organization.", variant: "destructive" });
               return;
             }
-            await supabase.from("sync_configurations").upsert(
+            const { error: upsertError } = await supabase.from("sync_configurations").upsert(
               {
                 organization_id: orgId,
                 event_id: eventId,
@@ -1829,6 +1842,15 @@ function SourcesTab({
               },
               { onConflict: "organization_id,event_id,source_type" }
             );
+            if (upsertError) {
+              console.error("[DriveSync] Failed to persist folder config:", upsertError);
+              toast({
+                title: "Folder not saved",
+                description: "Connected folder could not be saved. It may disappear after reload. Try again.",
+                variant: "destructive",
+              });
+              return;
+            }
 
             toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Starting sync and extraction...` });
             // Run sync immediately so we extract and sync right away (state may not have updated yet)
@@ -5366,6 +5388,12 @@ export default function CIS() {
     }
   }, []);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [initialDriveSyncConfig, setInitialDriveSyncConfig] = useState<{
+    folderId: string;
+    folderName: string;
+    folders: Array<{ id: string; name: string }>;
+    lastSyncAt: string | null;
+  } | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [documents, setDocuments] = useState<
     Array<{ id: string; title: string | null; storage_path: string | null; folder_id?: string | null }>
@@ -5853,6 +5881,28 @@ export default function CIS() {
 
       if (cancelled) return;
       setActiveEventId(event.id);
+
+      // Load Drive sync config in same flow so Sources tab restores folders after reload
+      const { data: syncRows } = await supabase
+        .from("sync_configurations" as any)
+        .select("config, last_sync_at")
+        .eq("event_id", event.id)
+        .eq("source_type", "google_drive")
+        .limit(1);
+      if (!cancelled && (syncRows as any)?.[0]?.config?.google_drive_folder_id) {
+        const row = (syncRows as any)[0];
+        const folders = Array.isArray(row.config.folders) && row.config.folders.length > 0
+          ? row.config.folders
+          : [{ id: row.config.google_drive_folder_id, name: row.config.google_drive_folder_name || "Portfolio folder" }];
+        setInitialDriveSyncConfig({
+          folderId: row.config.google_drive_folder_id,
+          folderName: row.config.google_drive_folder_name || "Portfolio folder",
+          folders,
+          lastSyncAt: row.last_sync_at || null,
+        });
+      } else {
+        setInitialDriveSyncConfig(null);
+      }
 
       const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes, companyCardsRes] = await Promise.all([
         getDecisionsByEvent(event.id),
@@ -9965,6 +10015,7 @@ export default function CIS() {
                   if (res.data) setCompanyCards(res.data as typeof companyCards);
                 }
               }}
+              initialDriveSyncConfig={initialDriveSyncConfig}
             />
           </TabsContent>
 

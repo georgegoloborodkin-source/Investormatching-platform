@@ -88,7 +88,7 @@ export default function AuthCallback() {
         if (userProfile?.role === "team_member") {
           navigate("/role-selection");
         } else {
-          navigate("/");
+          navigate("/cis");
         }
       } catch (error: any) {
         console.error("Auth callback error:", error);

@@ -123,8 +123,8 @@ export default function InviteAcceptance() {
         description: `Welcome to ${invitation?.organization_name}`,
       });
 
-      // Redirect to app
-      navigate("/");
+      // Redirect to CIS
+      navigate("/cis");
     } catch (err: any) {
       console.error("Error accepting invitation:", err);
       toast({
@@ -167,7 +167,7 @@ export default function InviteAcceptance() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-            <Button onClick={() => navigate("/")} className="w-full mt-4 rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60" variant="outline">
+            <Button onClick={() => navigate("/orbit-stats")} className="w-full mt-4 rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60" variant="outline">
               Go to Home
             </Button>
           </CardContent>
@@ -245,7 +245,7 @@ export default function InviteAcceptance() {
           </Button>
 
           <Button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/cis")}
             variant="ghost"
             className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11"
             disabled={accepting}

@@ -15,6 +15,7 @@ import {
   Check,
   Circle,
   Loader2,
+  LogIn,
 } from "lucide-react";
 
 export default function OrbitStatsDemo() {
@@ -175,8 +176,33 @@ export default function OrbitStatsDemo() {
         }}
       />
 
+      {/* Sticky header with Log in */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-white tracking-tight">
+            <span className="text-xl">Venture</span>
+            <span className="text-xl text-amber-400">OS</span>
+          </Link>
+          <nav className="flex items-center gap-2">
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-5 py-2.5 text-sm font-semibold text-amber-400 transition-all hover:border-amber-400/50 hover:bg-amber-500/20 hover:text-amber-300"
+            >
+              <LogIn className="h-4 w-4" />
+              Log in
+            </Link>
+            <Link to="/login">
+              <Button className="rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold px-5 py-2.5 h-auto shadow-[0_2px_16px_-4px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_24px_-4px_rgba(245,158,11,0.5)] transition-all">
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </nav>
+        </div>
+      </header>
+
       {/* Hero */}
-      <section className="relative z-10 flex min-h-screen items-center justify-center px-4 pt-20 pb-32">
+      <section className="relative z-10 flex min-h-screen items-center justify-center px-4 pt-24 pb-32">
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{

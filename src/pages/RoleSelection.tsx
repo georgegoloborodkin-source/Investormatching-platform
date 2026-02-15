@@ -38,9 +38,9 @@ export default function RoleSelection() {
   const [createdInvitationCode, setCreatedInvitationCode] = useState<string | null>(null);
 
   useEffect(() => {
-    // If user already has organization, redirect to app
+    // If user already has organization, redirect to CIS
     if (profile?.organization_id) {
-      navigate("/");
+      navigate("/cis");
       return;
     }
 
@@ -128,7 +128,7 @@ export default function RoleSelection() {
             title: "Welcome!",
             description: `You've joined ${data?.organization?.name || "the fund"}.`,
           });
-          navigate("/");
+          navigate("/cis");
         }
       } else {
         // Team member joined
@@ -136,7 +136,7 @@ export default function RoleSelection() {
           title: "Welcome!",
           description: `You've joined ${data?.organization?.name || "the fund"}.`,
         });
-        navigate("/");
+        navigate("/cis");
       }
     } catch (error: any) {
       console.error("Error joining fund:", error);
@@ -190,7 +190,7 @@ export default function RoleSelection() {
               </p>
             </div>
 
-            <Button onClick={() => navigate("/")} className={btnPrimaryClass}>
+            <Button onClick={() => navigate("/cis")} className={btnPrimaryClass}>
               Go to Dashboard
             </Button>
           </CardContent>
