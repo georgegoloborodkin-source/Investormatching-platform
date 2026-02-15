@@ -1739,6 +1739,9 @@ function SourcesTab({
     });
   }, []);
 
+  // Ref to avoid "Cannot access syncGoogleDriveFolder before initialization" when Sources tab mounts
+  const syncGoogleDriveFolderRef = useRef<((foldersOverride?: Array<{ id: string; name: string }>) => Promise<void>) | null>(null);
+
   // ── Connect a Google Drive root portfolio folder via Picker ──
   const connectDrivePortfolioFolder = useCallback(async () => {
     if (!googleApiKey || !googleClientId) {
@@ -1829,7 +1832,7 @@ function SourcesTab({
 
             toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Starting sync and extraction...` });
             // Run sync immediately so we extract and sync right away (state may not have updated yet)
-            syncGoogleDriveFolder(updatedFolders);
+            syncGoogleDriveFolderRef.current?.(updatedFolders);
           }
         })
         .build();
@@ -1837,7 +1840,7 @@ function SourcesTab({
     } catch (err) {
       toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
     }
-  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, syncGoogleDriveFolder, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
 
   // ── Core folder sync logic ──
   const syncGoogleDriveFolder = useCallback(async (foldersOverride?: Array<{ id: string; name: string }>) => {
@@ -1870,23 +1873,48 @@ function SourcesTab({
     const results: Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }> = [];
 
     try {
-      // 1. List sub-folders from ALL connected root folders
-      let subFolders: Array<{ id: string; name: string }> = [];
+      // 1. Recursively list ALL descendant folders (sub, sub-sub, ...) up to MAX_FOLDER_DEPTH
+      const MAX_FOLDER_DEPTH = 10;
+      const visitedIds = new Set<string>();
+      const allDescendantFolders: Array<{ id: string; name: string; path: string }> = [];
+
+      const collectDescendants = async (
+        parentId: string,
+        parentPath: string,
+        depth: number
+      ): Promise<void> => {
+        if (depth <= 0 || visitedIds.has(parentId)) return;
+        visitedIds.add(parentId);
+        const children = await listDriveFolders(accessToken, parentId);
+        for (const child of children) {
+          if (visitedIds.has(child.id)) continue;
+          const path = parentPath ? `${parentPath} / ${child.name}` : child.name;
+          allDescendantFolders.push({ id: child.id, name: child.name, path });
+          await collectDescendants(child.id, path, depth - 1);
+        }
+      };
+
+      setDriveSyncProgress({ phase: "Discovering folders (recursive)...", current: 0, total: 0, currentItem: "" });
       for (const rootFolder of foldersToSync) {
-        const subs = await listDriveFolders(accessToken, rootFolder.id);
-        console.log(`[DriveSync] Root "${rootFolder.name}" → ${subs.length} sub-folders`);
-        subFolders = [...subFolders, ...subs];
+        const rootPath = rootFolder.name;
+        allDescendantFolders.push({ id: rootFolder.id, name: rootFolder.name, path: rootPath });
+        await collectDescendants(rootFolder.id, rootPath, MAX_FOLDER_DEPTH - 1);
       }
-      // Deduplicate by folder id
-      const seenIds = new Set<string>();
-      subFolders = subFolders.filter(f => {
-        if (seenIds.has(f.id)) return false;
-        seenIds.add(f.id);
-        return true;
-      });
-      console.log(`[DriveSync] Total: ${subFolders.length} unique company sub-folders from ${foldersToSync.length} root(s)`);
+      console.log(`[DriveSync] Recursive discovery: ${allDescendantFolders.length} folders from ${foldersToSync.length} root(s)`);
+
+      // 2. Keep only folders that contain at least one file (so we sync and extract from them)
+      const subFolders: Array<{ id: string; name: string }> = [];
+      for (let i = 0; i < allDescendantFolders.length; i++) {
+        const folder = allDescendantFolders[i];
+        setDriveSyncProgress({ phase: "Checking for documents...", current: i + 1, total: allDescendantFolders.length, currentItem: folder.path });
+        const files = await listDriveFiles(accessToken, folder.id);
+        if (files.length > 0) {
+          subFolders.push({ id: folder.id, name: folder.path }); // use path as company name for uniqueness
+        }
+      }
+      console.log(`[DriveSync] ${subFolders.length} folders with documents (from ${allDescendantFolders.length} total)`);
       if (subFolders.length === 0) {
-        toast({ title: "No sub-folders found", description: "The connected folder(s) have no company sub-folders yet." });
+        toast({ title: "No documents found", description: "No folders with documents found in the connected folder(s)." });
         setIsSyncingDrive(false);
         setDriveSyncProgress(null);
         return;
@@ -2235,6 +2263,14 @@ function SourcesTab({
       setDriveSyncProgress(null);
     }
   }, [activeEventId, connectedDriveFolderId, connectedDriveFolderName, connectedDriveFolders, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onRefreshCompanyCards, sourceFolders, toast]);
+
+  // Keep ref updated so connectDrivePortfolioFolder can call sync without TDZ
+  useEffect(() => {
+    syncGoogleDriveFolderRef.current = syncGoogleDriveFolder;
+    return () => {
+      syncGoogleDriveFolderRef.current = null;
+    };
+  }, [syncGoogleDriveFolder]);
 
   // ── Auto-sync on login: fire once per session when config + token are available ──
   const autoSyncFiredRef = useRef(false);
@@ -3694,7 +3730,7 @@ function SourcesTab({
                   </Button>
                   <Button
                     size="sm"
-                    onClick={syncGoogleDriveFolder}
+                    onClick={() => syncGoogleDriveFolder()}
                     disabled={isSyncingDrive || !canImport}
                     className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
