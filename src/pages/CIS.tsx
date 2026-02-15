@@ -7172,6 +7172,30 @@ export default function CIS() {
     }));
   }, [companyConnections]);
 
+  // Always include ALL company cards in chat context so the LLM can easily answer from card info (social, contact, etc.)
+  const buildCompanyCardSources = useCallback(
+    (_question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, _detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
+      const MAX_CARDS = 60;
+      const result: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
+      for (const card of cards.slice(0, MAX_CARDS)) {
+        const name = (card.company_name || "").trim();
+        if (!name) continue;
+        const p = card.company_properties || {};
+        const parts: string[] = [`Company: ${card.company_name}`];
+        if (p.website) parts.push(`Website: ${p.website}`);
+        if (p.linkedin_url) parts.push(`LinkedIn: ${p.linkedin_url}`);
+        if (p.email) parts.push(`Email: ${p.email}`);
+        if (p.phone) parts.push(`Phone: ${p.phone}`);
+        if (p.twitter_url) parts.push(`Twitter/X: ${p.twitter_url}`);
+        if (p.bio) parts.push(`Bio: ${String(p.bio).slice(0, 250)}${String(p.bio).length > 250 ? "..." : ""}`);
+        if (p.headquarters) parts.push(`Headquarters: ${p.headquarters}`);
+        result.push({ title: `Company card: ${card.company_name}`, file_name: null as string | null, snippet: parts.join("\n") });
+      }
+      return result;
+    },
+    []
+  );
+
   const askFund = useCallback(
     async (question: string, threadId: string) => {
       if (!scopes.some((s) => s.checked)) {
@@ -7429,11 +7453,17 @@ export default function CIS() {
           !['What', 'Where', 'When', 'Which', 'About', 'Tell', 'Give', 'Find', 'Search', 'Show', 'Explain', 'Describe', 'More', 'Complete', 'Comprehensive'].includes(m)
         );
         
+        // All-caps words (e.g. BIANCA, Weego) so chat can match company cards
+        const allCapsPattern = /\b[A-Z]{2,}\b/g;
+        const allCapsMatches = (query.match(allCapsPattern) || []).filter(m => 
+          !['AI', 'LLC', 'USA', 'UK', 'CEO', 'CFO', 'CTO', 'VP', 'HR', 'IT', 'ID', 'UI', 'API'].includes(m)
+        );
+        
         // Check for common name-like patterns even without capitals (handles "george goloborodkin" in lowercase)
         const lowerQuery = query.toLowerCase();
         const hasNameLikeWords = /\b[a-z]{4,}\s+[a-z]{6,}\b/.test(lowerQuery); // First + Last name pattern
         
-        const allNames = Array.from(new Set([...nouns, ...nameMatches, ...potentialMatches]));
+        const allNames = Array.from(new Set([...nouns, ...nameMatches, ...potentialMatches, ...allCapsMatches]));
         
         // If query looks like a "who is X" or "tell me about X" pattern, assume it's a name query
         const isNameQuery = allNames.length > 0 || 
@@ -8491,11 +8521,15 @@ export default function CIS() {
             .split(/\W+/)
             .map((t) => t.trim())
             .filter((t) => t.length > 3);
-          const sources = answerDocs.map((doc) => ({
-            title: doc.title,
-            file_name: doc.file_name,
-            snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
-          }));
+          const companyCardSourcesPronoun = buildCompanyCardSources(searchQuestion, companyCards, []);
+          const sources = [
+            ...companyCardSourcesPronoun,
+            ...answerDocs.map((doc) => ({
+              title: doc.title,
+              file_name: doc.file_name,
+              snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
+            })),
+          ];
           const decisionsForClaude = decisionIntent
             ? decisionMatches.map((d) => ({
                 startup_name: d.startupName,
@@ -8791,7 +8825,11 @@ export default function CIS() {
           }
           
           // Call Claude with portfolio context (web search is handled natively by Anthropic when enabled)
-          const noDocSources = portfolioSources.length > 0 ? [...portfolioSources] : [] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
+          const companyCardSourcesFallback = buildCompanyCardSources(question, companyCards, detectedNames || []);
+          const noDocSources = [
+            ...companyCardSourcesFallback,
+            ...(portfolioSources.length > 0 ? portfolioSources : []),
+          ] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
           
           await askClaudeAnswerStream(
             {
@@ -8902,11 +8940,15 @@ export default function CIS() {
           .split(/\W+/)
           .map((t) => t.trim())
           .filter((t) => t.length > 3);
-        let sources = docsForClaude.map((doc) => ({
-          title: doc.title,
-          file_name: doc.file_name,
-          snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
-        }));
+        const companyCardSources = buildCompanyCardSources(question, companyCards, detectedNames || []);
+        let sources = [
+          ...companyCardSources,
+          ...docsForClaude.map((doc) => ({
+            title: doc.title,
+            file_name: doc.file_name,
+            snippet: buildClaudeContext(doc, claudeTokens, isComprehensiveQuestion, snippetByDocId.get(doc.id)),
+          })),
+        ];
         
         // ── CONNECTION-INTENT: Inject additional portfolio context ──
         // When user asks about connections, also include titles of OTHER docs
@@ -12154,8 +12196,8 @@ function ConnectionsGraphTab({
         </CardContent>
       </Card>
 
-      {/* Pending Reviews Section */}
-      {pendingReviews.length > 0 && (
+      {/* Pending Reviews Section — disabled for now (auto-extraction was wrong); re-enable when fixed */}
+      {false && pendingReviews.length > 0 && (
         <Card className="border-2 border-[#eab308] bg-transparent">
           <CardHeader className="pb-2 border-b-2 border-[#eab308]">
             <div className="flex flex-wrap items-center justify-between gap-2">
