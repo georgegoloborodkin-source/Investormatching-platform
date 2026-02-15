@@ -9200,9 +9200,9 @@ export default function CIS() {
       {/* Black + yellow background: grid + subtle mesh */}
       <div className="fixed inset-0 cis-grid-bg cis-mesh-bg pointer-events-none" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <div className="relative z-10 max-w-[1600px] mx-auto px-4 py-3 space-y-3">
         {/* Header */}
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b-2 border-white/20 pb-5 cis-fade-in">
+        <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b-2 border-white/20 pb-3 cis-fade-in">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3 text-white tracking-tight">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFED00]/15 text-[#FFED00] cis-accent-glow">
@@ -9391,49 +9391,44 @@ export default function CIS() {
               </button>
             </nav>
 
-            {/* Knowledge Scope - Only show in chat tab */}
+            {/* Knowledge Scope - Only show in chat tab — all items flat on one level */}
             {activeTab === "chat" && (
-              <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
-                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
-                  Knowledge Scope
+              <div className="cis-surface p-3 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider">
+                    Knowledge Scope
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allChecked = scopes.every((s) => s.checked);
+                      setScopes((prev) => prev.map((s) => ({ ...s, checked: !allChecked })));
+                    }}
+                    className="text-[10px] text-white/40 hover:text-[#FFED00] font-mono transition-colors"
+                  >
+                    {scopes.every((s) => s.checked) ? "Deselect All" : "Select All"}
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  {scopes.filter((s) => s.type !== "folder").map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm border-2 border-white px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
-                      <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
-                      <span className="flex-1 text-xs">{s.label}</span>
-                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
-                        {s.type}
-                      </Badge>
+                {/* All scopes displayed flat — no nesting, no collapsing */}
+                <div className="flex flex-wrap gap-1.5">
+                  {scopes.map((s) => (
+                    <label
+                      key={s.id}
+                      className={`inline-flex items-center gap-1.5 text-[11px] border px-2 py-1 rounded-md cursor-pointer transition-all font-mono whitespace-nowrap ${
+                        s.checked
+                          ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
+                          : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={s.checked}
+                        onCheckedChange={(val) => toggleScope(s.id, val === true)}
+                        className="h-3 w-3 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                      />
+                      {s.type === "folder" && <Folder className="h-3 w-3 shrink-0" />}
+                      <span>{s.label}</span>
                     </label>
                   ))}
-                  {scopes.some((s) => s.type === "folder") && (
-                    <div className="border-2 border-white/60 rounded-md">
-                      <button
-                        type="button"
-                        onClick={() => setFoldersExpanded((prev) => !prev)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white font-mono font-bold uppercase tracking-wider hover:bg-[#FFED00]/5 transition-colors"
-                      >
-                        <Folder className="h-4 w-4 text-[#FFED00]" />
-                        <span className="flex-1 text-left">Folders</span>
-                        <Badge variant="outline" className="text-[10px] border-white/60 text-white/80 bg-transparent font-mono">
-                          {scopes.filter((s) => s.type === "folder").length}
-                        </Badge>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${foldersExpanded ? "rotate-180" : ""}`} />
-                      </button>
-                      {foldersExpanded && (
-                        <div className="space-y-2 px-2 pb-2">
-                          {scopes.filter((s) => s.type === "folder").map((s) => (
-                            <label key={s.id} className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono">
-                              <Checkbox checked={s.checked} onCheckedChange={(val) => toggleScope(s.id, val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
-                              <Folder className="h-3 w-3 text-white/70" />
-                              <span className="flex-1">{s.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -9487,7 +9482,7 @@ export default function CIS() {
               </Card>
             )}
             {/* Chat Container — fills viewport, input pinned to bottom */}
-            <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}>
+            <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)", minHeight: "600px" }}>
               <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
                 {/* Chat header */}
                 <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/15 bg-black/40 flex-shrink-0">
