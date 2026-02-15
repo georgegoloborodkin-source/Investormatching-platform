@@ -137,14 +137,16 @@ export default function InviteAcceptance() {
     }
   };
 
+  const cardClass = "w-full max-w-md border border-slate-700/60 bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-xl shadow-black/20 overflow-hidden";
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
+      <div className="flex items-center justify-center min-h-screen p-4 page-content">
+        <Card className={cardClass}>
+          <CardContent className="pt-8 pb-8">
             <div className="flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">Loading invitation...</p>
+              <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+              <p className="text-sm text-slate-400">Loading invitation...</p>
             </div>
           </CardContent>
         </Card>
@@ -154,18 +156,18 @@ export default function InviteAcceptance() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Invitation Error</CardTitle>
-            <CardDescription>There was a problem with this invitation</CardDescription>
+      <div className="flex items-center justify-center min-h-screen p-4 page-content">
+        <Card className={cardClass}>
+          <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
+            <CardTitle className="text-white">Invitation Error</CardTitle>
+            <CardDescription className="text-slate-400">There was a problem with this invitation</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Alert variant="destructive">
+          <CardContent className="pt-6">
+            <Alert variant="destructive" className="border-red-500/30 bg-red-500/10">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-            <Button onClick={() => navigate("/")} className="w-full mt-4" variant="outline">
+            <Button onClick={() => navigate("/")} className="w-full mt-4 rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60" variant="outline">
               Go to Home
             </Button>
           </CardContent>
@@ -178,26 +180,25 @@ export default function InviteAcceptance() {
     return null;
   }
 
-  // Check if user needs to sign in
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Sign In Required</CardTitle>
-            <CardDescription>Please sign in to accept this invitation</CardDescription>
+      <div className="flex items-center justify-center min-h-screen p-4 page-content">
+        <Card className={cardClass}>
+          <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
+            <CardTitle className="text-white">Sign In Required</CardTitle>
+            <CardDescription className="text-slate-400">Please sign in to accept this invitation</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Alert>
-              <Mail className="h-4 w-4" />
+          <CardContent className="space-y-4 pt-6">
+            <Alert className="border-amber-500/20 bg-amber-500/5 text-slate-300">
+              <Mail className="h-4 w-4 text-amber-400" />
               <AlertDescription>
-                This invitation is for <strong>{invitation.email}</strong>
+                This invitation is for <strong className="text-white">{invitation.email}</strong>
               </AlertDescription>
             </Alert>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-slate-500">
               You need to sign in with this email address to accept the invitation.
             </p>
-            <Button onClick={() => navigate("/login")} className="w-full">
+            <Button onClick={() => navigate("/login")} className="w-full rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold h-11">
               Sign In
             </Button>
           </CardContent>
@@ -207,22 +208,22 @@ export default function InviteAcceptance() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">You're Invited!</CardTitle>
-          <CardDescription>Join {invitation.organization_name}</CardDescription>
+    <div className="flex items-center justify-center min-h-screen p-4 page-content">
+      <Card className={cardClass}>
+        <CardHeader className="text-center border-b border-slate-700/60 bg-slate-800/30">
+          <CardTitle className="text-2xl font-bold text-white">You're Invited!</CardTitle>
+          <CardDescription className="text-slate-400">Join {invitation.organization_name}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <div className="space-y-2 text-center">
-            <p className="text-sm">
-              You've been invited to join <strong>{invitation.organization_name}</strong> as a{" "}
-              <strong>{invitation.role === "team_member" ? "Team Member" : "Organizer"}</strong>.
+            <p className="text-sm text-slate-300">
+              You've been invited to join <strong className="text-white">{invitation.organization_name}</strong> as a{" "}
+              <strong className="text-amber-400">{invitation.role === "team_member" ? "Team Member" : "Organizer"}</strong>.
             </p>
           </div>
 
-          <Alert>
-            <CheckCircle className="h-4 w-4" />
+          <Alert className="border-amber-500/20 bg-amber-500/5 text-slate-300">
+            <CheckCircle className="h-4 w-4 text-amber-400" />
             <AlertDescription>
               You'll have access to the fund's workspace, documents, and decision logs.
             </AlertDescription>
@@ -231,7 +232,7 @@ export default function InviteAcceptance() {
           <Button
             onClick={handleAccept}
             disabled={accepting}
-            className="w-full"
+            className="w-full rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold h-11 shadow-[0_2px_12px_-2px_rgba(245,158,11,0.4)]"
           >
             {accepting ? (
               <>
@@ -246,7 +247,7 @@ export default function InviteAcceptance() {
           <Button
             onClick={() => navigate("/")}
             variant="ghost"
-            className="w-full"
+            className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11"
             disabled={accepting}
           >
             Cancel

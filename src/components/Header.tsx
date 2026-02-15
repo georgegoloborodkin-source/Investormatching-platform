@@ -13,88 +13,84 @@ interface HeaderProps {
   hasData: boolean;
 }
 
-export function Header({ 
-  onImportData, 
+export function Header({
+  onImportData,
   onGenerateMatches,
-  onRematch, 
-  onExport, 
+  onRematch,
+  onExport,
   isRematching = false,
-  hasData
+  hasData,
 }: HeaderProps) {
   const { user, profile } = useAuth();
   const [scrollY, setScrollY] = useState(0);
   const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
+    const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  return (
-    <header 
-      ref={headerRef}
-      className="relative border-b-2 border-white bg-[#050505] text-white transition-all duration-300"
-      style={{
-        backdropFilter: scrollY > 50 ? "blur(10px)" : "none",
-        backgroundColor: scrollY > 50 ? "rgba(5, 5, 5, 0.95)" : "#050505",
-      }}
-    >
-      {/* Animated Grid Background */}
-      <div
-        className="absolute inset-0 opacity-5"
-        style={{
-          transform: `translateY(${scrollY * 0.1}px)`,
-          backgroundImage: `
-            linear-gradient(rgba(255, 237, 0, 0.2) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 237, 0, 0.2) 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 40px",
-        }}
-      />
+  const scrolled = scrollY > 40;
+  const btnBase =
+    "rounded-lg font-semibold transition-all duration-200 border";
+  const btnPrimary =
+    "bg-amber-500 text-slate-950 hover:bg-amber-400 border-amber-500/50 shadow-[0_2px_12px_-2px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(245,158,11,0.5)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0";
+  const btnSecondary =
+    "border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed";
 
+  return (
+    <header
+      ref={headerRef}
+      className={`sticky top-0 z-50 border-b transition-all duration-300 ${
+        scrolled
+          ? "border-slate-700/60 bg-slate-950/90 backdrop-blur-xl shadow-lg shadow-black/10"
+          : "border-slate-800/50 bg-transparent"
+      }`}
+    >
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-8">
-            <h1 className="text-2xl font-black font-mono text-white tracking-tight">
-              VENTUREOS
-            </h1>
-            <nav className="hidden md:flex space-x-6">
-              <span className="text-sm font-medium text-white/70 uppercase tracking-wider">
-                Venture Capital Platform
-              </span>
-            </nav>
+          <div className="flex items-center gap-8">
+            <Link
+              to="/"
+              className="text-xl font-bold text-white tracking-tight hover:text-amber-400 transition-colors duration-200"
+            >
+              VentureOS
+            </Link>
+            <span className="hidden md:inline text-sm text-slate-400 font-medium">
+              Venture Capital Platform
+            </span>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onImportData}
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold"
+              className={`${btnBase} ${btnSecondary} h-9 px-4`}
             >
               <Upload className="h-4 w-4 mr-2" />
               Import CSV
             </Button>
-            
-            <Button 
-              size="sm" 
+
+            <Button
+              size="sm"
               onClick={onGenerateMatches}
               disabled={isRematching || !hasData}
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`${btnBase} ${btnPrimary} h-9 px-4`}
             >
-              <RotateCcw className={`h-4 w-4 mr-2 ${isRematching ? 'animate-spin' : ''}`} />
-              {isRematching ? 'Generating...' : 'Generate Matches'}
+              <RotateCcw
+                className={`h-4 w-4 mr-2 ${isRematching ? "animate-spin" : ""}`}
+              />
+              {isRematching ? "Generating…" : "Generate Matches"}
             </Button>
-            
-            <Button 
+
+            <Button
               variant="outline"
-              size="sm" 
+              size="sm"
               onClick={onExport}
               disabled={!hasData}
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`${btnBase} ${btnSecondary} h-9 px-4`}
             >
               <Download className="h-4 w-4 mr-2" />
               Export
@@ -102,14 +98,22 @@ export function Header({
 
             {user ? (
               <Link to="/profile">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-[#FFED00] font-bold">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-300 hover:text-white hover:bg-slate-800/80 h-9 px-4 rounded-lg font-medium transition-colors duration-200"
+                >
                   <User className="h-4 w-4 mr-2" />
-                  {profile?.full_name || user.email?.split('@')[0] || 'Profile'}
+                  {profile?.full_name || user.email?.split("@")[0] || "Profile"}
                 </Button>
               </Link>
             ) : (
               <Link to="/login">
-                <Button variant="outline" size="sm" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`${btnBase} ${btnSecondary} h-9 px-4`}
+                >
                   <LogIn className="h-4 w-4 mr-2" />
                   Sign In
                 </Button>

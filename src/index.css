@@ -405,6 +405,18 @@
     }
   }
 
+  /* Global app shell: use on root wrapper so all pages share same base */
+  .app-shell {
+    min-height: 100vh;
+    background-color: #020617; /* slate-950 */
+    color: #f8fafc;
+    font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+  }
+
+  .app-shell .page-content {
+    animation: cis-fade-in-up 0.4s ease-out forwards;
+  }
+
   .cis-grid-bg {
     background-image:
       linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),

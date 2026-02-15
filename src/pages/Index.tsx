@@ -846,37 +846,7 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
-        {/* Parallax Background Layers */}
-        <div
-          className="fixed inset-0 opacity-5 pointer-events-none"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(255, 237, 0, 0.2) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255, 237, 0, 0.2) 1px, transparent 1px)
-            `,
-            backgroundSize: "50px 50px",
-          }}
-        />
-        
-        {/* Floating Particles */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          {[...Array(15)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-full bg-[#FFED00] opacity-10 blur-sm"
-              style={{
-                width: `${Math.random() * 3 + 1}px`,
-                height: `${Math.random() * 3 + 1}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animation: `float${i % 3} ${5 + Math.random() * 5}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 2}s`,
-              }}
-            />
-          ))}
-        </div>
-
+    <div className="min-h-screen text-white relative overflow-hidden page-content">
         <Header
           onImportData={() => setShowCSVUpload(true)}
           onGenerateMatches={handleGenerateMatches}
@@ -887,39 +857,39 @@ const Index = () => {
         />
         
         <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-black font-mono text-white mb-2 tracking-tight">
-                MATCHMAKING DASHBOARD
+              <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                Matchmaking Dashboard
               </h2>
-              <p className="text-white/70 uppercase text-xs tracking-wider font-semibold">
-                {startups.length} STARTUPS • {investors.length} INVESTORS • {mentors.length} MENTORS • {corporates.length} CORPORATES • {matches.length} MATCHES
+              <p className="text-slate-400 text-sm mt-1 font-medium">
+                {startups.length} startups · {investors.length} investors · {mentors.length} mentors · {corporates.length} corporates · {matches.length} matches
               </p>
             </div>
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <Link to="/cis">
-              <Button variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
-                Switch to CIS
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <Link to="/cis">
+                <Button variant="outline" className="rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 hover:text-white font-semibold transition-all duration-200">
+                  Switch to CIS
+                </Button>
+              </Link>
+              <Link to="/orbit-stats">
+                <Button className="rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold shadow-[0_2px_12px_-2px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(245,158,11,0.5)] hover:-translate-y-0.5 transition-all duration-200">
+                  VentureOS Stats
+                </Button>
+              </Link>
+              <Button onClick={handleSaveData} variant="outline" className="rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 font-semibold transition-all duration-200">
+                <Save className="h-4 w-4 mr-2" />
+                Save Data
               </Button>
-            </Link>
-            <Link to="/orbit-stats">
-              <Button className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
-                VentureOS Stats
-              </Button>
-            </Link>
-            <Button onClick={handleSaveData} variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] transition-all font-bold">
-              <Save className="h-4 w-4 mr-2" />
-              Save Data
-            </Button>
+            </div>
           </div>
-        </div>
         
         <Tabs value={safeActiveTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 border-2 border-white bg-transparent">
-            <TabsTrigger value="manage" className="data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">Manage</TabsTrigger>
-            <TabsTrigger value="visibility" className="data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">Overview</TabsTrigger>
-            <TabsTrigger value="table" className="data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold border-r border-white last:border-r-0">Table View</TabsTrigger>
-            <TabsTrigger value="editable" className="data-[state=active]:bg-[#FFED00] data-[state=active]:text-black data-[state=active]:font-bold">Edit Schedule</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 rounded-xl border border-slate-700/60 bg-slate-800/40 p-1 gap-1">
+            <TabsTrigger value="manage" className="rounded-lg data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 data-[state=active]:font-semibold data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-200 transition-all duration-200">Manage</TabsTrigger>
+            <TabsTrigger value="visibility" className="rounded-lg data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 data-[state=active]:font-semibold data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-200 transition-all duration-200">Overview</TabsTrigger>
+            <TabsTrigger value="table" className="rounded-lg data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 data-[state=active]:font-semibold data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-200 transition-all duration-200">Table View</TabsTrigger>
+            <TabsTrigger value="editable" className="rounded-lg data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 data-[state=active]:font-semibold data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-200 transition-all duration-200">Edit Schedule</TabsTrigger>
           </TabsList>
           
           <TabsContent value="manage">

@@ -25,6 +25,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <div className="app-shell cis-grid-bg cis-mesh-bg">
           <Routes>
             <Route
               path="/"
@@ -80,6 +81,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </div>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>

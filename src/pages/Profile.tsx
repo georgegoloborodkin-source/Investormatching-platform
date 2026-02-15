@@ -121,29 +121,29 @@ export default function Profile() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
       </div>
     );
   }
 
   if (!user || !profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <Card className="w-full max-w-md border border-slate-700/60 bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-xl shadow-black/20">
+          <CardContent className="pt-8 pb-8">
+            <p className="text-center text-slate-400 mb-6">
               Please sign in to view your profile.
             </p>
-            <div className="mt-4 space-y-2">
-              <Button onClick={() => navigate("/login")} className="w-full">
+            <div className="space-y-3">
+              <Button onClick={() => navigate("/login")} className="w-full rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold h-11">
                 Sign In
               </Button>
               {user ? (
-                <Button variant="outline" onClick={handleCreateProfile} className="w-full">
+                <Button variant="outline" onClick={handleCreateProfile} className="w-full rounded-lg border-slate-600 text-slate-200 hover:bg-slate-800 h-11">
                   Fix Profile
                 </Button>
               ) : null}
-              <Button variant="ghost" onClick={handleSignOut} className="w-full">
+              <Button variant="ghost" onClick={handleSignOut} className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11">
                 Log out
               </Button>
             </div>
@@ -154,78 +154,85 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 page-content">
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">My Profile</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold text-white">My Profile</h1>
+            <p className="text-slate-400 text-sm mt-1">
               Manage your account and availability
             </p>
           </div>
-          <Button variant="outline" onClick={handleSignOut}>
+          <Button
+            variant="outline"
+            onClick={handleSignOut}
+            className="rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 font-semibold self-start sm:self-auto"
+          >
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
           </Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Profile Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserIcon className="h-5 w-5" />
+          <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
+            <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
+              <CardTitle className="flex items-center gap-2 text-white font-semibold">
+                <UserIcon className="h-5 w-5 text-amber-400" />
                 Profile Information
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-slate-400 text-sm">
                 Update your personal information
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-slate-300">Email</Label>
                 <Input
                   id="email"
                   value={user.email || ""}
                   disabled
-                  className="bg-muted"
+                  className="bg-slate-800/50 border-slate-600 text-slate-300"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Email is managed by your Google account
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="fullName" className="text-slate-300">Full Name</Label>
                 <Input
                   id="fullName"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your full name"
+                  className="bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-500"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Role</Label>
+                <Label className="text-slate-300">Role</Label>
                 <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-slate-800/50 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="managing_partner">Managing Partner</SelectItem>
-                    <SelectItem value="team_member">Team Member</SelectItem>
-                    <SelectItem value="organizer">Organizer</SelectItem>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="managing_partner" className="text-white focus:bg-slate-700">Managing Partner</SelectItem>
+                    <SelectItem value="team_member" className="text-white focus:bg-slate-700">Team Member</SelectItem>
+                    <SelectItem value="organizer" className="text-white focus:bg-slate-700">Organizer</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Role controls access to org data and workflows.
                 </p>
               </div>
 
-              <Separator />
+              <Separator className="bg-slate-700/60" />
 
-              <Button onClick={handleSaveProfile} disabled={saving} className="w-full">
+              <Button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="w-full rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold h-11 shadow-[0_2px_12px_-2px_rgba(245,158,11,0.4)]"
+              >
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -241,18 +248,17 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {/* Availability (for Investors) */}
           {profile.role === 'investor' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Time Slot Availability</CardTitle>
-                <CardDescription>
+            <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
+              <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
+                <CardTitle className="text-white font-semibold">Time Slot Availability</CardTitle>
+                <CardDescription className="text-slate-400 text-sm">
                   Set which time slots you're available for meetings
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 {events.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-slate-500">
                     <p>No active events found.</p>
                     <p className="text-sm mt-2">
                       Contact your organizer to create an event.
@@ -262,9 +268,9 @@ export default function Profile() {
                   <div className="space-y-4">
                     {events.length > 1 && (
                       <div className="space-y-2">
-                        <Label>Select Event</Label>
+                        <Label className="text-slate-300">Select Event</Label>
                         <select
-                          className="w-full px-3 py-2 border rounded-md"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-white"
                           value={activeEventId || ""}
                           onChange={(e) => setActiveEventId(e.target.value)}
                         >
