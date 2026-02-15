@@ -1603,10 +1603,15 @@ function SourcesTab({
   // ── Google Drive Folder Sync state ──
   const [connectedDriveFolderId, setConnectedDriveFolderId] = useState<string | null>(null);
   const [connectedDriveFolderName, setConnectedDriveFolderName] = useState<string | null>(null);
+  // Support multiple connected folders
+  const [connectedDriveFolders, setConnectedDriveFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [driveSyncProgress, setDriveSyncProgress] = useState<{ phase: string; current: number; total: number; currentItem: string } | null>(null);
   const [driveSyncResults, setDriveSyncResults] = useState<Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }>>([]);
   const [lastDriveSyncAt, setLastDriveSyncAt] = useState<string | null>(null);
+  // Auto-sync interval (15 minutes)
+  const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
   const MAX_IMPORT_CHARS = 24000;
   const MAX_PDF_PAGES = 6;
@@ -1643,6 +1648,17 @@ function SourcesTab({
           setConnectedDriveFolderId(row.config.google_drive_folder_id);
           setConnectedDriveFolderName(row.config.google_drive_folder_name || "Portfolio folder");
           setLastDriveSyncAt(row.last_sync_at || null);
+          // Load multiple folders if stored
+          const folders = row.config.folders as Array<{ id: string; name: string }> | undefined;
+          if (folders && Array.isArray(folders) && folders.length > 0) {
+            setConnectedDriveFolders(folders);
+          } else {
+            // Backward compat: single folder → array
+            setConnectedDriveFolders([{
+              id: row.config.google_drive_folder_id,
+              name: row.config.google_drive_folder_name || "Portfolio folder",
+            }]);
+          }
         }
       } catch (err) {
         console.warn("[DriveSync] Failed to load sync config:", err);
@@ -1765,8 +1781,15 @@ function SourcesTab({
             const folderId = folder.id;
             const folderName = folder.name || "Portfolio folder";
             console.log("[DriveSync] Connected folder:", folderName, folderId);
-            setConnectedDriveFolderId(folderId);
-            setConnectedDriveFolderName(folderName);
+            
+            // Add to folders list (avoid duplicates)
+            const updatedFolders = [...connectedDriveFolders.filter(f => f.id !== folderId), { id: folderId, name: folderName }];
+            setConnectedDriveFolders(updatedFolders);
+            // Keep primary folder for backward compat
+            if (!connectedDriveFolderId) {
+              setConnectedDriveFolderId(folderId);
+              setConnectedDriveFolderName(folderName);
+            }
 
             // Persist to sync_configurations
             const eventId = activeEventId || (await ensureActiveEventId());
@@ -1792,15 +1815,19 @@ function SourcesTab({
                 organization_id: orgId,
                 event_id: eventId,
                 source_type: "google_drive",
-                config: { google_drive_folder_id: folderId, google_drive_folder_name: folderName },
-                sync_frequency: "on_login",
+                config: {
+                  google_drive_folder_id: updatedFolders[0].id,
+                  google_drive_folder_name: updatedFolders[0].name,
+                  folders: updatedFolders,
+                },
+                sync_frequency: "every_15_min",
                 is_active: true,
                 created_by: userId,
               },
               { onConflict: "organization_id,event_id,source_type" }
             );
 
-            toast({ title: "Portfolio folder connected", description: `Connected to "${folderName}". Click "Sync Now" to import.` });
+            toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Auto-sync runs every 15 minutes.` });
           }
         })
         .build();
@@ -1808,11 +1835,17 @@ function SourcesTab({
     } catch (err) {
       toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
     }
-  }, [activeEventId, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
 
   // ── Core folder sync logic ──
   const syncGoogleDriveFolder = useCallback(async () => {
-    if (!connectedDriveFolderId) {
+    // Support multiple folders — use array if available, fallback to single
+    const foldersToSync = connectedDriveFolders.length > 0
+      ? connectedDriveFolders
+      : connectedDriveFolderId
+        ? [{ id: connectedDriveFolderId, name: connectedDriveFolderName || "Portfolio folder" }]
+        : [];
+    if (foldersToSync.length === 0) {
       toast({ title: "No folder connected", description: "Connect a Google Drive portfolio folder first.", variant: "destructive" });
       return;
     }
@@ -1828,16 +1861,28 @@ function SourcesTab({
     }
 
     setIsSyncingDrive(true);
-    setDriveSyncProgress({ phase: "Discovering folders...", current: 0, total: 0, currentItem: "" });
+    setDriveSyncProgress({ phase: `Discovering folders (${foldersToSync.length} root${foldersToSync.length > 1 ? "s" : ""})...`, current: 0, total: 0, currentItem: "" });
     setDriveSyncResults([]);
     const results: Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }> = [];
 
     try {
-      // 1. List sub-folders (each = one portfolio company)
-      const subFolders = await listDriveFolders(accessToken, connectedDriveFolderId);
-      console.log(`[DriveSync] Found ${subFolders.length} company sub-folders`);
+      // 1. List sub-folders from ALL connected root folders
+      let subFolders: Array<{ id: string; name: string }> = [];
+      for (const rootFolder of foldersToSync) {
+        const subs = await listDriveFolders(accessToken, rootFolder.id);
+        console.log(`[DriveSync] Root "${rootFolder.name}" → ${subs.length} sub-folders`);
+        subFolders = [...subFolders, ...subs];
+      }
+      // Deduplicate by folder id
+      const seenIds = new Set<string>();
+      subFolders = subFolders.filter(f => {
+        if (seenIds.has(f.id)) return false;
+        seenIds.add(f.id);
+        return true;
+      });
+      console.log(`[DriveSync] Total: ${subFolders.length} unique company sub-folders from ${foldersToSync.length} root(s)`);
       if (subFolders.length === 0) {
-        toast({ title: "No sub-folders found", description: "The connected folder has no company sub-folders yet." });
+        toast({ title: "No sub-folders found", description: "The connected folder(s) have no company sub-folders yet." });
         setIsSyncingDrive(false);
         setDriveSyncProgress(null);
         return;
@@ -2185,21 +2230,22 @@ function SourcesTab({
       setIsSyncingDrive(false);
       setDriveSyncProgress(null);
     }
-  }, [activeEventId, connectedDriveFolderId, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onRefreshCompanyCards, sourceFolders, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolderName, connectedDriveFolders, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onRefreshCompanyCards, sourceFolders, toast]);
 
   // ── Auto-sync on login: fire once per session when config + token are available ──
   const autoSyncFiredRef = useRef(false);
   useEffect(() => {
     if (autoSyncFiredRef.current) return;
-    if (!connectedDriveFolderId || !activeEventId || isSyncingDrive) return;
+    const hasFolders = connectedDriveFolders.length > 0 || connectedDriveFolderId;
+    if (!hasFolders || !activeEventId || isSyncingDrive) return;
     (async () => {
       const token = await getGoogleAccessToken();
       if (!token) return;
-      // Only auto-sync if last sync was > 1 hour ago (or never synced)
+      // Only auto-sync if last sync was > 15 min ago (or never synced)
       if (lastDriveSyncAt) {
         const elapsed = Date.now() - new Date(lastDriveSyncAt).getTime();
-        if (elapsed < 60 * 60 * 1000) {
-          console.log("[DriveSync] Auto-sync skipped: last sync was less than 1 hour ago");
+        if (elapsed < SYNC_INTERVAL_MS) {
+          console.log("[DriveSync] Auto-sync skipped: last sync was less than 15 min ago");
           autoSyncFiredRef.current = true;
           return;
         }
@@ -2208,7 +2254,38 @@ function SourcesTab({
       console.log("[DriveSync] Auto-sync on login triggered");
       syncGoogleDriveFolder();
     })();
-  }, [connectedDriveFolderId, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
+  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
+
+  // ── Auto-sync interval: sync every 15 minutes while page is open ──
+  useEffect(() => {
+    const hasFolders = connectedDriveFolders.length > 0 || connectedDriveFolderId;
+    if (!hasFolders || !activeEventId) {
+      // Clear interval if no folders connected
+      if (autoSyncIntervalRef.current) {
+        clearInterval(autoSyncIntervalRef.current);
+        autoSyncIntervalRef.current = null;
+      }
+      return;
+    }
+    // Set up interval
+    if (!autoSyncIntervalRef.current) {
+      console.log("[DriveSync] Setting up auto-sync interval (every 15 min)");
+      autoSyncIntervalRef.current = setInterval(() => {
+        if (isSyncingDrive) {
+          console.log("[DriveSync] Auto-sync interval: skipped (already syncing)");
+          return;
+        }
+        console.log("[DriveSync] Auto-sync interval triggered");
+        syncGoogleDriveFolder();
+      }, SYNC_INTERVAL_MS);
+    }
+    return () => {
+      if (autoSyncIntervalRef.current) {
+        clearInterval(autoSyncIntervalRef.current);
+        autoSyncIntervalRef.current = null;
+      }
+    };
+  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId, isSyncingDrive, syncGoogleDriveFolder]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -3533,43 +3610,98 @@ function SourcesTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {connectedDriveFolderId ? (
+          {(connectedDriveFolders.length > 0 || connectedDriveFolderId) ? (
             <>
-              <div className="flex items-center justify-between p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5">
-                <div className="flex items-center gap-3">
-                  <Folder className="h-5 w-5 text-[#FFED00]" />
-                  <div>
-                    <div className="font-mono font-bold text-white text-sm">{connectedDriveFolderName}</div>
-                    <div className="text-[10px] text-white/50 font-mono">
-                      {lastDriveSyncAt
-                        ? `Last synced: ${new Date(lastDriveSyncAt).toLocaleString()}`
-                        : "Never synced"}
+              {/* Connected folders list */}
+              <div className="space-y-2">
+                {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder" }]).map((folder) => (
+                  <div key={folder.id} className="flex items-center justify-between p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5">
+                    <div className="flex items-center gap-3">
+                      <Folder className="h-5 w-5 text-[#FFED00]" />
+                      <div>
+                        <div className="font-mono font-bold text-white text-sm">{folder.name}</div>
+                        <div className="text-[10px] text-white/40 font-mono truncate max-w-[200px]">{folder.id}</div>
+                      </div>
                     </div>
+                    {connectedDriveFolders.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const updated = connectedDriveFolders.filter(f => f.id !== folder.id);
+                          setConnectedDriveFolders(updated);
+                          if (updated.length > 0) {
+                            setConnectedDriveFolderId(updated[0].id);
+                            setConnectedDriveFolderName(updated[0].name);
+                          } else {
+                            setConnectedDriveFolderId(null);
+                            setConnectedDriveFolderName(null);
+                          }
+                          // Persist updated list
+                          if (activeEventId) {
+                            await supabase.from("sync_configurations")
+                              .update({
+                                config: {
+                                  google_drive_folder_id: updated[0]?.id || null,
+                                  google_drive_folder_name: updated[0]?.name || null,
+                                  folders: updated,
+                                },
+                              })
+                              .eq("event_id", activeEventId)
+                              .eq("source_type", "google_drive");
+                          }
+                          toast({ title: "Folder removed", description: `Removed "${folder.name}" from sync.` });
+                        }}
+                        className="text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
+                ))}
+              </div>
+
+              {/* Sync status bar */}
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-white/15 bg-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">AUTO-SYNC ACTIVE</span>
+                  </div>
+                  <span className="text-[10px] text-white/40 font-mono">Every 15 min</span>
+                  {lastDriveSyncAt && (
+                    <span className="text-[10px] text-white/40 font-mono">
+                      | Last: {new Date(lastDriveSyncAt).toLocaleString()}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={connectDrivePortfolioFolder}
-                    className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold text-xs"
+                    className="border border-white/20 bg-transparent text-white/70 hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold text-[10px] h-7 px-2"
                   >
-                    Change Folder
+                    <FolderPlus className="h-3.5 w-3.5 mr-1" />
+                    Add Folder
                   </Button>
                   <Button
                     size="sm"
                     onClick={syncGoogleDriveFolder}
                     disabled={isSyncingDrive || !canImport}
-                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingDrive ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                         Syncing...
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="h-4 w-4 mr-1" />
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
                         Sync Now
                       </>
                     )}
