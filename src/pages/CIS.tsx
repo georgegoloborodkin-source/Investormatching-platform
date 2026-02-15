@@ -7045,8 +7045,11 @@ export default function CIS() {
       // Use backend LLM rewriting if we have chat history and the question might need rewriting
       const qLower = question.toLowerCase();
       const hasPronouns = /\b(it|its|him|his|her|she|they|them|their|this|that|these|those)\b/i.test(question);
-      const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|more complete|more comprehensive|more profound|give more|give more info|expand|elaborate|all you know|everything|full|complete|comprehensive|detailed)\b/i.test(qLower);
-      const followUpCueInQuestion = /\b(what about|and what|tell me|more about|more info|more complete|more comprehensive|more profound|give more|give more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail|full|complete|detailed)\b/i.test(qLower);
+      const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|more complete|more comprehensive|more profound|give more|give more info|expand|elaborate|all you know|everything|full|complete|comprehensive|detailed|another|other|different|alternative|someone else|something else|any other|next one|one more)\b/i.test(qLower);
+      const followUpCueInQuestion = /\b(what about|and what|tell me|more about|more info|more complete|more comprehensive|more profound|give more|give more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail|full|complete|detailed|another|other|different|alternative|someone else|something else|any other|next one|one more)\b/i.test(qLower);
+      
+      // CRITICAL: Detect "another/different/other" queries — user wants NEW results, not repeats
+      const wantsAlternative = /\b(another|other|different|alternative|someone else|something else|any other|next one|one more|what else|who else|which else)\b/i.test(qLower);
       const isShort = question.split(/\s+/).length <= 15;
       
       // CRITICAL: Extract names from chat history for fallback pronoun replacement
@@ -7056,6 +7059,33 @@ export default function CIS() {
         const namePattern = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g;
         const names = allText.match(namePattern) || [];
         return [...new Set(names)]; // Unique names
+      };
+      
+      // Extract company/entity names that were already mentioned in ASSISTANT responses
+      // Used to tell Claude to exclude these when user asks for "another" option
+      const extractMentionedCompaniesFromAssistant = (msgs: Array<{ role: string; content: string }>): string[] => {
+        const assistantTexts = msgs.filter(m => m.role === "assistant").map(m => m.content).join("\n");
+        const companies: string[] = [];
+        // Match bold headers like **CoreTechX** or **Company Name**
+        const boldPattern = /\*\*([A-Z][A-Za-z0-9\s&\-\.]+?)\*\*/g;
+        let match;
+        while ((match = boldPattern.exec(assistantTexts)) !== null) {
+          const name = match[1].trim();
+          // Filter out common headings that aren't company names
+          const skipWords = new Set(['Key', 'Note', 'Summary', 'Recommendation', 'Connection Type', 'Potential Synergies', 'Rationale', 'Sources Used', 'MENA Portfolio', 'Why', 'How', 'What', 'Location', 'Business', 'Pricing Model', 'Core Business', 'Key Value Proposition']);
+          if (name.length > 1 && name.length < 50 && !skipWords.has(name) && !/^(The |A |An |This |That |Here |Our |Your )/.test(name)) {
+            companies.push(name);
+          }
+        }
+        // Also match "# Name" or "## Name" markdown headers  
+        const headerPattern = /^#{1,3}\s+([A-Z][A-Za-z0-9\s&\-\.]+)/gm;
+        while ((match = headerPattern.exec(assistantTexts)) !== null) {
+          const name = match[1].trim();
+          if (name.length > 1 && name.length < 50) {
+            companies.push(name);
+          }
+        }
+        return [...new Set(companies)];
       };
       
       const namesInHistory = extractNamesFromHistory(threadMessages);
@@ -8143,7 +8173,7 @@ export default function CIS() {
       // we need to send ALL portfolio context so Claude knows what companies exist.
       const isConnectionIntent = (() => {
         const q = normalizedQuestion;
-        return /\b(connect|connected|connection|connections|partner|partnership|partnerships|introduce|introduction|link|linked|linking|network|networking|relationship|relationships|relate|who.*help|help.*them|could.*connect|should.*connect|could.*partner|suggest.*compan|recommend.*compan|match.*with|pair.*with|synerg|collaborate|collaboration)\b/i.test(q);
+        return /\b(connect|connected|connection|connections|partner|partnership|partnerships|introduce|introduction|link|linked|linking|network|networking|relationship|relationships|relate|who.*help|help.*them|could.*help|could.*connect|should.*connect|could.*partner|suggest.*compan|recommend.*compan|match.*with|pair.*with|synerg|collaborate|collaboration|another.*compan|other.*compan|different.*compan|what.*compan.*help|which.*compan)\b/i.test(q);
       })();
 
       // For meta-questions, answer even without sources
@@ -8200,9 +8230,11 @@ export default function CIS() {
 
       // CRITICAL: If this is a pronoun-based follow-up, reuse previous evidence directly.
       // This avoids searching for "him" and failing to find new docs.
+      // BUT: If user asks for "another/different/other", do NOT reuse — they want NEW results.
       if (
         isFollowUpQuery &&
         followUpHasPronoun &&
+        !wantsAlternative &&
         previousEvidence &&
         previousEvidence.docs.length > 0 &&
         previousEvidenceThreadId === threadId
@@ -8288,6 +8320,8 @@ export default function CIS() {
 
       console.log("[DEBUG] Follow-up detection:", {
         isFollowUpQuery,
+        wantsAlternative,
+        isConnectionIntent,
         hasRankedDocs: rankedDocs?.length > 0,
         hasPreviousEvidence: !!previousEvidence,
         previousEvidenceDocsCount: previousEvidence?.docs?.length,
@@ -8302,6 +8336,7 @@ export default function CIS() {
         const hasFollowupCueInOriginal = /\b(more about|more info|more complete|more comprehensive|more profound|give more|give more info|tell me more|elaborate|explain|full|complete|comprehensive|detailed)\b/i.test(question.toLowerCase());
         const shouldUsePreviousEvidence = (
           (isFollowUpQuery || hasPronounInQuestion || hasFollowupCueInOriginal) &&
+          !wantsAlternative && // Don't reuse when user asks for "another/different"
           previousEvidence &&
           previousEvidence.docs.length > 0
           // Removed: && previousEvidenceThreadId === threadId (too strict!)
@@ -8517,12 +8552,23 @@ export default function CIS() {
           // Get previous messages from this thread for context
           const threadMessages = await getThreadMessages(threadId, 10);
           
+          // CRITICAL: When user asks for "another/different", add exclusion context
+          let questionForClaudeFallback = question;
+          if (wantsAlternative && threadMessages.length > 0) {
+            const alreadyMentioned = extractMentionedCompaniesFromAssistant(threadMessages);
+            if (alreadyMentioned.length > 0) {
+              const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
+              questionForClaudeFallback = question + exclusionNote;
+              console.log("[DEBUG] 🚫 Fallback exclusion context added. Already mentioned:", alreadyMentioned);
+            }
+          }
+          
           // Call Claude with portfolio context (web search is handled natively by Anthropic when enabled)
           const noDocSources = portfolioSources.length > 0 ? [...portfolioSources] : [] as Array<{ title: string | null; file_name: string | null; snippet: string | null }>;
           
           await askClaudeAnswerStream(
             {
-              question,
+              question: questionForClaudeFallback,
               sources: noDocSources,
               webSearchEnabled,
               decisions: decisionIntent
@@ -8667,16 +8713,28 @@ export default function CIS() {
         // Get previous messages from this thread for context (from state or DB)
         const threadMessages = await getThreadMessages(threadId, 10);
         
+        // CRITICAL: When user asks for "another/different", extract already-mentioned companies
+        // and inject exclusion context so Claude avoids repeating them
+        let questionForClaude = question;
+        if (wantsAlternative && threadMessages.length > 0) {
+          const alreadyMentioned = extractMentionedCompaniesFromAssistant(threadMessages);
+          if (alreadyMentioned.length > 0) {
+            const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
+            questionForClaude = question + exclusionNote;
+            console.log("[DEBUG] 🚫 Exclusion context added. Already mentioned:", alreadyMentioned);
+          }
+        }
+        
         // Debug logging
         console.log("[DEBUG] Sending to backend:", {
-          question,
+          question: questionForClaude,
           threadMessagesCount: threadMessages.length,
           threadMessages: threadMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." }))
         });
         
         await askClaudeAnswerStream(
           {
-            question,
+            question: questionForClaude,
             sources,
             decisions: decisionsForClaude,
             connections: connectionsForChat,
