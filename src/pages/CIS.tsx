@@ -43,6 +43,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +104,8 @@ import {
   Percent,
   Cloud,
   RefreshCw,
+  LogOut,
+  User,
 } from "lucide-react";
 import {
   BarChart,
@@ -9201,62 +9210,123 @@ export default function CIS() {
       <div className="fixed inset-0 cis-grid-bg cis-mesh-bg pointer-events-none" />
 
       <div className="relative z-10 max-w-[1600px] mx-auto px-4 py-3 space-y-3">
-        {/* Header */}
-        <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b-2 border-white/20 pb-3 cis-fade-in">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3 text-white tracking-tight">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFED00]/15 text-[#FFED00] cis-accent-glow">
+        {/* Top navigation bar */}
+        <header className="flex items-center justify-between gap-4 border-b-2 border-white/20 pb-3 cis-fade-in">
+          <div className="flex items-center gap-6 min-w-0">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
                 <Brain className="h-5 w-5" />
               </span>
-              Company Intelligence System
-            </h1>
-            <p className="text-sm text-white/60 mt-1 font-medium">
-              AI-powered document extraction, decision tracking, and knowledge management
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center gap-2">
-            <div className="cis-surface px-4 py-2.5 rounded-lg text-sm">
-              <div className="font-semibold text-white">
-                {profile?.full_name || profile?.email || "Signed in"}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <Badge className="bg-[#FFED00]/20 text-[#FFED00] border-[#FFED00]/40 font-semibold">
-                  {profile?.role?.toUpperCase() || "MEMBER"}
-                </Badge>
-                {profile?.organization_id ? (
-                  <span className="text-white/50 text-xs">Org: {profile.organization_id.slice(0, 8)}…</span>
-                ) : (
-                  <span className="text-white/50 text-xs">Org: Pending</span>
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-white/50 uppercase tracking-wider">
-                Build: {buildStamp}
-              </div>
+              <span className="font-bold text-white text-lg tracking-tight hidden sm:inline">CIS</span>
             </div>
-            {(profile?.role as string) === "admin" && (
-              <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
-                <Link to="/admin">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Admin Panel
+            <nav className="flex items-center gap-0.5 flex-wrap">
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "chat" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Chat
+              </button>
+              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+                <button
+                  onClick={() => setActiveTab("onboarding")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "onboarding" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Onboarding
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab("overview")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "overview" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab("sources")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "sources" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Sources
+              </button>
+              <button
+                onClick={() => setActiveTab("decisions")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "decisions" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Decisions
+              </button>
+              <button
+                onClick={() => setActiveTab("companies")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "companies" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Companies
+              </button>
+              <button
+                onClick={() => setActiveTab("connections")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "connections" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Connections
+              </button>
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "dashboard" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Engine
+              </button>
+              {(profile?.role as string) === "admin" && (
+                <Link to="/admin" className="px-3 py-2 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
+                  <Shield className="h-4 w-4" />
+                  Admin
                 </Link>
-              </Button>
-            )}
-            <Button variant="outline" onClick={signOut} className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
-              Log out
-            </Button>
-            <Button variant="outline" asChild className="cis-nav-btn cis-nav-btn-inactive rounded-lg border-white/30 text-white hover:border-[#FFED00]/40 hover:text-[#FFED00]">
-              <a href="/">← Back to Matchmaking</a>
-            </Button>
+              )}
+            </nav>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 hover:border-[#FFED00]/30 text-white font-medium text-sm shrink-0 transition-all">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-xs font-bold">
+                  {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
+                </span>
+                <span className="max-w-[140px] truncate hidden sm:inline">{profile?.full_name || profile?.email || "Account"}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 border border-white/20 bg-black/95 backdrop-blur-xl text-white">
+              <DropdownMenuItem
+                onClick={() => setActiveTab("account")}
+                className="cursor-pointer text-white/80 focus:bg-white/10 focus:text-white"
+              >
+                <User className="h-4 w-4 mr-2" />
+                My Account
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem onClick={signOut} className="cursor-pointer text-red-400 focus:bg-red-500/20 focus:text-red-200">
+                <LogOut className="h-4 w-4 mr-2" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
-        {/* Main Layout with Left Sidebar */}
+        {/* Main Layout — sidebar only when on Chat tab */}
         <div className="flex gap-4">
-          {/* Left Sidebar - Navigation */}
+          {activeTab === "chat" && (
           <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-            {/* Chat Threads - Only show in chat tab */}
-            {activeTab === "chat" && (
-              <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
+            {/* Chat Threads */}
+            <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
                 <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
                   Chat Threads
                 </div>
@@ -9309,91 +9379,9 @@ export default function CIS() {
                   )}
                 </div>
               </div>
-            )}
 
-            <nav className="cis-surface p-4 space-y-1.5 sticky top-4 cis-fade-in-up cis-stagger-2 opacity-0 [animation-fill-mode:forwards]">
-              <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
-                Navigation
-              </div>
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "chat" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <Brain className="h-4 w-4 shrink-0" />
-                Intelligence Chat
-              </button>
-              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
-                <button
-                  onClick={() => setActiveTab("onboarding")}
-                  className={`w-full flex items-center gap-2 cis-nav-btn ${
-                    activeTab === "onboarding" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                  }`}
-                >
-                  <Sparkles className="h-4 w-4 shrink-0" />
-                  Onboarding
-                </button>
-              )}
-              <button
-                onClick={() => setActiveTab("overview")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "overview" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <TrendingUp className="h-4 w-4 shrink-0" />
-                Dashboard
-              </button>
-              <button
-                onClick={() => setActiveTab("sources")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "sources" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <Folder className="h-4 w-4 shrink-0" />
-                Sources
-              </button>
-              <button
-                onClick={() => setActiveTab("decisions")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "decisions" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <ClipboardList className="h-4 w-4 shrink-0" />
-                Decision Logger
-              </button>
-              <button
-                onClick={() => setActiveTab("companies")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "companies" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <Building2 className="h-4 w-4 shrink-0" />
-                Company Cards
-              </button>
-              <button
-                onClick={() => setActiveTab("connections")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "connections" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <Link2 className="h-4 w-4 shrink-0" />
-                Connections Graph
-              </button>
-              <button
-                onClick={() => setActiveTab("dashboard")}
-                className={`w-full flex items-center gap-2 cis-nav-btn ${
-                  activeTab === "dashboard" ? "cis-nav-btn-active" : "cis-nav-btn-inactive"
-                }`}
-              >
-                <TrendingUp className="h-4 w-4 shrink-0" />
-                Decision Engine
-              </button>
-            </nav>
-
-            {/* Knowledge Scope - Only show in chat tab — all items flat on one level */}
-            {activeTab === "chat" && (
-              <div className="cis-surface p-3 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
+            {/* Knowledge Scope — all items flat on one level */}
+            <div className="cis-surface p-3 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards]">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider">
                     Knowledge Scope
@@ -9431,9 +9419,9 @@ export default function CIS() {
                   ))}
                 </div>
               </div>
-            )}
 
           </div>
+          )}
 
           {/* Main Content Area */}
           <div className="flex-1 min-w-0 cis-fade-in-up cis-stagger-4 opacity-0 [animation-fill-mode:forwards]">
@@ -9955,6 +9943,60 @@ export default function CIS() {
               {/* Decision Engine Dashboard Tab */}
               <TabsContent value="dashboard">
                 <DecisionEngineDashboardTab decisions={decisions} />
+              </TabsContent>
+
+              {/* Account Tab */}
+              <TabsContent value="account">
+                <Card className="border-2 border-white/20 bg-black/30 backdrop-blur-sm rounded-xl max-w-2xl">
+                  <CardHeader className="border-b-2 border-white/15 bg-black/40">
+                    <CardTitle className="text-lg font-bold text-white flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-lg font-bold">
+                        {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
+                      </span>
+                      My Account
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-5">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between py-3 border-b border-white/10">
+                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Name</span>
+                        <span className="text-sm text-white font-medium">{profile?.full_name || "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-3 border-b border-white/10">
+                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Email</span>
+                        <span className="text-sm text-white font-medium">{profile?.email || "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-3 border-b border-white/10">
+                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Role</span>
+                        <Badge className="bg-[#FFED00]/20 text-[#FFED00] border-[#FFED00]/40 text-xs font-semibold">
+                          {profile?.role?.toUpperCase() || "MEMBER"}
+                        </Badge>
+                      </div>
+                      {profile?.organization_id && (
+                        <div className="flex items-center justify-between py-3 border-b border-white/10">
+                          <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Organization</span>
+                          <span className="text-xs text-white/60 font-mono">{profile.organization_id.slice(0, 8)}…</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 pt-4">
+                      <a
+                        href="/"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 text-sm text-white/70 hover:text-white hover:border-white/40 transition-all font-medium"
+                      >
+                        ← Back to Matchmaking
+                      </a>
+                      <Button
+                        onClick={signOut}
+                        variant="outline"
+                        className="border-red-500/40 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/60"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Log out
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
