@@ -106,6 +106,9 @@ import {
   RefreshCw,
   LogOut,
   User,
+  Plus,
+  ListTodo,
+  GanttChart,
 } from "lucide-react";
 import {
   BarChart,
@@ -128,7 +131,7 @@ import {
   type Decision,
 } from "@/utils/claudeConverter";
 import { calculateDecisionEngineAnalytics } from "@/utils/decisionAnalytics";
-import type { DocumentRecord, SourceRecord, UserProfile } from "@/types";
+import type { DocumentRecord, SourceRecord, Task, UserProfile } from "@/types";
 import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import { TeamMembersList } from "@/components/TeamMembersList";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -165,6 +168,12 @@ import {
   getEntityProperties,
   mergeCompanyCardFromExtraction,
   normalizeCompanyNameForMatch,
+  getTasksByEvent,
+  getMyTasks,
+  insertTask,
+  updateTask,
+  updateTaskStatus,
+  deleteTask,
   type ConnectionType,
   type ConnectionStatus,
   type CompanyConnection,
@@ -4038,25 +4047,153 @@ function SourcesTab({
 }
 
 // ============================================================================
-// DASHBOARD TAB
+// DASHBOARD TAB (task hub: MD assigns tasks, team sees my tasks + Gantt)
 // ============================================================================
 
+type TeamMember = { id: string; email: string | null; full_name: string | null; role: string };
+
 function DashboardTab({
+  profile,
+  activeEventId,
+  currentUserId,
+  tasks,
+  onRefetchTasks,
   decisions,
   documents,
   sources,
 }: {
+  profile: UserProfile | null;
+  activeEventId: string | null;
+  currentUserId: string | null;
+  tasks: Task[];
+  onRefetchTasks: () => Promise<void>;
   decisions: Decision[];
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   sources: SourceRecord[];
 }) {
+  const { toast } = useToast();
+  const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
+  const orgId = profile?.organization_id;
+
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [addTaskTitle, setAddTaskTitle] = useState("");
+  const [addTaskDescription, setAddTaskDescription] = useState("");
+  const [addTaskDeadline, setAddTaskDeadline] = useState("");
+  const [addTaskAssignee, setAddTaskAssignee] = useState<string>("");
+  const [addTaskSaving, setAddTaskSaving] = useState(false);
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "gantt">("list");
+  const [statusNote, setStatusNote] = useState<Record<string, string>>({});
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+
+  const myTasks = useMemo(
+    () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
+    [tasks, currentUserId]
+  );
+  const filteredTasks = useMemo(() => {
+    let list = isMD ? tasks : myTasks;
+    if (filterAssignee !== "all") list = list.filter((t) => t.assignee_user_id === filterAssignee);
+    if (filterStatus !== "all") list = list.filter((t) => t.status === filterStatus);
+    return list;
+  }, [isMD, tasks, myTasks, filterAssignee, filterStatus]);
+
+  useEffect(() => {
+    if (!isMD || !orgId) return;
+    supabase
+      .from("user_profiles")
+      .select("id, email, full_name, role")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setTeamMembers((data as TeamMember[]) || []));
+  }, [isMD, orgId]);
+
   const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
   const latestDecision = decisions[0];
   const latestDocument = documents[0];
   const latestSource = sources[0];
 
+  const handleCreateTask = useCallback(async () => {
+    if (!activeEventId || !currentUserId || !addTaskTitle.trim()) {
+      toast({ title: "Missing fields", description: "Title is required.", variant: "destructive" });
+      return;
+    }
+    setAddTaskSaving(true);
+    try {
+      const { data, error } = await insertTask(activeEventId, {
+        assignee_user_id: addTaskAssignee || null,
+        title: addTaskTitle.trim(),
+        description: addTaskDescription.trim() || null,
+        deadline: addTaskDeadline ? new Date(addTaskDeadline).toISOString() : null,
+        created_by: currentUserId,
+      });
+      if (error) throw error;
+      toast({ title: "Task created" });
+      setAddTaskOpen(false);
+      setAddTaskTitle("");
+      setAddTaskDescription("");
+      setAddTaskDeadline("");
+      setAddTaskAssignee("");
+      await onRefetchTasks();
+    } catch (e: any) {
+      toast({ title: "Failed to create task", description: e?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setAddTaskSaving(false);
+    }
+  }, [activeEventId, currentUserId, addTaskTitle, addTaskDescription, addTaskDeadline, addTaskAssignee, onRefetchTasks, toast]);
+
+  const handleUpdateStatus = useCallback(
+    async (taskId: string, status: Task["status"], note?: string) => {
+      setStatusUpdatingId(taskId);
+      try {
+        const { error } = await updateTaskStatus(taskId, status, note ?? undefined);
+        if (error) throw error;
+        toast({ title: `Marked ${status === "done" ? "Done" : "In progress"}` });
+        await onRefetchTasks();
+      } catch (e: any) {
+        toast({ title: "Update failed", description: e?.message, variant: "destructive" });
+      } finally {
+        setStatusUpdatingId(null);
+      }
+    },
+    [onRefetchTasks, toast]
+  );
+
+  const handleDeleteTask = useCallback(async () => {
+    if (!taskToDelete) return;
+    setDeletingTaskId(taskToDelete.id);
+    try {
+      const { error } = await deleteTask(taskToDelete.id);
+      if (error) throw error;
+      toast({ title: "Task deleted" });
+      setTaskToDelete(null);
+      await onRefetchTasks();
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e?.message, variant: "destructive" });
+    } finally {
+      setDeletingTaskId(null);
+    }
+  }, [taskToDelete, onRefetchTasks, toast]);
+
+  const displayName = (userId: string | null) => {
+    if (!userId) return "Unassigned";
+    const m = teamMembers.find((x) => x.id === userId);
+    return m?.full_name || m?.email || "Unknown";
+  };
+
+  const now = Date.now();
+  const ganttWeeks = 12;
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const ganttStart = new Date(now);
+  ganttStart.setHours(0, 0, 0, 0);
+  const ganttStartMs = ganttStart.getTime();
+
   return (
     <div className="space-y-6">
+      {/* Summary stats: MD sees all; team sees same (optional: hide for team — per spec critical stats = MD only; we keep these as general dashboard stats for all) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-2 border-white bg-transparent">
           <CardContent className="pt-4 text-white">
@@ -4101,17 +4238,299 @@ function DashboardTab({
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
               <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                <ListTodo className="h-5 w-5 text-[#FFED00]" />
               </div>
               <div>
-                <p className="text-2xl font-mono font-black">{stats.byOutcome.positive || 0}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive</p>
+                <p className="text-2xl font-mono font-black">{isMD ? tasks.length : myTasks.length}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Tasks</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Task hub */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white flex flex-row items-center justify-between gap-4">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
+            <ListTodo className="h-5 w-5 text-[#FFED00]" />
+            {isMD ? "All tasks" : "My tasks"}
+          </CardTitle>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className={viewMode === "list" ? "bg-[#FFED00]/15 border-[#FFED00] text-[#FFED00]" : "border-white text-white"}
+            >
+              <ListTodo className="h-4 w-4 mr-1" />
+              List
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode("gantt")}
+              className={viewMode === "gantt" ? "bg-[#FFED00]/15 border-[#FFED00] text-[#FFED00]" : "border-white text-white"}
+            >
+              <GanttChart className="h-4 w-4 mr-1" />
+              Gantt
+            </Button>
+            {isMD && activeEventId && (
+              <Button
+                onClick={() => setAddTaskOpen(true)}
+                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add task
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {isMD && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label className="text-white font-mono text-xs uppercase tracking-wider">Assignee</Label>
+                <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="all" className="text-white">All</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id} className="text-white">
+                        {m.full_name || m.email || m.id.slice(0, 8)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-white font-mono text-xs uppercase tracking-wider">Status</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectItem value="all" className="text-white">All</SelectItem>
+                    <SelectItem value="not_started" className="text-white">Not started</SelectItem>
+                    <SelectItem value="in_progress" className="text-white">In progress</SelectItem>
+                    <SelectItem value="done" className="text-white">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {viewMode === "gantt" ? (
+            <div className="overflow-x-auto">
+              <div className="min-w-[600px]">
+                <div className="grid font-mono text-xs text-white/70 border-b border-white/30 pb-2 mb-2" style={{ gridTemplateColumns: isMD ? "180px 1fr" : "140px 1fr" }}>
+                  <div>{isMD ? "Task / Assignee" : "Task"}</div>
+                  <div className="flex">
+                    {Array.from({ length: ganttWeeks }, (_, i) => {
+                      const d = new Date(ganttStartMs + i * weekMs);
+                      return (
+                        <div key={i} className="flex-1 text-center min-w-[48px]">
+                          {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {filteredTasks.map((task) => {
+                  const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
+                  const startMs = Math.max(now, ganttStartMs);
+                  const endMs = deadlineMs && deadlineMs > ganttStartMs ? Math.min(deadlineMs, ganttStartMs + ganttWeeks * weekMs) : ganttStartMs + weekMs;
+                  const left = ((startMs - ganttStartMs) / (ganttWeeks * weekMs)) * 100;
+                  const width = ((endMs - startMs) / (ganttWeeks * weekMs)) * 100;
+                  const color = task.status === "done" ? "#22c55e" : task.status === "in_progress" ? "#FFED00" : "#6b7280";
+                  return (
+                    <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "180px 1fr" : "140px 1fr" }}>
+                      <div className="text-white truncate" title={task.title}>
+                        {task.title}
+                        {isMD && (
+                          <span className="block text-xs text-white/60 truncate">{displayName(task.assignee_user_id)}</span>
+                        )}
+                      </div>
+                      <div className="relative h-6 flex">
+                        <div
+                          className="absolute h-5 rounded border border-white/30"
+                          style={{ left: `${left}%`, width: `${Math.max(width, 2)}%`, backgroundColor: color, opacity: 0.9 }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredTasks.length === 0 && (
+                  <div className="text-white/50 font-mono text-sm py-8 text-center">
+                    {isMD ? "No tasks. Add one to see the timeline." : "No tasks assigned to you."}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTasks.length === 0 ? (
+                <p className="text-white/60 font-mono text-sm">No tasks {isMD ? "" : "assigned to you"}.</p>
+              ) : (
+                filteredTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex flex-wrap items-center gap-3 p-3 border-2 border-white/20 rounded-lg bg-white/5 hover:border-white/40"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono font-bold text-white">{task.title}</div>
+                      {task.description && <div className="text-sm text-white/70 font-mono mt-0.5">{task.description}</div>}
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {isMD && <Badge variant="outline" className="text-xs border-white/50 text-white/80">{displayName(task.assignee_user_id)}</Badge>}
+                        <Badge variant="outline" className={task.status === "done" ? "border-green-500 text-green-400" : task.status === "in_progress" ? "border-[#FFED00] text-[#FFED00]" : "border-white/50 text-white/60"}>
+                          {task.status === "not_started" ? "Not started" : task.status === "in_progress" ? "In progress" : "Done"}
+                        </Badge>
+                        {task.deadline && (
+                          <span className="text-xs text-white/60 font-mono flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {new Date(task.deadline).toLocaleDateString(undefined, { dateStyle: "short" })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isMD && (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                          onClick={() => setTaskToDelete(task)}
+                          title="Delete task"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {!isMD && task.status !== "done" && (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Input
+                          placeholder="Note (optional)"
+                          className="w-32 border border-white/30 bg-transparent text-white text-xs font-mono"
+                          value={statusNote[task.id] ?? ""}
+                          onChange={(e) => setStatusNote((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                        />
+                        {task.status === "not_started" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-[#FFED00] text-[#FFED00] hover:bg-[#FFED00]/10"
+                            disabled={statusUpdatingId === task.id}
+                            onClick={() => handleUpdateStatus(task.id, "in_progress", statusNote[task.id] || undefined)}
+                          >
+                            {statusUpdatingId === task.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "In progress"}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          className="bg-[#22c55e] text-white hover:bg-[#22c55e]/90"
+                          disabled={statusUpdatingId === task.id}
+                          onClick={() => handleUpdateStatus(task.id, "done", statusNote[task.id] || undefined)}
+                        >
+                          {statusUpdatingId === task.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Done"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add task dialog (MD only) */}
+      <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
+        <DialogContent className="border-2 border-white bg-[#050505] text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono font-black uppercase tracking-tight">Add task</DialogTitle>
+            <DialogDescription className="text-white/70 font-mono">Assign a task with deadline and description.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label className="text-white font-mono font-bold">Title</Label>
+              <Input
+                className="border-2 border-white bg-transparent text-white mt-1"
+                value={addTaskTitle}
+                onChange={(e) => setAddTaskTitle(e.target.value)}
+                placeholder="Task title"
+              />
+            </div>
+            <div>
+              <Label className="text-white font-mono font-bold">Assignee</Label>
+              <Select value={addTaskAssignee} onValueChange={setAddTaskAssignee}>
+                <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectItem value="" className="text-white">Unassigned</SelectItem>
+                  {teamMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.id} className="text-white">
+                      {m.full_name || m.email || m.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-white font-mono font-bold">Deadline</Label>
+              <Input
+                type="datetime-local"
+                className="border-2 border-white bg-transparent text-white mt-1 font-mono"
+                value={addTaskDeadline}
+                onChange={(e) => setAddTaskDeadline(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-white font-mono font-bold">Description (optional)</Label>
+              <Textarea
+                className="border-2 border-white bg-transparent text-white mt-1 font-mono min-h-[80px]"
+                value={addTaskDescription}
+                onChange={(e) => setAddTaskDescription(e.target.value)}
+                placeholder="Description"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAddTaskOpen(false)} className="border-white text-white">
+                Cancel
+              </Button>
+              <Button onClick={handleCreateTask} disabled={addTaskSaving} className="bg-[#FFED00] text-black font-bold">
+                {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete task confirm (MD only) */}
+      <AlertDialog open={!!taskToDelete} onOpenChange={(open) => !open && setTaskToDelete(null)}>
+        <AlertDialogContent className="border-2 border-white bg-[#050505] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-mono font-black text-white">Delete task?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70 font-mono">
+              {taskToDelete ? `"${taskToDelete.title}" will be permanently removed.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white text-white hover:bg-white/10">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTask}
+              disabled={!!deletingTaskId}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {deletingTaskId ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Latest decision / document / source — keep for context */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
@@ -4129,35 +4548,25 @@ function DashboardTab({
             )}
           </CardContent>
         </Card>
-
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Document</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-white/70 font-mono">
             {latestDocument ? (
-              <div className="space-y-1">
-                <div className="font-mono font-bold text-white">
-                  {latestDocument.title || "Untitled document"}
-                </div>
-                <div className="text-xs font-mono">Stored in CIS documents</div>
-              </div>
+              <div className="font-mono font-bold text-white">{latestDocument.title || "Untitled document"}</div>
             ) : (
               "No documents yet."
             )}
           </CardContent>
         </Card>
-
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Source</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-white/70 font-mono">
             {latestSource ? (
-              <div className="space-y-1">
-                <div className="font-mono font-bold text-white">{latestSource.title || "Untitled source"}</div>
-                <div className="text-xs font-mono">{latestSource.source_type}</div>
-              </div>
+              <div className="font-mono font-bold text-white">{latestSource.title || "Untitled source"}</div>
             ) : (
               "No sources yet."
             )}
@@ -4177,18 +4586,22 @@ function OnboardingTab({
   sources,
   documents,
   decisions,
+  tasks,
   onNavigate,
 }: {
   profile: UserProfile | null;
   sources: SourceRecord[];
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   decisions: Decision[];
+  tasks: Task[];
   onNavigate: (tab: string) => void;
 }) {
   const orgLinked = Boolean(profile?.organization_id);
   const hasSources = sources.length > 0;
   const hasDocuments = documents.length > 0;
   const hasDecisions = decisions.length > 0;
+  const hasTasks = tasks.length > 0;
+  const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
 
   const steps = [
     {
@@ -4220,9 +4633,18 @@ function OnboardingTab({
       actionLabel: "Open Decision Logger",
     },
     {
+      title: "Dashboard & tasks",
+      status: hasTasks,
+      description: isMD
+        ? "Assign tasks to your team from the Dashboard (assignee, deadline, status)."
+        : "View your assigned tasks and update status (In progress / Done) from the Dashboard.",
+      action: () => onNavigate("overview"),
+      actionLabel: "Open Dashboard",
+    },
+    {
       title: "Review analytics",
       status: decisions.length >= 5,
-      description: "Unlock Decision Engine analytics with at least 5 decisions.",
+      description: "Unlock Decision Engine analytics with at least 5 decisions (MD only).",
       action: () => onNavigate("dashboard"),
       actionLabel: "Open Decision Engine",
     },
@@ -5417,6 +5839,7 @@ export default function CIS() {
     localStorage.setItem(LOCAL_CHAT_CACHE_KEY, JSON.stringify(items));
   }, []);
   const [sources, setSources] = useState<SourceRecord[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
   const [foldersExpanded, setFoldersExpanded] = useState(false);
   const [draftDecision, setDraftDecision] = useState<{
@@ -5424,6 +5847,13 @@ export default function CIS() {
     sector?: string;
     stage?: string;
   } | null>(null);
+
+  // Team members cannot see Engine tab; redirect if they're on it
+  useEffect(() => {
+    if (profile && profile.role === "team_member" && activeTab === "dashboard") {
+      setActiveTab("overview");
+    }
+  }, [profile?.role, activeTab]);
 
   // Keep folder scopes in sync with source folders for Knowledge Scope
   useEffect(() => {
@@ -5905,7 +6335,7 @@ export default function CIS() {
         setInitialDriveSyncConfig(null);
       }
 
-      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes, companyCardsRes] = await Promise.all([
+      const [decisionsRes, documentsRes, sourcesRes, foldersRes, connectionsRes, pendingReviewsRes, companyCardsRes, tasksRes] = await Promise.all([
         getDecisionsByEvent(event.id),
         getDocumentsByEvent(event.id),
         getSourcesByEvent(event.id),
@@ -5913,10 +6343,12 @@ export default function CIS() {
         getCompanyConnectionsByEvent(event.id),
         getPendingRelationshipReviews(event.id),
         getAllEntityCards(event.id),
+        getTasksByEvent(event.id),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
       setDecisions(mapped);
+      setTasks((tasksRes.data || []) as Task[]);
       
       // Check for documents with NULL event_id and fix them
       if (documentsRes.error) {
@@ -9605,14 +10037,16 @@ export default function CIS() {
               >
                 Connections
               </button>
-              <button
-                onClick={() => setActiveTab("dashboard")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "dashboard" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Engine
-              </button>
+              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+                <button
+                  onClick={() => setActiveTab("dashboard")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "dashboard" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Engine
+                </button>
+              )}
               {(profile?.role as string) === "admin" && (
                 <Link to="/admin" className="px-3 py-2 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
                   <Shield className="h-4 w-4" />
@@ -9760,6 +10194,7 @@ export default function CIS() {
               sources={sources}
               documents={documents}
               decisions={decisions}
+              tasks={tasks}
               onNavigate={setActiveTab}
             />
           </TabsContent>
@@ -10070,9 +10505,23 @@ export default function CIS() {
             />
           </TabsContent>
 
-          {/* Dashboard Tab */}
+          {/* Dashboard Tab (task hub: MD assigns, team sees my tasks + Gantt) */}
           <TabsContent value="overview">
-            <DashboardTab decisions={decisions} documents={documents} sources={sources} />
+            <DashboardTab
+              profile={profile}
+              activeEventId={activeEventId}
+              currentUserId={profile?.id || user?.id || null}
+              tasks={tasks}
+              onRefetchTasks={async () => {
+                if (activeEventId) {
+                  const { data } = await getTasksByEvent(activeEventId);
+                  setTasks((data || []) as Task[]);
+                }
+              }}
+              decisions={decisions}
+              documents={documents}
+              sources={sources}
+            />
           </TabsContent>
 
           {/* Decisions Tab */}

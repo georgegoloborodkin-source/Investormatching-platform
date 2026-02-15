@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CorporatePartner, DecisionLog, DocumentRecord, Event, Investor, Match, Mentor, SourceRecord, Startup, TimeSlotConfig, UserProfile } from "@/types";
+import type { CorporatePartner, DecisionLog, DocumentRecord, Event, Investor, Match, Mentor, SourceRecord, Startup, Task, TaskStatus, TimeSlotConfig, UserProfile } from "@/types";
 
 type SupabaseResult<T> = { data: T | null; error: any };
 
@@ -1206,4 +1206,77 @@ export function mapMatchRow(row: any): Match {
     targetAttending: row.target_attending ?? undefined,
     investorId: row.investor_id || undefined,
   };
+}
+
+// =============================================================================
+// TASKS (Dashboard task hub: MD assigns, team updates status)
+// =============================================================================
+
+export async function getTasksByEvent(eventId: string): Promise<SupabaseResult<Task[]>> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("deadline", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  return { data: (data as Task[]) || [], error };
+}
+
+export async function getMyTasks(eventId: string, userId: string): Promise<SupabaseResult<Task[]>> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("assignee_user_id", userId)
+    .order("deadline", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  return { data: (data as Task[]) || [], error };
+}
+
+export async function insertTask(
+  eventId: string,
+  payload: { assignee_user_id: string | null; title: string; description?: string | null; deadline?: string | null; created_by: string }
+): Promise<SupabaseResult<Task>> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      event_id: eventId,
+      assignee_user_id: payload.assignee_user_id ?? null,
+      title: payload.title,
+      description: payload.description ?? null,
+      status: "not_started",
+      deadline: payload.deadline ?? null,
+      created_by: payload.created_by,
+    })
+    .select("*")
+    .single();
+  return { data: data as Task, error };
+}
+
+export async function updateTask(
+  taskId: string,
+  updates: Partial<Pick<Task, "assignee_user_id" | "title" | "description" | "status" | "deadline" | "status_note">>
+): Promise<SupabaseResult<Task>> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .update(updates)
+    .eq("id", taskId)
+    .select("*")
+    .single();
+  return { data: data as Task, error };
+}
+
+export async function updateTaskStatus(
+  taskId: string,
+  status: TaskStatus,
+  statusNote?: string | null
+): Promise<SupabaseResult<Task>> {
+  const payload: Record<string, unknown> = { status };
+  if (statusNote !== undefined) payload.status_note = statusNote;
+  return updateTask(taskId, payload);
+}
+
+export async function deleteTask(taskId: string): Promise<SupabaseResult<void>> {
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+  return { data: undefined, error };
 }

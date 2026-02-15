@@ -234,3 +234,19 @@ export interface SourceRecord {
   created_at: string;
   updated_at: string;
 }
+
+export type TaskStatus = 'not_started' | 'in_progress' | 'done';
+
+export interface Task {
+  id: string;
+  event_id: string;
+  assignee_user_id: string | null;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  deadline: string | null;
+  status_note: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
