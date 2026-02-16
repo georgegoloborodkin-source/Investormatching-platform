@@ -8097,15 +8097,20 @@ export default function CIS() {
       for (const card of relevantCards) {
         result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, false) });
       }
-      // For portfolio-wide or filter questions, send ALL cards (slim for non-relevant)
+      // For portfolio-wide or filter questions, send matching cards + slim list of others (capped)
       if (isPortfolioWide || isFilterQuestion) {
-        for (const card of otherCards) {
+        // Cap non-matching cards to avoid token waste — 20 slim cards is enough for context
+        for (const card of otherCards.slice(0, 20)) {
           result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
+        if (otherCards.length > 20) {
+          const remaining = otherCards.slice(20).map(c => c.company_name).join(", ");
+          result.push({ title: "Other portfolio companies", file_name: null, snippet: `Also in portfolio: ${remaining}` });
+        }
       } else {
-        // For specific-company questions (1-3 matches), don't flood with extra cards
+        // For specific-company questions, only include a few extra for cross-reference
         const isSpecificCompany = relevantCards.length > 0 && relevantCards.length <= 3;
-        const otherCap = isSpecificCompany ? 5 : 15;
+        const otherCap = isSpecificCompany ? 3 : 10;
         for (const card of otherCards.slice(0, otherCap)) {
           result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }

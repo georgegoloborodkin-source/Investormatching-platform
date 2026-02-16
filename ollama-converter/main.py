@@ -402,7 +402,7 @@ def get_supabase():
 
 # Ask-the-fund settings (generous tokens for comprehensive answers)
 ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "4000"))  # Increased from 1000 for more detailed responses
-ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "200"))  # Send ALL company cards — no truncation
+ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "30"))  # Cap sources to avoid token waste
 ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "500"))  # Larger snippets for better answers
 # Use Haiku for simple questions (3-5x faster, 75% cheaper)
 USE_HAIKU_FOR_SIMPLE = os.getenv("USE_HAIKU_FOR_SIMPLE", "true").lower() == "true"
