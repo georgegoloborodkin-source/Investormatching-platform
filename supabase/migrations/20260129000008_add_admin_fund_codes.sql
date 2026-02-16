@@ -272,7 +272,7 @@ BEGIN
     INSERT INTO organizations (name, slug, invitation_code)
     VALUES (
       fund_code_record.fund_name,
-      fund_code_record.fund_slug OR slugify(fund_code_record.fund_name),
+      COALESCE(fund_code_record.fund_slug, slugify(fund_code_record.fund_name)),
       invite_code
     )
     RETURNING * INTO new_org;
