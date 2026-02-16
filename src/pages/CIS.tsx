@@ -7802,12 +7802,27 @@ export default function CIS() {
         return hasFilter && matches;
       };
 
+      const STOP_WORDS = new Set([
+        "about", "after", "also", "been", "before", "between", "both", "call",
+        "came", "come", "could", "each", "find", "from", "give", "have", "help",
+        "here", "high", "into", "just", "know", "last", "like", "long", "look",
+        "made", "make", "many", "more", "most", "much", "must", "need", "only",
+        "over", "said", "same", "some", "such", "take", "tell", "than", "that",
+        "the", "them", "then", "there", "these", "they", "this", "time", "very",
+        "want", "well", "were", "what", "when", "which", "will", "with", "work",
+        "would", "your", "company", "companies", "portfolio", "startup", "startups",
+        "information", "details", "about", "everything", "anything", "something",
+        "right", "currently", "please", "should", "think", "really", "today",
+      ]);
       const cardMatchesNameOrContent = (card: { company_name: string; company_properties: Record<string, any> }): boolean => {
         const nameLower = (card.company_name || "").toLowerCase();
         const p = card.company_properties || {};
-        const cardText = [card.company_name, p.bio || "", p.industry || ""].join(" ").toLowerCase();
         if (nameLowers.some(n => nameLower.includes(n) || n.includes(nameLower))) return true;
-        return qLower.split(/\s+/).filter(w => w.length > 3).some(tok => cardText.includes(tok));
+        if (qLower.includes(nameLower) && nameLower.length >= 3) return true;
+        if (nameLower.includes(qLower.split(/[\s,?!]+/)[0]) && qLower.split(/[\s,?!]+/)[0].length >= 3) return true;
+        const meaningfulTokens = qLower.split(/[\s,?!.;:]+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
+        if (!meaningfulTokens.length) return false;
+        return meaningfulTokens.some(tok => nameLower.includes(tok));
       };
 
       // For "how many in Bangladesh" or "all B2B SaaS preseed": matching cards FULL, rest SLIM
@@ -7843,8 +7858,10 @@ export default function CIS() {
           result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
       } else {
-        // For specific questions, send up to 15 other cards as slim context
-        for (const card of otherCards.slice(0, 15)) {
+        // For specific-company questions (1-3 matches), don't flood with extra cards
+        const isSpecificCompany = relevantCards.length > 0 && relevantCards.length <= 3;
+        const otherCap = isSpecificCompany ? 5 : 15;
+        for (const card of otherCards.slice(0, otherCap)) {
           result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
       }
