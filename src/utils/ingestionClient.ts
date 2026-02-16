@@ -210,7 +210,7 @@ export async function listDriveFolders(
     if (!response.ok) {
       const text = await response.text();
       let detail = `HTTP ${response.status}`;
-      try { detail = JSON.parse(text)?.detail || detail; } catch {}
+      try { const parsed = JSON.parse(text); detail = parsed?.detail || parsed?.error || text || detail; } catch { if (text) detail = `HTTP ${response.status}: ${text.slice(0, 200)}`; }
       throw new Error(detail);
     }
     const data = await response.json();
