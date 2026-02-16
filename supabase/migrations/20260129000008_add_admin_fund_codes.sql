@@ -42,7 +42,12 @@ CREATE INDEX IF NOT EXISTS idx_fund_codes_active ON fund_codes(is_active) WHERE 
 -- Enable RLS
 ALTER TABLE fund_codes ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Fund Codes
+-- RLS Policies: Fund Codes (drop first so migration is idempotent)
+DROP POLICY IF EXISTS "Admins can view all fund codes" ON fund_codes;
+DROP POLICY IF EXISTS "Anyone can view active fund codes" ON fund_codes;
+DROP POLICY IF EXISTS "Admins can create fund codes" ON fund_codes;
+DROP POLICY IF EXISTS "Admins can update fund codes" ON fund_codes;
+
 -- Admins can view all fund codes
 CREATE POLICY "Admins can view all fund codes"
   ON fund_codes FOR SELECT
