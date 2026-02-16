@@ -11,6 +11,12 @@ services:
         value: claude-3-5-sonnet-20241022
       - key: ANTHROPIC_API_KEY
         sync: false  # Set this manually in Render dashboard
+      - key: SUPABASE_URL
+        sync: false  # Set this manually — same URL as VITE_SUPABASE_URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false  # Set this manually — get from Supabase dashboard > Settings > API
+      - key: VOYAGE_API_KEY
+        sync: false  # Set this manually — needed for document semantic search
       - key: PORT
         fromService:
           type: web
