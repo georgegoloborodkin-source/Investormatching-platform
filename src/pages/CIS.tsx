@@ -1659,7 +1659,12 @@ function SourcesTab({
     if (!initialDriveSyncConfig) return;
     setConnectedDriveFolderId(initialDriveSyncConfig.folderId);
     setConnectedDriveFolderName(initialDriveSyncConfig.folderName);
-    setConnectedDriveFolders(initialDriveSyncConfig.folders);
+    // Only update array state if contents actually changed (avoids reference churn)
+    setConnectedDriveFolders(prev => {
+      const next = initialDriveSyncConfig.folders;
+      if (prev.length === next.length && prev.every((f, i) => f.id === next[i]?.id)) return prev;
+      return next;
+    });
     setLastDriveSyncAt(initialDriveSyncConfig.lastSyncAt);
   }, [initialDriveSyncConfig]);
 
@@ -2023,10 +2028,32 @@ function SourcesTab({
                 }
               }
 
-              // Skip unsupported binary/image types before calling the ingestion API.
+              // Skip unsupported binary/media types before calling the ingestion API.
               // This avoids noisy 400s from /gdrive/download-file for files we won't process.
-              if (file.mimeType?.startsWith("image/")) {
-                console.info(`[DriveSync] Skipping unsupported image file: ${file.name} (${file.mimeType})`);
+              const unsupportedMimePrefixes = ["image/", "video/", "audio/", "font/"];
+              const unsupportedMimeExact = new Set([
+                "application/zip", "application/x-zip-compressed",
+                "application/x-rar-compressed", "application/x-7z-compressed",
+                "application/gzip", "application/x-tar",
+                "application/octet-stream",
+                "application/x-msdownload",
+                "application/vnd.android.package-archive",
+              ]);
+              const unsupportedExtensions = new Set([
+                ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff", ".heic",
+                ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm",
+                ".mp3", ".wav", ".aac", ".ogg", ".flac", ".wma",
+                ".zip", ".rar", ".7z", ".tar", ".gz",
+                ".exe", ".dll", ".dmg", ".apk",
+              ]);
+              const mime = file.mimeType || "";
+              const ext = (file.name || "").toLowerCase().match(/\.[^.]+$/)?.[0] || "";
+              if (
+                unsupportedMimePrefixes.some(p => mime.startsWith(p)) ||
+                unsupportedMimeExact.has(mime) ||
+                unsupportedExtensions.has(ext)
+              ) {
+                console.info(`[DriveSync] Skipping unsupported file: ${file.name} (${mime || ext})`);
                 skippedFiles++;
                 continue;
               }
@@ -2328,12 +2355,15 @@ function SourcesTab({
     };
   }, [syncGoogleDriveFolder]);
 
+  // Derive a stable boolean so interval/auto-sync effects don't re-fire when
+  // connectedDriveFolders gets a new array reference with the same contents.
+  const hasDriveFolders = connectedDriveFolders.length > 0 || !!connectedDriveFolderId;
+
   // ── Auto-sync on login: fire once per session when config + token are available ──
   const autoSyncFiredRef = useRef(false);
   useEffect(() => {
     if (autoSyncFiredRef.current) return;
-    const hasFolders = connectedDriveFolders.length > 0 || connectedDriveFolderId;
-    if (!hasFolders || !activeEventId || isSyncingDrive) return;
+    if (!hasDriveFolders || !activeEventId || isSyncingDrive) return;
     (async () => {
       const token = await getGoogleAccessToken();
       if (!token) return;
@@ -2350,12 +2380,12 @@ function SourcesTab({
       console.log("[DriveSync] Auto-sync on login triggered");
       syncGoogleDriveFolder();
     })();
-  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDriveFolders, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
 
   // ── Auto-sync interval: sync every 15 minutes while page is open ──
   useEffect(() => {
-    const hasFolders = connectedDriveFolders.length > 0 || connectedDriveFolderId;
-    if (!hasFolders || !activeEventId) {
+    if (!hasDriveFolders || !activeEventId) {
       // Clear interval if no folders connected
       if (autoSyncIntervalRef.current) {
         clearInterval(autoSyncIntervalRef.current);
@@ -2381,7 +2411,8 @@ function SourcesTab({
         autoSyncIntervalRef.current = null;
       }
     };
-  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDriveFolders, activeEventId]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
