@@ -132,6 +132,7 @@ export interface GDriveFolderEntry {
   modifiedTime?: string | null;
 }
 
+/** Drive file metadata from list-files API */
 export interface GDriveFileEntry {
   id: string;
   name: string;
