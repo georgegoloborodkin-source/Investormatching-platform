@@ -26,6 +26,22 @@ export function normalizeCompanyNameForMatch(name: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Extract a fuzzy "core" company name by stripping ALL corporate suffixes,
+ * so "Chhaya Technologies PTE. LTD." and "Chhaya" map to the same key.
+ */
+export function extractCoreCompanyName(name: string): string {
+  if (!name || typeof name !== "string") return "";
+  let s = name.toLowerCase().trim();
+  // Remove corporate suffixes (can appear anywhere, not just at the end)
+  s = s.replace(
+    /\b(technologies|technology|tech|pte\.?|ltd\.?|limited|inc\.?|incorporated|corp\.?|corporation|plc\.?|gmbh|co\.?|company|group|holdings|solutions|services|ventures|capital|partners|llc\.?|llp\.?|lp\.?|sa|s\.a\.?|ag|bv|nv|pvt\.?|private)\b/gi,
+    " "
+  );
+  s = s.replace(/[.,()]+/g, " ");
+  return s.replace(/\s+/g, " ").trim();
+}
+
 export async function ensureOrganizationForUser(profile: UserProfile): Promise<SupabaseResult<{ organization: any; updatedProfile: UserProfile }>> {
   if (profile.organization_id) {
     const { data, error } = await supabase.from("organizations").select("*").eq("id", profile.organization_id).single();
@@ -909,14 +925,14 @@ export async function getAllEntityCards(eventId: string) {
     created_at: e.created_at,
   }));
 
-  // ── Deduplicate: keep the primary card per normalized name ──
-  // Multiple entities can share a name (created from different docs/folders).
-  // Pick the one with the most documents; tie-break by richest properties.
-  const bestByName = new Map<string, typeof rawCards[0]>();
+  // ── Deduplicate: keep the primary card per core company name ──
+  // "Chhaya", "Chhaya Technologies Limited", "CHHAYA TECHNOLOGIES PTE. LTD."
+  // all share core name "chhaya" → keep the one with most documents.
+  const bestByCore = new Map<string, typeof rawCards[0]>();
   for (const card of rawCards) {
-    const norm = (card.company_name || "").trim().toLowerCase();
-    if (!norm) continue;
-    const existing = bestByName.get(norm);
+    const core = extractCoreCompanyName(card.company_name);
+    if (!core) continue;
+    const existing = bestByCore.get(core);
     if (
       !existing ||
       card.document_count > existing.document_count ||
@@ -924,10 +940,10 @@ export async function getAllEntityCards(eventId: string) {
         JSON.stringify(card.company_properties).length >
           JSON.stringify(existing.company_properties).length)
     ) {
-      bestByName.set(norm, card);
+      bestByCore.set(core, card);
     }
   }
-  const cards = Array.from(bestByName.values());
+  const cards = Array.from(bestByCore.values());
 
   return { data: cards, error: null };
 }

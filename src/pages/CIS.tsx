@@ -72,6 +72,7 @@ import {
   Sparkles,
   Folder,
   ChevronDown,
+  ChevronRight,
   FolderPlus,
   Link2,
   BarChart3,
@@ -169,6 +170,7 @@ import {
   getEntityProperties,
   mergeCompanyCardFromExtraction,
   normalizeCompanyNameForMatch,
+  extractCoreCompanyName,
   getTasksByEvent,
   getMyTasks,
   insertTask,
@@ -5867,6 +5869,7 @@ export default function CIS() {
   const { user, profile, signOut } = useAuth();
   const { toast } = useToast();
   const [scopes, setScopes] = useState<ScopeItem[]>(initialScopes);
+  const [expandedScopeGroups, setExpandedScopeGroups] = useState<Set<string>>(new Set());
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -8018,14 +8021,14 @@ export default function CIS() {
     (question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
       if (!cards.length) return [];
 
-      // Deduplicate by normalized name — keep card with richest properties
+      // Deduplicate by core company name — "Chhaya Technologies PTE. LTD." and "Chhaya" merge
       const deduped = new Map<string, typeof cards[0]>();
       for (const card of cards) {
-        const norm = (card.company_name || "").trim().toLowerCase();
-        if (!norm) continue;
-        const existing = deduped.get(norm);
+        const core = extractCoreCompanyName(card.company_name);
+        if (!core) continue;
+        const existing = deduped.get(core);
         if (!existing || JSON.stringify(card.company_properties).length > JSON.stringify(existing.company_properties).length) {
-          deduped.set(norm, card);
+          deduped.set(core, card);
         }
       }
       cards = Array.from(deduped.values());
@@ -8172,12 +8175,18 @@ export default function CIS() {
         try {
           const threadMsgs = await getThreadMessages(threadId, 10);
 
+          // Compute folder scope for agentic RAG
+          const agentFolderIds = scopes
+            .filter((s) => s.type === "folder" && s.checked)
+            .map((s) => s.id.replace("folder:", ""));
+
           await askAgentStream(
             {
               question,
               eventId,
               previousMessages: threadMsgs,
               webSearchEnabled: webSearchEnabled,
+              folderIds: agentFolderIds.length > 0 ? agentFolderIds : undefined,
             },
             (chunk) => {
               if (!streamCompleted) streamer.appendChunk(chunk);
@@ -10788,8 +10797,8 @@ export default function CIS() {
                 </div>
               </div>
 
-            {/* Knowledge Scope — compact, scrollable */}
-            <div className="cis-surface p-2 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards] max-h-[min(280px,40vh)] flex flex-col min-w-0">
+            {/* Knowledge Scope — compact, scrollable, with grouped Drive folders */}
+            <div className="cis-surface p-2 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards] max-h-[min(340px,45vh)] flex flex-col min-w-0">
                 <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
                   <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider truncate">
                     Knowledge Scope
@@ -10805,25 +10814,123 @@ export default function CIS() {
                     {scopes.every((s) => s.checked) ? "Deselect All" : "Select All"}
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1 overflow-y-auto min-h-0">
-                  {scopes.map((s) => (
-                    <label
-                      key={s.id}
-                      className={`inline-flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono shrink-0 max-w-full min-w-0 ${
-                        s.checked
-                          ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
-                          : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={s.checked}
-                        onCheckedChange={(val) => toggleScope(s.id, val === true)}
-                        className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
-                      />
-                      {s.type === "folder" && <Folder className="h-2.5 w-2.5 shrink-0" />}
-                      <span className="truncate">{s.label}</span>
-                    </label>
-                  ))}
+                <div className="flex flex-col gap-0.5 overflow-y-auto min-h-0">
+                  {/* Non-folder scopes */}
+                  <div className="flex flex-wrap gap-1">
+                    {scopes.filter((s) => s.type !== "folder").map((s) => (
+                      <label
+                        key={s.id}
+                        className={`inline-flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono shrink-0 max-w-full min-w-0 ${
+                          s.checked
+                            ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
+                            : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={s.checked}
+                          onCheckedChange={(val) => toggleScope(s.id, val === true)}
+                          className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                        />
+                        <span className="truncate">{s.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {/* Folder scopes — grouped by top-level company */}
+                  {(() => {
+                    const folderScopes = scopes.filter((s) => s.type === "folder");
+                    if (folderScopes.length === 0) return null;
+                    // Group by top-level path segment (before first " / ")
+                    const groups = new Map<string, ScopeItem[]>();
+                    for (const fs of folderScopes) {
+                      const sepIdx = fs.label.indexOf(" / ");
+                      const groupName = sepIdx > 0 ? fs.label.slice(0, sepIdx).trim() : fs.label.trim();
+                      if (!groups.has(groupName)) groups.set(groupName, []);
+                      groups.get(groupName)!.push(fs);
+                    }
+                    return Array.from(groups.entries()).map(([groupName, items]) => {
+                      const allChecked = items.every((i) => i.checked);
+                      const someChecked = items.some((i) => i.checked);
+                      const isExpanded = expandedScopeGroups.has(groupName);
+                      const hasSubfolders = items.length > 1 || (items.length === 1 && items[0].label.includes(" / "));
+                      return (
+                        <div key={groupName} className="flex flex-col">
+                          <div
+                            className={`flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono ${
+                              allChecked
+                                ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
+                                : someChecked
+                                  ? "border-[#FFED00]/30 bg-[#FFED00]/5 text-[#FFED00]/80"
+                                  : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
+                            }`}
+                          >
+                            <Checkbox
+                              checked={allChecked}
+                              onCheckedChange={(val) => {
+                                const checked = val === true;
+                                setScopes((prev) =>
+                                  prev.map((s) =>
+                                    items.some((i) => i.id === s.id) ? { ...s, checked } : s
+                                  )
+                                );
+                              }}
+                              className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                            />
+                            <Folder className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate flex-1" onClick={() => {
+                              const checked = !allChecked;
+                              setScopes((prev) =>
+                                prev.map((s) =>
+                                  items.some((i) => i.id === s.id) ? { ...s, checked } : s
+                                )
+                              );
+                            }}>{groupName}</span>
+                            {someChecked && <span className="text-[8px] text-[#FFED00]/60 shrink-0">{items.filter(i => i.checked).length}/{items.length}</span>}
+                            {hasSubfolders && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedScopeGroups((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(groupName)) next.delete(groupName);
+                                    else next.add(groupName);
+                                    return next;
+                                  });
+                                }}
+                                className="p-0 shrink-0 text-white/40 hover:text-[#FFED00]"
+                              >
+                                {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
+                              </button>
+                            )}
+                          </div>
+                          {isExpanded && hasSubfolders && (
+                            <div className="ml-3 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-1.5">
+                              {items.map((sub) => {
+                                const subLabel = sub.label.includes(" / ") ? sub.label.slice(sub.label.indexOf(" / ") + 3) : sub.label;
+                                return (
+                                  <label
+                                    key={sub.id}
+                                    className={`inline-flex items-center gap-1 text-[9px] border px-1 py-0.5 rounded cursor-pointer transition-all font-mono max-w-full min-w-0 ${
+                                      sub.checked
+                                        ? "border-[#FFED00]/40 bg-[#FFED00]/5 text-[#FFED00]/90"
+                                        : "border-white/10 bg-transparent text-white/50 hover:border-white/30 hover:text-white/70"
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      checked={sub.checked}
+                                      onCheckedChange={(val) => toggleScope(sub.id, val === true)}
+                                      className="h-2 w-2 border-white/30 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                                    />
+                                    <span className="truncate">{subLabel}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 

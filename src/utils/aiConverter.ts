@@ -386,6 +386,7 @@ export async function askAgentStream(
     eventId: string;
     previousMessages?: ChatMessage[];
     webSearchEnabled?: boolean;
+    folderIds?: string[];
   },
   onChunk: (text: string) => void,
   onStatus?: (status: string) => void,
@@ -407,12 +408,15 @@ export async function askAgentStream(
   const timeoutSeconds = Math.round(timeoutMs / 1000);
 
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       question: input.question,
       event_id: input.eventId,
       previous_messages: input.previousMessages || [],
       web_search_enabled: input.webSearchEnabled || false,
     };
+    if (input.folderIds && input.folderIds.length > 0) {
+      payload.folder_ids = input.folderIds;
+    }
     const response = await fetch(`${baseUrl}/ask/agent/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

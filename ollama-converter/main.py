@@ -6797,7 +6797,40 @@ def _expand_synonyms(term: str, synonym_map: dict[str, set[str]]) -> set[str]:
     return expanded
 
 
-async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
+import re as _re
+
+_CORPORATE_SUFFIXES_RE = _re.compile(
+    r"""(?:\s+|[.,])*\b(?:
+        technologies|technology|tech|
+        pte\.?|ltd\.?|limited|inc\.?|incorporated|
+        corp\.?|corporation|plc\.?|gmbh|
+        co\.?|company|group|holdings|
+        solutions|services|ventures|capital|partners|
+        llc\.?|llp\.?|lp\.?|
+        sa|s\.a\.?|ag|bv|nv|
+        pvt\.?|private
+    )\b[.,\s]*""",
+    _re.IGNORECASE | _re.VERBOSE,
+)
+
+
+def _extract_core_company_name(name: str) -> str:
+    """
+    Strip corporate suffixes to get a canonical 'core' name.
+    E.g. 'Chhaya Technologies PTE. LTD.' → 'chhaya'
+         'Watawaste Co. Ltd' → 'watawaste'
+         'Insurance Development and Regulatory Authority' → unchanged
+    """
+    if not name:
+        return ""
+    s = name.strip().lower()
+    s = _CORPORATE_SUFFIXES_RE.sub(" ", s)
+    s = _re.sub(r"[.,()]+", " ", s)
+    s = " ".join(s.split()).strip()
+    return s
+
+
+async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Search portfolio companies via SQL on kg_entities with JSONB filters and synonym expansion."""
     sb = get_supabase()
     country = (tool_input.get("country") or "").strip().lower()
@@ -6817,21 +6850,64 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     if not raw_rows:
         return "No portfolio companies found in the database."
 
-    # ── Deduplicate: keep the richest entity per normalized_name ──
-    # Multiple entities can share the same normalized_name (created from
-    # different documents / folders).  Pick the one with the most content
-    # (longest properties JSON → most extracted data).
-    best_by_norm: dict[str, dict] = {}
+    # ── Deduplicate: keep the richest entity per core company name ──
+    # "Chhaya", "Chhaya Technologies Limited", "CHHAYA TECHNOLOGIES PTE. LTD."
+    # all share the core name "chhaya" → keep the one with most content.
+    best_by_core: dict[str, dict] = {}
     for row in raw_rows:
-        norm = (row.get("normalized_name") or row.get("name", "")).strip().lower()
-        if not norm:
+        raw_name = row.get("normalized_name") or row.get("name", "")
+        core = _extract_core_company_name(raw_name)
+        if not core:
             continue
         props = row.get("properties") or {}
         richness = len(json.dumps(props))
-        prev = best_by_norm.get(norm)
+        prev = best_by_core.get(core)
         if prev is None or richness > prev["_richness"]:
-            best_by_norm[norm] = {**row, "_richness": richness}
-    rows = [v for v in best_by_norm.values()]
+            best_by_core[core] = {**row, "_richness": richness}
+    rows = [v for v in best_by_core.values()]
+
+    # ── Folder scope filter: restrict to entities with docs in selected folders ──
+    if folder_ids:
+        try:
+            entity_ids = [r["id"] for r in rows if r.get("id")]
+            if entity_ids:
+                # Find which entities have documents in the selected folders
+                allowed_entity_ids: set[str] = set()
+                for i in range(0, len(entity_ids), 25):
+                    batch = entity_ids[i:i+25]
+                    docs_res = sb.table("documents") \
+                        .select("company_entity_id, folder_id") \
+                        .in_("company_entity_id", batch) \
+                        .execute()
+                    for d in (docs_res.data or []):
+                        if d.get("folder_id") in folder_ids:
+                            allowed_entity_ids.add(d["company_entity_id"])
+                    # Also check document_folder_links
+                    doc_id_res = sb.table("documents") \
+                        .select("id, company_entity_id") \
+                        .in_("company_entity_id", batch) \
+                        .execute()
+                    doc_id_map = {}
+                    for d in (doc_id_res.data or []):
+                        doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
+                    all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
+                    if all_doc_ids:
+                        for j in range(0, len(all_doc_ids), 50):
+                            link_batch = all_doc_ids[j:j+50]
+                            links_res = sb.table("document_folder_links") \
+                                .select("document_id, folder_id") \
+                                .in_("document_id", link_batch) \
+                                .in_("folder_id", folder_ids) \
+                                .execute()
+                            for link in (links_res.data or []):
+                                for eid, dids in doc_id_map.items():
+                                    if link["document_id"] in dids:
+                                        allowed_entity_ids.add(eid)
+                if allowed_entity_ids:
+                    rows = [r for r in rows if r.get("id") in allowed_entity_ids]
+                    print(f"[AGENT] Folder scope: {len(rows)} entities after filtering by {len(folder_ids)} folders")
+        except Exception as e:
+            print(f"[AGENT] Folder scope filter error (continuing without filter): {e}")
 
     def _field_text(props: dict, keys: list[str]) -> str:
         return " ".join(str(props.get(f, "")) for f in keys).lower()
@@ -6912,7 +6988,7 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     return "\n\n".join(lines)
 
 
-async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
+async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Semantic search via VoyageAI embedding + match_document_chunks RPC."""
     sb = get_supabase()
     query_text = (tool_input.get("query") or "").strip()
@@ -6948,18 +7024,44 @@ async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
     if not chunks:
         return f"No documents found matching: '{query_text}'"
 
-    # If company_name filter, also fetch document titles to filter
-    if company_name:
-        doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
-        if doc_ids:
-            try:
-                docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
-                doc_map = {d["id"]: d for d in (docs_result.data or [])}
-            except Exception:
-                doc_map = {}
-        else:
-            doc_map = {}
+    # Fetch document metadata for all chunks (title, file_name, folder_id)
+    doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
+    doc_map: dict = {}
+    if doc_ids:
+        try:
+            docs_result = sb.table("documents").select("id, title, file_name, folder_id").in_("id", doc_ids).execute()
+            doc_map = {d["id"]: d for d in (docs_result.data or [])}
+        except Exception:
+            pass
 
+    # ── Folder scope filter: restrict to documents in selected folders ──
+    if folder_ids and doc_ids:
+        try:
+            allowed_doc_ids: set[str] = set()
+            # Check direct folder_id
+            for did, doc in doc_map.items():
+                if doc.get("folder_id") in folder_ids:
+                    allowed_doc_ids.add(did)
+            # Check document_folder_links
+            for i in range(0, len(doc_ids), 50):
+                batch = doc_ids[i:i+50]
+                links_res = sb.table("document_folder_links") \
+                    .select("document_id, folder_id") \
+                    .in_("document_id", batch) \
+                    .in_("folder_id", folder_ids) \
+                    .execute()
+                for link in (links_res.data or []):
+                    allowed_doc_ids.add(link["document_id"])
+            if allowed_doc_ids:
+                chunks = [c for c in chunks if c.get("document_id") in allowed_doc_ids]
+                print(f"[AGENT] Doc scope filter: {len(chunks)} chunks after folder filtering")
+            if not chunks:
+                return f"No documents found matching '{query_text}' within the selected knowledge scope folders."
+        except Exception as e:
+            print(f"[AGENT] Doc folder scope filter error (continuing without filter): {e}")
+
+    # If company_name filter, further restrict by document title
+    if company_name:
         company_lower = company_name.lower()
         filtered_chunks = []
         for c in chunks:
@@ -6969,15 +7071,6 @@ async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
                 filtered_chunks.append(c)
         if filtered_chunks:
             chunks = filtered_chunks
-    else:
-        doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
-        doc_map = {}
-        if doc_ids:
-            try:
-                docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
-                doc_map = {d["id"]: d for d in (docs_result.data or [])}
-            except Exception:
-                pass
 
     lines = [f"Found {len(chunks)} relevant document chunks:\n"]
     for i, chunk in enumerate(chunks, 1):
@@ -6991,7 +7084,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
     return "\n\n".join(lines)
 
 
-async def _agent_get_company_details(tool_input: dict, event_id: str) -> str:
+async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Get detailed company card via kg_find_entity + get_company_card RPCs."""
     sb = get_supabase()
     company_name = (tool_input.get("company_name") or "").strip()
@@ -7026,15 +7119,36 @@ async def _agent_get_company_details(tool_input: dict, event_id: str) -> str:
     if not entities:
         return f"No company found matching '{company_name}'. Try searching the portfolio with search_portfolio tool."
 
-    # ── Deduplicate: pick the richest entity when multiple share the same normalized name ──
+    # ── Deduplicate: pick the richest entity when multiple share the same core name ──
     if len(entities) > 1:
-        best_by_norm: dict[str, dict] = {}
+        best_by_core: dict[str, dict] = {}
         for ent in entities:
-            norm = (ent.get("normalized_name") or ent.get("name", "")).strip().lower()
+            raw_name = ent.get("normalized_name") or ent.get("name", "")
+            core = _extract_core_company_name(raw_name)
+            if not core:
+                core = raw_name.strip().lower()
             richness = len(json.dumps(ent.get("properties") or {}))
-            if norm not in best_by_norm or richness > best_by_norm[norm]["_r"]:
-                best_by_norm[norm] = {**ent, "_r": richness}
-        entities = [v for v in best_by_norm.values()]
+            if core not in best_by_core or richness > best_by_core[core]["_r"]:
+                best_by_core[core] = {**ent, "_r": richness}
+        entities = [v for v in best_by_core.values()]
+
+    # ── Folder scope: prefer entity with docs in selected folders ──
+    if folder_ids and len(entities) > 1:
+        try:
+            ent_ids = [e["id"] for e in entities if e.get("id")]
+            docs_res = sb.table("documents") \
+                .select("company_entity_id, folder_id") \
+                .in_("company_entity_id", ent_ids) \
+                .execute()
+            in_scope = set()
+            for d in (docs_res.data or []):
+                if d.get("folder_id") in folder_ids:
+                    in_scope.add(d["company_entity_id"])
+            scoped = [e for e in entities if e.get("id") in in_scope]
+            if scoped:
+                entities = scoped
+        except Exception:
+            pass
 
     entity = entities[0]
     entity_id = entity.get("id")
@@ -7176,15 +7290,15 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str) -> str:
     return "\n".join(lines)
 
 
-async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str) -> str:
+async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Dispatch tool calls to the correct handler."""
     try:
         if tool_name == "search_portfolio":
-            return await _agent_search_portfolio(tool_input, event_id)
+            return await _agent_search_portfolio(tool_input, event_id, folder_ids)
         elif tool_name == "search_documents":
-            return await _agent_search_documents(tool_input, event_id)
+            return await _agent_search_documents(tool_input, event_id, folder_ids)
         elif tool_name == "get_company_details":
-            return await _agent_get_company_details(tool_input, event_id)
+            return await _agent_get_company_details(tool_input, event_id, folder_ids)
         elif tool_name == "search_knowledge_graph":
             return await _agent_search_knowledge_graph(tool_input, event_id)
         else:
@@ -7249,6 +7363,7 @@ class AgentAskRequest(BaseModel):
     event_id: str
     previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
     web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
+    folder_ids: List[str] = Field(default_factory=list, alias="folderIds")
     model_config = {"populate_by_name": True}
 
 
@@ -7270,6 +7385,10 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
         event_id = (request.event_id or "").strip()
         if not event_id:
             raise HTTPException(status_code=400, detail="event_id is required.")
+
+        folder_ids = request.folder_ids or []
+        if folder_ids:
+            print(f"[AGENT] Knowledge scope: {len(folder_ids)} folders selected")
 
         # Resolve question using chat history (pronoun resolution etc.)
         resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
@@ -7402,7 +7521,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     tool_results = []
                     for tc in tool_calls:
                         print(f"[AGENT] Executing {tc.name} with {json.dumps(tc.input)[:200]}")
-                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id)
+                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id, folder_ids or None)
                         print(f"[AGENT] Result from {tc.name}: {result_text[:200]}...")
                         tool_results.append({
                             "type": "tool_result",
