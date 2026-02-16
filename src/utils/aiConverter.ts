@@ -326,13 +326,13 @@ export async function askClaudeAnswerStream(
                 onChunk(data.text);
               } else if (data.status) {
                 // Status updates from backend (e.g. "🌐 Searching the web...", "tool_execution")
-                if (typeof data.status === "string") {
+                // Handle tool_execution first so we never show the literal "tool_execution" to the user
+                if (data.status === "tool_execution" || (typeof data.status === "object" && (data.status as { tools?: number }).tools) || data.tools !== undefined) {
+                  const toolCount = typeof data.status === "object" ? (data.status as { tools?: number }).tools : data.tools ?? 1;
+                  onChunk(`\n*Executing ${toolCount} tool${toolCount > 1 ? 's' : ''}...*\n`);
+                } else if (typeof data.status === "string") {
                   // String status (e.g. "🌐 Searching the web...")
                   onChunk(`\n*${data.status}*\n`);
-                } else if (data.status === "tool_execution" || (typeof data.status === "object" && data.status.tools)) {
-                  // Tool execution status - show progress indicator
-                  const toolCount = typeof data.status === "object" ? data.status.tools : data.tools || 1;
-                  onChunk(`\n*Executing ${toolCount} tool${toolCount > 1 ? 's' : ''}...*\n`);
                 }
               } else if (data.error) {
                 onError?.(new Error(data.error));

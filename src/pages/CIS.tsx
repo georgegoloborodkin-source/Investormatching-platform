@@ -7690,28 +7690,106 @@ export default function CIS() {
     }));
   }, [companyConnections]);
 
-  // Always include ALL company cards in chat context so the LLM can easily answer from card info (social, contact, etc.)
-  const buildCompanyCardSources = useCallback(
-    (_question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, _detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
-      const MAX_CARDS = 60;
-      const result: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
-      for (const card of cards.slice(0, MAX_CARDS)) {
-        const name = (card.company_name || "").trim();
-        if (!name) continue;
-        const p = card.company_properties || {};
-        const parts: string[] = [`Company: ${card.company_name}`];
+  // ── Build a single card snippet (reusable) ──
+  const buildCardSnippet = useCallback(
+    (card: { company_name: string; company_properties: Record<string, any> }, slim = false): string => {
+      const p = card.company_properties || {};
+      const parts: string[] = [`Company: ${card.company_name}`];
+      if (p.industry) parts.push(`Industry: ${p.industry}`);
+      if (p.funding_stage) parts.push(`Stage: ${p.funding_stage}`);
+      if (p.headquarters) parts.push(`HQ: ${p.headquarters}`);
+      if (p.country) parts.push(`Country: ${p.country}`);
+      if (p.location) parts.push(`Location: ${p.location}`);
+      const geoList = p.geo_focus || p.geo_markets || p.geography || p.region || p.regions;
+      if (Array.isArray(geoList) && geoList.length) parts.push(`Geo: ${geoList.join(", ")}`);
+      else if (typeof geoList === "string") parts.push(`Geo: ${geoList}`);
+      if (!slim) {
+        if (p.bio) parts.push(`Bio: ${String(p.bio).slice(0, 200)}${String(p.bio).length > 200 ? "..." : ""}`);
         if (p.website) parts.push(`Website: ${p.website}`);
         if (p.linkedin_url) parts.push(`LinkedIn: ${p.linkedin_url}`);
         if (p.email) parts.push(`Email: ${p.email}`);
         if (p.phone) parts.push(`Phone: ${p.phone}`);
         if (p.twitter_url) parts.push(`Twitter/X: ${p.twitter_url}`);
-        if (p.bio) parts.push(`Bio: ${String(p.bio).slice(0, 250)}${String(p.bio).length > 250 ? "..." : ""}`);
-        if (p.headquarters) parts.push(`Headquarters: ${p.headquarters}`);
-        result.push({ title: `Company card: ${card.company_name}`, file_name: null as string | null, snippet: parts.join("\n") });
+      } else {
+        if (p.bio) parts.push(`Bio: ${String(p.bio).slice(0, 80)}${String(p.bio).length > 80 ? "..." : ""}`);
       }
-      return result;
+      return parts.join("\n");
     },
     []
+  );
+
+  // ── Smart company card sources: send relevant cards full, rest as slim one-liners ──
+  const buildCompanyCardSources = useCallback(
+    (question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
+      if (!cards.length) return [];
+      const qLower = question.toLowerCase();
+      const nameLowers = detectedNames.map(n => n.toLowerCase());
+
+      // Determine if this is a "list all" / portfolio-wide question
+      const isPortfolioWide = /\b(how many|list|all compan|portfolio|every company|which compan)\b/i.test(question);
+      // Determine if user is asking about a specific country/sector/etc.
+      const isFilterQuestion = /\b(in\s+\w+|from\s+\w+|based in|headquartered|country|sector|fintech|saas|b2b|b2c|healthtech|edtech|agritech|logistics|ecommerce)\b/i.test(question);
+
+      const result: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
+      const relevantCards: typeof cards = [];
+      const otherCards: typeof cards = [];
+
+      for (const card of cards) {
+        const name = (card.company_name || "").trim();
+        if (!name) continue;
+        const nameLower = name.toLowerCase();
+        const p = card.company_properties || {};
+        const cardText = [
+          name, p.bio || "", p.industry || "", p.headquarters || "",
+          p.country || "", p.location || "", p.funding_stage || "",
+          ...(Array.isArray(p.geo_focus) ? p.geo_focus : []),
+          ...(Array.isArray(p.geo_markets) ? p.geo_markets : []),
+        ].join(" ").toLowerCase();
+
+        // Card is "relevant" if the question mentions its name, or the card matches query tokens
+        const isNameMatch = nameLowers.some(n => nameLower.includes(n) || n.includes(nameLower));
+        const isContentMatch = qLower.split(/\s+/).filter(w => w.length > 3).some(tok => cardText.includes(tok));
+        if (isNameMatch || isContentMatch) {
+          relevantCards.push(card);
+        } else {
+          otherCards.push(card);
+        }
+      }
+
+      // Relevant cards get full snippets
+      for (const card of relevantCards) {
+        result.push({
+          title: `Company card: ${card.company_name}`,
+          file_name: null as string | null,
+          snippet: buildCardSnippet(card, false),
+        });
+      }
+
+      // For portfolio-wide or filter questions, send ALL cards but slim
+      if (isPortfolioWide || isFilterQuestion) {
+        for (const card of otherCards) {
+          result.push({
+            title: `Company card: ${card.company_name}`,
+            file_name: null as string | null,
+            snippet: buildCardSnippet(card, true),
+          });
+        }
+      } else {
+        // For specific questions, send only a slim summary of other companies
+        // so Claude knows the portfolio but doesn't waste tokens
+        const MAX_OTHER = 25;
+        for (const card of otherCards.slice(0, MAX_OTHER)) {
+          result.push({
+            title: `Company card: ${card.company_name}`,
+            file_name: null as string | null,
+            snippet: buildCardSnippet(card, true),
+          });
+        }
+      }
+
+      return result;
+    },
+    [buildCardSnippet]
   );
 
   const askFund = useCallback(
@@ -8140,305 +8218,248 @@ export default function CIS() {
         searchTimeoutId = null;
       }
       
-      if (canSemantic) {
+      // ════════════════════════════════════════════════════════════════════
+      // FAST PATH: Portfolio / company-index questions → skip heavy RAG
+      // Questions like "how many companies in Morocco?", "list my fintech companies",
+      // "which companies could connect with X?" can be answered from cards alone.
+      // ════════════════════════════════════════════════════════════════════
+      const isPortfolioIndexQuestion = (() => {
+        const q = normalizedQuestion;
+        return (
+          /\b(how many|list|all compan|portfolio|every company|which compan|companies in|companies from|headquartered|based in)\b/i.test(question) &&
+          !isComprehensiveQuestion &&
+          !(/\b(pitch|deck|memo|document|meeting notes|revenue|mrr|arr|kpi|financial)\b/i.test(q))
+        );
+      })();
+
+      if (isPortfolioIndexQuestion && companyCards.length > 0) {
+        console.log("[FAST-PATH] Portfolio index question detected — answering from company cards only");
+        if (searchTimeoutId !== null) {
+          window.clearTimeout(searchTimeoutId);
+        }
+        setChatIsLoading(false);
+        setIsClaudeLoading(true);
+        const streamer = createStreamingAssistantMessage(threadId);
+        let streamCompleted = false;
+        const streamTimeout = setTimeout(() => {
+          if (!streamCompleted) {
+            streamer.setError("Request timed out. Please try again.");
+            setIsClaudeLoading(false);
+          }
+        }, 45000);
         try {
-          // Add timeout to embedding query (15s max)
-          // Use cleaned query (without instruction words) for embedding
+          const cardSources = buildCompanyCardSources(question, companyCards, detectedNames || []);
+          const threadMsgs = await getThreadMessages(threadId, 10);
+          await askClaudeAnswerStream(
+            {
+              question,
+              sources: cardSources,
+              decisions: [],
+              connections: connectionsForChat,
+              previousMessages: threadMsgs,
+            },
+            (chunk) => { if (!streamCompleted) streamer.appendChunk(chunk); },
+            (err) => {
+              if (!streamCompleted) {
+                streamCompleted = true;
+                clearTimeout(streamTimeout);
+                streamer.setError(err.message || "Failed. Please try again.");
+                setIsClaudeLoading(false);
+              }
+            }
+          );
+          if (!streamCompleted) {
+            streamCompleted = true;
+            clearTimeout(streamTimeout);
+            streamer.finalize();
+          }
+        } catch (err) {
+          streamCompleted = true;
+          clearTimeout(streamTimeout);
+          streamer.setError(err instanceof Error ? err.message : "Failed. Please try again.");
+        } finally {
+          setIsClaudeLoading(false);
+        }
+        return;
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // PARALLEL RETRIEVAL with global time budget (8s)
+      // Fire semantic + keyword search simultaneously, merge with RRF.
+      // Only run heavier fallbacks if both came back empty.
+      // ════════════════════════════════════════════════════════════════════
+      const RETRIEVAL_BUDGET_MS = 8000;
+      const retrievalDeadline = Date.now() + RETRIEVAL_BUDGET_MS;
+      const isRetrievalBudgetExhausted = () => Date.now() >= retrievalDeadline;
+
+      // ── Semantic search promise ──
+      const semanticSearchPromise = (async (): Promise<typeof semanticMatches> => {
+        if (!canSemantic) return [];
+        try {
           let embedding: number[] | null = null;
           try {
             const embeddingPromise = embedQuery(finalSearchQuery, "query");
-            const embeddingTimeout = new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error("Embedding timeout")), 15000)
+            const embeddingTimeout = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Embedding timeout")), Math.min(8000, RETRIEVAL_BUDGET_MS))
             );
             embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
-          } catch (embedErr) {
-            // Embedding timeout or error - skip semantic search, use full-text instead
-            semanticFailed = true;
-            embedding = null;
+          } catch {
+            return [];
           }
-          if (timedOut) return;
-          console.log("[DEBUG] Embedding generated:", { length: embedding?.length || 0 });
-          if (embedding && embedding.length > 0) {
-            console.log("[DEBUG] Embedding dimension:", embedding.length);
+          if (!embedding || embedding.length === 0) return [];
 
-            const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
-              query_embedding: embedding,
-              match_count: 30,
-              filter_event_id: eventId,
-            });
-            if (timedOut) return;
-            console.log("[DEBUG] Semantic search results:", { 
-              matchCount: matches?.length || 0, 
-              matchError: matchError?.message || null,
-              matchErrorCode: matchError?.code || null,
-              matchErrorDetails: matchError || null,
-              topSimilarities: matches?.slice(0, 5).map((m: any) => ({ docId: m.document_id, similarity: m.similarity })) || []
-            });
-            
-            // Only mark as failed if there's an actual error, not just 0 results
-            if (matchError) {
-              console.error("[ERROR] Semantic search RPC failed:", matchError);
-              semanticFailed = true;
-            } else if (matches && matches.length > 0) {
-              // ── STEP 2: GraphRAG — relevance filtering + optional graph expansion ──
-              // Convert Supabase matches to GraphRAG format
-              const initialChunks = matches.map((m: any) => ({
-                id: m.document_id,
-                text: (m.parent_text || m.chunk_text || "").slice(0, 1500),
-                score: m.similarity,
-                metadata: { chunk_text: m.chunk_text, parent_text: m.parent_text },
-              }));
+          const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
+            query_embedding: embedding,
+            match_count: 20,
+            filter_event_id: eventId,
+          });
+          if (matchError || !matches?.length) return [];
 
-              // Use GraphRAG if strategy requires it (vector+graph or vector+graph+structured)
-              const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
-              let finalChunks = initialChunks;
+          console.log("[PARALLEL] Semantic search:", { count: matches.length, top: matches.slice(0, 3).map((m: any) => m.similarity) });
 
-              if (useGraphRAG && initialChunks.length > 0) {
-                try {
-                  console.log("[GRAPHRAG] Running relevance assessment + optional expansion");
-                  const graphragResult = await graphragRetrieve({
-                    query: finalSearchQuery,
-                    initial_chunks: initialChunks,
-                    min_relevant_chunks: queryAnalysis?.complexity && queryAnalysis.complexity > 0.6 ? 3 : 2,
-                  });
-                  finalChunks = graphragResult.relevant_chunks;
-                  console.log("[GRAPHRAG] Result:", {
-                    initial: initialChunks.length,
-                    relevant: finalChunks.length,
-                    expanded: graphragResult.expanded,
-                    assessed: graphragResult.total_assessed,
-                  });
-                } catch (graphragErr) {
-                  console.warn("[GRAPHRAG] Failed, using initial chunks:", graphragErr);
-                  finalChunks = initialChunks;
-                }
-              }
+          // GraphRAG expansion (optional, with tight timeout)
+          const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
+          let finalChunks = matches.map((m: any) => ({
+            id: m.document_id,
+            text: (m.parent_text || m.chunk_text || "").slice(0, 1500),
+            score: m.similarity,
+            metadata: { chunk_text: m.chunk_text, parent_text: m.parent_text },
+          }));
 
-              // Convert back to semanticMatches format (GraphRAG already filtered by relevance)
-              const chunkMap = new Map(finalChunks.map((c) => [c.id, c]));
-              let filteredMatches = matches
-                .filter((m: any) => chunkMap.has(m.document_id))
-                .map((m: any) => ({
-                  document_id: m.document_id,
-                  similarity: chunkMap.get(m.document_id)?.score ?? m.similarity,
-                  chunk_text: m.chunk_text,
-                  parent_text: m.parent_text,
-                }));
-
-              // Apply similarity threshold only if GraphRAG wasn't used (fallback)
-              if (!useGraphRAG) {
-                const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
-                console.log("[DEBUG] Filtering with threshold:", { hasName, SIMILARITY_THRESHOLD, detectedNames });
-                filteredMatches = filteredMatches.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
-              }
-              
-              // CRITICAL: Post-retrieval filtering - exclude documents about wrong companies
-              // Extract company name from conversation history (last user question)
-              const lastUserQuestion = threadMessages.filter(m => m.role === "user").slice(-1)[0]?.content || "";
-              const targetCompanyName = (() => {
-                // Look for capitalized words that might be company names in the last user question
-                const matches = lastUserQuestion.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g) || [];
-                const commonWords = new Set(['The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'Which', 'Could', 'Would', 'Should', 'Based', 'Found', 'Sorry', 'Please', 'User', 'Assistant', 'How', 'Help', 'Make', 'Go', 'On', 'Given', 'Resources', 'Have', 'Right', 'Now', 'About', 'Tell', 'Me']);
-                const companies = matches.filter(m => !commonWords.has(m) && m.length > 2);
-                return companies[0] || null;
-              })();
-              
-              if (targetCompanyName) {
-                console.log("[DEBUG] 🎯 Target company from conversation:", targetCompanyName);
-                // Fetch document titles to check which company they're about
-                const docIds = filteredMatches.map(m => m.document_id);
-                if (docIds.length > 0) {
-                  const { data: docTitles } = await supabase
-                    .from("documents")
-                    .select("id,title,file_name,raw_content")
-                    .in("id", docIds)
-                    .eq("event_id", eventId);
-                  
-                  if (docTitles) {
-                    const docTitleMap = new Map(docTitles.map((d: any) => [d.id, d]));
-                    const targetCompanyLower = targetCompanyName.toLowerCase();
-                    
-                    // Filter and boost: prioritize documents that mention the target company
-                    filteredMatches = filteredMatches
-                      .map(m => {
-                        const doc = docTitleMap.get(m.document_id);
-                        if (!doc) return { ...m, companyRelevance: 0 };
-                        
-                        const titleText = `${doc.title || ""} ${doc.file_name || ""}`.toLowerCase();
-                        const contentText = (doc.raw_content || "").toLowerCase().substring(0, 2000);
-                        const fullText = `${titleText} ${contentText}`;
-                        const mentionsTarget = fullText.includes(targetCompanyLower);
-                        
-                        // Check for other common company names that might be wrong
-                        const otherCompanies = ['giga energy', 'ridelink', 'yindii', 'weego'];
-                        const mentionsOtherCompany = otherCompanies
-                          .filter(c => c !== targetCompanyLower)
-                          .some(c => fullText.includes(c));
-                        
-                        // If document mentions other company but not target, heavily penalize
-                        if (mentionsOtherCompany && !mentionsTarget) {
-                          return { ...m, companyRelevance: -1, similarity: m.similarity * 0.1 };
-                        }
-                        
-                        // Boost documents that mention target company
-                        if (mentionsTarget) {
-                          return { ...m, companyRelevance: 1, similarity: Math.min(m.similarity * 1.5, 1.0) };
-                        }
-                        
-                        return { ...m, companyRelevance: 0 };
-                      })
-                      .filter(m => {
-                        // Exclude documents that are clearly about other companies
-                        if (m.companyRelevance === -1) {
-                          console.log("[DEBUG] 🚫 Excluding document about wrong company:", m.document_id);
-                          return false;
-                        }
-                        return true;
-                      })
-                      .sort((a, b) => {
-                        // Sort by: company relevance first, then similarity
-                        if (a.companyRelevance !== b.companyRelevance) {
-                          return b.companyRelevance - a.companyRelevance;
-                        }
-                        return b.similarity - a.similarity;
-                      });
-                    
-                    console.log("[DEBUG] ✅ Post-filtered matches:", {
-                      original: filteredMatches.length,
-                      afterFilter: filteredMatches.length,
-                      targetCompany: targetCompanyName
-                    });
-                  }
-                }
-              }
-              
-              semanticMatches = filteredMatches;
-              console.log("[DEBUG] Final semantic matches:", { count: semanticMatches.length });
-              semanticMatches.forEach((m) => {
-                if (m.parent_text?.trim()) {
-                  snippetByDocId.set(m.document_id, m.parent_text);
-                } else if (m.chunk_text?.trim()) {
-                  snippetByDocId.set(m.document_id, m.chunk_text);
-                }
-              });
-            } else {
-              // No matches found, but RPC succeeded - this is OK, just no semantic results
-              console.log("[DEBUG] Semantic search returned 0 matches (RPC succeeded, no results)");
+          if (useGraphRAG && finalChunks.length > 0 && !isRetrievalBudgetExhausted()) {
+            try {
+              const graphragResult = await Promise.race([
+                graphragRetrieve({
+                  query: finalSearchQuery,
+                  initial_chunks: finalChunks,
+                  min_relevant_chunks: queryAnalysis?.complexity && queryAnalysis.complexity > 0.6 ? 3 : 2,
+                }),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GraphRAG timeout")), 4000)),
+              ]);
+              finalChunks = graphragResult.relevant_chunks;
+              console.log("[PARALLEL] GraphRAG:", { initial: matches.length, relevant: finalChunks.length });
+            } catch {
+              console.warn("[PARALLEL] GraphRAG skipped (timeout or error)");
             }
-          } else {
-            console.log("[DEBUG] ⚠️ No embedding generated - semantic search skipped");
-            semanticFailed = true;
           }
+
+          const chunkMap = new Map(finalChunks.map((c) => [c.id, c]));
+          let filteredMatches = matches
+            .filter((m: any) => chunkMap.has(m.document_id))
+            .map((m: any) => ({
+              document_id: m.document_id,
+              similarity: chunkMap.get(m.document_id)?.score ?? m.similarity,
+              chunk_text: m.chunk_text,
+              parent_text: m.parent_text,
+            }));
+
+          if (!useGraphRAG) {
+            const SIMILARITY_THRESHOLD = hasName ? 0.15 : 0.35;
+            filteredMatches = filteredMatches.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+          }
+              
+          return filteredMatches;
         } catch (err) {
-          // Semantic search failed - silently fall back to full-text search
-          semanticFailed = true;
-          console.log("[DEBUG] ⚠️ Semantic search error:", err instanceof Error ? err.message : String(err));
+          console.warn("[PARALLEL] Semantic search error:", err instanceof Error ? err.message : String(err));
+          return [];
         }
+      })();
+
+      // ── Keyword search promise (runs in PARALLEL with semantic) ──
+      const keywordSearchPromise = (async (): Promise<typeof keywordMatches> => {
+        try {
+          const keywordQueryText = finalSearchQuery.replace(/[^\w\s-]/g, " ").trim();
+          if (keywordQueryText.length <= 1) return [];
+          const { data: keywordRows, error: keywordError } = await supabase.rpc("match_documents_keyword", {
+            query_text: keywordQueryText,
+            match_count: 20,
+            filter_event_id: eventId,
+          });
+          if (keywordError || !keywordRows?.length) return [];
+          console.log("[PARALLEL] Keyword search:", { count: keywordRows.length });
+          return keywordRows as typeof keywordMatches;
+        } catch {
+          return [];
+        }
+      })();
+
+      // ── Direct title search promise (for name queries, also in parallel) ──
+      const directTitleSearchPromise = (async (): Promise<typeof keywordMatches> => {
+        if (!hasName) return [];
+        try {
+          const searchTerms = new Set<string>();
+          detectedNames.forEach(name => {
+            searchTerms.add(name.toLowerCase());
+            name.split(/\s+/).forEach(part => { if (part.length > 3) searchTerms.add(part.toLowerCase()); });
+          });
+          finalSearchQuery.split(/\s+/).forEach(word => {
+            if (word.length > 4 && /^[A-Za-z]+$/.test(word)) searchTerms.add(word.toLowerCase());
+          });
+          const { data: titleMatches, error: titleError } = await supabase
+            .from("documents")
+            .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
+            .eq("event_id", eventId)
+            .limit(30);
+          if (titleError || !titleMatches?.length) return [];
+          const directMatches = titleMatches.filter((doc: any) => {
+            const fullText = `${doc.title || ""} ${doc.file_name || ""} ${(doc.raw_content || "").substring(0, 5000)}`.toLowerCase();
+            return Array.from(searchTerms).some(term => fullText.includes(term));
+          });
+          console.log("[PARALLEL] Direct title search:", { found: directMatches.length });
+          return directMatches.map((doc: any) => ({
+            document_id: doc.id, rank: 0.5, snippet: (doc.raw_content || "").substring(0, 200)
+          }));
+        } catch { return []; }
+      })();
+
+      // ── AWAIT ALL IN PARALLEL with global budget ──
+      const allSearches = Promise.all([semanticSearchPromise, keywordSearchPromise, directTitleSearchPromise]);
+      const budgetTimeout = new Promise<[typeof semanticMatches, typeof keywordMatches, typeof keywordMatches]>((resolve) =>
+        setTimeout(() => resolve([[], [], []]), RETRIEVAL_BUDGET_MS)
+      );
+      const [semResults, kwResults, directResults] = await Promise.race([allSearches, budgetTimeout]);
+      if (timedOut) return;
+
+      // Merge results
+      semanticMatches = semResults;
+      semanticFailed = semResults.length === 0 && canSemantic;
+      keywordMatches = kwResults;
+      // Merge direct title results into keyword matches (dedup)
+      const kwDocIds = new Set(keywordMatches.map(m => m.document_id));
+      for (const d of directResults) {
+        if (!kwDocIds.has(d.document_id)) keywordMatches.push(d);
       }
+      // Populate snippet map from semantic results
+      semanticMatches.forEach((m) => {
+        if (m.parent_text?.trim()) snippetByDocId.set(m.document_id, m.parent_text);
+        else if (m.chunk_text?.trim()) snippetByDocId.set(m.document_id, m.chunk_text);
+      });
+      keywordMatches.forEach((m) => {
+        if (!snippetByDocId.has(m.document_id) && m.snippet?.trim()) snippetByDocId.set(m.document_id, m.snippet!);
+      });
+
+      console.log("[PARALLEL] All retrieval done:", {
+        semantic: semanticMatches.length,
+        keyword: keywordMatches.length,
+        direct: directResults.length,
+        budgetUsedMs: RETRIEVAL_BUDGET_MS - (retrievalDeadline - Date.now()),
+      });
 
       if (!docs.length && !error) {
-        // Hybrid search: keyword + semantic (RRF)
-        // Use cleaned query (without instruction words) for keyword search
-        const keywordQueryText = finalSearchQuery.replace(/[^\w\s-]/g, " ").trim();
-        console.log("[DEBUG] Keyword search query:", keywordQueryText);
-        if (keywordQueryText.length > 1) {
-          try {
-            const { data: keywordRows, error: keywordError } = await supabase.rpc("match_documents_keyword", {
-              query_text: keywordQueryText,
-              match_count: 30,
-              filter_event_id: eventId,
-            });
-            if (timedOut) return;
-            console.log("[DEBUG] Keyword search results:", { 
-              matchCount: keywordRows?.length || 0, 
-              keywordError: keywordError?.message || null,
-              topRanks: keywordRows?.slice(0, 5).map((m: any) => ({ docId: m.document_id, rank: m.rank })) || []
-            });
-            if (!keywordError && keywordRows?.length) {
-              keywordMatches = keywordRows as typeof keywordMatches;
-              keywordMatches.forEach((m) => {
-                if (!snippetByDocId.has(m.document_id) && m.snippet?.trim()) {
-                  snippetByDocId.set(m.document_id, m.snippet);
-                }
-              });
-            }
-          } catch (keywordErr) {
-            // Ignore keyword errors; fall back below
-            console.log("[DEBUG] ⚠️ Keyword search error:", keywordErr instanceof Error ? keywordErr.message : String(keywordErr));
-          }
-        }
-        
-        // CRITICAL FIX: Direct title/filename search for name queries
-        // PostgreSQL full-text search is bad at proper nouns, so search directly
-        if (hasName && (semanticMatches.length === 0 || keywordMatches.length === 0)) {
-          console.log("[DEBUG] 🔍 Trying direct title/filename search for names:", detectedNames);
-          try {
-            // Build OR conditions for each detected name (and each word in names)
-            const searchTerms = new Set<string>();
-            detectedNames.forEach(name => {
-              searchTerms.add(name.toLowerCase());
-              name.split(/\s+/).forEach(part => {
-                if (part.length > 3) searchTerms.add(part.toLowerCase());
-              });
-            });
-            // Also add words from finalSearchQuery that look like names
-            finalSearchQuery.split(/\s+/).forEach(word => {
-              if (word.length > 4 && /^[A-Za-z]+$/.test(word)) {
-                searchTerms.add(word.toLowerCase());
-              }
-            });
-            
-            console.log("[DEBUG] Direct search terms:", Array.from(searchTerms));
-            
-            // Query documents directly using ILIKE for fuzzy matching
-            const { data: titleMatches, error: titleError } = await supabase
-              .from("documents")
-              .select("id,title,file_name,raw_content,extracted_json,created_at,storage_path,created_by")
-              .eq("event_id", eventId)
-              .limit(30);
-            
-            if (!titleError && titleMatches?.length) {
-              // Filter documents that contain any of our search terms in title, filename, or content
-              const directMatches = titleMatches.filter((doc: any) => {
-                const titleText = `${doc.title || ""} ${doc.file_name || ""}`.toLowerCase();
-                const contentText = (doc.raw_content || "").toLowerCase().substring(0, 5000); // Check first 5k chars
-                const fullText = `${titleText} ${contentText}`;
-                return Array.from(searchTerms).some(term => fullText.includes(term));
-              });
-              
-              console.log("[DEBUG] Direct title/content search found:", directMatches.length, "documents");
-              
-              // Add these to keyword matches if not already there
-              directMatches.forEach((doc: any) => {
-                if (!keywordMatches.some(m => m.document_id === doc.id)) {
-                  keywordMatches.push({
-                    document_id: doc.id,
-                    rank: 0.5, // Medium rank
-                    snippet: (doc.raw_content || "").substring(0, 200)
-                  });
-                }
-              });
-            }
-          } catch (directErr) {
-            console.log("[DEBUG] Direct search error:", directErr instanceof Error ? directErr.message : String(directErr));
-          }
-        }
-
+        // ── RRF merge ──
         const RRF_K = 60;
         const scoreMap = new Map<string, number>();
         semanticMatches.forEach((m, idx) => {
-          const score = 1 / (RRF_K + idx + 1);
-          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + score);
+          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + 1 / (RRF_K + idx + 1));
         });
         keywordMatches.forEach((m, idx) => {
-          const score = 1 / (RRF_K + idx + 1);
-          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + score);
+          scoreMap.set(m.document_id, (scoreMap.get(m.document_id) || 0) + 1 / (RRF_K + idx + 1));
         });
 
         const rankedIds = Array.from(scoreMap.entries())
           .sort((a, b) => b[1] - a[1])
           .map(([id]) => id)
-          .slice(0, 20);
+          .slice(0, 15);
         
         console.log("[DEBUG] RRF results:", { 
           semanticMatchCount: semanticMatches.length, 
@@ -9427,7 +9448,33 @@ export default function CIS() {
 
       // For comprehensive questions, use more sources (up to 5)
       const maxDocs = isComprehensiveQuestion ? 5 : 3;
-      const answerDocs = rankedDocs.slice(0, maxDocs);
+      // ── SOURCE DIVERSITY: Don't let one company dominate all results ──
+      // If multiple docs share the same title prefix (e.g. all about Chari), cap per-company to 2
+      const diversifyDocs = (allDocs: typeof rankedDocs, cap: number): typeof rankedDocs => {
+        const result: typeof rankedDocs = [];
+        const titleSeen = new Map<string, number>();
+        for (const doc of allDocs) {
+          const key = (doc.title || doc.file_name || "").toLowerCase().split(/[\s\-_:]+/).slice(0, 2).join(" ").trim() || doc.id;
+          const count = titleSeen.get(key) || 0;
+          if (count < 2) {
+            result.push(doc);
+            titleSeen.set(key, count + 1);
+            if (result.length >= cap) break;
+          }
+        }
+        // If diversity filtering gave fewer than cap, fill from remaining
+        if (result.length < cap) {
+          const usedIds = new Set(result.map(d => d.id));
+          for (const doc of allDocs) {
+            if (!usedIds.has(doc.id)) {
+              result.push(doc);
+              if (result.length >= cap) break;
+            }
+          }
+        }
+        return result;
+      };
+      const answerDocs = diversifyDocs(rankedDocs, maxDocs);
       setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
       setLastEvidenceThreadId(threadId);
       setChatIsLoading(false);
