@@ -17,6 +17,62 @@ async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 800
   }
 }
 
+/**
+ * Fetch with automatic retry + exponential backoff for transient errors
+ * (503 Service Unavailable, 429 Too Many Requests, network failures).
+ * Render free-tier cold-starts and rate limits are the main culprits.
+ */
+async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  maxRetries = 4,
+  baseDelayMs = 1500
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.status === 503 || response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        const delay = retryAfter
+          ? parseInt(retryAfter, 10) * 1000
+          : baseDelayMs * Math.pow(2, attempt);
+        if (attempt < maxRetries) {
+          console.warn(`[fetchWithRetry] ${response.status} on ${url} — retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+      }
+      return response;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.warn(`[fetchWithRetry] Network error on ${url} — retry ${attempt + 1}/${maxRetries} in ${delay}ms:`, lastError.message);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError ?? new Error(`fetchWithRetry failed after ${maxRetries} retries`);
+}
+
+/** Small sleep helper to throttle request bursts */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Wake up the Render service before bulk requests (fire-and-forget with retry) */
+export async function warmUpIngestion(): Promise<void> {
+  try {
+    const baseUrl = await resolveIngestionBaseUrl();
+    console.log("[DriveSync] Warming up ingestion service...");
+    await fetchWithRetry(`${baseUrl}/health`, undefined, 3, 2000);
+    console.log("[DriveSync] Ingestion service is awake.");
+  } catch {
+    console.warn("[DriveSync] Warm-up failed — will retry on first real request.");
+  }
+}
+
 async function resolveIngestionBaseUrl(): Promise<string> {
   if (resolvedBaseUrl) return resolvedBaseUrl;
 
@@ -147,7 +203,7 @@ export async function listDriveFolders(
 ): Promise<GDriveFolderEntry[]> {
   try {
     const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetch(`${baseUrl}/gdrive/list-folders`, {
+    const response = await fetchWithRetry(`${baseUrl}/gdrive/list-folders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
@@ -171,7 +227,7 @@ export async function listDriveFiles(
 ): Promise<GDriveFileEntry[]> {
   try {
     const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetch(`${baseUrl}/gdrive/list-files`, {
+    const response = await fetchWithRetry(`${baseUrl}/gdrive/list-files`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
@@ -197,7 +253,7 @@ export async function downloadDriveFile(
 ): Promise<{ title: string; content: string; raw_content: string; sourceType: string; mimeType: string }> {
   try {
     const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetch(`${baseUrl}/gdrive/download-file`, {
+    const response = await fetchWithRetry(`${baseUrl}/gdrive/download-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

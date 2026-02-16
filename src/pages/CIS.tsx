@@ -180,7 +180,7 @@ import {
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
-import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
+import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
 // ============================================================================
@@ -1920,6 +1920,9 @@ function SourcesTab({
     const results: Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }> = [];
 
     try {
+      // 0. Wake up the Render ingestion service (free-tier cold-start can take 30-60s)
+      await warmUpIngestion();
+
       // 1. Recursively list ALL descendant folders (sub, sub-sub, ...) up to MAX_FOLDER_DEPTH
       const MAX_FOLDER_DEPTH = 10;
       const visitedIds = new Set<string>();
@@ -1937,6 +1940,7 @@ function SourcesTab({
           if (visitedIds.has(child.id)) continue;
           const path = parentPath ? `${parentPath} / ${child.name}` : child.name;
           allDescendantFolders.push({ id: child.id, name: child.name, path });
+          await sleep(300); // throttle: avoid overwhelming Render
           await collectDescendants(child.id, path, depth - 1);
         }
       };
@@ -1958,6 +1962,7 @@ function SourcesTab({
         if (files.length > 0) {
           subFolders.push({ id: folder.id, name: folder.path }); // use path as company name for uniqueness
         }
+        if (i < allDescendantFolders.length - 1) await sleep(300); // throttle
       }
       console.log(`[DriveSync] ${subFolders.length} folders with documents (from ${allDescendantFolders.length} total)`);
       if (subFolders.length === 0) {
@@ -2303,6 +2308,7 @@ function SourcesTab({
 
         results.push({ companyName, newFiles, updatedFiles, skippedFiles });
         setDriveSyncResults([...results]);
+        if (fi < subFolders.length - 1) await sleep(500); // throttle between company folders
       }
 
       // 9. Update sync_configurations last_sync_at
