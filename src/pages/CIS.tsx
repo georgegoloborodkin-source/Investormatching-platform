@@ -157,6 +157,7 @@ import {
   insertDocument,
   insertSource,
   insertSourceFolder,
+  deleteFolderAndContents,
   insertCompanyConnection,
   updateCompanyConnection,
   deleteCompanyConnection,
@@ -1531,6 +1532,7 @@ function SourcesTab({
   sourceFolders,
   onCreateSource,
   onCreateFolder,
+  onDeleteFolderAndContents,
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
@@ -1565,6 +1567,7 @@ function SourcesTab({
     eventIdOverride?: string | null
   ) => Promise<void>;
   onCreateFolder: (name: string) => Promise<SourceFolder | null>;
+  onDeleteFolderAndContents?: (folderId: string) => Promise<{ docCount: number } | { error: string }>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
   onAutoLogDecision: (input: {
@@ -1599,6 +1602,8 @@ function SourcesTab({
   const [selectedListId, setSelectedListId] = useState("");
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [driveUrl, setDriveUrl] = useState("");
+  const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [isImportingClickUp, setIsImportingClickUp] = useState(false);
   const [isImportingDrive, setIsImportingDrive] = useState(false);
   const [isUploadingLocal, setIsUploadingLocal] = useState(false);
@@ -3547,23 +3552,83 @@ function SourcesTab({
               <Label className="text-white/70 font-mono text-xs mb-2 block">Existing Folders ({sourceFolders.length})</Label>
               <div className="flex flex-wrap gap-2">
                 {sourceFolders.map((folder) => (
-                  <Badge
-                    key={folder.id}
-                    variant="outline"
-                    className={`cursor-pointer transition-all font-mono ${
-                      selectedFolderId === folder.id
-                        ? "border-[#FFED00] text-[#FFED00] bg-[#FFED00]/10"
-                        : "border-white text-white bg-transparent hover:border-[#FFED00] hover:text-[#FFED00]"
-                    }`}
-                    onClick={() => setSelectedFolderId(folder.id)}
-                  >
-                    <Folder className="h-3 w-3 mr-1" />
-                    {folder.name}
-                  </Badge>
+                  <div key={folder.id} className="flex items-center gap-0.5">
+                    <Badge
+                      variant="outline"
+                      className={`cursor-pointer transition-all font-mono ${
+                        selectedFolderId === folder.id
+                          ? "border-[#FFED00] text-[#FFED00] bg-[#FFED00]/10"
+                          : "border-white text-white bg-transparent hover:border-[#FFED00] hover:text-[#FFED00]"
+                      }`}
+                      onClick={() => setSelectedFolderId(folder.id)}
+                    >
+                      <Folder className="h-3 w-3 mr-1" />
+                      {folder.name}
+                    </Badge>
+                    {onDeleteFolderAndContents && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-white/50 hover:text-red-400 hover:bg-red-500/10">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="border-white/20 bg-slate-900">
+                          <DropdownMenuItem
+                            className="text-red-400 focus:text-red-300 focus:bg-red-500/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFolderToDelete({ id: folder.id, name: folder.name || "Folder" });
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            Delete folder and all documents
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
           )}
+          {/* Confirm delete folder and contents */}
+          <AlertDialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
+            <AlertDialogContent className="border-2 border-white/20 bg-slate-900 text-white">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-white font-mono">Delete folder and all its documents?</AlertDialogTitle>
+                <AlertDialogDescription className="text-white/80 font-mono text-sm">
+                  This will permanently delete the folder &quot;{folderToDelete?.name}&quot; and all documents in it. Embeddings and links will be removed. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="bg-slate-800 text-white border-white/20 hover:bg-slate-700">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 text-white hover:bg-red-700"
+                  onClick={async () => {
+                    if (!folderToDelete || !onDeleteFolderAndContents) return;
+                    setIsDeletingFolder(true);
+                    try {
+                      const result = await onDeleteFolderAndContents(folderToDelete.id);
+                      if ("error" in result) {
+                        toast({ title: "Failed to delete folder", description: result.error, variant: "destructive" });
+                      } else {
+                        toast({
+                          title: "Folder deleted",
+                          description: result.docCount > 0 ? `Deleted folder and ${result.docCount} document(s).` : "Folder deleted.",
+                        });
+                        setFolderToDelete(null);
+                      }
+                    } finally {
+                      setIsDeletingFolder(false);
+                    }
+                  }}
+                  disabled={isDeletingFolder}
+                >
+                  {isDeletingFolder ? "Deleting…" : "Delete folder and documents"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
 
@@ -5979,6 +6044,27 @@ export default function CIS() {
       return folder;
     },
     [activeEventId, profile, user, toast]
+  );
+
+  const handleDeleteFolderAndContents = useCallback(
+    async (folderId: string): Promise<{ docCount: number } | { error: string }> => {
+      const result = await deleteFolderAndContents(folderId);
+      if (result.error) return { error: result.error };
+      if (!activeEventId) return result;
+      const { data: refreshedFolders } = await getSourceFoldersByEvent(activeEventId);
+      const { data: refreshedDocs } = await getDocumentsByEvent(activeEventId);
+      setSourceFolders((refreshedFolders || []) as SourceFolder[]);
+      setDocuments(
+        (refreshedDocs || []).map((doc: any) => ({
+          id: doc.id,
+          title: doc.title,
+          storage_path: doc.storage_path || null,
+          folder_id: doc.folder_id || null,
+        }))
+      );
+      return { docCount: result.docCount };
+    },
+    [activeEventId]
   );
 
   const ensureActiveEventId = useCallback(async () => {
@@ -10482,6 +10568,7 @@ export default function CIS() {
               sourceFolders={sourceFolders}
               onCreateSource={handleCreateSource}
               onCreateFolder={handleCreateFolder}
+              onDeleteFolderAndContents={handleDeleteFolderAndContents}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}

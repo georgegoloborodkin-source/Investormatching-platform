@@ -252,6 +252,47 @@ export async function insertSourceFolder(
     .single();
 }
 
+/**
+ * Delete a folder and all documents that are in it (via document_folder_links).
+ * Permanently removes those documents (and their embeddings via CASCADE).
+ * Use with confirmation in the UI.
+ */
+export async function deleteFolderAndContents(folderId: string): Promise<{ docCount: number; error?: string }> {
+  const { data: links, error: linksError } = await supabase
+    .from("document_folder_links")
+    .select("document_id")
+    .eq("folder_id", folderId);
+
+  if (linksError) {
+    return { docCount: 0, error: linksError.message };
+  }
+
+  const docIds = (links || []).map((r: { document_id: string }) => r.document_id);
+  const docCount = docIds.length;
+
+  if (docIds.length > 0) {
+    const { error: deleteDocsError } = await supabase
+      .from("documents")
+      .delete()
+      .in("id", docIds);
+
+    if (deleteDocsError) {
+      return { docCount, error: deleteDocsError.message };
+    }
+  }
+
+  const { error: deleteFolderError } = await supabase
+    .from("source_folders")
+    .delete()
+    .eq("id", folderId);
+
+  if (deleteFolderError) {
+    return { docCount, error: deleteFolderError.message };
+  }
+
+  return { docCount };
+}
+
 // Company Connections helpers
 export type ConnectionType = "BD" | "INV" | "Knowledge" | "Partnership" | "Portfolio";
 export type ConnectionStatus = "To Connect" | "Connected" | "Rejected" | "In Progress" | "Completed";
