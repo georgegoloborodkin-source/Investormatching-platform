@@ -124,9 +124,7 @@ export async function ingestGoogleDrive(
   }
 }
 
-// ─── Google Drive Folder-Sync Helpers ────────────────────────────────────────
-
-export interface GDriveFolderEntry {
+// ─── Google Drive Folder-Sync Helpers ────────────────────────────────────────export interface GDriveFolderEntry {
   id: string;
   name: string;
   modifiedTime?: string | null;
@@ -186,9 +184,7 @@ export async function listDriveFiles(
       `Drive list-files failed: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
-}
-
-export async function downloadDriveFile(
+}export async function downloadDriveFile(
   accessToken: string,
   fileId: string,
   mimeType?: string,
@@ -217,4 +213,3 @@ export async function downloadDriveFile(
     );
   }
 }
-
