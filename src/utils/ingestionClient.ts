@@ -1,4 +1,5 @@
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
+const GDRIVE_PROXY_BASE = "/api/gdrive";
 
 function buildCandidateBaseUrls(): string[] {
   if (ENV_CONVERTER_API_URL) return [ENV_CONVERTER_API_URL];
@@ -64,9 +65,8 @@ export function sleep(ms: number): Promise<void> {
 /** Wake up the Render service before bulk requests (fire-and-forget with retry) */
 export async function warmUpIngestion(): Promise<void> {
   try {
-    const baseUrl = await resolveIngestionBaseUrl();
     console.log("[DriveSync] Warming up ingestion service...");
-    await fetchWithRetry(`${baseUrl}/health`, undefined, 3, 2000);
+    await fetchWithRetry(`${GDRIVE_PROXY_BASE}/health`, { method: "GET" }, 3, 2000);
     console.log("[DriveSync] Ingestion service is awake.");
   } catch {
     console.warn("[DriveSync] Warm-up failed — will retry on first real request.");
@@ -202,8 +202,7 @@ export async function listDriveFolders(
   folderId: string
 ): Promise<GDriveFolderEntry[]> {
   try {
-    const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetchWithRetry(`${baseUrl}/gdrive/list-folders`, {
+    const response = await fetchWithRetry(`${GDRIVE_PROXY_BASE}/list-folders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
@@ -226,8 +225,7 @@ export async function listDriveFiles(
   folderId: string
 ): Promise<GDriveFileEntry[]> {
   try {
-    const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetchWithRetry(`${baseUrl}/gdrive/list-files`, {
+    const response = await fetchWithRetry(`${GDRIVE_PROXY_BASE}/list-files`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
@@ -252,8 +250,7 @@ export async function downloadDriveFile(
   fileName?: string
 ): Promise<{ title: string; content: string; raw_content: string; sourceType: string; mimeType: string }> {
   try {
-    const baseUrl = await resolveIngestionBaseUrl();
-    const response = await fetchWithRetry(`${baseUrl}/gdrive/download-file`, {
+    const response = await fetchWithRetry(`${GDRIVE_PROXY_BASE}/download-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
