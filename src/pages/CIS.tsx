@@ -1633,6 +1633,7 @@ function SourcesTab({
   const [lastDriveSyncAt, setLastDriveSyncAt] = useState<string | null>(null);
   // Auto-sync interval (15 minutes)
   const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSyncingDriveRef = useRef(false);
   const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
   const MAX_IMPORT_CHARS = 24000;
@@ -1640,6 +1641,10 @@ function SourcesTab({
   const canImport = Boolean(activeEventId);
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  useEffect(() => {
+    isSyncingDriveRef.current = isSyncingDrive;
+  }, [isSyncingDrive]);
   
   // Debug: log env vars (remove in production)
   useEffect(() => {
@@ -2018,6 +2023,14 @@ function SourcesTab({
                 }
               }
 
+              // Skip unsupported binary/image types before calling the ingestion API.
+              // This avoids noisy 400s from /gdrive/download-file for files we won't process.
+              if (file.mimeType?.startsWith("image/")) {
+                console.info(`[DriveSync] Skipping unsupported image file: ${file.name} (${file.mimeType})`);
+                skippedFiles++;
+                continue;
+              }
+
               // 5. Download file content
               const downloaded = await downloadDriveFile(accessToken, file.id, file.mimeType, file.name);
               if (!downloaded.content || downloaded.content.startsWith("[Empty")) {
@@ -2248,6 +2261,12 @@ function SourcesTab({
                 newFiles++;
               }
             } catch (fileErr) {
+              const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
+              if (msg.toLowerCase().includes("unsupported file type")) {
+                console.warn(`[DriveSync] Skipping unsupported file type for ${file.name}: ${msg}`);
+                skippedFiles++;
+                continue;
+              }
               console.error(`[DriveSync] Error processing file ${file.name}:`, fileErr);
             }
           }
@@ -2348,12 +2367,12 @@ function SourcesTab({
     if (!autoSyncIntervalRef.current) {
       console.log("[DriveSync] Setting up auto-sync interval (every 15 min)");
       autoSyncIntervalRef.current = setInterval(() => {
-        if (isSyncingDrive) {
+        if (isSyncingDriveRef.current) {
           console.log("[DriveSync] Auto-sync interval: skipped (already syncing)");
           return;
         }
         console.log("[DriveSync] Auto-sync interval triggered");
-        syncGoogleDriveFolder();
+        syncGoogleDriveFolderRef.current?.();
       }, SYNC_INTERVAL_MS);
     }
     return () => {
@@ -2362,7 +2381,7 @@ function SourcesTab({
         autoSyncIntervalRef.current = null;
       }
     };
-  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId, isSyncingDrive, syncGoogleDriveFolder]);
+  }, [connectedDriveFolderId, connectedDriveFolders, activeEventId]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -7254,7 +7273,14 @@ export default function CIS() {
             });
           });
 
-          if (pairs.length > 0) return pairs;
+          if (pairs.length > 0) {
+            return {
+              pairs,
+              mode: "agentic" as const,
+              parentCount: agenticResult.sections.length,
+              modelUsed: agenticResult.model_used || "",
+            };
+          }
         }
       } catch (err) {
         console.warn("[CHUNK] Agentic chunking failed, falling back to semantic:", err);
@@ -7262,7 +7288,14 @@ export default function CIS() {
 
       // ── Fallback: semantic chunking (paragraph/sentence boundaries) ──
       console.log("[CHUNK] Using semantic fallback chunking");
-      return buildSemanticParentChildChunks(text);
+      const semanticPairs = buildSemanticParentChildChunks(text);
+      const parentCount = new Set(semanticPairs.map((p) => p.parentIndex)).size;
+      return {
+        pairs: semanticPairs,
+        mode: "semantic_fallback" as const,
+        parentCount,
+        modelUsed: "",
+      };
     },
     [splitIntoSentences, mergeUnitsIntoChunks, chunkTextWithOverlap, buildSemanticParentChildChunks]
   );
@@ -7500,13 +7533,24 @@ export default function CIS() {
           const MAX_EMBED_CHARS = 12000; // Increased for better coverage
           const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
           const title = docTitle || "Untitled document";
-          const pairs = await buildParentChildChunks(truncated, title);
+          const chunkBuild = await buildParentChildChunks(truncated, title);
+          const pairs = chunkBuild.pairs;
+          console.log(
+            `[CHUNK] Doc ${documentId}: mode=${chunkBuild.mode}, parents=${chunkBuild.parentCount}, children=${pairs.length}` +
+            (chunkBuild.modelUsed ? `, model=${chunkBuild.modelUsed}` : "")
+          );
 
           // Build a short document summary for contextual headers (first 500 chars)
           const docSummary = rawContent.slice(0, 500);
+          let chunksAttempted = 0;
+          let chunksEmbedded = 0;
+          let chunksEmbeddingFailed = 0;
+          let chunksInsertFailed = 0;
+          let contextualSkipped = 0;
 
           for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i];
+            chunksAttempted++;
             try {
               // ── Contextual Retrieval: enrich chunk with a Claude-generated header ──
               // This dramatically improves embedding quality (per Anthropic's paper)
@@ -7534,6 +7578,7 @@ export default function CIS() {
                 // Contextual enrichment failed or timed out — embed raw chunk (still works, just less precise)
                 // This is non-fatal and shouldn't block the upload
                 console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length} (timeout or error)`);
+                contextualSkipped++;
               }
 
               // Generate embedding with timeout
@@ -7546,10 +7591,14 @@ export default function CIS() {
                 embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
               } catch (embedErr) {
                 console.warn(`[EMBED] Embedding failed for chunk ${i + 1}/${pairs.length}:`, embedErr);
+                chunksEmbeddingFailed++;
                 continue; // Skip this chunk
               }
               
-              if (!embedding || embedding.length === 0) continue;
+              if (!embedding || embedding.length === 0) {
+                chunksEmbeddingFailed++;
+                continue;
+              }
 
               const { error } = await supabase.from("document_embeddings").insert({
                 document_id: documentId,
@@ -7574,22 +7623,31 @@ export default function CIS() {
                   });
                   if (retryError) {
                     disableEmbeddings(retryError.message || "Embedding insert failed");
+                    chunksInsertFailed++;
                     // Skip this chunk but continue with others
                     continue;
                   }
                 } else {
                   disableEmbeddings(error.message || "Embedding insert failed");
+                  chunksInsertFailed++;
                   // Skip this chunk but continue with others
                   continue;
                 }
               }
+              chunksEmbedded++;
             } catch (chunkErr) {
               disableEmbeddings(chunkErr instanceof Error ? chunkErr.message : "Embedding error");
+              chunksEmbeddingFailed++;
               // Skip this chunk but continue with others
               continue;
             }
           }
-          console.log(`[EMBED] ✅ Indexed ${pairs.length} chunks for doc ${documentId} (contextual enrichment enabled)`);
+          const failedTotal = chunksEmbeddingFailed + chunksInsertFailed;
+          const statusEmoji = chunksEmbedded > 0 ? "✅" : "⚠️";
+          console.log(
+            `[EMBED] ${statusEmoji} Indexed ${chunksEmbedded}/${chunksAttempted} chunks for doc ${documentId} ` +
+            `(mode=${chunkBuild.mode}, contextual_skipped=${contextualSkipped}, embed_failed=${chunksEmbeddingFailed}, insert_failed=${chunksInsertFailed}, total_failed=${failedTotal})`
+          );
           
           // ── Trigger entity extraction after embeddings are done ──
           const eventId = activeEventId || (await ensureActiveEventId());
@@ -8621,14 +8679,18 @@ export default function CIS() {
           if (validEmbeddings.length === 0) return [];
 
           // Step 3: Run match_document_chunks for each embedding in parallel
-          const searchPromises = validEmbeddings.map((emb) =>
-            supabase.rpc("match_document_chunks", {
-              query_embedding: emb,
-              match_count: 20,
-              filter_event_id: eventId,
-            }).then(({ data, error: err }) => (err || !data?.length ? [] : (data as any[])))
-              .catch(() => [] as any[])
-          );
+          const searchPromises = validEmbeddings.map(async (emb) => {
+            try {
+              const { data, error: err } = await supabase.rpc("match_document_chunks", {
+                query_embedding: emb,
+                match_count: 20,
+                filter_event_id: eventId,
+              });
+              return err || !data?.length ? [] : (data as any[]);
+            } catch {
+              return [] as any[];
+            }
+          });
           const allResults = await Promise.all(searchPromises);
 
           // Step 4: Merge and dedupe — keep best similarity per document_id
@@ -8657,7 +8719,7 @@ export default function CIS() {
 
           // GraphRAG expansion (optional, with tight timeout)
           const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
-          let finalChunks = mergedMatches.map((m: any) => ({
+          let finalChunks: Array<{ id: string; text: string; score?: number; metadata?: Record<string, unknown> }> = mergedMatches.map((m: any) => ({
             id: m.document_id,
             text: (m.parent_text || m.chunk_text || "").slice(0, 1500),
             score: m.similarity,
