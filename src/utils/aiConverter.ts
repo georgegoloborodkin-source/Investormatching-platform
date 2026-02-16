@@ -240,10 +240,15 @@ export async function askClaudeAnswerStream(
     webSearchEnabled?: boolean;
   },
   onChunk: (text: string) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  externalSignal?: AbortSignal
 ): Promise<void> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
+  // Link external signal so caller can cancel
+  if (externalSignal) {
+    externalSignal.addEventListener("abort", () => controller.abort());
+  }
   // Give more time when web search is enabled (Claude may perform multiple searches)
   const timeoutMs = input.webSearchEnabled ? 120000 : 70000;
   let timeoutFired = false;
@@ -384,10 +389,15 @@ export async function askAgentStream(
   },
   onChunk: (text: string) => void,
   onStatus?: (status: string) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  externalSignal?: AbortSignal
 ): Promise<void> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
+  // Link external signal so caller can cancel
+  if (externalSignal) {
+    externalSignal.addEventListener("abort", () => controller.abort());
+  }
   const timeoutMs = input.webSearchEnabled ? 120000 : 90000;
   let timeoutFired = false;
   const timeout = window.setTimeout(() => {
@@ -580,6 +590,44 @@ export async function rewriteQueryWithLLM(
   return data.rewritten_question || question;
 }
 
+// ---------------------------------------------------------------------------
+//  Multi-Query Generation — produce diverse query variants for better recall
+// ---------------------------------------------------------------------------
+
+export interface MultiQueryResult {
+  queries: string[];
+  model_used: string;
+}
+
+export async function generateMultiQueries(
+  question: string,
+  maxVariants: number = 3
+): Promise<MultiQueryResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/multi-query`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, max_variants: maxVariants }),
+      },
+      5000 // 5s — Haiku is fast, but network latency varies
+    );
+    if (!response.ok) {
+      return { queries: [question], model_used: "" };
+    }
+    const data = await response.json();
+    return {
+      queries: data.queries?.length ? data.queries : [question],
+      model_used: data.model_used || "",
+    };
+  } catch {
+    // Fail silently — return original query only
+    return { queries: [question], model_used: "" };
+  }
+}
+
 export async function embedQuery(text: string, inputType: "query" | "document" = "query"): Promise<number[]> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const response = await fetchWithTimeout(
@@ -748,6 +796,54 @@ export async function contextualizeChunk(
   } catch {
     // Fail silently — return raw chunk (non-blocking)
     return { enriched_chunk: input.chunk_text, contextual_header: "" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Step 1b: Agentic chunking — call /agentic-chunk for LLM-driven splitting
+// ---------------------------------------------------------------------------
+
+export interface AgenticSection {
+  label: string;
+  text: string;
+}
+
+export interface AgenticChunkInput {
+  document_title: string;
+  document_text: string;
+  max_sections?: number;
+}
+
+export interface AgenticChunkResult {
+  sections: AgenticSection[];
+  model_used: string;
+  fallback: boolean;
+}
+
+export async function agenticChunk(
+  input: AgenticChunkInput
+): Promise<AgenticChunkResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/agentic-chunk`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_title: input.document_title,
+          document_text: input.document_text,
+          max_sections: input.max_sections ?? 8,
+        }),
+      },
+      15000 // 15s — LLM needs time to read and split the full document
+    );
+    if (!response.ok) {
+      return { sections: [], model_used: "", fallback: true };
+    }
+    return await response.json();
+  } catch {
+    return { sections: [], model_used: "", fallback: true };
   }
 }
 

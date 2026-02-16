@@ -179,7 +179,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -5867,6 +5867,7 @@ export default function CIS() {
   const embeddingsDisabledRef = useRef(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // Helper function to scroll chat container to bottom
   const scrollChatToBottom = useCallback(() => {
@@ -7115,6 +7116,8 @@ export default function CIS() {
     return { estInputTokens, estOutputTokens, estCostUsd };
   }, [lastEvidence]);
 
+  // ── Semantic chunking helpers ──
+
   const chunkTextWithOverlap = useCallback((text: string, size: number, overlap: number) => {
     const chunks: string[] = [];
     let start = 0;
@@ -7130,28 +7133,138 @@ export default function CIS() {
     return chunks;
   }, []);
 
-  const buildParentChildChunks = useCallback(
+  const splitIntoParagraphs = useCallback((text: string): string[] => {
+    const raw = text.split(/\n\s*\n/);
+    const paragraphs: string[] = [];
+    for (const p of raw) {
+      const trimmed = p.trim();
+      if (trimmed) paragraphs.push(trimmed);
+    }
+    return paragraphs;
+  }, []);
+
+  const splitIntoSentences = useCallback((text: string): string[] => {
+    const parts = text.split(/(?<=[.!?])\s+/);
+    const sentences: string[] = [];
+    for (const s of parts) {
+      const trimmed = s.trim();
+      if (trimmed) sentences.push(trimmed);
+    }
+    return sentences;
+  }, []);
+
+  const mergeUnitsIntoChunks = useCallback(
+    (units: string[], maxSize: number, fallbackOverlap: number): string[] => {
+      if (units.length === 0) return [];
+      const chunks: string[] = [];
+      let current = "";
+      for (const unit of units) {
+        if (!current) {
+          current = unit;
+        } else if (current.length + 1 + unit.length <= maxSize) {
+          current += "\n" + unit;
+        } else {
+          chunks.push(current);
+          current = unit;
+        }
+      }
+      if (current.trim()) chunks.push(current);
+
+      // If any chunk exceeds maxSize (e.g. single giant paragraph/sentence), split it with fixed-size fallback
+      const result: string[] = [];
+      for (const chunk of chunks) {
+        if (chunk.length > maxSize * 1.2) {
+          result.push(...chunkTextWithOverlap(chunk, maxSize, fallbackOverlap));
+        } else {
+          result.push(chunk);
+        }
+      }
+      return result;
+    },
+    [chunkTextWithOverlap]
+  );
+
+  const buildSemanticParentChildChunks = useCallback(
     (text: string) => {
       const PARENT_SIZE = 2000;
-      const PARENT_OVERLAP = 200;
-      const CHILD_SIZE = 400;
-      const CHILD_OVERLAP = 80;
-      const MAX_PARENT_CHUNKS = 6;
-      const MAX_CHILD_PER_PARENT = 3;
+      const CHILD_SIZE = 500;
+      const FALLBACK_OVERLAP = 100;
+      const MAX_PARENT_CHUNKS = 8;
+      const MAX_CHILD_PER_PARENT = 4;
 
-      const parents = chunkTextWithOverlap(text, PARENT_SIZE, PARENT_OVERLAP).slice(0, MAX_PARENT_CHUNKS);
+      const paragraphs = splitIntoParagraphs(text);
+      let parentTexts: string[];
+      if (paragraphs.length <= 1) {
+        const sentences = splitIntoSentences(text);
+        parentTexts = mergeUnitsIntoChunks(sentences, PARENT_SIZE, FALLBACK_OVERLAP);
+      } else {
+        parentTexts = mergeUnitsIntoChunks(paragraphs, PARENT_SIZE, FALLBACK_OVERLAP);
+      }
+      parentTexts = parentTexts.slice(0, MAX_PARENT_CHUNKS);
+
       const pairs: Array<{ parentText: string; childText: string; parentIndex: number; childIndex: number }> = [];
-
-      parents.forEach((parentText, parentIndex) => {
-        const children = chunkTextWithOverlap(parentText, CHILD_SIZE, CHILD_OVERLAP).slice(0, MAX_CHILD_PER_PARENT);
+      parentTexts.forEach((parentText, parentIndex) => {
+        const sentences = splitIntoSentences(parentText);
+        let children: string[];
+        if (sentences.length <= 1) {
+          children = chunkTextWithOverlap(parentText, CHILD_SIZE, FALLBACK_OVERLAP);
+        } else {
+          children = mergeUnitsIntoChunks(sentences, CHILD_SIZE, FALLBACK_OVERLAP);
+        }
+        children = children.slice(0, MAX_CHILD_PER_PARENT);
         children.forEach((childText, childIndex) => {
           pairs.push({ parentText, childText, parentIndex, childIndex });
         });
       });
-
       return pairs;
     },
-    [chunkTextWithOverlap]
+    [splitIntoParagraphs, splitIntoSentences, mergeUnitsIntoChunks, chunkTextWithOverlap]
+  );
+
+  const buildParentChildChunks = useCallback(
+    async (text: string, docTitle?: string) => {
+      const CHILD_SIZE = 500;
+      const FALLBACK_OVERLAP = 100;
+      const MAX_CHILD_PER_PARENT = 4;
+
+      // ── Agentic chunking: ask the LLM to split the document by topic ──
+      try {
+        const agenticResult = await agenticChunk({
+          document_title: docTitle || "Untitled",
+          document_text: text,
+          max_sections: 8,
+        });
+
+        if (!agenticResult.fallback && agenticResult.sections.length > 0) {
+          console.log(`[CHUNK] Agentic chunking succeeded: ${agenticResult.sections.length} sections (${agenticResult.model_used})`);
+          const pairs: Array<{ parentText: string; childText: string; parentIndex: number; childIndex: number }> = [];
+
+          agenticResult.sections.forEach((section, parentIndex) => {
+            const parentText = section.text;
+            const sentences = splitIntoSentences(parentText);
+            let children: string[];
+            if (sentences.length <= 1) {
+              children = chunkTextWithOverlap(parentText, CHILD_SIZE, FALLBACK_OVERLAP);
+            } else {
+              children = mergeUnitsIntoChunks(sentences, CHILD_SIZE, FALLBACK_OVERLAP);
+            }
+            children = children.slice(0, MAX_CHILD_PER_PARENT);
+            children.forEach((childText, childIndex) => {
+              pairs.push({ parentText, childText, parentIndex, childIndex });
+            });
+          });
+
+          if (pairs.length > 0) return pairs;
+        }
+      } catch (err) {
+        console.warn("[CHUNK] Agentic chunking failed, falling back to semantic:", err);
+      }
+
+      // ── Fallback: semantic chunking (paragraph/sentence boundaries) ──
+      console.log("[CHUNK] Using semantic fallback chunking");
+      return buildSemanticParentChildChunks(text);
+    },
+    [splitIntoSentences, mergeUnitsIntoChunks, chunkTextWithOverlap, buildSemanticParentChildChunks]
   );
 
   // Track transient failures per session (NOT permanently in localStorage)
@@ -7386,11 +7499,11 @@ export default function CIS() {
 
           const MAX_EMBED_CHARS = 12000; // Increased for better coverage
           const truncated = rawContent.slice(0, MAX_EMBED_CHARS);
-          const pairs = buildParentChildChunks(truncated);
+          const title = docTitle || "Untitled document";
+          const pairs = await buildParentChildChunks(truncated, title);
 
           // Build a short document summary for contextual headers (first 500 chars)
           const docSummary = rawContent.slice(0, 500);
-          const title = docTitle || "Untitled document";
 
           for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i];
@@ -7929,7 +8042,8 @@ export default function CIS() {
                 streamer.setError(err.message || "Failed. Please try again.");
                 setIsClaudeLoading(false);
               }
-            }
+            },
+            chatAbortRef.current?.signal
           );
 
           if (!streamCompleted) {
@@ -8444,7 +8558,8 @@ export default function CIS() {
                 streamer.setError(err.message || "Failed. Please try again.");
                 setIsClaudeLoading(false);
               }
-            }
+            },
+            chatAbortRef.current?.signal
           );
           if (!streamCompleted) {
             streamCompleted = true;
@@ -8470,34 +8585,79 @@ export default function CIS() {
       const retrievalDeadline = Date.now() + RETRIEVAL_BUDGET_MS;
       const isRetrievalBudgetExhausted = () => Date.now() >= retrievalDeadline;
 
-      // ── Semantic search promise ──
+      // ── Multi-Query + Semantic search promise ──
       const semanticSearchPromise = (async (): Promise<typeof semanticMatches> => {
         if (!canSemantic) return [];
         try {
-          let embedding: number[] | null = null;
+          // Step 1: Generate multi-query variants (fast, with fallback to original)
+          let queryVariants: string[] = [finalSearchQuery];
           try {
-            const embeddingPromise = embedQuery(finalSearchQuery, "query");
-            const embeddingTimeout = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Embedding timeout")), Math.min(8000, RETRIEVAL_BUDGET_MS))
-            );
-            embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
+            const mqResult = await Promise.race([
+              generateMultiQueries(finalSearchQuery, 3),
+              new Promise<{ queries: string[]; model_used: string }>((resolve) =>
+                setTimeout(() => resolve({ queries: [finalSearchQuery], model_used: "" }), 3000)
+              ),
+            ]);
+            if (mqResult.queries.length > 1) {
+              queryVariants = mqResult.queries;
+              console.log("[MULTI-QUERY] Variants:", queryVariants);
+            }
           } catch {
-            return [];
+            console.log("[MULTI-QUERY] Generation skipped — using original query only");
           }
-          if (!embedding || embedding.length === 0) return [];
 
-          const { data: matches, error: matchError } = await supabase.rpc("match_document_chunks", {
-            query_embedding: embedding,
-            match_count: 20,
-            filter_event_id: eventId,
+          // Step 2: Embed all variants in parallel
+          const embeddingTimeout = Math.min(8000, RETRIEVAL_BUDGET_MS);
+          const embedPromises = queryVariants.map((q) =>
+            Promise.race([
+              embedQuery(q, "query"),
+              new Promise<number[]>((_, reject) =>
+                setTimeout(() => reject(new Error("Embedding timeout")), embeddingTimeout)
+              ),
+            ]).catch(() => null as number[] | null)
+          );
+          const embeddings = await Promise.all(embedPromises);
+          const validEmbeddings = embeddings.filter((e): e is number[] => !!e && e.length > 0);
+          if (validEmbeddings.length === 0) return [];
+
+          // Step 3: Run match_document_chunks for each embedding in parallel
+          const searchPromises = validEmbeddings.map((emb) =>
+            supabase.rpc("match_document_chunks", {
+              query_embedding: emb,
+              match_count: 20,
+              filter_event_id: eventId,
+            }).then(({ data, error: err }) => (err || !data?.length ? [] : (data as any[])))
+              .catch(() => [] as any[])
+          );
+          const allResults = await Promise.all(searchPromises);
+
+          // Step 4: Merge and dedupe — keep best similarity per document_id
+          const bestByDoc = new Map<string, any>();
+          for (const results of allResults) {
+            for (const m of results) {
+              const existing = bestByDoc.get(m.document_id);
+              if (!existing || m.similarity > existing.similarity) {
+                bestByDoc.set(m.document_id, m);
+              }
+            }
+          }
+          const mergedMatches = Array.from(bestByDoc.values())
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, 25);
+
+          if (mergedMatches.length === 0) return [];
+
+          const totalRaw = allResults.reduce((acc, r) => acc + r.length, 0);
+          console.log("[PARALLEL] Multi-query semantic search:", {
+            variants: queryVariants.length,
+            totalRawHits: totalRaw,
+            mergedUnique: mergedMatches.length,
+            top: mergedMatches.slice(0, 3).map((m: any) => m.similarity),
           });
-          if (matchError || !matches?.length) return [];
-
-          console.log("[PARALLEL] Semantic search:", { count: matches.length, top: matches.slice(0, 3).map((m: any) => m.similarity) });
 
           // GraphRAG expansion (optional, with tight timeout)
           const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
-          let finalChunks = matches.map((m: any) => ({
+          let finalChunks = mergedMatches.map((m: any) => ({
             id: m.document_id,
             text: (m.parent_text || m.chunk_text || "").slice(0, 1500),
             score: m.similarity,
@@ -8515,14 +8675,14 @@ export default function CIS() {
                 new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GraphRAG timeout")), 4000)),
               ]);
               finalChunks = graphragResult.relevant_chunks;
-              console.log("[PARALLEL] GraphRAG:", { initial: matches.length, relevant: finalChunks.length });
+              console.log("[PARALLEL] GraphRAG:", { initial: mergedMatches.length, relevant: finalChunks.length });
             } catch {
               console.warn("[PARALLEL] GraphRAG skipped (timeout or error)");
             }
           }
 
           const chunkMap = new Map(finalChunks.map((c) => [c.id, c]));
-          let filteredMatches = matches
+          let filteredMatches = mergedMatches
             .filter((m: any) => chunkMap.has(m.document_id))
             .map((m: any) => ({
               document_id: m.document_id,
@@ -9187,7 +9347,8 @@ export default function CIS() {
               clearTimeout(streamTimeout);
               streamer.setError(error.message || "Failed to answer. Please try again.");
               setIsClaudeLoading(false);
-            }
+            },
+            chatAbortRef.current?.signal
           );
           streamCompleted = true;
           clearTimeout(streamTimeout);
@@ -9276,7 +9437,8 @@ export default function CIS() {
                 streamer.setError(error.message || "Claude answer failed. Please try again.");
                 setIsClaudeLoading(false);
               }
-            }
+            },
+            chatAbortRef.current?.signal
           );
           if (!streamCompleted) {
             streamCompleted = true;
@@ -9393,7 +9555,8 @@ export default function CIS() {
                   streamer.setError(error.message || "Claude answer failed. Please try again.");
                   setIsClaudeLoading(false);
                 }
-              }
+              },
+              chatAbortRef.current?.signal
             );
             // Only finalize if stream completed successfully
             if (!streamCompleted) {
@@ -9452,7 +9615,8 @@ export default function CIS() {
                   streamer.setError(error.message || "Failed to answer. Please try again.");
                   setIsClaudeLoading(false);
                 }
-              }
+              },
+              chatAbortRef.current?.signal
             );
             if (!streamCompleted) {
               streamCompleted = true;
@@ -9579,7 +9743,8 @@ export default function CIS() {
                 streamer.setError(errorMsg);
                 setIsClaudeLoading(false);
               }
-            }
+            },
+            chatAbortRef.current?.signal
           );
           
           if (!streamCompleted && fullAnswer.length > 0) {
@@ -9768,7 +9933,8 @@ export default function CIS() {
               streamer.setError(errorMsg);
               setIsClaudeLoading(false);
             }
-          }
+          },
+          chatAbortRef.current?.signal
         );
         // Only finalize if stream completed successfully (no error was called)
         if (!streamCompleted && fullAnswer.length > 0) {
@@ -9842,8 +10008,17 @@ export default function CIS() {
     ]
   );
 
+  const stopGenerating = useCallback(() => {
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+      chatAbortRef.current = null;
+    }
+    setChatIsLoading(false);
+    setIsClaudeLoading(false);
+  }, []);
+
   const addMessage = async () => {
-    if (chatIsLoading) return;
+    if (chatIsLoading || isClaudeLoading) return;
     if (!input.trim()) return;
     let threadId = activeThread;
     if (!threadId) {
@@ -9864,10 +10039,16 @@ export default function CIS() {
       sourceDocIds: null,
     });
     setInput("");
+    // Create a fresh AbortController for this request
+    chatAbortRef.current = new AbortController();
     setChatIsLoading(true);
     try {
       await askFund(question, threadId);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User cancelled — don't show error
+        return;
+      }
       console.error("Chat error:", err);
       const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
       createAssistantMessage(
@@ -9875,6 +10056,7 @@ export default function CIS() {
         threadId
       );
     } finally {
+      chatAbortRef.current = null;
       setChatIsLoading(false);
       setIsClaudeLoading(false);
     }

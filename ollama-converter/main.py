@@ -3035,7 +3035,9 @@ async def root():
             "/ask/stream": "POST - Streaming Q&A (SSE)",
             "/embed/query": "POST - Generate embeddings",
             "/rerank": "POST - Cross-encoder reranking",
+            "/multi-query": "POST - [V2] Multi-query expansion for better retrieval recall",
             "/contextualize-chunk": "POST - [V2] Contextual Retrieval header generation",
+            "/agentic-chunk": "POST - [V2] LLM-driven document chunking (agentic splitting by topic)",
             "/graphrag/retrieve": "POST - [V2] LazyGraphRAG retrieval pipeline",
             "/ingest/document-stream": "POST - [V2] SSE streaming document ingestion",
             "/health": "GET - Health check",
@@ -4642,6 +4644,102 @@ async def rewrite_query_endpoint(request: RewriteQueryRequest):
 
 
 # ---------------------------------------------------------------------------
+#  Multi-Query Generation — produce 2-3 query variants for better recall
+# ---------------------------------------------------------------------------
+
+class MultiQueryRequest(BaseModel):
+    question: str = Field(..., description="The primary user question (already rewritten if applicable)")
+    max_variants: int = Field(default=3, ge=2, le=5, description="Number of query variants to generate")
+
+
+class MultiQueryResponse(BaseModel):
+    queries: List[str] = Field(..., description="List of query variants including the original")
+    model_used: str = ""
+
+
+@app.post("/multi-query", response_model=MultiQueryResponse)
+async def multi_query_endpoint(request: MultiQueryRequest):
+    """
+    Multi-Query RAG: Generate 2-3 diverse reformulations of a user question.
+    Each variant emphasizes a different angle (synonyms, specificity, broader scope)
+    so parallel retrieval covers more relevant chunks.
+
+    Always includes the original query as the first variant.
+    """
+    question = (request.question or "").strip()
+    if not question:
+        return MultiQueryResponse(queries=[question], model_used="")
+
+    # Short or simple queries (< 4 words) — don't bother generating variants
+    if len(question.split()) < 4:
+        return MultiQueryResponse(queries=[question], model_used="")
+
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return MultiQueryResponse(queries=[question], model_used="")
+
+    n_variants = min(request.max_variants, 5)
+    prompt = (
+        f"You are a search query expansion assistant for a venture capital platform.\n\n"
+        f"Original question: {question}\n\n"
+        f"Generate exactly {n_variants - 1} alternative search queries that would help find relevant information "
+        f"to answer the original question. Each variant should:\n"
+        f"1. Approach the topic from a different angle or use different keywords/synonyms\n"
+        f"2. Be a standalone search query (not a follow-up)\n"
+        f"3. Be concise (under 20 words)\n"
+        f"4. Together with the original, cover the full scope of what the user might want\n\n"
+        f"Examples of good variants:\n"
+        f'- Original: "What is their burn rate?" → "monthly cash expenditure and runway" , "operating expenses vs revenue"\n'
+        f'- Original: "Tell me about the team" → "founders background and experience" , "key hires and advisors"\n\n'
+        f"Return ONLY a JSON array of strings, no markdown fences, no explanation.\n"
+        f'Example: ["variant 1", "variant 2"]\n'
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await _call_claude_with_fallback(
+            client,
+            preferred_model=HAIKU_MODEL,
+            max_tokens=300,
+            temperature=0.3,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
+        model_used = getattr(message, "model", HAIKU_MODEL)
+
+        # Parse JSON
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+        import json as _json
+        variants = _json.loads(raw)
+
+        if not isinstance(variants, list):
+            raise ValueError("LLM returned non-list")
+
+        # Clean and dedupe
+        clean_variants = []
+        seen = {question.lower().strip()}
+        for v in variants:
+            v_str = str(v).strip()
+            if v_str and v_str.lower() not in seen and len(v_str) < 200:
+                clean_variants.append(v_str)
+                seen.add(v_str.lower())
+            if len(clean_variants) >= n_variants - 1:
+                break
+
+        all_queries = [question] + clean_variants
+        print(f"[MULTI-QUERY] Generated {len(all_queries)} variants: {all_queries}")
+        return MultiQueryResponse(queries=all_queries, model_used=str(model_used))
+
+    except Exception as e:
+        print(f"[MULTI-QUERY] Generation failed: {e} — returning original only")
+        return MultiQueryResponse(queries=[question], model_used="")
+
+
+# ---------------------------------------------------------------------------
 #  Adaptive Query Router — entity extraction, intent, complexity, routing
 # ---------------------------------------------------------------------------
 
@@ -5694,6 +5792,129 @@ async def contextualize_chunk(request: ContextualChunkRequest):
 
     enriched = f"{header}\n\n{request.chunk_text}" if header else request.chunk_text
     return ContextualChunkResponse(enriched_chunk=enriched, contextual_header=header)
+
+
+# ---------------------------------------------------------------------------
+#  Agentic Chunking — LLM decides where to split the document by topic
+# ---------------------------------------------------------------------------
+
+class AgenticChunkRequest(BaseModel):
+    """Send document text to an LLM which returns topic-based sections."""
+    document_title: str = ""
+    document_text: str = Field(..., description="Full document text (will be truncated to 12k chars)")
+    max_sections: int = Field(default=8, description="Maximum number of sections to produce")
+
+
+class AgenticSection(BaseModel):
+    label: str = Field(..., description="Short topic label for this section")
+    text: str = Field(..., description="The verbatim text content for this section")
+
+
+class AgenticChunkResponse(BaseModel):
+    sections: List[AgenticSection]
+    model_used: str = ""
+    fallback: bool = Field(default=False, description="True if LLM call failed and we fell back to paragraphs")
+
+
+@app.post("/agentic-chunk", response_model=AgenticChunkResponse)
+async def agentic_chunk(request: AgenticChunkRequest):
+    """
+    Agentic Chunking: An LLM reads the document and splits it into
+    coherent topic-based sections with labels.
+
+    Each returned section becomes a parent chunk; the frontend splits
+    children within each section on sentence boundaries.
+    """
+    doc_text = request.document_text[:12000]
+    title = request.document_title or "Untitled"
+    max_sections = min(request.max_sections, 12)
+
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        # No Claude — fall back to naive paragraph splitting
+        sections = _paragraph_fallback(doc_text, max_sections)
+        return AgenticChunkResponse(sections=sections, model_used="", fallback=True)
+
+    prompt = (
+        f"You are a document segmentation assistant. Your job is to split the following document into coherent topic-based sections.\n\n"
+        f"Document title: {title}\n"
+        f"---\n{doc_text}\n---\n\n"
+        f"Split this document into at most {max_sections} sections. Each section should cover one coherent topic or theme.\n\n"
+        f"Rules:\n"
+        f"1. Every word of the original text must appear in exactly one section — do NOT summarize, paraphrase, or drop any text.\n"
+        f"2. Sections must be in the same order as the original text.\n"
+        f"3. Each section gets a short label (3-8 words) describing the topic.\n"
+        f"4. Prefer splitting at natural boundaries: paragraph breaks, heading changes, topic shifts.\n"
+        f"5. A section should be at least 200 characters and at most 3000 characters when possible.\n"
+        f"6. If the document is very short (< 500 chars), return it as a single section.\n\n"
+        f"Respond with ONLY a JSON array, no markdown fences, no explanation. Format:\n"
+        f'[{{"label": "Section topic", "text": "verbatim text..."}}, ...]\n'
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await _call_claude_with_fallback(
+            client,
+            preferred_model=HAIKU_MODEL,
+            max_tokens=8000,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
+        model_used = getattr(message, "model", HAIKU_MODEL)
+
+        # Parse JSON — handle potential markdown fences
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+        import json as _json
+        parsed = _json.loads(raw)
+
+        if not isinstance(parsed, list) or len(parsed) == 0:
+            raise ValueError("LLM returned empty or non-list JSON")
+
+        sections = []
+        for item in parsed[:max_sections]:
+            label = str(item.get("label", "Section")).strip()
+            text = str(item.get("text", "")).strip()
+            if text:
+                sections.append(AgenticSection(label=label, text=text))
+
+        if not sections:
+            raise ValueError("No valid sections parsed from LLM output")
+
+        print(f"[AGENTIC-CHUNK] Split '{title}' into {len(sections)} sections: {[s.label for s in sections]}")
+        return AgenticChunkResponse(sections=sections, model_used=str(model_used), fallback=False)
+
+    except Exception as e:
+        print(f"[AGENTIC-CHUNK] LLM chunking failed for '{title}': {e} — falling back to paragraphs")
+        sections = _paragraph_fallback(doc_text, max_sections)
+        return AgenticChunkResponse(sections=sections, model_used="", fallback=True)
+
+
+def _paragraph_fallback(text: str, max_sections: int) -> List[AgenticSection]:
+    """Simple paragraph-based fallback when LLM is unavailable."""
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [text.strip()] if text.strip() else []
+
+    # Merge tiny paragraphs until we have reasonable sections
+    sections: List[AgenticSection] = []
+    current = ""
+    for p in paragraphs:
+        if not current:
+            current = p
+        elif len(current) + len(p) + 2 < 2000:
+            current += "\n\n" + p
+        else:
+            sections.append(AgenticSection(label=f"Section {len(sections) + 1}", text=current))
+            current = p
+    if current:
+        sections.append(AgenticSection(label=f"Section {len(sections) + 1}", text=current))
+
+    return sections[:max_sections]
 
 
 class GraphRAGRetrieveRequest(BaseModel):
