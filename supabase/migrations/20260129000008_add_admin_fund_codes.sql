@@ -35,9 +35,9 @@ CREATE TABLE IF NOT EXISTS fund_codes (
   CONSTRAINT unique_fund_code UNIQUE (code)
 );
 
-CREATE INDEX idx_fund_codes_code ON fund_codes(code);
-CREATE INDEX idx_fund_codes_created_by ON fund_codes(created_by);
-CREATE INDEX idx_fund_codes_active ON fund_codes(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_fund_codes_code ON fund_codes(code);
+CREATE INDEX IF NOT EXISTS idx_fund_codes_created_by ON fund_codes(created_by);
+CREATE INDEX IF NOT EXISTS idx_fund_codes_active ON fund_codes(is_active) WHERE is_active = true;
 
 -- Enable RLS
 ALTER TABLE fund_codes ENABLE ROW LEVEL SECURITY;
