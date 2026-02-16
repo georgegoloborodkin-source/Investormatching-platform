@@ -224,13 +224,13 @@ export async function getSourceFoldersByEvent(eventId: string) {
  * Default folders: Portfolio Companies, Investors, Funds, Deals, Market Research, Due Diligence
  */
 export async function ensureDefaultFoldersForEvent(eventId: string): Promise<void> {
-  const defaultFolders = [
-    'Portfolio Companies',
-    'Investors',
-    'Funds',
-    'Deals',
-    'Market Research',
-    'Due Diligence'
+  const defaultFolders: { name: string; category: string }[] = [
+    { name: 'Portfolio Companies', category: 'Portfolio Companies' },
+    { name: 'Investors', category: 'Funds' },
+    { name: 'Funds', category: 'Funds' },
+    { name: 'Deals', category: 'Sourcing' },
+    { name: 'Market Research', category: 'Sourcing' },
+    { name: 'Due Diligence', category: 'Portfolio Companies' },
   ];
 
   // Get existing folders for this event
@@ -239,27 +239,37 @@ export async function ensureDefaultFoldersForEvent(eventId: string): Promise<voi
     .select("name")
     .eq("event_id", eventId);
 
-  const existingNames = new Set((existingFolders || []).map(f => f.name.toLowerCase()));
+  const existingNames = new Set((existingFolders || []).map((f: any) => f.name.toLowerCase()));
 
   // Create missing folders
-  const foldersToCreate = defaultFolders.filter(name => !existingNames.has(name.toLowerCase()));
+  const foldersToCreate = defaultFolders.filter(d => !existingNames.has(d.name.toLowerCase()));
   
   if (foldersToCreate.length > 0) {
     await supabase
       .from("source_folders")
       .insert(
-        foldersToCreate.map(name => ({
+        foldersToCreate.map(d => ({
           event_id: eventId,
-          name,
+          name: d.name,
+          category: d.category,
           created_by: null, // System-created
         }))
       );
   }
 }
 
+export async function updateFolderCategory(folderId: string, category: string) {
+  return supabase
+    .from("source_folders")
+    .update({ category })
+    .eq("id", folderId)
+    .select("*")
+    .single();
+}
+
 export async function insertSourceFolder(
   eventId: string,
-  payload: { name: string; created_by: string | null }
+  payload: { name: string; created_by: string | null; category?: string | null }
 ) {
   return supabase
     .from("source_folders")

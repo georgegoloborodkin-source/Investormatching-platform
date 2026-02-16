@@ -503,6 +503,41 @@ export async function askAgentStream(
   }
 }
 
+/**
+ * Delete redundant entity cards (keep one per core company name).
+ * Call after sync to remove duplicate/empty cards.
+ */
+export async function deleteRedundantCards(eventId: string): Promise<{ deleted: number; message: string }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const response = await fetch(`${baseUrl}/kg/delete-redundant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Delete all entity cards for the event (company and fund).
+ */
+export async function deleteAllCards(eventId: string, entityTypes?: string[]): Promise<{ deleted: number; message: string }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const response = await fetch(`${baseUrl}/kg/delete-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, entity_types: entityTypes ?? ["company", "fund"] }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function rerankDocuments(input: {
   query: string;
   documents: Array<{ id: string; text: string }>;

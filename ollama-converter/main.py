@@ -7222,7 +7222,7 @@ async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids
     return "\n".join(lines)
 
 
-async def _agent_search_knowledge_graph(tool_input: dict, event_id: str) -> str:
+async def _agent_search_knowledge_graph(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Search knowledge graph entities and relationships."""
     sb = get_supabase()
     entity_name = (tool_input.get("entity_name") or "").strip()
@@ -7246,6 +7246,45 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str) -> str:
 
     if entity_type:
         entities = [e for e in entities if (e.get("entity_type") or "").lower() == entity_type.lower()]
+
+    # ── Folder scope: only entities with docs in selected folders ──
+    if folder_ids and entities:
+        try:
+            entity_ids = [e["id"] for e in entities if e.get("id")]
+            allowed = set()
+            for i in range(0, len(entity_ids), 25):
+                batch = entity_ids[i : i + 25]
+                docs_res = sb.table("documents").select("company_entity_id, folder_id").in_("company_entity_id", batch).execute()
+                for d in (docs_res.data or []):
+                    if d.get("folder_id") in folder_ids:
+                        allowed.add(d["company_entity_id"])
+                doc_id_res = sb.table("documents").select("id, company_entity_id").in_("company_entity_id", batch).execute()
+                doc_id_map = {}
+                for d in (doc_id_res.data or []):
+                    doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
+                all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
+                if all_doc_ids:
+                    for j in range(0, len(all_doc_ids), 50):
+                        link_batch = all_doc_ids[j : j + 50]
+                        links_res = (
+                            sb.table("document_folder_links")
+                            .select("document_id, folder_id")
+                            .in_("document_id", link_batch)
+                            .in_("folder_id", folder_ids)
+                            .execute()
+                        )
+                        for link in (links_res.data or []):
+                            for eid, dids in doc_id_map.items():
+                                if link["document_id"] in dids:
+                                    allowed.add(eid)
+            entities = [e for e in entities if e.get("id") in allowed]
+            if not entities:
+                return (
+                    f"No entity matching '{entity_name}' found in the selected knowledge scope. "
+                    "The user has limited search to specific folders; this entity is outside that scope."
+                )
+        except Exception as e:
+            print(f"[AGENT] KG folder scope filter error: {e}")
 
     if not entities:
         return f"No entity found matching '{entity_name}'" + (f" (type: {entity_type})" if entity_type else "")
@@ -7300,7 +7339,7 @@ async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str, f
         elif tool_name == "get_company_details":
             return await _agent_get_company_details(tool_input, event_id, folder_ids)
         elif tool_name == "search_knowledge_graph":
-            return await _agent_search_knowledge_graph(tool_input, event_id)
+            return await _agent_search_knowledge_graph(tool_input, event_id, folder_ids)
         else:
             return f"Unknown tool: {tool_name}"
     except Exception as e:
@@ -7424,6 +7463,15 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
+                system_prompt = AGENT_SYSTEM_PROMPT
+                if folder_ids:
+                    system_prompt += """
+
+## Knowledge scope (MANDATORY when folders are selected)
+The user has limited this search to specific folders only. You MUST only use information from companies and documents in those folders.
+- If the user asks about a company or topic that is NOT in the selected scope (e.g. they selected only Yindii but ask about Weego), respond clearly: "That company/topic is not in your current knowledge scope. I can only search within the folders you selected. Please add that folder to Knowledge Scope or clear the scope to search the full portfolio."
+- Do NOT use web search or other tools to answer about out-of-scope companies when folder scope is active.
+- Only answer from tool results that fall within the selected folders."""
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
 
@@ -7432,7 +7480,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             model=model_name,
                             max_tokens=max_tokens,
                             temperature=0.1,
-                            system=AGENT_SYSTEM_PROMPT,
+                            system=system_prompt,
                             messages=current_messages,
                             tools=tools,
                         )
@@ -7444,7 +7492,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                                     model=fallback,
                                     max_tokens=max_tokens,
                                     temperature=0.1,
-                                    system=AGENT_SYSTEM_PROMPT,
+                                    system=system_prompt,
                                     messages=current_messages,
                                     tools=tools,
                                 )
@@ -7538,7 +7586,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         model=model_name,
                         max_tokens=max_tokens,
                         temperature=0.1,
-                        system=AGENT_SYSTEM_PROMPT,
+                        system=system_prompt,
                         messages=current_messages,
                     ) as final_stream:
                         async for event in final_stream:
@@ -7574,6 +7622,146 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)[:200]}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  KG cleanup — delete redundant or all entity cards
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class KgDeleteRedundantRequest(BaseModel):
+    event_id: str
+
+
+class KgDeleteAllRequest(BaseModel):
+    event_id: str
+    entity_types: List[str] = Field(default_factory=lambda: ["company", "fund"], alias="entityTypes")
+    model_config = {"populate_by_name": True}
+
+
+@app.post("/kg/delete-redundant")
+async def kg_delete_redundant(request: KgDeleteRedundantRequest, auth: AuthContext = Depends(get_auth_context)):
+    """
+    Delete redundant entity cards: keep one per core company name (the one with
+    most documents, then richest properties). Reassign documents from deleted
+    entities to the kept entity, then delete edges and redundant entities.
+    """
+    sb = get_supabase()
+    event_id = (request.event_id or "").strip()
+    if not event_id:
+        raise HTTPException(status_code=400, detail="event_id is required.")
+
+    try:
+        result = (
+            sb.table("kg_entities")
+            .select("id, name, normalized_name, properties")
+            .eq("event_id", event_id)
+            .in_("entity_type", ["company", "fund"])
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
+
+    rows = result.data or []
+    if not rows:
+        return {"deleted": 0, "message": "No entity cards to clean."}
+
+    # Document count per entity
+    entity_ids = [r["id"] for r in rows if r.get("id")]
+    doc_count: Dict[str, int] = {eid: 0 for eid in entity_ids}
+    for i in range(0, len(entity_ids), 25):
+        batch = entity_ids[i : i + 25]
+        doc_res = sb.table("documents").select("company_entity_id").in_("company_entity_id", batch).execute()
+        for d in (doc_res.data or []):
+            eid = d.get("company_entity_id")
+            if eid:
+                doc_count[eid] = doc_count.get(eid, 0) + 1
+
+    # Group by core name, keep best per group
+    best_by_core: Dict[str, dict] = {}
+    for row in rows:
+        core = _extract_core_company_name(row.get("normalized_name") or row.get("name", ""))
+        if not core:
+            continue
+        richness = len(json.dumps(row.get("properties") or {}))
+        count = doc_count.get(row["id"], 0)
+        prev = best_by_core.get(core)
+        if prev is None or count > prev["_doc_count"] or (count == prev["_doc_count"] and richness > prev["_richness"]):
+            best_by_core[core] = {**row, "_doc_count": count, "_richness": richness}
+
+    kept_ids = {v["id"] for v in best_by_core.values()}
+    to_delete = [r for r in rows if r.get("id") and r["id"] not in kept_ids]
+    if not to_delete:
+        return {"deleted": 0, "message": "No redundant cards to delete."}
+
+    deleted_ids = [r["id"] for r in to_delete]
+    # Map deleted entity id -> kept entity id (same core name)
+    core_to_kept = {_extract_core_company_name(v.get("normalized_name") or v.get("name", "")): v["id"] for v in best_by_core.values()}
+
+    for row in to_delete:
+        kept_id = core_to_kept.get(_extract_core_company_name(row.get("normalized_name") or row.get("name", "")))
+        if not kept_id:
+            continue
+        try:
+            sb.table("documents").update({"company_entity_id": kept_id}).eq("company_entity_id", row["id"]).execute()
+        except Exception as e:
+            print(f"[KG] Reassign docs for {row['id']}: {e}")
+
+    for eid in deleted_ids:
+        try:
+            sb.table("kg_edges").delete().eq("source_entity_id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete edges source {eid}: {e}")
+        try:
+            sb.table("kg_edges").delete().eq("target_entity_id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete edges target {eid}: {e}")
+        try:
+            sb.table("kg_entities").delete().eq("id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete entity {eid}: {e}")
+
+    return {"deleted": len(deleted_ids), "message": f"Deleted {len(deleted_ids)} redundant entity cards."}
+
+
+@app.post("/kg/delete-all")
+async def kg_delete_all(request: KgDeleteAllRequest, auth: AuthContext = Depends(get_auth_context)):
+    """Delete all entity cards of the given types for the event. Unlink documents and remove edges."""
+    sb = get_supabase()
+    event_id = (request.event_id or "").strip()
+    if not event_id:
+        raise HTTPException(status_code=400, detail="event_id is required.")
+    types = request.entity_types or ["company", "fund"]
+
+    try:
+        result = sb.table("kg_entities").select("id").eq("event_id", event_id).in_("entity_type", types).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
+
+    rows = result.data or []
+    entity_ids = [r["id"] for r in rows if r.get("id")]
+    if not entity_ids:
+        return {"deleted": 0, "message": "No entity cards to delete."}
+
+    for eid in entity_ids:
+        try:
+            sb.table("documents").update({"company_entity_id": None}).eq("company_entity_id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Unlink docs for {eid}: {e}")
+        try:
+            sb.table("kg_edges").delete().eq("source_entity_id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete edges source {eid}: {e}")
+        try:
+            sb.table("kg_edges").delete().eq("target_entity_id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete edges target {eid}: {e}")
+        try:
+            sb.table("kg_entities").delete().eq("id", eid).execute()
+        except Exception as e:
+            print(f"[KG] Delete entity {eid}: {e}")
+
+    return {"deleted": len(entity_ids), "message": f"Deleted all {len(entity_ids)} entity cards."}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
