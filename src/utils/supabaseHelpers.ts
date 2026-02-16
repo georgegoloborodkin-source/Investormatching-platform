@@ -884,18 +884,21 @@ export async function getAllEntityCards(eventId: string) {
 
   if (error || !entities) return { data: [], error };
 
-  // Get document counts per entity
+  // Get document counts per entity (batch in chunks of 25 to avoid URL length limits)
   const entityIds = entities.map((e: any) => e.id);
-  const { data: docLinks } = await supabase
-    .from("documents")
-    .select("company_entity_id")
-    .in("company_entity_id", entityIds.length ? entityIds : ["__none__"]);
-
   const docCountMap = new Map<string, number>();
-  (docLinks || []).forEach((d: any) => {
-    const id = d.company_entity_id;
-    docCountMap.set(id, (docCountMap.get(id) || 0) + 1);
-  });
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < entityIds.length; i += BATCH_SIZE) {
+    const batch = entityIds.slice(i, i + BATCH_SIZE);
+    const { data: docLinks } = await supabase
+      .from("documents")
+      .select("company_entity_id")
+      .in("company_entity_id", batch.length ? batch : ["__none__"]);
+    (docLinks || []).forEach((d: any) => {
+      const id = d.company_entity_id;
+      docCountMap.set(id, (docCountMap.get(id) || 0) + 1);
+    });
+  }
 
   const cards = entities.map((e: any) => ({
     company_id: e.id,

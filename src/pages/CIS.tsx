@@ -8050,11 +8050,43 @@ export default function CIS() {
       
       // CRITICAL: Extract names from chat history for fallback pronoun replacement
       const extractNamesFromHistory = (msgs: Array<{ role: string; content: string }>): string[] => {
-        const allText = msgs.map(m => m.content).join(" ");
-        // Find "FirstName LastName" patterns
-        const namePattern = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g;
-        const names = allText.match(namePattern) || [];
-        return [...new Set(names)]; // Unique names
+        // ONLY look at USER messages — assistant responses have tons of capitalized
+        // section headers ("Due Diligence", "Information Accuracy", "Burn Rate") that
+        // are NOT company/person names and pollute pronoun resolution
+        const userText = msgs.filter(m => m.role === "user").map(m => m.content).join(" ");
+        const namePattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g;
+        const rawNames = userText.match(namePattern) || [];
+        // Filter out common VC/business terms that look like names but aren't
+        const FAKE_NAME_TERMS = new Set([
+          "Due Diligence", "Information Accuracy", "Burn Rate", "Monthly Expenses",
+          "Monthly Revenues", "Runway Calculation", "Current Cash", "Monthly Burn",
+          "Qualified Financing", "Product Due", "Diligence Concepts", "Aha Moment",
+          "Legal Due", "Diligence Framework", "Grant Agreement", "Corporate Standing",
+          "Financial Representations", "Legal Compliance", "Document Analysis",
+          "Structured Information", "Reference Analysis", "Information Available",
+          "Financial Metrics", "Analysis Framework", "Series A", "Series B",
+          "Series C", "Pre Seed", "Total Addressable", "Market Size", "Business Model",
+          "Revenue Model", "Key Metrics", "Go To", "Market Strategy", "Team Size",
+          "Gross Margin", "Net Margin", "Churn Rate", "Customer Acquisition",
+          "Value Proposition", "Competitive Edge", "Market Growth",
+        ]);
+        // Cross-reference with known company cards if available
+        const knownCompanyNames = new Set(
+          (companyCards || []).map(c => (c.company_name || "").toLowerCase())
+        );
+        return [...new Set(rawNames)].filter(n => {
+          if (FAKE_NAME_TERMS.has(n)) return false;
+          // Keep if it matches a known company name
+          if (knownCompanyNames.has(n.toLowerCase())) return true;
+          // Keep if it's a single capitalized word (likely a company name like "Payd", "Chari")
+          if (/^[A-Z][a-z]+$/.test(n) && n.length >= 3) return true;
+          // Keep if it looks like a person name (2 words, each 2-15 chars)
+          if (/^[A-Z][a-z]{1,14}\s+[A-Z][a-z]{1,14}$/.test(n)) {
+            const words = n.split(/\s+/);
+            return words.every(w => w.length >= 2 && w.length <= 15);
+          }
+          return false;
+        });
       };
       
       // Extract company/entity names that were already mentioned in ASSISTANT responses
@@ -8093,29 +8125,26 @@ export default function CIS() {
           searchQuestion = await rewriteQueryWithLLM(question, threadMessages);
           console.log("[DEBUG] LLM rewritten query:", searchQuestion);
           
-          // VALIDATION: If original had pronouns but rewritten doesn't contain any name from history, force fix it
+          // VALIDATION: Only fall back to name injection if LLM rewrite failed AND
+          // we have VERIFIED company names (not AI response headers)
           if (hasPronouns && namesInHistory.length > 0) {
             const rewrittenLower = searchQuestion.toLowerCase();
             const hasNameInRewritten = namesInHistory.some(name => rewrittenLower.includes(name.toLowerCase()));
             if (!hasNameInRewritten) {
-              console.log("[DEBUG] ⚠️ LLM rewrite didn't include name from history, using fallback");
-              // Use the most recent name from history
-              const mostRecentName = namesInHistory[namesInHistory.length - 1];
-              searchQuestion = question;
-              for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
-                const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
-                searchQuestion = searchQuestion.replace(regex, mostRecentName);
+              // Only inject if the name is a KNOWN company (cross-checked against cards)
+              const knownCompanyLower = new Set((companyCards || []).map(c => (c.company_name || "").toLowerCase()));
+              const verifiedName = namesInHistory.reverse().find(n => knownCompanyLower.has(n.toLowerCase()));
+              if (verifiedName) {
+                console.log("[DEBUG] ⚠️ LLM rewrite missing company name, injecting verified:", verifiedName);
+                searchQuestion = question;
+                for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
+                  const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
+                  searchQuestion = searchQuestion.replace(regex, verifiedName);
+                }
+                console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
+              } else {
+                console.log("[DEBUG] LLM rewrite didn't include names, but no verified company found — trusting LLM");
               }
-              console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
-            }
-          }
-          // If the question is a vague follow-up without pronouns, inject the most recent name
-          if (!hasPronouns && namesInHistory.length > 0 && (hasVaguePattern || followUpCueInQuestion)) {
-            const mostRecentName = namesInHistory[namesInHistory.length - 1];
-            const rewrittenLower = searchQuestion.toLowerCase();
-            if (!rewrittenLower.includes(mostRecentName.toLowerCase())) {
-              searchQuestion = `${searchQuestion} about ${mostRecentName}`.replace(/\s+/g, " ").trim();
-              console.log("[DEBUG] Injected name into vague follow-up:", searchQuestion);
             }
           }
           
