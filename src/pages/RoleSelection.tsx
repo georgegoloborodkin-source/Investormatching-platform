@@ -106,9 +106,9 @@ export default function RoleSelection() {
 
     setIsSaving(true);
     try {
-      // For MDs: use fund code to create/join fund
-      // For team members: use invitation code to join
-      const { data, error } = await supabase.rpc("join_fund_by_code", {
+      // MDs: fund code (admin-created) → join_fund_by_code. Team: invitation code (from MD) → join_org_by_invitation_code.
+      const rpcName = profile?.role === "managing_partner" ? "join_fund_by_code" : "join_org_by_invitation_code";
+      const { data, error } = await supabase.rpc(rpcName, {
         code_param: invitationCode.trim().toUpperCase(),
       });
 
