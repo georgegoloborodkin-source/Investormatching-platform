@@ -36,6 +36,8 @@ export default function RoleSelection() {
   const [website, setWebsite] = useState("");
   const [invitationCode, setInvitationCode] = useState("");
   const [createdInvitationCode, setCreatedInvitationCode] = useState<string | null>(null);
+  // Role used when submitting code (avoids race where profile hasn't refreshed yet)
+  const [codeEntryRole, setCodeEntryRole] = useState<"managing_partner" | "team_member" | null>(null);
 
   useEffect(() => {
     // If user already has organization, redirect to CIS
@@ -48,6 +50,7 @@ export default function RoleSelection() {
     // Both MDs and team members enter codes now
     if ((profile?.role === "managing_partner" || profile?.role === "team_member") && !profile?.organization_id) {
       setStep("code_entry");
+      setCodeEntryRole(profile.role as "managing_partner" | "team_member");
     }
   }, [profile, navigate]);
 
@@ -75,7 +78,7 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      // Both MDs and team members enter codes
+      setCodeEntryRole(role);
       setStep("code_entry");
     } catch (error: any) {
       console.error("Error updating role:", error);
@@ -90,7 +93,7 @@ export default function RoleSelection() {
   };
 
   const handleCreateFund = async () => {
-    // MDs now enter fund code (created by admin), not create fund directly
+    setCodeEntryRole("managing_partner");
     setStep("code_entry");
   };
 
@@ -106,8 +109,8 @@ export default function RoleSelection() {
 
     setIsSaving(true);
     try {
-      // MDs: fund code (admin-created) → join_fund_by_code. Team: invitation code (from MD) → join_org_by_invitation_code.
-      const rpcName = profile?.role === "managing_partner" ? "join_fund_by_code" : "join_org_by_invitation_code";
+      const roleForRpc = codeEntryRole || profile?.role;
+      const rpcName = roleForRpc === "managing_partner" ? "join_fund_by_code" : "join_org_by_invitation_code";
       const { data, error } = await supabase.rpc(rpcName, {
         code_param: invitationCode.trim().toUpperCase(),
       });
@@ -118,7 +121,7 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      if (profile?.role === "managing_partner") {
+      if (roleForRpc === "managing_partner") {
         // MD created/joined fund
         setCreatedInvitationCode(data?.invitation_code || data?.organization?.invitation_code || null);
         if (data?.message === "Fund created successfully") {
@@ -140,9 +143,10 @@ export default function RoleSelection() {
       }
     } catch (error: any) {
       console.error("Error joining fund:", error);
+      const msg = error?.message || error?.details || (typeof error === "string" ? error : "Invalid or inactive code. If you're a Managing Partner, use the fund code from admin. If you're a team member, use the invitation code from your MD.");
       toast({
         title: "Failed to join fund",
-        description: error.message || "Invalid fund code. Please check and try again.",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -205,10 +209,10 @@ export default function RoleSelection() {
         <Card className={cardClass}>
           <CardHeader className={cardHeaderClass}>
             <CardTitle className="text-2xl font-bold text-white">
-              {profile?.role === "managing_partner" ? "Enter Fund Code" : "Join Your Fund"}
+              {(codeEntryRole || profile?.role) === "managing_partner" ? "Enter Fund Code" : "Join Your Fund"}
             </CardTitle>
             <CardDescription className="text-slate-400 text-base mt-1">
-              {profile?.role === "managing_partner"
+              {(codeEntryRole || profile?.role) === "managing_partner"
                 ? "Enter the fund code provided by admin to create or join your fund"
                 : "Enter the invitation code from your Managing Partner"}
             </CardDescription>
@@ -217,7 +221,7 @@ export default function RoleSelection() {
             <Alert className="border-amber-500/20 bg-amber-500/5 text-slate-300">
               <Key className="h-4 w-4 text-amber-400" />
               <AlertDescription>
-                {profile?.role === "managing_partner"
+                {(codeEntryRole || profile?.role) === "managing_partner"
                   ? "Contact admin to get your fund code (e.g., VOS-1234). First MD to use it creates the fund."
                   : "Ask your Managing Partner for the invitation code (e.g., VOS-1234)"}
               </AlertDescription>
@@ -225,7 +229,7 @@ export default function RoleSelection() {
 
             <div className="space-y-2">
               <Label htmlFor="invitation-code" className="text-slate-300">
-                {profile?.role === "managing_partner" ? "Fund Code" : "Invitation Code"}
+                {(codeEntryRole || profile?.role) === "managing_partner" ? "Fund Code" : "Invitation Code"}
               </Label>
               <Input
                 id="invitation-code"
@@ -238,7 +242,7 @@ export default function RoleSelection() {
             </div>
 
             <Button onClick={handleJoinFund} disabled={isSaving || !invitationCode.trim()} className={btnPrimaryClass}>
-              {isSaving ? "Processing..." : profile?.role === "managing_partner" ? "Create/Join Fund" : "Join Fund"}
+              {isSaving ? "Processing..." : (codeEntryRole || profile?.role) === "managing_partner" ? "Create/Join Fund" : "Join Fund"}
             </Button>
 
             <Button variant="ghost" onClick={() => setStep("role_selection")} disabled={isSaving} className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11">

@@ -11436,7 +11436,7 @@ function CompaniesTab({
   
   const filteredCards = useMemo(() => {
     let cards = companyCards;
-    // Content filter (default: with_content)
+    // Content filter applies to all cards equally (no "primary" card; every card must pass)
     if (contentFilter === "with_content") {
       cards = cards.filter(cardHasContent);
     } else if (contentFilter === "with_docs") {
