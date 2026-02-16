@@ -40,7 +40,7 @@ export function TeamInvitationForm() {
 
   const loadInvitationCode = async () => {
     if (!orgId) return;
-    
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -53,7 +53,17 @@ export function TeamInvitationForm() {
         throw error;
       }
 
-      setInvitationCode(data?.invitation_code || null);
+      let code = data?.invitation_code || null;
+
+      // If org has no invitation code (e.g. created via ensure_user_organization), generate one
+      if (!code) {
+        const { data: ensureData, error: ensureError } = await supabase.rpc("ensure_organization_invitation_code");
+        if (!ensureError && ensureData?.invitation_code) {
+          code = ensureData.invitation_code;
+        }
+      }
+
+      setInvitationCode(code);
     } catch (err: any) {
       console.error("Error loading invitation code:", err);
       toast({
