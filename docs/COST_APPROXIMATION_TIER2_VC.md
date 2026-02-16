@@ -174,6 +174,41 @@ So for **heavy use**:
 
 ---
 
+## 5.5 Worst-case unit economics: why $15 goes fast
+
+**Exact API call counts (worst case per action):**
+
+| Action | API calls (worst case) | Rough $/call | Worst $/action |
+|--------|-------------------------|---------------|----------------|
+| **1 doc (full pipeline)** | 18 contextualize + 18 embed + 1 extractEntities + 1 extractCompany | ~$0.0002, ~$0.000015, ~$0.0025, ~$0.002 | **~$0.0065/doc** (contextualize dominates) |
+| **1 chat (ask)** | 1 rewrite + 1 embed + 1 match + rerank + 1 Claude stream (large context) | ~$0.001, ~$0.0002, ~$0.001, ~$0.03–0.10 | **~$0.03–0.12/query** (Claude dominates) |
+| **Rerank (per chat)** | 1 rerank call | ~$0.001–0.003 | **~$0.002** |
+
+**How $15 can disappear (worst-case scenarios):**
+
+| Scenario | What happens | Approx cost |
+|----------|----------------|-------------|
+| **~15–20 long docs (18 chunks)** | Each doc: 18× contextualize + 18× embed + extractEntities + extractCompany | **~$0.80–1.20/doc** → **~$15** for ~15–20 long docs |
+| **~2,300 docs at 10 chunks each** | 2,300 × (10×$0.0002 + 10×$0.000015 + $0.0025 + $0.002) | **~$15** (one-time indexing) |
+| **~150–500 chat queries** | 150 × $0.10 ≈ $15; or 500 × $0.03 ≈ $15 | **~$15** (chat-only, 150–500 queries) |
+| **Mix: 100 docs + 100 chats** | 100 docs × ~$0.005 + 100 chats × ~$0.07 | **~$0.50 + $7 ≈ $7.50** |
+| **Mix: 400 docs + 80 chats** | 400 × ~$0.006 + 80 × ~$0.08 | **~$2.40 + $6.40 ≈ $8.80** |
+
+So **$15 can go in roughly**:
+- **~2,300 documents** (one-time indexing at ~10 chunks/doc), or
+- **~150–500 chat queries** (depending on $/query), or
+- **~15–20 long documents** (18 chunks each, full contextualize + embed + extract).
+
+**Main cost drivers (worst case):**
+1. **Contextualize (LLM) per chunk** — up to 18× per doc; ~$0.0002/chunk → **~$0.0036/doc** for 18 chunks.
+2. **Extract entities (LLM)** — 1× per doc; ~$0.0025/doc.
+3. **Chat (Claude + embed + rerank)** — ~$0.03–0.10 per query; **chat dominates** at high usage.
+4. **Embed** — cheap per chunk (~$0.000015) but adds up over thousands of chunks.
+
+**To avoid burning $15 quickly:** cap initial doc batch (e.g. 500–1,000), sync less often, and/or limit chat or use a cheaper model for simple queries.
+
+---
+
 ## 6. Full approximation summary (Tier 2 VC)
 
 | Item | One-time (onboarding) | Per month (ongoing) |
