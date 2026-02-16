@@ -900,7 +900,7 @@ export async function getAllEntityCards(eventId: string) {
     });
   }
 
-  const cards = entities.map((e: any) => ({
+  const rawCards = entities.map((e: any) => ({
     company_id: e.id,
     company_name: e.name,
     entity_type: e.entity_type,
@@ -908,6 +908,26 @@ export async function getAllEntityCards(eventId: string) {
     document_count: docCountMap.get(e.id) || 0,
     created_at: e.created_at,
   }));
+
+  // ── Deduplicate: keep the primary card per normalized name ──
+  // Multiple entities can share a name (created from different docs/folders).
+  // Pick the one with the most documents; tie-break by richest properties.
+  const bestByName = new Map<string, typeof rawCards[0]>();
+  for (const card of rawCards) {
+    const norm = (card.company_name || "").trim().toLowerCase();
+    if (!norm) continue;
+    const existing = bestByName.get(norm);
+    if (
+      !existing ||
+      card.document_count > existing.document_count ||
+      (card.document_count === existing.document_count &&
+        JSON.stringify(card.company_properties).length >
+          JSON.stringify(existing.company_properties).length)
+    ) {
+      bestByName.set(norm, card);
+    }
+  }
+  const cards = Array.from(bestByName.values());
 
   return { data: cards, error: null };
 }

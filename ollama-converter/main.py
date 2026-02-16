@@ -6810,12 +6810,28 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     sector_terms = _expand_synonyms(sector, _SECTOR_SYNONYMS) if sector else set()
     model_terms = _expand_synonyms(biz_model, _MODEL_SYNONYMS) if biz_model else set()
 
-    query = sb.table("kg_entities").select("name, properties").eq("event_id", event_id).eq("entity_type", "company")
+    query = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company")
     result = query.execute()
-    rows = result.data or []
+    raw_rows = result.data or []
 
-    if not rows:
+    if not raw_rows:
         return "No portfolio companies found in the database."
+
+    # ── Deduplicate: keep the richest entity per normalized_name ──
+    # Multiple entities can share the same normalized_name (created from
+    # different documents / folders).  Pick the one with the most content
+    # (longest properties JSON → most extracted data).
+    best_by_norm: dict[str, dict] = {}
+    for row in raw_rows:
+        norm = (row.get("normalized_name") or row.get("name", "")).strip().lower()
+        if not norm:
+            continue
+        props = row.get("properties") or {}
+        richness = len(json.dumps(props))
+        prev = best_by_norm.get(norm)
+        if prev is None or richness > prev["_richness"]:
+            best_by_norm[norm] = {**row, "_richness": richness}
+    rows = [v for v in best_by_norm.values()]
 
     def _field_text(props: dict, keys: list[str]) -> str:
         return " ".join(str(props.get(f, "")) for f in keys).lower()
@@ -6997,11 +7013,11 @@ async def _agent_get_company_details(tool_input: dict, event_id: str) -> str:
         # Fallback: try direct table search
         try:
             fallback = sb.table("kg_entities") \
-                .select("id, name, properties") \
+                .select("id, name, normalized_name, properties") \
                 .eq("event_id", event_id) \
                 .eq("entity_type", "company") \
                 .ilike("normalized_name", f"%{company_name.lower()}%") \
-                .limit(5) \
+                .limit(10) \
                 .execute()
             entities = fallback.data or []
         except Exception:
@@ -7009,6 +7025,16 @@ async def _agent_get_company_details(tool_input: dict, event_id: str) -> str:
 
     if not entities:
         return f"No company found matching '{company_name}'. Try searching the portfolio with search_portfolio tool."
+
+    # ── Deduplicate: pick the richest entity when multiple share the same normalized name ──
+    if len(entities) > 1:
+        best_by_norm: dict[str, dict] = {}
+        for ent in entities:
+            norm = (ent.get("normalized_name") or ent.get("name", "")).strip().lower()
+            richness = len(json.dumps(ent.get("properties") or {}))
+            if norm not in best_by_norm or richness > best_by_norm[norm]["_r"]:
+                best_by_norm[norm] = {**ent, "_r": richness}
+        entities = [v for v in best_by_norm.values()]
 
     entity = entities[0]
     entity_id = entity.get("id")

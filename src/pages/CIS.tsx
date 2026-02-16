@@ -8013,10 +8013,23 @@ export default function CIS() {
     return result;
   }, []);
 
-  // ── Smart company card sources: filter by country/sector, cap at 25, put matches first ──
+  // ── Smart company card sources: filter by country/sector, cap, put matches first ──
   const buildCompanyCardSources = useCallback(
     (question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
       if (!cards.length) return [];
+
+      // Deduplicate by normalized name — keep card with richest properties
+      const deduped = new Map<string, typeof cards[0]>();
+      for (const card of cards) {
+        const norm = (card.company_name || "").trim().toLowerCase();
+        if (!norm) continue;
+        const existing = deduped.get(norm);
+        if (!existing || JSON.stringify(card.company_properties).length > JSON.stringify(existing.company_properties).length) {
+          deduped.set(norm, card);
+        }
+      }
+      cards = Array.from(deduped.values());
+
       const qLower = question.toLowerCase();
       const nameLowers = detectedNames.map(n => n.toLowerCase());
       const filter = extractFilterFromQuestion(question);
