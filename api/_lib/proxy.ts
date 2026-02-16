@@ -1,6 +1,13 @@
-export default async function handler(req: any, res: any) {
-  const actionRaw = req?.query?.action;
-  const action = Array.isArray(actionRaw) ? actionRaw[0] : actionRaw;
+/** Shared proxy logic for all gdrive API routes */
+export async function proxyToBackend(req: any, res: any, upstreamPath: string) {
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.status(204).end();
+    return;
+  }
 
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ detail: "Method not allowed" });
@@ -18,20 +25,6 @@ export default async function handler(req: any, res: any) {
   }
 
   const normalizedBase = converterBaseUrl.replace(/\/+$/, "");
-  let upstreamPath = "";
-
-  if (action === "health") {
-    upstreamPath = "/health";
-  } else if (
-    action === "list-folders" ||
-    action === "list-files" ||
-    action === "download-file"
-  ) {
-    upstreamPath = `/gdrive/${action}`;
-  } else {
-    res.status(400).json({ detail: `Unsupported gdrive action: ${String(action)}` });
-    return;
-  }
 
   try {
     const upstreamUrl = `${normalizedBase}${upstreamPath}`;
@@ -46,6 +39,7 @@ export default async function handler(req: any, res: any) {
 
     res.status(upstreamRes.status);
     res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.send(text);
   } catch (error) {
     res.status(502).json({
