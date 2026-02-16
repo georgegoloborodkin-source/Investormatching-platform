@@ -208,8 +208,10 @@ export async function listDriveFolders(
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      const text = await response.text();
+      let detail = `HTTP ${response.status}`;
+      try { detail = JSON.parse(text)?.detail || detail; } catch {}
+      throw new Error(detail);
     }
     const data = await response.json();
     return data.folders ?? [];
@@ -231,8 +233,10 @@ export async function listDriveFiles(
       body: JSON.stringify({ access_token: accessToken, folder_id: folderId }),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      const text = await response.text();
+      let detail = `HTTP ${response.status}`;
+      try { detail = JSON.parse(text)?.detail || detail; } catch {}
+      throw new Error(detail);
     }
     const data = await response.json();
     return data.files ?? [];
@@ -261,8 +265,10 @@ export async function downloadDriveFile(
       }),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      const text = await response.text();
+      let detail = `HTTP ${response.status}`;
+      try { detail = JSON.parse(text)?.detail || detail; } catch {}
+      throw new Error(detail);
     }
     return await response.json();
   } catch (error) {
