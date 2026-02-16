@@ -6766,8 +6766,39 @@ AGENT_TOOLS = [
 #  Tool execution handlers
 # ---------------------------------------------------------------------------
 
+_SECTOR_SYNONYMS: dict[str, set[str]] = {
+    "saas": {"saas", "software-as-a-service", "software as a service", "cloud software", "subscription software"},
+    "fintech": {"fintech", "financial technology", "financial services", "payments", "neobank", "insurtech", "lending", "banking"},
+    "edtech": {"edtech", "education technology", "elearning", "e-learning", "learning platform"},
+    "healthtech": {"healthtech", "health technology", "healthcare", "medtech", "digital health", "telehealth", "telemedicine"},
+    "agtech": {"agtech", "agritech", "agriculture technology", "farming", "agricultural"},
+    "climate": {"climate", "climate tech", "cleantech", "sustainability", "green tech", "renewable"},
+    "logistics": {"logistics", "supply chain", "shipping", "delivery", "freight", "last mile"},
+    "marketplace": {"marketplace", "platform", "two-sided", "multi-sided"},
+    "ecommerce": {"ecommerce", "e-commerce", "online retail", "d2c", "direct to consumer"},
+    "ai": {"ai", "artificial intelligence", "machine learning", "ml", "deep learning", "nlp", "computer vision", "genai"},
+    "proptech": {"proptech", "property technology", "real estate tech", "real estate"},
+}
+_MODEL_SYNONYMS: dict[str, set[str]] = {
+    "b2b": {"b2b", "business-to-business", "business to business", "enterprise"},
+    "b2c": {"b2c", "business-to-consumer", "business to consumer", "consumer"},
+    "b2b2c": {"b2b2c", "b2b2c model"},
+    "saas": {"saas", "software-as-a-service", "software as a service", "subscription", "recurring revenue"},
+    "marketplace": {"marketplace", "platform", "two-sided marketplace"},
+}
+
+def _expand_synonyms(term: str, synonym_map: dict[str, set[str]]) -> set[str]:
+    """Return the term plus any synonyms from the map."""
+    term_lower = term.lower().strip()
+    expanded = {term_lower}
+    for canonical, syns in synonym_map.items():
+        if term_lower in syns or term_lower == canonical:
+            expanded |= syns
+    return expanded
+
+
 async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
-    """Search portfolio companies via SQL on kg_entities with JSONB filters."""
+    """Search portfolio companies via SQL on kg_entities with JSONB filters and synonym expansion."""
     sb = get_supabase()
     country = (tool_input.get("country") or "").strip().lower()
     sector = (tool_input.get("sector") or "").strip().lower()
@@ -6776,6 +6807,9 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     biz_model = (tool_input.get("business_model") or "").strip().lower()
     list_all = tool_input.get("list_all", False)
 
+    sector_terms = _expand_synonyms(sector, _SECTOR_SYNONYMS) if sector else set()
+    model_terms = _expand_synonyms(biz_model, _MODEL_SYNONYMS) if biz_model else set()
+
     query = sb.table("kg_entities").select("name, properties").eq("event_id", event_id).eq("entity_type", "company")
     result = query.execute()
     rows = result.data or []
@@ -6783,59 +6817,73 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     if not rows:
         return "No portfolio companies found in the database."
 
+    def _field_text(props: dict, keys: list[str]) -> str:
+        return " ".join(str(props.get(f, "")) for f in keys).lower()
+
+    def _any_term_in(terms: set[str], text: str) -> bool:
+        return any(t in text for t in terms)
+
     def matches(row) -> bool:
         if list_all:
             return True
         props = row.get("properties") or {}
         text_blob = json.dumps(props).lower()
         company_name_lower = (row.get("name") or "").lower()
+
         if name and name not in company_name_lower and name not in text_blob:
             return False
+
         if country:
-            geo_fields = " ".join(str(props.get(f, "")) for f in [
+            geo_text = _field_text(props, [
                 "country", "headquarters", "location", "hq",
                 "geo_focus", "geo_markets", "geography", "region", "regions",
-            ]).lower()
-            if country not in geo_fields and country not in text_blob:
+            ])
+            if country not in geo_text and country not in text_blob:
                 return False
-        if sector:
-            industry_fields = " ".join(str(props.get(f, "")) for f in [
-                "industry", "sector", "vertical",
-            ]).lower()
+
+        if sector_terms:
+            sector_text = _field_text(props, [
+                "industry", "sector", "vertical", "category",
+            ])
             bio = str(props.get("bio", "")).lower()
-            if sector not in industry_fields and sector not in bio:
+            combined = sector_text + " " + bio
+            if not _any_term_in(sector_terms, combined) and not _any_term_in(sector_terms, text_blob):
                 return False
+
         if stage:
-            stage_fields = " ".join(str(props.get(f, "")) for f in [
+            stage_text = _field_text(props, [
                 "funding_stage", "stage", "round", "funding_round",
-            ]).lower()
-            if stage not in stage_fields:
+            ])
+            if stage not in stage_text and stage not in text_blob:
                 return False
-        if biz_model:
-            model_fields = " ".join(str(props.get(f, "")) for f in [
-                "business_model", "model",
-            ]).lower()
+
+        if model_terms:
+            model_text = _field_text(props, [
+                "business_model", "model", "revenue_model",
+            ])
             bio = str(props.get("bio", "")).lower()
-            if biz_model not in model_fields and biz_model not in bio:
+            combined = model_text + " " + bio
+            if not _any_term_in(model_terms, combined) and not _any_term_in(model_terms, text_blob):
                 return False
+
         return True
 
     matched = [r for r in rows if matches(r)]
 
     if not matched:
-        all_names = ", ".join(r.get("name", "?") for r in rows[:30])
+        all_names = ", ".join(r.get("name", "?") for r in rows[:50])
         return f"No companies matched the filters. Total portfolio: {len(rows)} companies. Names: {all_names}"
 
     lines = [f"Found {len(matched)} matching companies (out of {len(rows)} total in portfolio):\n"]
     for r in matched:
         props = r.get("properties") or {}
         parts = [f"- **{r.get('name', '?')}**"]
-        for key in ["industry", "funding_stage", "headquarters", "country", "location",
-                     "business_model", "bio"]:
+        for key in ["industry", "sector", "funding_stage", "headquarters", "country", "location",
+                     "business_model", "revenue_model", "bio"]:
             val = props.get(key)
             if val:
                 label = key.replace("_", " ").title()
-                display = str(val)[:200] if key == "bio" else str(val)
+                display = str(val)[:250] if key == "bio" else str(val)
                 parts.append(f"  {label}: {display}")
         geo = props.get("geo_focus") or props.get("geo_markets") or props.get("geography")
         if geo:
@@ -6921,7 +6969,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
         title = doc.get("title") or doc.get("file_name") or "Unknown document"
         similarity = chunk.get("similarity", 0)
         text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
-        text = text[:600]
+        text = text[:1500]
         lines.append(f"[{i}] **{title}** (relevance: {similarity:.2f})\n{text}")
 
     return "\n\n".join(lines)
@@ -7132,36 +7180,36 @@ ALWAYS use your tools to find information before answering. Never guess or say "
 
 ## Tool Selection Rules
 
-1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage):
-   → Use `search_portfolio` with appropriate filters.
-   Examples: "how many companies in Bangladesh", "list all B2B SaaS preseed companies", "which companies are in fintech"
+1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage/business model):
+   → Use `search_portfolio` ONCE with the right filters. Do NOT call it multiple times with different filters — combine filters in a single call.
+   Examples: "how many companies in Bangladesh" → search_portfolio(country="bangladesh")
+   "list all B2B SaaS preseed companies" → search_portfolio(business_model="b2b saas", stage="pre-seed")
+   "which companies are in fintech" → search_portfolio(sector="fintech")
+   "tell me all portfolio companies" → search_portfolio(list_all=true)
 
 2. **Document content questions** (pitch details, meeting notes, financials, specific content):
-   → Use `search_documents` with a clear query.
-   Examples: "what is Chari's revenue model", "summarize the pitch deck for XYZ", "what were the key metrics in the last report"
+   → Use `search_documents` ONCE with a clear, specific query. Do NOT repeat the same search with slight variations.
+   Examples: "what is Chari's revenue model" → search_documents(query="revenue model", company_name="Chari")
 
 3. **Specific company deep-dives** (detailed info about one company):
-   → Use `get_company_details` first, then `search_documents` if you need more detail.
-   Examples: "tell me everything about Company X", "what is the valuation of Y"
+   → Use `get_company_details` ONCE per company. Only call `search_documents` afterwards if the company card lacks the specific info the user asked about.
 
 4. **Relationship questions** (investors, founders, competitors, connections):
-   → Use `search_knowledge_graph`.
-   Examples: "who invested in X", "what are Y's competitors", "who founded Z"
+   → Use `search_knowledge_graph` ONCE per entity.
 
-5. **Complex multi-step questions**:
-   → Use multiple tools in sequence. For example:
-   - "Compare fintech companies in Africa" → search_portfolio(sector=fintech, country=africa) → get_company_details for each
-   - "What documents mention Series A" → search_documents(query="Series A funding round")
+5. **Comparison questions** (compare 2-3 companies):
+   → Call `get_company_details` for each company IN PARALLEL (all in one tool-use turn). Then answer from the results. Only use `search_documents` if the company cards don't contain enough detail.
 
-## Important Rules
+## Critical Rules
 
+- **NEVER call the same tool twice with similar inputs.** If a search returns no results, try a DIFFERENT tool, not the same one again.
+- **Prefer fewer, broader searches** over many narrow ones. One good search > three redundant ones.
+- When search_portfolio returns results, answer directly from those results. Do NOT then call get_company_details for every company — only do that if the user asked for deep details.
 - ALWAYS search before claiming data is unavailable.
-- If a search returns no results, try broader terms or a different tool.
-- Cite information sources clearly in your response.
 - Be precise with numbers — if search_portfolio returns 3 companies, say "3 companies", not "a few".
-- For "how many" questions, give the exact count from search_portfolio results.
-- Keep responses well-structured with clear formatting.
-- When listing companies, include key details (sector, stage, country) for each.
+- Keep responses well-structured with clear formatting (use headers, tables, bullet points).
+- When listing companies, include key details (sector, stage, country, business model) for each.
+- Cite information sources clearly in your response.
 """
 
 MAX_AGENT_ITERATIONS = 4

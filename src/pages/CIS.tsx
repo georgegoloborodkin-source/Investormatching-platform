@@ -1903,7 +1903,7 @@ function SourcesTab({
       toast({ title: "No folder connected", description: "Connect a Google Drive portfolio folder first.", variant: "destructive" });
       return;
     }
-    const accessToken = await getGoogleAccessToken();
+    let accessToken = await getGoogleAccessToken();
     if (!accessToken) {
       toast({ title: "Google Drive access needed", description: "Please sign in again with Google Drive access enabled.", variant: "destructive" });
       return;
@@ -1918,6 +1918,31 @@ function SourcesTab({
     setDriveSyncProgress({ phase: `Discovering folders (${foldersToSync.length} root${foldersToSync.length > 1 ? "s" : ""})...`, current: 0, total: 0, currentItem: "" });
     setDriveSyncResults([]);
     const results: Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }> = [];
+
+    const isDriveAuthError = (error: unknown): boolean => {
+      const msg = error instanceof Error ? error.message : String(error);
+      return /(invalid credentials|unauthenticated|autherror|http\s*401|code['"]?\s*:\s*401)/i.test(msg);
+    };
+
+    const refreshDriveAccessToken = async (): Promise<string> => {
+      const refreshed = await getGoogleAccessToken(true);
+      if (!refreshed) {
+        throw new Error("Google Drive access expired during sync. Please sign in again and retry.");
+      }
+      accessToken = refreshed;
+      return refreshed;
+    };
+
+    const withDriveAuthRetry = async <T,>(operation: () => Promise<T>): Promise<T> => {
+      try {
+        return await operation();
+      } catch (error) {
+        if (!isDriveAuthError(error)) throw error;
+        console.warn("[DriveSync] Google token appears expired. Refreshing token and retrying once...");
+        await refreshDriveAccessToken();
+        return await operation();
+      }
+    };
 
     try {
       // 0. Wake up the Render ingestion service (free-tier cold-start can take 30-60s)
@@ -1935,7 +1960,7 @@ function SourcesTab({
       ): Promise<void> => {
         if (depth <= 0 || visitedIds.has(parentId)) return;
         visitedIds.add(parentId);
-        const children = await listDriveFolders(accessToken, parentId);
+        const children = await withDriveAuthRetry(() => listDriveFolders(accessToken, parentId));
         for (const child of children) {
           if (visitedIds.has(child.id)) continue;
           const path = parentPath ? `${parentPath} / ${child.name}` : child.name;
@@ -1958,7 +1983,7 @@ function SourcesTab({
       for (let i = 0; i < allDescendantFolders.length; i++) {
         const folder = allDescendantFolders[i];
         setDriveSyncProgress({ phase: "Checking for documents...", current: i + 1, total: allDescendantFolders.length, currentItem: folder.path });
-        const files = await listDriveFiles(accessToken, folder.id);
+        const files = await withDriveAuthRetry(() => listDriveFiles(accessToken, folder.id));
         if (files.length > 0) {
           subFolders.push({ id: folder.id, name: folder.path }); // use path as company name for uniqueness
         }
@@ -1995,7 +2020,7 @@ function SourcesTab({
 
         try {
           // 2. List files in this company folder
-          const files = await listDriveFiles(accessToken, companyFolder.id);
+          const files = await withDriveAuthRetry(() => listDriveFiles(accessToken, companyFolder.id));
           console.log(`[DriveSync] ${companyName}: ${files.length} files`);
 
           // 3. Ensure a source_folder exists for this company
@@ -2064,7 +2089,9 @@ function SourcesTab({
               }
 
               // 5. Download file content
-              const downloaded = await downloadDriveFile(accessToken, file.id, file.mimeType, file.name);
+              const downloaded = await withDriveAuthRetry(() =>
+                downloadDriveFile(accessToken, file.id, file.mimeType, file.name)
+              );
               if (!downloaded.content || downloaded.content.startsWith("[Empty")) {
                 console.warn(`[DriveSync] Skipping empty file: ${file.name}`);
                 skippedFiles++;
@@ -2303,6 +2330,9 @@ function SourcesTab({
             }
           }
         } catch (folderErr) {
+          if (isDriveAuthError(folderErr)) {
+            throw new Error("Google Drive token expired during sync. Please reconnect Google Drive and run sync again.");
+          }
           console.error(`[DriveSync] Error processing folder ${companyName}:`, folderErr);
         }
 
@@ -6286,7 +6316,14 @@ export default function CIS() {
     void loadChatHistory();
   }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, readLocalChatCache, writeLocalChatCache]);
 
-  const getGoogleAccessToken = useCallback(async () => {
+  const getGoogleAccessToken = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) {
+      try {
+        await supabase.auth.refreshSession();
+      } catch {
+        // ignore; we'll still attempt to read any existing session token
+      }
+    }
     const { data } = await supabase.auth.getSession();
     return data.session?.provider_token || null;
   }, []);
