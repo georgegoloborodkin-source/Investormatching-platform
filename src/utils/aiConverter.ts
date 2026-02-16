@@ -370,6 +370,125 @@ export async function askClaudeAnswerStream(
   }
 }
 
+/**
+ * Agentic RAG — calls the new /ask/agent/stream endpoint.
+ * The backend handles all retrieval (SQL, vector search, graph) via Claude tool use.
+ * Frontend just streams the final answer.
+ */
+export async function askAgentStream(
+  input: {
+    question: string;
+    eventId: string;
+    previousMessages?: ChatMessage[];
+    webSearchEnabled?: boolean;
+  },
+  onChunk: (text: string) => void,
+  onStatus?: (status: string) => void,
+  onError?: (error: Error) => void
+): Promise<void> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutMs = input.webSearchEnabled ? 120000 : 90000;
+  let timeoutFired = false;
+  const timeout = window.setTimeout(() => {
+    timeoutFired = true;
+    controller.abort();
+  }, timeoutMs);
+  const timeoutSeconds = Math.round(timeoutMs / 1000);
+
+  try {
+    const payload = {
+      question: input.question,
+      event_id: input.eventId,
+      previous_messages: input.previousMessages || [],
+      web_search_enabled: input.webSearchEnabled || false,
+    };
+    const response = await fetch(`${baseUrl}/ask/agent/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) throw new Error("No response body");
+
+    let buffer = "";
+    let hasReceivedData = false;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          if (!hasReceivedData && !timeoutFired) {
+            onError?.(new Error("Stream ended without data."));
+          }
+          break;
+        }
+        if (timeoutFired) {
+          reader.cancel();
+          onError?.(new Error(`Request timed out after ${timeoutSeconds}s. Try a simpler question.`));
+          return;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            hasReceivedData = true;
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === "[DONE]") {
+              if (dataStr === "[DONE]") return;
+              continue;
+            }
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.text) {
+                onChunk(data.text);
+              } else if (data.status) {
+                if (typeof data.status === "string") {
+                  onStatus?.(data.status);
+                  onChunk(`\n*${data.status}*\n`);
+                }
+              } else if (data.error) {
+                onError?.(new Error(data.error));
+                return;
+              }
+            } catch {
+              // Partial JSON, ignore
+            }
+          }
+        }
+      }
+    } catch (readError) {
+      if (!timeoutFired) {
+        if (readError instanceof DOMException && readError.name === "AbortError") {
+          onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+        } else {
+          onError?.(readError instanceof Error ? readError : new Error("Stream read error"));
+        }
+      }
+    }
+  } catch (error) {
+    if (timeoutFired) {
+      onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+    } else if (error instanceof DOMException && error.name === "AbortError") {
+      onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+    } else {
+      onError?.(error instanceof Error ? error : new Error("Unknown error"));
+    }
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function rerankDocuments(input: {
   query: string;
   documents: Array<{ id: string; text: string }>;

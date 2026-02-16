@@ -49,6 +49,13 @@ try:
 except ImportError:
     ollama = None  # type: ignore[assignment]
 
+# Supabase — backend-side retrieval for Agentic RAG
+try:
+    from supabase import create_client as _supabase_create_client
+    _supabase_available = True
+except ImportError:
+    _supabase_available = False
+
 app = FastAPI(
     title="Company Second Brain V2 API",
     default_response_class=ORJSONResponse,
@@ -372,9 +379,30 @@ ANTHROPIC_MODEL_FALLBACKS = [
     ]) if m
 ]
 
+# ---------------------------------------------------------------------------
+#  Supabase — backend-side database access for Agentic RAG
+# ---------------------------------------------------------------------------
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+_sb_client = None
+
+def get_supabase():
+    """Lazy-init Supabase client (service-role key for backend retrieval)."""
+    global _sb_client
+    if _sb_client is not None:
+        return _sb_client
+    if not _supabase_available:
+        raise RuntimeError("supabase-py not installed — run: pip install supabase")
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars required for Agentic RAG")
+    _sb_client = _supabase_create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    print(f"✅ Supabase client initialised for Agentic RAG ({SUPABASE_URL[:40]}...)")
+    return _sb_client
+
 # Ask-the-fund settings (generous tokens for comprehensive answers)
 ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "4000"))  # Increased from 1000 for more detailed responses
-ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "5"))   # More sources for better context
+ASK_MAX_SOURCES = int(os.getenv("ASK_MAX_SOURCES", "200"))  # Send ALL company cards — no truncation
 ASK_MAX_SNIPPET_CHARS = int(os.getenv("ASK_MAX_SNIPPET_CHARS", "500"))  # Larger snippets for better answers
 # Use Haiku for simple questions (3-5x faster, 75% cheaper)
 USE_HAIKU_FOR_SIMPLE = os.getenv("USE_HAIKU_FOR_SIMPLE", "true").lower() == "true"
@@ -3979,7 +4007,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                     
                     # If client-side tools were used, execute and stream follow-up
                     if tool_uses:
-                        yield json.dumps({"status": "tool_execution", "tools": len(tool_uses)})
+                        yield json.dumps({"status": "Searching for more information...", "tools": len(tool_uses)})
                         tool_results = []
                         for tool_use in tool_uses:
                             result = await execute_tool_call(tool_use["name"], tool_use["input"], event_id)
@@ -4202,7 +4230,17 @@ async def ask_fund_stream(request: AskRequest, auth: AuthContext = Depends(get_a
                 yield f"data: {json.dumps({'status': 'Analyzing your question...'})}\n\n"
 
                 if request.sources:
-                    yield f"data: {json.dumps({'status': f'Reading {len(request.sources)} source(s)...'})}\n\n"
+                    n = len(request.sources)
+                    # Show a friendly count: distinguish company cards from documents
+                    card_count = sum(1 for s in request.sources if s.title and "Company card:" in s.title)
+                    doc_count = n - card_count
+                    parts = []
+                    if card_count > 0:
+                        parts.append(f"{card_count} company card{'s' if card_count != 1 else ''}")
+                    if doc_count > 0:
+                        parts.append(f"{doc_count} document{'s' if doc_count != 1 else ''}")
+                    status = f"Reading {' and '.join(parts)}..." if parts else f"Reading {n} source(s)..."
+                    yield f"data: {json.dumps({'status': status})}\n\n"
 
                 yield f"data: {json.dumps({'status': 'Generating response...'})}\n\n"
 
@@ -6375,6 +6413,756 @@ async def startup_event():
     print(f"   /web-search           — DuckDuckGo web search (legacy fallback)")
     print(f"   🌐 Native web search — Anthropic web_search_20250305 (in /ask, /ask/stream)")
     print("=" * 60)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AGENTIC RAG — Backend retrieval with Claude tool orchestration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ---------------------------------------------------------------------------
+#  Tool definitions (JSON schemas passed to Claude)
+# ---------------------------------------------------------------------------
+
+AGENT_TOOLS = [
+    {
+        "name": "search_portfolio",
+        "description": (
+            "Search portfolio companies by structured metadata filters. "
+            "Use this for questions about company counts, locations, sectors, funding stages, or listing companies. "
+            "Examples: 'companies in Bangladesh', 'B2B SaaS preseed companies', 'how many companies in Africa', "
+            "'list all fintech portfolio companies'. Returns matching company names and properties."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string",
+                    "description": "Filter by country or location (e.g. 'bangladesh', 'morocco', 'egypt'). Searches across country, headquarters, location, and geo fields.",
+                },
+                "sector": {
+                    "type": "string",
+                    "description": "Filter by industry/sector (e.g. 'fintech', 'saas', 'b2b', 'healthtech', 'edtech').",
+                },
+                "stage": {
+                    "type": "string",
+                    "description": "Filter by funding stage (e.g. 'pre-seed', 'seed', 'series a', 'series b').",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Search by company name (partial match). Use when looking for a specific company.",
+                },
+                "business_model": {
+                    "type": "string",
+                    "description": "Filter by business model (e.g. 'b2b', 'b2c', 'marketplace', 'saas').",
+                },
+                "list_all": {
+                    "type": "boolean",
+                    "description": "If true, return ALL portfolio companies (use for 'list all companies', 'how many total companies'). Default false.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "search_documents",
+        "description": (
+            "Semantic search across all uploaded documents (pitch decks, memos, meeting notes, reports). "
+            "Use this for questions about specific content mentioned in documents. "
+            "Examples: 'what is Chari's revenue model', 'tell me about the pitch deck for XYZ', "
+            "'what were the meeting notes about'. Returns relevant text chunks with document titles."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query — should be a clear description of the information you're looking for.",
+                },
+                "company_name": {
+                    "type": "string",
+                    "description": "Optional: limit search to documents about this specific company.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of results to return (default 10, max 20).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_company_details",
+        "description": (
+            "Get detailed information about a specific portfolio company including all properties, "
+            "KPI summaries, document count, and relationships. "
+            "Use this when user asks specifically about one company: 'tell me about Chari', "
+            "'what is Company X's valuation', 'who are the founders of Y'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "type": "string",
+                    "description": "The exact or approximate company name to look up.",
+                },
+            },
+            "required": ["company_name"],
+        },
+    },
+    {
+        "name": "search_knowledge_graph",
+        "description": (
+            "Search the knowledge graph for entities and their relationships. "
+            "Use this for questions about connections, investors, founders, competitors, partnerships. "
+            "Examples: 'who invested in Company X', 'what companies are competitors of Y', "
+            "'find connections between A and B', 'who are the founders of Z'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_name": {
+                    "type": "string",
+                    "description": "Name of the entity to search for.",
+                },
+                "entity_type": {
+                    "type": "string",
+                    "description": "Entity type filter: 'company', 'person', 'fund', 'round', 'sector', 'location'. Leave empty to search all types.",
+                },
+                "relationship_type": {
+                    "type": "string",
+                    "description": "Filter by relationship: 'founded', 'works_at', 'invested_in', 'raised', 'led_round', 'partner_of', 'competitor_of', 'acquired', 'operates_in', 'located_in', 'board_member'.",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Max traversal depth (1-3, default 1).",
+                },
+            },
+            "required": ["entity_name"],
+        },
+    },
+]
+
+# ---------------------------------------------------------------------------
+#  Tool execution handlers
+# ---------------------------------------------------------------------------
+
+async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
+    """Search portfolio companies via SQL on kg_entities with JSONB filters."""
+    sb = get_supabase()
+    country = (tool_input.get("country") or "").strip().lower()
+    sector = (tool_input.get("sector") or "").strip().lower()
+    stage = (tool_input.get("stage") or "").strip().lower()
+    name = (tool_input.get("name") or "").strip().lower()
+    biz_model = (tool_input.get("business_model") or "").strip().lower()
+    list_all = tool_input.get("list_all", False)
+
+    query = sb.table("kg_entities").select("name, properties").eq("event_id", event_id).eq("entity_type", "company")
+    result = query.execute()
+    rows = result.data or []
+
+    if not rows:
+        return "No portfolio companies found in the database."
+
+    def matches(row) -> bool:
+        if list_all:
+            return True
+        props = row.get("properties") or {}
+        text_blob = json.dumps(props).lower()
+        company_name_lower = (row.get("name") or "").lower()
+        if name and name not in company_name_lower and name not in text_blob:
+            return False
+        if country:
+            geo_fields = " ".join(str(props.get(f, "")) for f in [
+                "country", "headquarters", "location", "hq",
+                "geo_focus", "geo_markets", "geography", "region", "regions",
+            ]).lower()
+            if country not in geo_fields and country not in text_blob:
+                return False
+        if sector:
+            industry_fields = " ".join(str(props.get(f, "")) for f in [
+                "industry", "sector", "vertical",
+            ]).lower()
+            bio = str(props.get("bio", "")).lower()
+            if sector not in industry_fields and sector not in bio:
+                return False
+        if stage:
+            stage_fields = " ".join(str(props.get(f, "")) for f in [
+                "funding_stage", "stage", "round", "funding_round",
+            ]).lower()
+            if stage not in stage_fields:
+                return False
+        if biz_model:
+            model_fields = " ".join(str(props.get(f, "")) for f in [
+                "business_model", "model",
+            ]).lower()
+            bio = str(props.get("bio", "")).lower()
+            if biz_model not in model_fields and biz_model not in bio:
+                return False
+        return True
+
+    matched = [r for r in rows if matches(r)]
+
+    if not matched:
+        all_names = ", ".join(r.get("name", "?") for r in rows[:30])
+        return f"No companies matched the filters. Total portfolio: {len(rows)} companies. Names: {all_names}"
+
+    lines = [f"Found {len(matched)} matching companies (out of {len(rows)} total in portfolio):\n"]
+    for r in matched:
+        props = r.get("properties") or {}
+        parts = [f"- **{r.get('name', '?')}**"]
+        for key in ["industry", "funding_stage", "headquarters", "country", "location",
+                     "business_model", "bio"]:
+            val = props.get(key)
+            if val:
+                label = key.replace("_", " ").title()
+                display = str(val)[:200] if key == "bio" else str(val)
+                parts.append(f"  {label}: {display}")
+        geo = props.get("geo_focus") or props.get("geo_markets") or props.get("geography")
+        if geo:
+            if isinstance(geo, list):
+                parts.append(f"  Geo Focus: {', '.join(str(g) for g in geo)}")
+            else:
+                parts.append(f"  Geo Focus: {geo}")
+        lines.append("\n".join(parts))
+
+    return "\n\n".join(lines)
+
+
+async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
+    """Semantic search via VoyageAI embedding + match_document_chunks RPC."""
+    sb = get_supabase()
+    query_text = (tool_input.get("query") or "").strip()
+    company_name = (tool_input.get("company_name") or "").strip()
+    top_k = min(tool_input.get("top_k", 10), 20)
+
+    if not query_text:
+        return "Error: 'query' is required for document search."
+
+    # Generate embedding using the same provider as the rest of the system
+    try:
+        if EMBEDDINGS_PROVIDER == "voyage":
+            embedding = await generate_embedding_voyage(query_text, "query")
+        elif EMBEDDINGS_PROVIDER == "openai":
+            embedding = await generate_embedding_openai(query_text)
+        else:
+            embedding = await generate_embedding_ollama(query_text)
+    except Exception as e:
+        return f"Error generating embedding: {str(e)}"
+
+    # Call match_document_chunks RPC
+    try:
+        result = sb.rpc("match_document_chunks", {
+            "query_embedding": embedding,
+            "match_count": top_k,
+            "filter_event_id": event_id,
+        }).execute()
+    except Exception as e:
+        return f"Error in semantic search: {str(e)}"
+
+    chunks = result.data or []
+
+    if not chunks:
+        return f"No documents found matching: '{query_text}'"
+
+    # If company_name filter, also fetch document titles to filter
+    if company_name:
+        doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
+        if doc_ids:
+            try:
+                docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
+                doc_map = {d["id"]: d for d in (docs_result.data or [])}
+            except Exception:
+                doc_map = {}
+        else:
+            doc_map = {}
+
+        company_lower = company_name.lower()
+        filtered_chunks = []
+        for c in chunks:
+            doc = doc_map.get(c.get("document_id", ""), {})
+            title = (doc.get("title") or doc.get("file_name") or "").lower()
+            if company_lower in title:
+                filtered_chunks.append(c)
+        if filtered_chunks:
+            chunks = filtered_chunks
+    else:
+        doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
+        doc_map = {}
+        if doc_ids:
+            try:
+                docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
+                doc_map = {d["id"]: d for d in (docs_result.data or [])}
+            except Exception:
+                pass
+
+    lines = [f"Found {len(chunks)} relevant document chunks:\n"]
+    for i, chunk in enumerate(chunks, 1):
+        doc = doc_map.get(chunk.get("document_id", ""), {})
+        title = doc.get("title") or doc.get("file_name") or "Unknown document"
+        similarity = chunk.get("similarity", 0)
+        text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
+        text = text[:600]
+        lines.append(f"[{i}] **{title}** (relevance: {similarity:.2f})\n{text}")
+
+    return "\n\n".join(lines)
+
+
+async def _agent_get_company_details(tool_input: dict, event_id: str) -> str:
+    """Get detailed company card via kg_find_entity + get_company_card RPCs."""
+    sb = get_supabase()
+    company_name = (tool_input.get("company_name") or "").strip()
+
+    if not company_name:
+        return "Error: 'company_name' is required."
+
+    # Find entity by name
+    try:
+        find_result = sb.rpc("kg_find_entity", {
+            "search_name": company_name,
+            "filter_event_id": event_id,
+        }).execute()
+    except Exception as e:
+        return f"Error finding entity: {str(e)}"
+
+    entities = find_result.data or []
+    if not entities:
+        # Fallback: try direct table search
+        try:
+            fallback = sb.table("kg_entities") \
+                .select("id, name, properties") \
+                .eq("event_id", event_id) \
+                .eq("entity_type", "company") \
+                .ilike("normalized_name", f"%{company_name.lower()}%") \
+                .limit(5) \
+                .execute()
+            entities = fallback.data or []
+        except Exception:
+            pass
+
+    if not entities:
+        return f"No company found matching '{company_name}'. Try searching the portfolio with search_portfolio tool."
+
+    entity = entities[0]
+    entity_id = entity.get("id")
+
+    # Get full company card
+    try:
+        card_result = sb.rpc("get_company_card", {
+            "p_company_entity_id": entity_id,
+            "p_filter_event_id": event_id,
+        }).execute()
+    except Exception as e:
+        # If RPC fails, fall back to entity properties
+        props = entity.get("properties") or {}
+        lines = [f"**{entity.get('name', company_name)}**\n"]
+        for k, v in props.items():
+            if v and k not in ("auto_created", "source", "property_sources"):
+                lines.append(f"- {k.replace('_', ' ').title()}: {str(v)[:300]}")
+        return "\n".join(lines)
+
+    cards = card_result.data or []
+    if not cards:
+        props = entity.get("properties") or {}
+        lines = [f"**{entity.get('name', company_name)}**\n"]
+        for k, v in props.items():
+            if v and k not in ("auto_created", "source", "property_sources"):
+                lines.append(f"- {k.replace('_', ' ').title()}: {str(v)[:300]}")
+        return "\n".join(lines)
+
+    card = cards[0]
+    props = card.get("company_properties") or {}
+    lines = [f"**{card.get('company_name', company_name)}** — Detailed Company Card\n"]
+
+    for key in ["industry", "funding_stage", "business_model", "headquarters", "country",
+                 "location", "bio", "website", "linkedin_url", "email", "phone",
+                 "founded_year", "team_size", "amount_seeking", "valuation",
+                 "arr", "mrr", "burn_rate", "runway_months",
+                 "problem", "solution", "tam", "competitive_edge"]:
+        val = props.get(key)
+        if val:
+            label = key.replace("_", " ").title()
+            display = str(val)[:500] if key in ("bio", "problem", "solution", "tam", "competitive_edge") else str(val)
+            lines.append(f"- **{label}**: {display}")
+
+    geo = props.get("geo_focus") or props.get("geo_markets")
+    if geo:
+        lines.append(f"- **Geo Focus**: {', '.join(geo) if isinstance(geo, list) else geo}")
+
+    founders = props.get("founders")
+    if founders and isinstance(founders, list):
+        founder_strs = []
+        for f in founders:
+            if isinstance(f, dict):
+                founder_strs.append(f"{f.get('name', '?')} ({f.get('role', 'founder')})")
+            else:
+                founder_strs.append(str(f))
+        lines.append(f"- **Founders**: {', '.join(founder_strs)}")
+
+    doc_count = card.get("document_count", 0)
+    rel_count = card.get("relationship_count", 0)
+    kpi_count = card.get("kpi_count", 0)
+    related = card.get("related_companies") or []
+
+    lines.append(f"\n**Stats**: {doc_count} documents, {kpi_count} KPIs, {rel_count} relationships")
+    if related:
+        lines.append(f"**Related Companies**: {', '.join(related[:10])}")
+
+    kpi_summary = card.get("kpi_summary")
+    if kpi_summary and isinstance(kpi_summary, (dict, list)):
+        lines.append(f"**KPI Summary**: {json.dumps(kpi_summary, default=str)[:500]}")
+
+    return "\n".join(lines)
+
+
+async def _agent_search_knowledge_graph(tool_input: dict, event_id: str) -> str:
+    """Search knowledge graph entities and relationships."""
+    sb = get_supabase()
+    entity_name = (tool_input.get("entity_name") or "").strip()
+    entity_type = (tool_input.get("entity_type") or "").strip()
+    relationship_type = (tool_input.get("relationship_type") or "").strip()
+    max_depth = min(tool_input.get("max_depth", 1), 3)
+
+    if not entity_name:
+        return "Error: 'entity_name' is required."
+
+    # Find entity
+    try:
+        find_result = sb.rpc("kg_find_entity", {
+            "search_name": entity_name,
+            "filter_event_id": event_id,
+        }).execute()
+    except Exception as e:
+        return f"Error finding entity: {str(e)}"
+
+    entities = find_result.data or []
+
+    if entity_type:
+        entities = [e for e in entities if (e.get("entity_type") or "").lower() == entity_type.lower()]
+
+    if not entities:
+        return f"No entity found matching '{entity_name}'" + (f" (type: {entity_type})" if entity_type else "")
+
+    lines = [f"Found {len(entities)} entity/entities matching '{entity_name}':\n"]
+
+    for entity in entities[:5]:
+        eid = entity.get("id")
+        ename = entity.get("name", "?")
+        etype = entity.get("entity_type", "?")
+        props = entity.get("properties") or {}
+        lines.append(f"### {ename} ({etype})")
+        for k, v in list(props.items())[:10]:
+            if v and k not in ("auto_created", "source", "property_sources"):
+                lines.append(f"  - {k}: {str(v)[:200]}")
+
+        # Get neighbors
+        try:
+            neighbors_result = sb.rpc("kg_neighbors", {
+                "entity_id": eid,
+                "max_depth": max_depth,
+            }).execute()
+            neighbors = neighbors_result.data or []
+        except Exception:
+            neighbors = []
+
+        if relationship_type:
+            neighbors = [n for n in neighbors if (n.get("relation_type") or "").lower() == relationship_type.lower()]
+
+        if neighbors:
+            lines.append(f"  **Relationships** ({len(neighbors)}):")
+            for n in neighbors[:15]:
+                direction = n.get("direction", "?")
+                rel_type = n.get("relation_type", "?")
+                neighbor_name = n.get("entity_name", "?")
+                neighbor_type = n.get("entity_type", "?")
+                arrow = "→" if direction == "outgoing" else "←"
+                lines.append(f"    {arrow} {rel_type} — {neighbor_name} ({neighbor_type})")
+        else:
+            lines.append("  No relationships found.")
+
+    return "\n".join(lines)
+
+
+async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str) -> str:
+    """Dispatch tool calls to the correct handler."""
+    try:
+        if tool_name == "search_portfolio":
+            return await _agent_search_portfolio(tool_input, event_id)
+        elif tool_name == "search_documents":
+            return await _agent_search_documents(tool_input, event_id)
+        elif tool_name == "get_company_details":
+            return await _agent_get_company_details(tool_input, event_id)
+        elif tool_name == "search_knowledge_graph":
+            return await _agent_search_knowledge_graph(tool_input, event_id)
+        else:
+            return f"Unknown tool: {tool_name}"
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"Tool error ({tool_name}): {str(e)[:300]}"
+
+
+# ---------------------------------------------------------------------------
+#  Agent system prompt
+# ---------------------------------------------------------------------------
+
+AGENT_SYSTEM_PROMPT = """You are Orbit AI, a VC portfolio intelligence assistant for a venture capital firm.
+
+You have access to tools that let you search the firm's portfolio database, documents, and knowledge graph.
+ALWAYS use your tools to find information before answering. Never guess or say "I don't have access" without searching first.
+
+## Tool Selection Rules
+
+1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage):
+   → Use `search_portfolio` with appropriate filters.
+   Examples: "how many companies in Bangladesh", "list all B2B SaaS preseed companies", "which companies are in fintech"
+
+2. **Document content questions** (pitch details, meeting notes, financials, specific content):
+   → Use `search_documents` with a clear query.
+   Examples: "what is Chari's revenue model", "summarize the pitch deck for XYZ", "what were the key metrics in the last report"
+
+3. **Specific company deep-dives** (detailed info about one company):
+   → Use `get_company_details` first, then `search_documents` if you need more detail.
+   Examples: "tell me everything about Company X", "what is the valuation of Y"
+
+4. **Relationship questions** (investors, founders, competitors, connections):
+   → Use `search_knowledge_graph`.
+   Examples: "who invested in X", "what are Y's competitors", "who founded Z"
+
+5. **Complex multi-step questions**:
+   → Use multiple tools in sequence. For example:
+   - "Compare fintech companies in Africa" → search_portfolio(sector=fintech, country=africa) → get_company_details for each
+   - "What documents mention Series A" → search_documents(query="Series A funding round")
+
+## Important Rules
+
+- ALWAYS search before claiming data is unavailable.
+- If a search returns no results, try broader terms or a different tool.
+- Cite information sources clearly in your response.
+- Be precise with numbers — if search_portfolio returns 3 companies, say "3 companies", not "a few".
+- For "how many" questions, give the exact count from search_portfolio results.
+- Keep responses well-structured with clear formatting.
+- When listing companies, include key details (sector, stage, country) for each.
+"""
+
+MAX_AGENT_ITERATIONS = 4
+
+# ---------------------------------------------------------------------------
+#  Agent request model
+# ---------------------------------------------------------------------------
+
+class AgentAskRequest(BaseModel):
+    question: str
+    event_id: str
+    previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
+    web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
+#  Streaming agent endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/ask/agent/stream")
+async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends(get_auth_context)):
+    """
+    Agentic RAG endpoint — Claude decides which tools to call, executes them,
+    and generates a final answer. Streams SSE events for real-time UI updates.
+    """
+    try:
+        question = (request.question or "").strip()
+        if not question:
+            raise HTTPException(status_code=400, detail="question is required.")
+
+        event_id = (request.event_id or "").strip()
+        if not event_id:
+            raise HTTPException(status_code=400, detail="event_id is required.")
+
+        # Resolve question using chat history (pronoun resolution etc.)
+        resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
+        print(f"[AGENT] Question: {question}")
+        print(f"[AGENT] Resolved: {resolved_question}")
+
+        # Build messages with chat history context
+        messages: List[dict] = []
+        for msg in (request.previous_messages or [])[-10:]:
+            messages.append({"role": msg.role, "content": msg.content})
+        messages.append({"role": "user", "content": resolved_question})
+
+        # Build tools list
+        tools = list(AGENT_TOOLS)
+        if request.web_search_enabled:
+            tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
+
+        # Choose model
+        is_comp = is_comprehensive_question(question)
+        max_tokens = 8000 if is_comp else ASK_MAX_TOKENS
+
+        async def generate():
+            try:
+                yield f"data: {json.dumps({'ping': True})}\n\n"
+                yield f"data: {json.dumps({'status': 'Analyzing your question...'})}\n\n"
+
+                if not _anthropic_sdk_available:
+                    yield f"data: {json.dumps({'error': 'Anthropic SDK not available'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                client = _get_anthropic_async_client()
+                current_messages = list(messages)
+                model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
+
+                for iteration in range(MAX_AGENT_ITERATIONS):
+                    print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
+
+                    try:
+                        response = await client.messages.create(
+                            model=model_name,
+                            max_tokens=max_tokens,
+                            temperature=0.1,
+                            system=AGENT_SYSTEM_PROMPT,
+                            messages=current_messages,
+                            tools=tools,
+                        )
+                    except anthropic.NotFoundError:
+                        # Try fallback model
+                        for fallback in ANTHROPIC_MODEL_FALLBACKS[1:]:
+                            try:
+                                response = await client.messages.create(
+                                    model=fallback,
+                                    max_tokens=max_tokens,
+                                    temperature=0.1,
+                                    system=AGENT_SYSTEM_PROMPT,
+                                    messages=current_messages,
+                                    tools=tools,
+                                )
+                                model_name = fallback
+                                break
+                            except Exception:
+                                continue
+                        else:
+                            yield f"data: {json.dumps({'error': 'All models failed'})}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+
+                    # Collect tool calls and text from response
+                    tool_calls = []
+                    text_parts = []
+                    web_search_citations: Dict[str, str] = {}
+
+                    for block in response.content:
+                        if block.type == "text":
+                            text_parts.append(block.text)
+                        elif block.type == "tool_use":
+                            tool_calls.append(block)
+                        elif block.type == "server_tool_use":
+                            yield f"data: {json.dumps({'status': '🌐 Searching the web...'})}\n\n"
+                        elif block.type == "web_search_tool_result":
+                            result_content = getattr(block, "content", [])
+                            if isinstance(result_content, list):
+                                for item in result_content:
+                                    if hasattr(item, "type") and getattr(item, "type", "") == "web_search_result":
+                                        url = getattr(item, "url", "")
+                                        title = getattr(item, "title", "")
+                                        if url:
+                                            web_search_citations[url] = title
+
+                    # If no tool calls, send the final answer
+                    if not tool_calls:
+                        full_text = "\n".join(text_parts)
+                        if full_text:
+                            # Send in chunks for progressive rendering
+                            chunk_size = 80
+                            for i in range(0, len(full_text), chunk_size):
+                                yield f"data: {json.dumps({'text': full_text[i:i+chunk_size]})}\n\n"
+                                await asyncio.sleep(0)  # yield control for SSE flush
+                        if web_search_citations:
+                            sources_text = "\n\n**Web Sources:**"
+                            for i, (url, title) in enumerate(web_search_citations.items(), 1):
+                                sources_text += f"\n[{i}] [{title}]({url})"
+                            yield f"data: {json.dumps({'text': sources_text})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
+
+                    # Execute tool calls
+                    tool_names = [tc.name for tc in tool_calls]
+                    tool_label = ", ".join(tool_names)
+                    yield f"data: {json.dumps({'status': f'Searching: {tool_label}...'})}\n\n"
+                    print(f"[AGENT] Tool calls: {tool_names}")
+
+                    # Build assistant message with all content blocks
+                    assistant_content = []
+                    for block in response.content:
+                        if block.type == "text":
+                            assistant_content.append({"type": "text", "text": block.text})
+                        elif block.type == "tool_use":
+                            assistant_content.append({
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            })
+
+                    current_messages.append({"role": "assistant", "content": assistant_content})
+
+                    # Execute each tool and collect results
+                    tool_results = []
+                    for tc in tool_calls:
+                        print(f"[AGENT] Executing {tc.name} with {json.dumps(tc.input)[:200]}")
+                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id)
+                        print(f"[AGENT] Result from {tc.name}: {result_text[:200]}...")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tc.id,
+                            "content": result_text,
+                        })
+
+                    current_messages.append({"role": "user", "content": tool_results})
+
+                # If we exhausted iterations, do a final streaming call
+                yield f"data: {json.dumps({'status': 'Generating final answer...'})}\n\n"
+                try:
+                    async with client.messages.stream(
+                        model=model_name,
+                        max_tokens=max_tokens,
+                        temperature=0.1,
+                        system=AGENT_SYSTEM_PROMPT,
+                        messages=current_messages,
+                    ) as final_stream:
+                        async for event in final_stream:
+                            if event.type == "content_block_delta" and hasattr(event.delta, "type"):
+                                if event.delta.type == "text_delta" and hasattr(event.delta, "text"):
+                                    yield f"data: {json.dumps({'text': event.delta.text})}\n\n"
+                except Exception as e:
+                    yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
+
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                yield f"data: {json.dumps({'error': f'Agent error: {str(e)[:300]}'})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)[:200]}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     import uvicorn

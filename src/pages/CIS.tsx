@@ -179,7 +179,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, embedQuery, rerankDocuments, rewriteQueryWithLLM, suggestConnections, contextualizeChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -7696,7 +7696,9 @@ export default function CIS() {
       const p = card.company_properties || {};
       const parts: string[] = [`Company: ${card.company_name}`];
       if (p.industry) parts.push(`Industry: ${p.industry}`);
-      if (p.funding_stage) parts.push(`Stage: ${p.funding_stage}`);
+      const stage = p.funding_stage || p.stage || p.round || p.funding_round;
+      if (stage) parts.push(`Stage: ${stage}`);
+      if (p.business_model) parts.push(`Model: ${p.business_model}`);
       if (p.headquarters) parts.push(`HQ: ${p.headquarters}`);
       if (p.country) parts.push(`Country: ${p.country}`);
       if (p.location) parts.push(`Location: ${p.location}`);
@@ -7718,78 +7720,137 @@ export default function CIS() {
     []
   );
 
-  // ── Smart company card sources: send relevant cards full, rest as slim one-liners ──
+  // ── Extract country/sector from question for filtering (e.g. "how many in Bangladesh") ──
+  const extractFilterFromQuestion = useCallback((question: string): { country?: string; sector?: string; stage?: string } => {
+    const q = question.toLowerCase();
+    const result: { country?: string; sector?: string; stage?: string } = {};
+    // Common countries (expand as needed)
+    const countries = [
+      "bangladesh", "morocco", "egypt", "india", "pakistan", "nigeria", "kenya", "ghana",
+      "indonesia", "vietnam", "philippines", "brazil", "mexico", "colombia", "argentina",
+      "tunisia", "algeria", "saudi arabia", "uae", "turkey", "south africa", "ethiopia",
+      "jordan", "lebanon", "senegal", "rwanda", "tanzania", "uganda", "cameroon",
+      "ivory coast", "cote d'ivoire", "myanmar", "cambodia", "thailand", "malaysia",
+      "singapore", "china", "japan", "korea", "usa", "united states", "uk", "united kingdom",
+      "france", "germany", "spain", "canada", "australia",
+    ];
+    for (const c of countries) {
+      if (q.includes(c)) {
+        result.country = c;
+        break;
+      }
+    }
+    // Sectors
+    const sectors = ["fintech", "saas", "b2b", "b2c", "healthtech", "edtech", "agritech", "logistics", "ecommerce", "proptech", "insurtech", "cleantech", "deeptech", "biotech", "medtech", "legaltech", "regtech", "hrtech", "martech"];
+    for (const s of sectors) {
+      if (q.includes(s)) {
+        result.sector = s;
+        break;
+      }
+    }
+    // Funding stages
+    const stages: Array<{ match: string; label: string }> = [
+      { match: "pre-seed", label: "pre-seed" },
+      { match: "preseed", label: "pre-seed" },
+      { match: "pre seed", label: "pre-seed" },
+      { match: "seed", label: "seed" },
+      { match: "series a", label: "series a" },
+      { match: "series b", label: "series b" },
+      { match: "series c", label: "series c" },
+      { match: "series d", label: "series d" },
+    ];
+    for (const s of stages) {
+      if (q.includes(s.match)) {
+        result.stage = s.label;
+        break;
+      }
+    }
+    return result;
+  }, []);
+
+  // ── Smart company card sources: filter by country/sector, cap at 25, put matches first ──
   const buildCompanyCardSources = useCallback(
     (question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
       if (!cards.length) return [];
       const qLower = question.toLowerCase();
       const nameLowers = detectedNames.map(n => n.toLowerCase());
+      const filter = extractFilterFromQuestion(question);
 
       // Determine if this is a "list all" / portfolio-wide question
       const isPortfolioWide = /\b(how many|list|all compan|portfolio|every company|which compan)\b/i.test(question);
-      // Determine if user is asking about a specific country/sector/etc.
-      const isFilterQuestion = /\b(in\s+\w+|from\s+\w+|based in|headquartered|country|sector|fintech|saas|b2b|b2c|healthtech|edtech|agritech|logistics|ecommerce)\b/i.test(question);
+      const isFilterQuestion = /\b(in\s+\w+|from\s+\w+|based in|headquartered|country|sector|stage|preseed|pre-seed|seed|series)\b/i.test(question) ||
+        filter.country || filter.sector || filter.stage;
 
       const result: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
-      const relevantCards: typeof cards = [];
-      const otherCards: typeof cards = [];
 
-      for (const card of cards) {
-        const name = (card.company_name || "").trim();
-        if (!name) continue;
-        const nameLower = name.toLowerCase();
+      const cardMatchesFilter = (card: { company_name: string; company_properties: Record<string, any> }): boolean => {
         const p = card.company_properties || {};
         const cardText = [
-          name, p.bio || "", p.industry || "", p.headquarters || "",
-          p.country || "", p.location || "", p.funding_stage || "",
+          p.headquarters || "", p.country || "", p.location || "",
+          p.industry || "", p.bio || "",
           ...(Array.isArray(p.geo_focus) ? p.geo_focus : []),
           ...(Array.isArray(p.geo_markets) ? p.geo_markets : []),
         ].join(" ").toLowerCase();
+        const stageText = [
+          p.funding_stage || "", p.stage || "", p.round || "",
+        ].join(" ").toLowerCase();
+        let matches = true;
+        let hasFilter = false;
+        if (filter.country) { hasFilter = true; if (!cardText.includes(filter.country)) matches = false; }
+        if (filter.sector) { hasFilter = true; if (!cardText.includes(filter.sector)) matches = false; }
+        if (filter.stage) { hasFilter = true; if (!stageText.includes(filter.stage) && !cardText.includes(filter.stage)) matches = false; }
+        return hasFilter && matches;
+      };
 
-        // Card is "relevant" if the question mentions its name, or the card matches query tokens
-        const isNameMatch = nameLowers.some(n => nameLower.includes(n) || n.includes(nameLower));
-        const isContentMatch = qLower.split(/\s+/).filter(w => w.length > 3).some(tok => cardText.includes(tok));
-        if (isNameMatch || isContentMatch) {
-          relevantCards.push(card);
-        } else {
-          otherCards.push(card);
+      const cardMatchesNameOrContent = (card: { company_name: string; company_properties: Record<string, any> }): boolean => {
+        const nameLower = (card.company_name || "").toLowerCase();
+        const p = card.company_properties || {};
+        const cardText = [card.company_name, p.bio || "", p.industry || ""].join(" ").toLowerCase();
+        if (nameLowers.some(n => nameLower.includes(n) || n.includes(nameLower))) return true;
+        return qLower.split(/\s+/).filter(w => w.length > 3).some(tok => cardText.includes(tok));
+      };
+
+      // For "how many in Bangladesh" or "all B2B SaaS preseed": matching cards FULL, rest SLIM
+      if ((isPortfolioWide || isFilterQuestion) && (filter.country || filter.sector || filter.stage)) {
+        const matching = cards.filter(c => (c.company_name || "").trim() && cardMatchesFilter(c));
+        const nonMatching = cards.filter(c => (c.company_name || "").trim() && !cardMatchesFilter(c));
+        // Matching cards first (full snippet)
+        for (const card of matching) {
+          result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, false) });
         }
+        // ALL non-matching cards get slim snippets so the model knows about the entire portfolio
+        for (const card of nonMatching) {
+          result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
+        }
+        return result;
       }
 
-      // Relevant cards get full snippets
+      // General case: relevant cards (name/content match) full, others slim, cap total
+      const relevantCards: typeof cards = [];
+      const otherCards: typeof cards = [];
+      for (const card of cards) {
+        if (!(card.company_name || "").trim()) continue;
+        if (cardMatchesNameOrContent(card)) relevantCards.push(card);
+        else otherCards.push(card);
+      }
+
       for (const card of relevantCards) {
-        result.push({
-          title: `Company card: ${card.company_name}`,
-          file_name: null as string | null,
-          snippet: buildCardSnippet(card, false),
-        });
+        result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, false) });
       }
-
-      // For portfolio-wide or filter questions, send ALL cards but slim
+      // For portfolio-wide or filter questions, send ALL cards (slim for non-relevant)
       if (isPortfolioWide || isFilterQuestion) {
         for (const card of otherCards) {
-          result.push({
-            title: `Company card: ${card.company_name}`,
-            file_name: null as string | null,
-            snippet: buildCardSnippet(card, true),
-          });
+          result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
       } else {
-        // For specific questions, send only a slim summary of other companies
-        // so Claude knows the portfolio but doesn't waste tokens
-        const MAX_OTHER = 25;
-        for (const card of otherCards.slice(0, MAX_OTHER)) {
-          result.push({
-            title: `Company card: ${card.company_name}`,
-            file_name: null as string | null,
-            snippet: buildCardSnippet(card, true),
-          });
+        // For specific questions, send up to 15 other cards as slim context
+        for (const card of otherCards.slice(0, 15)) {
+          result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
       }
-
       return result;
     },
-    [buildCardSnippet]
+    [buildCardSnippet, extractFilterFromQuestion]
   );
 
   const askFund = useCallback(
@@ -7804,6 +7865,77 @@ export default function CIS() {
         createAssistantMessage("I can't access documents yet. Please try again in a moment.", threadId);
         return;
       }
+
+      // ════════════════════════════════════════════════════════════════════
+      // AGENTIC RAG — Backend-driven retrieval with Claude tool use
+      // When enabled, the backend handles ALL retrieval (SQL, vector search,
+      // knowledge graph) via Claude's tool_use loop. The frontend just streams.
+      // ════════════════════════════════════════════════════════════════════
+      const USE_AGENT_RAG = true; // Feature flag: set to false to revert to old pipeline
+
+      if (USE_AGENT_RAG) {
+        setChatIsLoading(false);
+        setIsClaudeLoading(true);
+        setLastEvidence(null);
+
+        const streamer = createStreamingAssistantMessage(threadId);
+        let streamCompleted = false;
+        const agentTimeoutMs = webSearchEnabled ? 120000 : 90000;
+        const agentTimeout = window.setTimeout(() => {
+          if (!streamCompleted) {
+            streamCompleted = true;
+            streamer.setError("Request timed out. Please try again with a simpler question.");
+            setIsClaudeLoading(false);
+          }
+        }, agentTimeoutMs);
+
+        try {
+          const threadMsgs = await getThreadMessages(threadId, 10);
+
+          await askAgentStream(
+            {
+              question,
+              eventId,
+              previousMessages: threadMsgs,
+              webSearchEnabled: webSearchEnabled,
+            },
+            (chunk) => {
+              if (!streamCompleted) streamer.appendChunk(chunk);
+            },
+            (status) => {
+              console.log("[AGENT] Status:", status);
+            },
+            (err) => {
+              if (!streamCompleted) {
+                streamCompleted = true;
+                clearTimeout(agentTimeout);
+                streamer.setError(err.message || "Failed. Please try again.");
+                setIsClaudeLoading(false);
+              }
+            }
+          );
+
+          if (!streamCompleted) {
+            streamCompleted = true;
+            clearTimeout(agentTimeout);
+            streamer.finalize();
+          }
+        } catch (err) {
+          if (!streamCompleted) {
+            streamCompleted = true;
+            clearTimeout(agentTimeout);
+            streamer.setError(err instanceof Error ? err.message : "Failed. Please try again.");
+          }
+        } finally {
+          clearTimeout(agentTimeout);
+          setIsClaudeLoading(false);
+        }
+        return; // Skip entire old retrieval pipeline
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // LEGACY PIPELINE (below) — only runs when USE_AGENT_RAG = false
+      // ════════════════════════════════════════════════════════════════════
 
       const previousEvidence = lastEvidence;
       const previousEvidenceThreadId = lastEvidenceThreadId;
@@ -8226,7 +8358,7 @@ export default function CIS() {
       const isPortfolioIndexQuestion = (() => {
         const q = normalizedQuestion;
         return (
-          /\b(how many|list|all compan|portfolio|every company|which compan|companies in|companies from|headquartered|based in)\b/i.test(question) &&
+          /\b(how many|list|show|tell me|all compan|portfolio|every company|which compan|companies in|companies from|headquartered|based in|preseed|pre-seed|seed stage|series [a-d]|b2b|b2c|saas|fintech|healthtech|edtech|agritech)\b/i.test(question) &&
           !isComprehensiveQuestion &&
           !(/\b(pitch|deck|memo|document|meeting notes|revenue|mrr|arr|kpi|financial)\b/i.test(q))
         );

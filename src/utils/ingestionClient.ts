@@ -128,17 +128,13 @@ export async function ingestGoogleDrive(
   id: string;
   name: string;
   modifiedTime?: string | null;
-}
-
-export interface GDriveFileEntry {
+}export interface GDriveFileEntry {
   id: string;
   name: string;
   mimeType: string;
   modifiedTime?: string | null;
   size?: string | null;
-}
-
-export async function listDriveFolders(
+}export async function listDriveFolders(
   accessToken: string,
   folderId: string
 ): Promise<GDriveFolderEntry[]> {
