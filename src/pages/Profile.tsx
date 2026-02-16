@@ -101,12 +101,15 @@ export default function Profile() {
   const handleCreateProfile = async () => {
     if (!user) return;
     try {
-      const { error } = await supabase.from("user_profiles").insert({
-        id: user.id,
-        email: user.email,
-        full_name: (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "",
-        role: "team_member",
-      });
+      const { error } = await supabase.from("user_profiles").upsert(
+        {
+          id: user.id,
+          email: user.email,
+          full_name: (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "",
+          role: "team_member",
+        },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
       if (error) throw error;
       await refreshProfile();
     } catch (error: any) {

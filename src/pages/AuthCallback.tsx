@@ -55,16 +55,19 @@ export default function AuthCallback() {
           .single();
 
         if (profileError && profileError.code === "PGRST116") {
-          const { error: insertError } = await supabase.from("user_profiles").insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || user.user_metadata?.name || "",
-            role: "team_member",
-          });
+          const { error: upsertError } = await supabase.from("user_profiles").upsert(
+            {
+              id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || user.user_metadata?.name || "",
+              role: "team_member",
+            },
+            { onConflict: "id", ignoreDuplicates: true }
+          );
 
-          if (insertError) {
-            console.error("Profile insert error:", insertError);
-            throw insertError;
+          if (upsertError) {
+            console.error("Profile upsert error:", upsertError);
+            throw upsertError;
           }
         } else if (profileError) {
           console.error("Profile fetch error:", profileError);
