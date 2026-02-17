@@ -375,7 +375,6 @@ ANTHROPIC_MODEL_FALLBACKS = [
         ANTHROPIC_MODEL,
         "claude-sonnet-4-20250514",
         "claude-3-7-sonnet-latest",
-        "claude-haiku-4-20250514",
     ]) if m
 ]
 
@@ -6813,20 +6812,62 @@ _CORPORATE_SUFFIXES_RE = _re.compile(
     _re.IGNORECASE | _re.VERBOSE,
 )
 
+# Patterns that indicate the entity name is a document title, not a company name
+# e.g. "[Chari] GPT Demo Day", "Template for Chari Side Letter", "V1 . Chari"
+_BRACKET_PREFIX_RE = _re.compile(r"^\[([^\]]+)\]")  # [CompanyName] ...
+_VERSION_PREFIX_RE = _re.compile(r"^v\d+\.?\s*\.?\s*", _re.IGNORECASE)  # V1 . , V2.
+_DOCUMENT_TITLE_JUNK = _re.compile(
+    r"\b(?:template|draft|final|copy|summary|report|update|email|"
+    r"memo|letter|deck|pitch|presentation|agenda|minutes|notes|"
+    r"side letter|spa|sha|ssa|term sheet|nda|mou|loi|"
+    r"weekly|monthly|quarterly|annual|demo day|gpt)\b",
+    _re.IGNORECASE,
+)
+
 
 def _extract_core_company_name(name: str) -> str:
     """
-    Strip corporate suffixes to get a canonical 'core' name.
-    E.g. 'Chhaya Technologies PTE. LTD.' → 'chhaya'
-         'Watawaste Co. Ltd' → 'watawaste'
-         'Insurance Development and Regulatory Authority' → unchanged
+    Extract the actual company name from entity names that might be document titles.
+    Then strip corporate suffixes to get a canonical 'core' name.
+
+    Examples:
+        'Chhaya Technologies PTE. LTD.'          → 'chhaya'
+        '[Chari] GPT Demo Day'                   → 'chari'
+        'Template for Chari Side Letter to Chari SPA' → 'chari'
+        'V1 . Chari'                             → 'chari'
+        '[Chari] Orbit Weekly Update Email Template'  → 'chari'
+        'Watawaste Co. Ltd'                      → 'watawaste'
     """
     if not name:
         return ""
-    s = name.strip().lower()
+    s = name.strip()
+
+    # 1) If name starts with [Something], extract the bracket content as the company name
+    bracket_match = _BRACKET_PREFIX_RE.match(s)
+    if bracket_match:
+        s = bracket_match.group(1).strip()
+
+    # 2) Strip "V1 .", "V2." etc. prefix
+    s = _VERSION_PREFIX_RE.sub("", s).strip()
+
+    # 3) Strip "Copy of " prefix
+    if s.lower().startswith("copy of "):
+        s = s[8:].strip()
+
+    # 4) Lowercase for remaining processing
+    s = s.lower()
+
+    # 5) Strip corporate suffixes
     s = _CORPORATE_SUFFIXES_RE.sub(" ", s)
-    s = _re.sub(r"[.,()]+", " ", s)
+
+    # 6) Strip document-title junk words
+    s = _DOCUMENT_TITLE_JUNK.sub(" ", s)
+
+    # 7) Clean up punctuation and whitespace
+    s = _re.sub(r"[.,():\[\]{}\"'`/\\|_\-]+", " ", s)
+    s = _re.sub(r"\b(for|to|of|the|a|an|and|or|in|on|at|by|from|with)\b", " ", s)
     s = " ".join(s.split()).strip()
+
     return s
 
 
@@ -6864,7 +6905,7 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
         prev = best_by_core.get(core)
         if prev is None or richness > prev["_richness"]:
             best_by_core[core] = {**row, "_richness": richness}
-    rows = [v for v in best_by_core.values()]
+    rows = sorted(best_by_core.values(), key=lambda r: (r.get("name") or "").lower())
 
     # ── Folder scope filter: restrict to entities with docs in selected folders ──
     if folder_ids:
@@ -6961,9 +7002,11 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
         return True
 
     matched = [r for r in rows if matches(r)]
+    # Deterministic sort: by name alphabetically so results are always consistent
+    matched.sort(key=lambda r: (r.get("name") or "").lower())
 
     if not matched:
-        all_names = ", ".join(r.get("name", "?") for r in rows[:50])
+        all_names = ", ".join(sorted(r.get("name", "?") for r in rows[:50]))
         return f"No companies matched the filters. Total portfolio: {len(rows)} companies. Names: {all_names}"
 
     lines = [f"Found {len(matched)} matching companies (out of {len(rows)} total in portfolio):\n"]
@@ -7360,35 +7403,41 @@ ALWAYS use your tools to find information before answering. Never guess or say "
 ## Tool Selection Rules
 
 1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage/business model):
-   → Use `search_portfolio` ONCE with the right filters. Do NOT call it multiple times with different filters — combine filters in a single call.
+   → Use `search_portfolio` with the right filters.
    Examples: "how many companies in Bangladesh" → search_portfolio(country="bangladesh")
    "list all B2B SaaS preseed companies" → search_portfolio(business_model="b2b saas", stage="pre-seed")
    "which companies are in fintech" → search_portfolio(sector="fintech")
    "tell me all portfolio companies" → search_portfolio(list_all=true)
 
 2. **Document content questions** (pitch details, meeting notes, financials, specific content):
-   → Use `search_documents` ONCE with a clear, specific query. Do NOT repeat the same search with slight variations.
+   → Use `search_documents` with a clear, specific query.
    Examples: "what is Chari's revenue model" → search_documents(query="revenue model", company_name="Chari")
 
 3. **Specific company deep-dives** (detailed info about one company):
-   → Use `get_company_details` ONCE per company. Only call `search_documents` afterwards if the company card lacks the specific info the user asked about.
+   → Use `get_company_details` per company. Only call `search_documents` afterwards if the company card lacks the specific info the user asked about.
 
 4. **Relationship questions** (investors, founders, competitors, connections):
-   → Use `search_knowledge_graph` ONCE per entity.
+   → Use `search_knowledge_graph` per entity.
 
 5. **Comparison questions** (compare 2-3 companies):
-   → Call `get_company_details` for each company IN PARALLEL (all in one tool-use turn). Then answer from the results. Only use `search_documents` if the company cards don't contain enough detail.
+   → Call `get_company_details` for each company IN PARALLEL (all in one tool-use turn). Then answer from the results.
 
-## Critical Rules
+## CONSISTENCY RULES (CRITICAL)
 
-- **NEVER call the same tool twice with similar inputs.** If a search returns no results, try a DIFFERENT tool, not the same one again.
+- **Be EXHAUSTIVE**: When the user asks "list ALL companies matching X", you MUST present ALL results from the tool. Do NOT cherry-pick, summarize, or omit any results. If search_portfolio returns 8 companies, list ALL 8.
+- **Answer ONLY from tool results**: NEVER add companies, data, or facts that are not in the tool output. If a company was NOT in the search results, do NOT mention it. Do NOT hallucinate or recall companies from previous conversations.
+- **Be DETERMINISTIC**: Given the same question, your answer must contain the same companies. Only report what the tools return. If a company appeared in a PREVIOUS conversation turn but NOT in the current search results, do NOT include it.
+- **Acknowledge limitations**: If a filter (like "Sanabil fund" or "2+ founders") cannot be verified from the data returned, say so explicitly. Do NOT guess.
+- **When data is incomplete**: Say "Based on available data, I found X companies matching the criteria. Note: [specific field] data may be incomplete for some companies."
+
+## Other Rules
+
 - **Prefer fewer, broader searches** over many narrow ones. One good search > three redundant ones.
 - When search_portfolio returns results, answer directly from those results. Do NOT then call get_company_details for every company — only do that if the user asked for deep details.
 - ALWAYS search before claiming data is unavailable.
 - Be precise with numbers — if search_portfolio returns 3 companies, say "3 companies", not "a few".
 - Keep responses well-structured with clear formatting (use headers, tables, bullet points).
 - When listing companies, include key details (sector, stage, country, business model) for each.
-- Cite information sources clearly in your response.
 """
 
 MAX_AGENT_ITERATIONS = 4

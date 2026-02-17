@@ -27,18 +27,49 @@ export function normalizeCompanyNameForMatch(name: string): string {
 }
 
 /**
- * Extract a fuzzy "core" company name by stripping ALL corporate suffixes,
- * so "Chhaya Technologies PTE. LTD." and "Chhaya" map to the same key.
+ * Extract a fuzzy "core" company name by handling document-title patterns
+ * and stripping ALL corporate suffixes.
+ *
+ * Examples:
+ *   "Chhaya Technologies PTE. LTD."          → "chhaya"
+ *   "[Chari] GPT Demo Day"                   → "chari"
+ *   "Template for Chari Side Letter to Chari SPA" → "chari"
+ *   "V1 . Chari"                             → "chari"
  */
 export function extractCoreCompanyName(name: string): string {
   if (!name || typeof name !== "string") return "";
-  let s = name.toLowerCase().trim();
-  // Remove corporate suffixes (can appear anywhere, not just at the end)
+  let s = name.trim();
+
+  // 1) If name starts with [Something], extract bracket content as the company name
+  const bracketMatch = s.match(/^\[([^\]]+)\]/);
+  if (bracketMatch) {
+    s = bracketMatch[1].trim();
+  }
+
+  // 2) Strip "V1 .", "V2." etc. prefix
+  s = s.replace(/^v\d+\.?\s*\.?\s*/i, "").trim();
+
+  // 3) Strip "Copy of " prefix
+  s = s.replace(/^copy of\s+/i, "").trim();
+
+  // 4) Lowercase
+  s = s.toLowerCase();
+
+  // 5) Remove corporate suffixes
   s = s.replace(
     /\b(technologies|technology|tech|pte\.?|ltd\.?|limited|inc\.?|incorporated|corp\.?|corporation|plc\.?|gmbh|co\.?|company|group|holdings|solutions|services|ventures|capital|partners|llc\.?|llp\.?|lp\.?|sa|s\.a\.?|ag|bv|nv|pvt\.?|private)\b/gi,
     " "
   );
-  s = s.replace(/[.,()]+/g, " ");
+
+  // 6) Remove document-title junk words
+  s = s.replace(
+    /\b(template|draft|final|copy|summary|report|update|email|memo|letter|deck|pitch|presentation|agenda|minutes|notes|side letter|spa|sha|ssa|term sheet|nda|mou|loi|weekly|monthly|quarterly|annual|demo day|gpt)\b/gi,
+    " "
+  );
+
+  // 7) Clean up punctuation and filler words
+  s = s.replace(/[.,():\[\]{}"'`/\\|_-]+/g, " ");
+  s = s.replace(/\b(for|to|of|the|a|an|and|or|in|on|at|by|from|with)\b/g, " ");
   return s.replace(/\s+/g, " ").trim();
 }
 
