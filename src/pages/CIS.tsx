@@ -249,10 +249,10 @@ type LocalChatMessage = {
 
 const FOLDER_CATEGORIES = [
   "Sourcing",
-  "Portfolio Companies",
-  "Funds",
   "BD",
   "Mentors / Corporates",
+  "Portfolio Companies",
+  "Funds",
 ] as const;
 
 type FolderCategory = (typeof FOLDER_CATEGORIES)[number];
@@ -3763,8 +3763,8 @@ function SourcesTab({
             </div>
           </div>
           
-          {/* Existing Folders – compact category → root company → subfolders */}
-          {sourceFolders.length > 0 && (() => {
+          {/* Existing Folders – always show all 5 base categories (Sourcing, Portfolio Companies, Funds, BD, Mentors/Corporates) */}
+          {(() => {
             const getRootName = (name: string) => {
               const first = (name || "").split(" / ")[0].trim();
               return first || name || "Unnamed";
@@ -3775,10 +3775,10 @@ function SourcesTab({
             return (
               <div className="pt-2 border-t border-white/20">
                 <Label className="text-white/70 font-mono text-xs mb-2 block">
-                  Document Folders ({sourceFolders.length})
+                  Document Folders ({sourceFolders.length}) — Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
                 </Label>
 
-                {/* Category pills row — show all categories (Funds, BD, Mentors/Corporates, etc.) even when 0 */}
+                {/* Category pills row — always show all 5 base categories */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {FOLDER_CATEGORIES.map((cat) => {
                     const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
@@ -6292,9 +6292,12 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : (() => {
+        const adv = analytics?.advancedInsights;
+        return (
         <>
           {/* ========== ADVANCED DECISION ANALYTICS ========== */}
+          {adv && (
           <Card className="border-2 border-[#FFED00]/50 bg-transparent">
             <CardHeader className="border-b-2 border-white">
               <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
@@ -6306,48 +6309,48 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             <CardContent className="pt-4 text-white space-y-6">
               {/* Advanced Insights KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {analytics.advancedInsights.bestSectorByRate && (
+                {adv.bestSectorByRate && (
                   <div className="p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Best sector (rate)</p>
-                    <p className="font-mono font-bold text-[#FFED00]">{analytics.advancedInsights.bestSectorByRate.sector}</p>
-                    <p className="text-xs font-mono text-white/80">{analytics.advancedInsights.bestSectorByRate.rate}% ({analytics.advancedInsights.bestSectorByRate.total} decisions)</p>
+                    <p className="font-mono font-bold text-[#FFED00]">{adv.bestSectorByRate.sector}</p>
+                    <p className="text-xs font-mono text-white/80">{adv.bestSectorByRate.rate}% ({adv.bestSectorByRate.total} decisions)</p>
                   </div>
                 )}
-                {analytics.advancedInsights.worstSectorByRate && analytics.advancedInsights.worstSectorByRate.sector !== analytics.advancedInsights.bestSectorByRate?.sector && (
+                {adv.worstSectorByRate && adv.worstSectorByRate.sector !== adv.bestSectorByRate?.sector && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Lowest sector (rate)</p>
-                    <p className="font-mono font-bold text-white">{analytics.advancedInsights.worstSectorByRate.sector}</p>
-                    <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.worstSectorByRate.rate}% ({analytics.advancedInsights.worstSectorByRate.total})</p>
+                    <p className="font-mono font-bold text-white">{adv.worstSectorByRate.sector}</p>
+                    <p className="text-xs font-mono text-white/70">{adv.worstSectorByRate.rate}% ({adv.worstSectorByRate.total})</p>
                   </div>
                 )}
-                {analytics.advancedInsights.topSectorByVolume && (
+                {adv.topSectorByVolume && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Top sector (volume)</p>
-                    <p className="font-mono font-bold text-white">{analytics.advancedInsights.topSectorByVolume.sector}</p>
-                    <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.topSectorByVolume.total} decisions</p>
+                    <p className="font-mono font-bold text-white">{adv.topSectorByVolume.sector}</p>
+                    <p className="text-xs font-mono text-white/70">{adv.topSectorByVolume.total} decisions</p>
                   </div>
                 )}
                 <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Concentration (top 3)</p>
-                  <p className="font-mono font-bold text-white">{analytics.advancedInsights.concentrationTop3Pct}%</p>
-                  <p className="text-xs font-mono text-white/70 truncate" title={analytics.advancedInsights.concentrationTop3Sectors.join(", ")}>
-                    {analytics.advancedInsights.concentrationTop3Sectors.join(", ") || "—"}
+                  <p className="font-mono font-bold text-white">{adv.concentrationTop3Pct ?? 0}%</p>
+                  <p className="text-xs font-mono text-white/70 truncate" title={(adv.concentrationTop3Sectors ?? []).join(", ")}>
+                    {(adv.concentrationTop3Sectors ?? []).join(", ") || "—"}
                   </p>
                 </div>
-                {analytics.advancedInsights.momDecisionsPct != null && (
+                {adv.momDecisionsPct != null && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM volume change</p>
-                    <p className={`font-mono font-bold ${analytics.advancedInsights.momDecisionsPct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
-                      {analytics.advancedInsights.momDecisionsPct >= 0 ? "+" : ""}{analytics.advancedInsights.momDecisionsPct}%
+                    <p className={`font-mono font-bold ${adv.momDecisionsPct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                      {adv.momDecisionsPct >= 0 ? "+" : ""}{adv.momDecisionsPct}%
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
                   </div>
                 )}
-                {analytics.advancedInsights.momPositiveRatePct != null && (
+                {adv.momPositiveRatePct != null && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM positive rate</p>
-                    <p className={`font-mono font-bold ${analytics.advancedInsights.momPositiveRatePct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
-                      {analytics.advancedInsights.momPositiveRatePct >= 0 ? "+" : ""}{analytics.advancedInsights.momPositiveRatePct}pp
+                    <p className={`font-mono font-bold ${adv.momPositiveRatePct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                      {adv.momPositiveRatePct >= 0 ? "+" : ""}{adv.momPositiveRatePct}pp
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
                   </div>
@@ -6358,39 +6361,40 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg border border-white/20 bg-white/5">
                   <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — High confidence (81–100)</p>
-                  <p className="font-mono font-bold text-white text-lg">{analytics.advancedInsights.calibrationHighConfidence.positiveRate}% positive rate</p>
-                  <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.calibrationHighConfidence.total} decisions in this band</p>
+                  <p className="font-mono font-bold text-white text-lg">{(adv.calibrationHighConfidence?.positiveRate ?? 0)}% positive rate</p>
+                  <p className="text-xs font-mono text-white/70">{(adv.calibrationHighConfidence?.total ?? 0)} decisions in this band</p>
                   <p className="text-[10px] font-mono text-white/50 mt-1">When you were very confident, how often were you right?</p>
                 </div>
                 <div className="p-4 rounded-lg border border-white/20 bg-white/5">
                   <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — Low confidence (0–40)</p>
-                  <p className="font-mono font-bold text-white text-lg">{analytics.advancedInsights.calibrationLowConfidence.positiveRate}% positive rate</p>
-                  <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.calibrationLowConfidence.total} decisions in this band</p>
+                  <p className="font-mono font-bold text-white text-lg">{(adv.calibrationLowConfidence?.positiveRate ?? 0)}% positive rate</p>
+                  <p className="text-xs font-mono text-white/70">{(adv.calibrationLowConfidence?.total ?? 0)} decisions in this band</p>
                   <p className="text-[10px] font-mono text-white/50 mt-1">When you were uncertain, how often did it still go positive?</p>
                 </div>
               </div>
 
               {/* Confidence by outcome */}
               <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-white/20 bg-white/5">
-                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-[#FFED00]">{analytics.advancedInsights.confidenceWhenPositive}%</strong></span>
-                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when negative:</span> <strong className="text-white">{analytics.advancedInsights.confidenceWhenNegative}%</strong></span>
-                <span className="font-mono text-sm"><span className="text-white/60">Pending:</span> <strong className="text-white">{analytics.advancedInsights.pendingPct}%</strong> of decisions</span>
+                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-[#FFED00]">{adv.confidenceWhenPositive ?? 0}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when negative:</span> <strong className="text-white">{adv.confidenceWhenNegative ?? 0}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-white/60">Pending:</span> <strong className="text-white">{adv.pendingPct ?? 0}%</strong> of decisions</span>
               </div>
 
               {/* Suggested focus */}
-              {analytics.advancedInsights.suggestedFocus && (
+              {adv.suggestedFocus && (
                 <div className="p-3 rounded-lg border border-[#FFED00]/40 bg-[#FFED00]/10">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mb-1">Suggested focus</p>
-                  <p className="font-mono font-bold text-[#FFED00]">{analytics.advancedInsights.suggestedFocus}</p>
+                  <p className="font-mono font-bold text-[#FFED00]">{adv.suggestedFocus}</p>
                 </div>
               )}
 
               {/* Peak month */}
-              {analytics.advancedInsights.peakMonth && (
-                <p className="text-xs font-mono text-white/50">Peak month: <strong className="text-white">{analytics.advancedInsights.peakMonth.date}</strong> ({analytics.advancedInsights.peakMonth.decisions} decisions)</p>
+              {adv.peakMonth && (
+                <p className="text-xs font-mono text-white/50">Peak month: <strong className="text-white">{adv.peakMonth.date}</strong> ({adv.peakMonth.decisions} decisions)</p>
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Sector × Stage heatmap */}
           {analytics.sectorStageMatrix.length > 0 && (() => {
@@ -7104,7 +7108,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </Card>
           )}
         </>
-      )}
+        );})()}
     </div>
   );
 }
