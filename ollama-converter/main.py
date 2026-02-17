@@ -7550,8 +7550,10 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
         print(f"[AGENT] Resolved: {resolved_question}")
 
         # Build messages with chat history context
+        # When scope is active, use less history (reduces noise from unrelated prior topics)
+        history_limit = 4 if folder_ids else 10
         messages: List[dict] = []
-        for msg in (request.previous_messages or [])[-10:]:
+        for msg in (request.previous_messages or [])[-history_limit:]:
             messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": resolved_question})
 
@@ -7560,9 +7562,12 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
         if request.web_search_enabled:
             tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
-        # Choose model
+        # Choose model — when scope is narrow, use fewer tokens for faster response
         is_comp = is_comprehensive_question(question)
-        max_tokens = 8000 if is_comp else ASK_MAX_TOKENS
+        if folder_ids:
+            max_tokens = min(ASK_MAX_TOKENS, 2000)  # scoped answers should be concise
+        else:
+            max_tokens = 8000 if is_comp else ASK_MAX_TOKENS
 
         async def generate():
             try:
@@ -7579,19 +7584,22 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
                 system_prompt = AGENT_SYSTEM_PROMPT
+                max_iterations = MAX_AGENT_ITERATIONS
                 if folder_ids:
+                    max_iterations = 2  # scope is narrow → 1 tool call + answer is enough
                     system_prompt += (
-                        "\n\n## KNOWLEDGE SCOPE IS ACTIVE\n"
-                        "The user narrowed the search to specific folders. All tools already filter at the database level — "
-                        "they only return data from those folders. You will NEVER see out-of-scope data.\n\n"
-                        "RULES:\n"
-                        "- If a tool returns no results for a company/topic, say: "
-                        "\"[Name] is not in your current knowledge scope. Please add that folder to Knowledge Scope or clear the scope.\"\n"
-                        "- Do NOT speculate, suggest, recommend, or use your own knowledge about companies not found by the tools.\n"
-                        "- Do NOT use web search to answer about companies when scope is active.\n"
-                        "- Keep your answer SHORT: only state what the tools returned. Nothing more."
+                        "\n\n## KNOWLEDGE SCOPE IS ACTIVE — STRICT MODE\n"
+                        "The user narrowed the search to specific folders. All tools filter at the database level — "
+                        "they ONLY return data from those folders.\n\n"
+                        "YOU MUST FOLLOW THESE RULES:\n"
+                        "1. ONLY answer the user's CURRENT question. Do NOT bring up companies or topics from earlier chat messages.\n"
+                        "2. If a tool returns SCOPE_EMPTY or no results, respond with ONLY: "
+                        "\"[Name] is not in your current knowledge scope. Please add that folder to Knowledge Scope or clear the scope.\" — NOTHING ELSE.\n"
+                        "3. Do NOT speculate, suggest partnerships, recommend actions, or use your own knowledge.\n"
+                        "4. Do NOT mention companies that were NOT returned by the tools in this turn.\n"
+                        "5. Keep answers SHORT. Only state facts from tool results. No filler."
                     )
-                for iteration in range(MAX_AGENT_ITERATIONS):
+                for iteration in range(max_iterations):
                     print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
 
                     try:
