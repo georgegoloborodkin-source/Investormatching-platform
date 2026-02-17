@@ -188,7 +188,7 @@ import {
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
-import * as XLSX from "xlsx";
+import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
 
 // ============================================================================
 // TYPES
@@ -11761,14 +11761,14 @@ export default function CIS() {
         }
       } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
+        const wb = xlsxRead(buf, { type: "array" });
         const first = wb.SheetNames[0];
         if (!first) {
           toast({ title: "Invalid XLSX", description: "No sheet found.", variant: "destructive" });
           return;
         }
         const sheet = wb.Sheets[first];
-        rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, unknown>>;
+        rows = xlsxUtils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, unknown>>;
       } else {
         toast({ title: "Unsupported file", description: "Use .csv or .xlsx", variant: "destructive" });
         return;

@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Force resolution of xlsx to ESM entry (fixes Vercel/Rollup "failed to resolve import")
+      xlsx: path.resolve(__dirname, "node_modules/xlsx/xlsx.mjs"),
     },
   },
   optimizeDeps: {
