@@ -2053,15 +2053,46 @@ function SourcesTab({
       }
       console.log(`[DriveSync] Recursive discovery: ${allDescendantFolders.length} folders from ${foldersToSync.length} root(s)`);
 
-      // Resolve category for a path: which root folder does this path belong to?
+      // Resolve category for a path using:
+      // 1. Root folder's explicit category (if multiple roots with different categories)
+      // 2. Smart keyword matching on folder name segments
+      // 3. Default to Portfolio Companies
+      const classifyFolderName = (name: string): string | null => {
+        const lower = name.toLowerCase().trim();
+        // BD / Business Development
+        if (/\b(bd|business\s*dev|business\s*development|partnerships?|biz\s*dev)\b/.test(lower)) return "BD";
+        // Mentors / Corporates
+        if (/\b(mentor|mentors?|corporate|corporates?|organizations?|advisors?|advisory)\b/.test(lower)) return "Mentors / Corporates";
+        // Sourcing / Deals
+        if (/\b(sourcing|deal\s*flow|pipeline|inbound|deal|deals|prospects?|market\s*research|research)\b/.test(lower)) return "Sourcing";
+        // Funds / Investors / LPs
+        if (/\b(fund|funds?|investors?|lps?|limited\s*partners?|co-invest|co.?invest|syndicate)\b/.test(lower)) return "Funds";
+        // Portfolio Companies
+        if (/\b(portfolio|companies|startups?|ventures?|investments?|due\s*diligence|dd|diligence)\b/.test(lower)) return "Portfolio Companies";
+        return null;
+      };
+
       const getCategoryForPath = (path: string): string => {
+        // First: check if any root folder has an explicit category
         for (const root of foldersToSync) {
           const rootName = root.name?.trim() || "";
           if (!rootName) continue;
           if (path === rootName || path.startsWith(rootName + " / ")) {
-            return (root as { id: string; name: string; category?: string }).category ?? "Portfolio Companies";
+            const rootCategory = (root as { id: string; name: string; category?: string }).category;
+            if (rootCategory && rootCategory !== "Portfolio Companies") {
+              return rootCategory;
+            }
           }
         }
+
+        // Second: smart classify based on folder path segments
+        const segments = path.split(" / ");
+        for (const segment of segments) {
+          const classified = classifyFolderName(segment);
+          if (classified) return classified;
+        }
+
+        // Default
         return "Portfolio Companies";
       };
 

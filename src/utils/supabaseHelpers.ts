@@ -255,39 +255,47 @@ export async function getSourceFoldersByEvent(eventId: string) {
  * Default folders: Portfolio Companies, Investors, Funds, Deals, Market Research, Due Diligence
  */
 export async function ensureDefaultFoldersForEvent(eventId: string): Promise<void> {
-  const defaultFolders: { name: string; category: string }[] = [
-    { name: 'Portfolio Companies', category: 'Portfolio Companies' },
-    { name: 'Investors', category: 'Funds' },
-    { name: 'Funds', category: 'Funds' },
-    { name: 'Deals', category: 'Sourcing' },
-    { name: 'Market Research', category: 'Sourcing' },
-    { name: 'Due Diligence', category: 'Portfolio Companies' },
-    { name: 'BD', category: 'BD' },
-    { name: 'Mentors / Corporates', category: 'Mentors / Corporates' },
-  ];
+  // Use the DB-side SECURITY DEFINER function which bypasses RLS.
+  // This creates all 8 default folders (including BD, Mentors/Corporates)
+  // with proper categories if they don't exist yet.
+  const { error } = await supabase.rpc("ensure_default_folders_for_event", {
+    p_event_id: eventId,
+  });
+  if (error) {
+    console.warn("[ensureDefaultFolders] RPC failed, falling back to direct insert:", error.message);
+    // Fallback: direct insert (works if user has proper RLS permissions)
+    const defaultFolders: { name: string; category: string }[] = [
+      { name: 'Portfolio Companies', category: 'Portfolio Companies' },
+      { name: 'Investors', category: 'Funds' },
+      { name: 'Funds', category: 'Funds' },
+      { name: 'Deals', category: 'Sourcing' },
+      { name: 'Market Research', category: 'Sourcing' },
+      { name: 'Due Diligence', category: 'Portfolio Companies' },
+      { name: 'BD', category: 'BD' },
+      { name: 'Mentors / Corporates', category: 'Mentors / Corporates' },
+    ];
 
-  // Get existing folders for this event
-  const { data: existingFolders } = await supabase
-    .from("source_folders")
-    .select("name")
-    .eq("event_id", eventId);
-
-  const existingNames = new Set((existingFolders || []).map((f: any) => f.name.toLowerCase()));
-
-  // Create missing folders
-  const foldersToCreate = defaultFolders.filter(d => !existingNames.has(d.name.toLowerCase()));
-  
-  if (foldersToCreate.length > 0) {
-    await supabase
+    const { data: existingFolders } = await supabase
       .from("source_folders")
-      .insert(
-        foldersToCreate.map(d => ({
-          event_id: eventId,
-          name: d.name,
-          created_by: null, // System-created
-          category: d.category,
-        }))
-      );
+      .select("name")
+      .eq("event_id", eventId);
+
+    const existingNames = new Set((existingFolders || []).map((f: any) => f.name.toLowerCase()));
+    const foldersToCreate = defaultFolders.filter(d => !existingNames.has(d.name.toLowerCase()));
+
+    if (foldersToCreate.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase
+        .from("source_folders")
+        .insert(
+          foldersToCreate.map(d => ({
+            event_id: eventId,
+            name: d.name,
+            created_by: user?.id || null,
+            category: d.category,
+          }))
+        );
+    }
   }
 }
 
