@@ -137,7 +137,10 @@ import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import { TeamMembersList } from "@/components/TeamMembersList";
 import { SyncStatus } from "@/components/SyncStatus";
 import { Link } from "react-router-dom";
-import { Shield } from "lucide-react";
+import { Shield, CalendarIcon } from "lucide-react";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 import {
   ensureActiveEventForOrg,
   ensureOrganizationForUser,
@@ -4740,9 +4743,11 @@ function DashboardTab({
   const [addTaskStartDate, setAddTaskStartDate] = useState("");
   const [addTaskDeadline, setAddTaskDeadline] = useState("");
   const [addTaskAssignee, setAddTaskAssignee] = useState<string>("");
+  const [addTaskPriority, setAddTaskPriority] = useState<"low" | "medium" | "high">("medium");
   const [addTaskSaving, setAddTaskSaving] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "gantt">("list");
@@ -4802,6 +4807,7 @@ function DashboardTab({
       setAddTaskStartDate("");
       setAddTaskDeadline("");
       setAddTaskAssignee("");
+      setAddTaskPriority("medium");
       await onRefetchTasks();
     } catch (e: any) {
       const msg = e?.message || "Unknown error";
@@ -5330,10 +5336,10 @@ function DashboardTab({
               ) : (
                 filteredTasks.map((task) => {
                   const statusBadgeClass =
-                    task.status === "done" ? "border-green-500 text-green-400" :
-                    task.status === "in_progress" ? "border-[#FFED00] text-[#FFED00]" :
-                    task.status === "cancelled" ? "border-red-500 text-red-400" :
-                    "border-white/50 text-white/60";
+                    task.status === "done" ? "border-green-500/50 text-green-400 bg-green-500/10" :
+                    task.status === "in_progress" ? "border-[#FFED00]/50 text-[#FFED00] bg-[#FFED00]/10" :
+                    task.status === "cancelled" ? "border-red-500/50 text-red-400 bg-red-500/10" :
+                    "border-white/30 text-white/60 bg-white/5";
                   const statusLabel =
                     task.status === "not_started" ? "Not started" :
                     task.status === "in_progress" ? "In progress" :
@@ -5341,90 +5347,39 @@ function DashboardTab({
                   const isTerminal = task.status === "done" || task.status === "cancelled";
                   const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
                   const isOverdue = deadlineMs && deadlineMs < now && !isTerminal;
+                  const priorityDot = (task as any).priority === "high" ? "bg-red-400" : (task as any).priority === "low" ? "bg-blue-400" : "bg-yellow-400";
                   return (
                     <div
                       key={task.id}
-                      className={`flex flex-wrap items-center gap-3 p-3 border-2 rounded-lg bg-white/5 hover:border-white/40 transition-all ${
-                        isOverdue ? "border-orange-500/50" : task.status === "cancelled" ? "border-red-500/20 opacity-70" : "border-white/20"
+                      onClick={() => setSelectedTask(task)}
+                      className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all group ${
+                        isOverdue ? "border-orange-500/40 bg-orange-500/5 hover:border-orange-500/60" :
+                        task.status === "cancelled" ? "border-white/10 bg-white/[0.02] opacity-60 hover:opacity-80" :
+                        task.status === "done" ? "border-green-500/20 bg-green-500/[0.03] hover:border-green-500/40" :
+                        "border-white/15 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.06]"
                       }`}
                     >
+                      {/* Priority dot */}
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${priorityDot}`} title="Priority" />
+                      {/* Main info */}
                       <div className="flex-1 min-w-0">
-                        <div className={`font-mono font-bold ${task.status === "cancelled" ? "text-white/40 line-through" : "text-white"}`}>{task.title}</div>
-                        {task.description && <div className="text-sm text-white/70 font-mono mt-0.5">{task.description}</div>}
-                        <div className="flex flex-wrap gap-2 mt-1.5">
-                          {isMD && <Badge variant="outline" className="text-xs border-white/50 text-white/80">{displayName(task.assignee_user_id)}</Badge>}
-                          <Badge variant="outline" className={statusBadgeClass}>{statusLabel}</Badge>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-mono font-bold text-sm truncate ${task.status === "cancelled" ? "text-white/40 line-through" : "text-white"}`}>{task.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${statusBadgeClass}`}>{statusLabel}</Badge>
+                          {isMD && <span className="text-[10px] text-white/50 font-mono">{displayName(task.assignee_user_id)}</span>}
                           {task.deadline && (
-                            <span className={`text-xs font-mono flex items-center gap-1 ${isOverdue ? "text-orange-400 font-bold" : "text-white/60"}`}>
-                              <Clock className="h-3 w-3" />
-                              {isOverdue && <AlertTriangle className="h-3 w-3" />}
-                              {new Date(task.deadline).toLocaleDateString(undefined, { dateStyle: "short" })}
-                            </span>
-                          )}
-                          {task.start_date && (
-                            <span className="text-xs text-white/40 font-mono">
-                              Start: {new Date(task.start_date).toLocaleDateString(undefined, { dateStyle: "short" })}
-                            </span>
-                          )}
-                          {task.status_note && (
-                            <span className="text-xs text-white/50 font-mono italic truncate max-w-[200px]" title={task.status_note}>
-                              "{task.status_note}"
+                            <span className={`text-[10px] font-mono flex items-center gap-1 ${isOverdue ? "text-orange-400 font-bold" : "text-white/40"}`}>
+                              {isOverdue && <AlertTriangle className="h-2.5 w-2.5" />}
+                              <CalendarIcon className="h-2.5 w-2.5" />
+                              {format(new Date(task.deadline), "MMM d")}
                             </span>
                           )}
                         </div>
                       </div>
-                      {/* Status action buttons — shown for everyone, with role-appropriate controls */}
-                      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                        {!isTerminal && (
-                          <>
-                            <Input
-                              placeholder="Note (optional)"
-                              className="w-28 border border-white/30 bg-transparent text-white text-xs font-mono h-8"
-                              value={statusNote[task.id] ?? ""}
-                              onChange={(e) => setStatusNote((prev) => ({ ...prev, [task.id]: e.target.value }))}
-                            />
-                            {task.status === "not_started" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-[#FFED00] text-[#FFED00] hover:bg-[#FFED00]/10 text-xs h-8"
-                                disabled={statusUpdatingId === task.id}
-                                onClick={() => handleUpdateStatus(task.id, "in_progress", statusNote[task.id] || undefined)}
-                              >
-                                {statusUpdatingId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start"}
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              className="bg-[#22c55e] text-white hover:bg-[#22c55e]/90 text-xs h-8"
-                              disabled={statusUpdatingId === task.id}
-                              onClick={() => handleUpdateStatus(task.id, "done", statusNote[task.id] || undefined)}
-                            >
-                              {statusUpdatingId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle className="h-3.5 w-3.5 mr-1" />Done</>}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs h-8"
-                              disabled={statusUpdatingId === task.id}
-                              onClick={() => handleUpdateStatus(task.id, "cancelled", statusNote[task.id] || undefined)}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        )}
-                        {isMD && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-white/30 hover:text-red-400 hover:bg-red-500/10 h-8 w-8 p-0"
-                            onClick={() => setTaskToDelete(task)}
-                            title="Delete task"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
+                      {/* Quick action chevron */}
+                      <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
                     </div>
                   );
                 })
@@ -5436,76 +5391,136 @@ function DashboardTab({
 
       {/* Add task dialog (MD only) */}
       <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-        <DialogContent className="border-2 border-white bg-[#050505] text-white max-w-md">
+        <DialogContent className="border-2 border-white bg-[#050505] text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-mono font-black uppercase tracking-tight">Add task</DialogTitle>
-            <DialogDescription className="text-white/70 font-mono">Assign a task with deadline and description.</DialogDescription>
+            <DialogTitle className="font-mono font-black uppercase tracking-tight flex items-center gap-2">
+              <Plus className="h-5 w-5 text-[#FFED00]" />
+              New Task
+            </DialogTitle>
+            <DialogDescription className="text-white/60 font-mono text-xs">Create and assign a task to your team.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-1">
             <div>
-              <Label className="text-white font-mono font-bold">Title</Label>
+              <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Title *</Label>
               <Input
-                className="border-2 border-white bg-transparent text-white mt-1"
+                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
                 value={addTaskTitle}
                 onChange={(e) => setAddTaskTitle(e.target.value)}
-                placeholder="Task title"
+                placeholder="e.g. Review Q4 financials for TechCorp"
               />
-            </div>
-            <div>
-              <Label className="text-white font-mono font-bold">Assignee</Label>
-              <Select value={addTaskAssignee || "unassigned"} onValueChange={(v) => setAddTaskAssignee(v === "unassigned" ? "" : v)}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="unassigned" className="text-white">Unassigned</SelectItem>
-                  {teamMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.id} className="text-white">
-                      {m.full_name || m.email || m.id.slice(0, 8)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-white font-mono font-bold">Start Date</Label>
-                <Input
-                  type="datetime-local"
-                  className="border-2 border-white bg-transparent text-white mt-1 font-mono"
-                  value={addTaskStartDate}
-                  onChange={(e) => setAddTaskStartDate(e.target.value)}
-                />
+                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Assignee</Label>
+                <Select value={addTaskAssignee || "unassigned"} onValueChange={(v) => setAddTaskAssignee(v === "unassigned" ? "" : v)}>
+                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                    <SelectValue placeholder="Select assignee" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0a0a0a] border border-white/30">
+                    <SelectItem value="unassigned" className="text-white/70 font-mono">Unassigned</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id} className="text-white font-mono">
+                        {m.full_name || m.email || m.id.slice(0, 8)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Deadline</Label>
-                <Input
-                  type="datetime-local"
-                  className="border-2 border-white bg-transparent text-white mt-1 font-mono"
-                  value={addTaskDeadline}
-                  onChange={(e) => setAddTaskDeadline(e.target.value)}
-                />
+                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Priority</Label>
+                <Select value={addTaskPriority} onValueChange={(v: "low" | "medium" | "high") => setAddTaskPriority(v)}>
+                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0a0a0a] border border-white/30">
+                    <SelectItem value="low" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400" />Low</span></SelectItem>
+                    <SelectItem value="medium" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-400" />Medium</span></SelectItem>
+                    <SelectItem value="high" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400" />High</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskStartDate ? "text-white" : "text-white/40"}`}>
+                      <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
+                      {addTaskStartDate ? format(new Date(addTaskStartDate), "MMM d, yyyy") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-[#0a0a0a] border border-white/30" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={addTaskStartDate ? new Date(addTaskStartDate) : undefined}
+                      onSelect={(date) => setAddTaskStartDate(date ? date.toISOString() : "")}
+                      className="text-white"
+                      classNames={{
+                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
+                        day_today: "bg-white/10 text-white",
+                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        caption_label: "text-white font-mono font-bold text-sm",
+                        head_cell: "text-white/50 font-mono text-xs w-9",
+                        cell: "h-9 w-9 text-center text-sm p-0",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day_outside: "text-white/20",
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Deadline</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskDeadline ? "text-white" : "text-white/40"}`}>
+                      <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
+                      {addTaskDeadline ? format(new Date(addTaskDeadline), "MMM d, yyyy") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-[#0a0a0a] border border-white/30" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={addTaskDeadline ? new Date(addTaskDeadline) : undefined}
+                      onSelect={(date) => setAddTaskDeadline(date ? date.toISOString() : "")}
+                      className="text-white"
+                      classNames={{
+                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
+                        day_today: "bg-white/10 text-white",
+                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        caption_label: "text-white font-mono font-bold text-sm",
+                        head_cell: "text-white/50 font-mono text-xs w-9",
+                        cell: "h-9 w-9 text-center text-sm p-0",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day_outside: "text-white/20",
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div>
-              <Label className="text-white font-mono font-bold">Description (optional)</Label>
+              <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Description</Label>
               <Textarea
-                className="border-2 border-white bg-transparent text-white mt-1 font-mono min-h-[80px]"
+                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono min-h-[80px] placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
                 value={addTaskDescription}
                 onChange={(e) => setAddTaskDescription(e.target.value)}
-                placeholder="Description"
+                placeholder="What needs to be done? Add details, context, links..."
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <Separator className="bg-white/10" />
+            <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
                 onClick={() => setAddTaskOpen(false)}
-                className="border border-white/30 text-white/80 hover:bg-white/10 hover:border-white/50 hover:text-white font-mono font-semibold"
+                className="text-white/50 hover:text-white hover:bg-white/5 font-mono text-sm"
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateTask} disabled={addTaskSaving} className="bg-[#FFED00] text-black font-bold font-mono">
-                {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+              <Button onClick={handleCreateTask} disabled={addTaskSaving || !addTaskTitle.trim()} className="bg-[#FFED00] text-black font-bold font-mono hover:bg-[#FFED00]/80 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.3)] disabled:opacity-40">
+                {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                Create Task
               </Button>
             </div>
           </div>
@@ -5533,6 +5548,169 @@ function DashboardTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Task detail dialog — opens when clicking a task row */}
+      <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+        <DialogContent className="border border-white/20 bg-[#050505] text-white max-w-lg">
+          {selectedTask && (() => {
+            const t = selectedTask;
+            const isTerminal = t.status === "done" || t.status === "cancelled";
+            const deadlineMs = t.deadline ? new Date(t.deadline).getTime() : null;
+            const isOverdue = deadlineMs && deadlineMs < now && !isTerminal;
+            const statusColor =
+              t.status === "done" ? "text-green-400" :
+              t.status === "in_progress" ? "text-[#FFED00]" :
+              t.status === "cancelled" ? "text-red-400" : "text-white/60";
+            const statusLabel =
+              t.status === "not_started" ? "Not started" :
+              t.status === "in_progress" ? "In progress" :
+              t.status === "done" ? "Done" : "Cancelled";
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-mono font-black text-lg leading-tight pr-8">
+                    <span className={t.status === "cancelled" ? "line-through text-white/40" : ""}>{t.title}</span>
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">Task details</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 -mt-1">
+                  {/* Status + Priority badges */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className={`font-mono text-xs ${
+                      t.status === "done" ? "bg-green-500/15 text-green-400 border-green-500/30" :
+                      t.status === "in_progress" ? "bg-[#FFED00]/15 text-[#FFED00] border-[#FFED00]/30" :
+                      t.status === "cancelled" ? "bg-red-500/15 text-red-400 border-red-500/30" :
+                      "bg-white/5 text-white/60 border-white/20"
+                    }`}>
+                      {statusLabel}
+                    </Badge>
+                    {isOverdue && (
+                      <Badge className="bg-orange-500/15 text-orange-400 border-orange-500/30 font-mono text-xs">
+                        <AlertTriangle className="h-3 w-3 mr-1" />Overdue
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Info grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Assignee</div>
+                      <div className="text-sm font-mono text-white flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-white/40" />
+                        {displayName(t.assignee_user_id)}
+                      </div>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Created by</div>
+                      <div className="text-sm font-mono text-white flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5 text-white/40" />
+                        {displayName(t.created_by)}
+                      </div>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Start Date</div>
+                      <div className="text-sm font-mono text-white flex items-center gap-1.5">
+                        <CalendarIcon className="h-3.5 w-3.5 text-white/40" />
+                        {t.start_date ? format(new Date(t.start_date), "MMM d, yyyy") : "Not set"}
+                      </div>
+                    </div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Deadline</div>
+                      <div className={`text-sm font-mono flex items-center gap-1.5 ${isOverdue ? "text-orange-400" : "text-white"}`}>
+                        <Clock className="h-3.5 w-3.5 text-white/40" />
+                        {t.deadline ? format(new Date(t.deadline), "MMM d, yyyy") : "Not set"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {t.description && (
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Description</div>
+                      <div className="text-sm font-mono text-white/80 p-3 rounded-lg bg-white/[0.03] border border-white/10 whitespace-pre-wrap">{t.description}</div>
+                    </div>
+                  )}
+
+                  {/* Status note */}
+                  {t.status_note && (
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Status Note</div>
+                      <div className="text-sm font-mono text-white/70 italic p-3 rounded-lg bg-white/[0.03] border border-white/10">"{t.status_note}"</div>
+                    </div>
+                  )}
+
+                  {/* Timestamps */}
+                  <div className="flex items-center gap-4 text-[10px] text-white/30 font-mono">
+                    <span>Created: {format(new Date(t.created_at), "MMM d, yyyy 'at' h:mm a")}</span>
+                    <span>Updated: {format(new Date(t.updated_at), "MMM d, yyyy 'at' h:mm a")}</span>
+                  </div>
+
+                  <Separator className="bg-white/10" />
+
+                  {/* Actions */}
+                  {!isTerminal && (
+                    <div className="space-y-3">
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Update Status</div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Add a note (optional)"
+                          className="flex-1 border border-white/20 bg-white/5 text-white text-xs font-mono h-9 placeholder:text-white/30"
+                          value={statusNote[t.id] ?? ""}
+                          onChange={(e) => setStatusNote((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {t.status === "not_started" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs flex-1"
+                            disabled={statusUpdatingId === t.id}
+                            onClick={() => { handleUpdateStatus(t.id, "in_progress", statusNote[t.id] || undefined); setSelectedTask(null); }}
+                          >
+                            {statusUpdatingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Rocket className="h-3.5 w-3.5 mr-1.5" />Start</>}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          className="bg-green-600 text-white hover:bg-green-700 font-mono text-xs flex-1"
+                          disabled={statusUpdatingId === t.id}
+                          onClick={() => { handleUpdateStatus(t.id, "done", statusNote[t.id] || undefined); setSelectedTask(null); }}
+                        >
+                          {statusUpdatingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle className="h-3.5 w-3.5 mr-1.5" />Done</>}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 font-mono text-xs"
+                          disabled={statusUpdatingId === t.id}
+                          onClick={() => { handleUpdateStatus(t.id, "cancelled", statusNote[t.id] || undefined); setSelectedTask(null); }}
+                        >
+                          <X className="h-3.5 w-3.5 mr-1" />Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MD actions: delete */}
+                  {isMD && (
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-400/60 hover:text-red-400 hover:bg-red-500/10 font-mono text-xs"
+                        onClick={() => { setTaskToDelete(t); setSelectedTask(null); }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete task
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Latest decision / document / source — keep for context */}
       <div className="grid gap-4 md:grid-cols-3">
