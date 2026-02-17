@@ -2044,14 +2044,27 @@ function SourcesTab({
       }
       console.log(`[DriveSync] Recursive discovery: ${allDescendantFolders.length} folders from ${foldersToSync.length} root(s)`);
 
+      // Resolve category for a path: which root folder does this path belong to?
+      const getCategoryForPath = (path: string): string => {
+        for (const root of foldersToSync) {
+          const rootName = root.name?.trim() || "";
+          if (!rootName) continue;
+          if (path === rootName || path.startsWith(rootName + " / ")) {
+            return (root as { id: string; name: string; category?: string }).category ?? "Portfolio Companies";
+          }
+        }
+        return "Portfolio Companies";
+      };
+
       // 2. Keep only folders that contain at least one file (so we sync and extract from them)
-      const subFolders: Array<{ id: string; name: string }> = [];
+      const subFolders: Array<{ id: string; name: string; category: string }> = [];
       for (let i = 0; i < allDescendantFolders.length; i++) {
         const folder = allDescendantFolders[i];
         setDriveSyncProgress({ phase: "Checking for documents...", current: i + 1, total: allDescendantFolders.length, currentItem: folder.path });
         const files = await withDriveAuthRetry(() => listDriveFiles(accessToken, folder.id));
         if (files.length > 0) {
-          subFolders.push({ id: folder.id, name: folder.path }); // use path as company name for uniqueness
+          const category = getCategoryForPath(folder.path);
+          subFolders.push({ id: folder.id, name: folder.path, category }); // use path as company name for uniqueness
         }
         if (i < allDescendantFolders.length - 1) await sleep(300); // throttle
       }
@@ -2092,13 +2105,14 @@ function SourcesTab({
           // 3. Ensure a source_folder exists for this company
           let platformFolderId: string | null = null;
           const normalizedCompanyName = companyName.trim();
+          const folderCategory = (companyFolder as { id: string; name: string; category?: string }).category ?? "Portfolio Companies";
           const existingFolder = sourceFolders.find(
             (f) => f.name.toLowerCase() === normalizedCompanyName.toLowerCase()
           );
           if (existingFolder) {
             platformFolderId = existingFolder.id;
           } else {
-            const created = await onCreateFolder(normalizedCompanyName, "Portfolio Companies");
+            const created = await onCreateFolder(normalizedCompanyName, folderCategory);
             if (created) {
               platformFolderId = created.id;
               newlyCreatedFolderIds.push({ id: created.id, name: normalizedCompanyName });
@@ -7266,6 +7280,34 @@ export default function CIS() {
       return [...nonFolderScopes, ...folderScopes];
     });
   }, [sourceFolders]);
+
+  // Backfill source_folder categories from Drive sync config so Funds/BD/Mentors show in Document Folders and Knowledge Scope
+  useEffect(() => {
+    if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
+    const driveFolders = initialDriveSyncConfig.folders;
+    const updates: Array<{ id: string; category: string }> = [];
+    for (const df of driveFolders) {
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const sf = sourceFolders.find(
+        (f) => (f.name || "").trim().toLowerCase() === (df.name || "").trim().toLowerCase()
+      );
+      if (sf && (sf.category || "Portfolio Companies") !== wantCategory) {
+        updates.push({ id: sf.id, category: wantCategory });
+      }
+    }
+    if (updates.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const { id, category } of updates) {
+        if (cancelled) return;
+        await updateFolderCategory(id, category);
+      }
+      if (cancelled) return;
+      const { data } = await getSourceFoldersByEvent(activeEventId);
+      setSourceFolders((data || []) as SourceFolder[]);
+    })();
+    return () => { cancelled = true; };
+  }, [activeEventId, initialDriveSyncConfig, sourceFolders]);
 
   // Auto-expand folder list if any folder is selected
   useEffect(() => {
