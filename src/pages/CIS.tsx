@@ -6476,6 +6476,8 @@ export default function CIS() {
   useEffect(() => {
     const loadChatHistory = async () => {
       if (!profile) return;
+      // Never replace messages while the AI is still streaming a response
+      if (isClaudeLoading) return;
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
       
@@ -6586,7 +6588,7 @@ export default function CIS() {
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, readLocalChatCache, writeLocalChatCache]);
+  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, isClaudeLoading, readLocalChatCache, writeLocalChatCache]);
 
   const getGoogleAccessToken = useCallback(async (forceRefresh = false) => {
     if (forceRefresh) {
@@ -6795,7 +6797,7 @@ export default function CIS() {
         getCompanyConnectionsByEvent(event.id),
         getPendingRelationshipReviews(event.id),
         getAllEntityCards(event.id),
-        getTasksByEvent(event.id),
+        getTasksByEvent(event.id).catch(() => ({ data: [] as Task[], error: null })),
       ]);
       if (cancelled) return;
       const mapped = (decisionsRes.data || []).map(mapDecisionRow);
@@ -8031,59 +8033,52 @@ export default function CIS() {
     (threadId: string, sourceDocIds?: string[] | null) => {
       const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       let currentText = "";
-      let messageIndex = -1;
-      
+
       // Create placeholder message with thinking indicator (dots)
-      setMessages((prev) => {
-        const newMessages = [...prev, { id, author: "assistant" as const, text: "...", threadId, isStreaming: true }];
-        messageIndex = newMessages.length - 1;
-        return newMessages;
-      });
+      setMessages((prev) => [
+        ...prev,
+        { id, author: "assistant" as const, text: "...", threadId, isStreaming: true },
+      ]);
 
       // Auto-scroll when thinking
       setTimeout(() => {
         scrollChatToBottom();
       }, 100);
 
+      // Helper: find the streaming message by its stable id (never stale)
+      const patchById = (prev: Message[], patch: Partial<Message>): Message[] => {
+        const idx = prev.findIndex((m) => m.id === id);
+        if (idx === -1) return prev; // message was removed — no-op
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], ...patch };
+        return updated;
+      };
+
       return {
         appendChunk: (chunk: string) => {
           currentText += chunk;
-          setMessages((prev) => {
-            const updated = [...prev];
-            if (messageIndex >= 0 && messageIndex < updated.length) {
-              updated[messageIndex] = { ...updated[messageIndex], text: currentText, isStreaming: true };
-            }
-            return updated;
-          });
+          setMessages((prev) => patchById(prev, { text: currentText, isStreaming: true }));
           // Auto-scroll as text streams
           setTimeout(() => {
             scrollChatToBottom();
           }, 50);
         },
         finalize: () => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            if (messageIndex >= 0 && messageIndex < updated.length) {
-              updated[messageIndex] = { ...updated[messageIndex], text: currentText, isStreaming: false };
-            }
-            return updated;
-          });
+          // Strip intermediate status lines (e.g. *Searching: ...*)  from persisted text
+          const cleanText = currentText
+            .replace(/\n?\*(?:Analyzing|Searching|Generating)[^*]*\*\n?/g, "")
+            .replace(/^\s+/, "");
+          setMessages((prev) => patchById(prev, { text: cleanText || currentText, isStreaming: false }));
           void persistChatMessage({
             threadId,
             role: "assistant",
-            content: currentText,
+            content: cleanText || currentText,
             model: "claude",
             sourceDocIds: sourceDocIds || null,
           });
         },
         setError: (error: string) => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            if (messageIndex >= 0 && messageIndex < updated.length) {
-              updated[messageIndex] = { ...updated[messageIndex], text: error, isStreaming: false };
-            }
-            return updated;
-          });
+          setMessages((prev) => patchById(prev, { text: error, isStreaming: false }));
           void persistChatMessage({
             threadId,
             role: "assistant",
@@ -11601,8 +11596,10 @@ export default function CIS() {
               tasks={tasks}
               onRefetchTasks={async () => {
                 if (activeEventId) {
-                  const { data } = await getTasksByEvent(activeEventId);
-                  setTasks((data || []) as Task[]);
+                  try {
+                    const { data } = await getTasksByEvent(activeEventId);
+                    setTasks((data || []) as Task[]);
+                  } catch { /* tasks table may not exist yet */ }
                 }
               }}
               decisions={decisions}
