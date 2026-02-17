@@ -389,6 +389,9 @@ export type VerifiableSource = {
   entity_name?: string;
 };
 
+/** Simple source doc from agent (id + title for Sources strip) */
+export type SourceDoc = { id: string; title: string };
+
 export async function askAgentStream(
   input: {
     question: string;
@@ -402,7 +405,8 @@ export async function askAgentStream(
   onError?: (error: Error) => void,
   externalSignal?: AbortSignal,
   onVerifiableSources?: (sources: VerifiableSource[]) => void,
-  onCritic?: (text: string) => void
+  onCritic?: (text: string) => void,
+  onSourceDocs?: (docs: SourceDoc[]) => void
 ): Promise<void> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
@@ -484,6 +488,8 @@ export async function askAgentStream(
                 }
               } else if (data.verifiable_sources && Array.isArray(data.verifiable_sources)) {
                 onVerifiableSources?.(data.verifiable_sources as VerifiableSource[]);
+              } else if (data.source_docs && Array.isArray(data.source_docs)) {
+                onSourceDocs?.(data.source_docs as SourceDoc[]);
               } else if (data.critic && typeof data.critic === "string") {
                 onCritic(data.critic);
               } else if (data.error) {
@@ -1244,6 +1250,8 @@ export interface SuggestedConnection {
   connection_type: string;
   reasoning: string;
   confidence: number;
+  /** Ways to make this connection (e.g. "Ask LP X for intro", "Reference deck Y") */
+  suggested_actions?: string[];
 }
 
 export async function suggestConnections(input: {
@@ -1259,8 +1267,8 @@ export async function suggestConnections(input: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        company_name: input.companyName || "",
-        question: input.question || "",
+        company_name: input.companyName ?? "",
+        question: input.question ?? "",
         sources: input.sources,
         existing_connections: input.existingConnections,
         max_suggestions: input.maxSuggestions ?? 5,

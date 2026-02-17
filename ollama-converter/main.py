@@ -6121,6 +6121,7 @@ class SuggestedConnection(BaseModel):
     connection_type: str              # BD, INV, Knowledge, Partnership, Portfolio
     reasoning: str                    # Why this connection makes sense
     confidence: float = 0.0           # 0.0 – 1.0
+    suggested_actions: List[str] = [] # Ways to make this connection (e.g. "Ask LP X for intro", "Reference deck Y")
 
 class SuggestConnectionsResponse(BaseModel):
     suggestions: List[SuggestedConnection] = []
@@ -6191,6 +6192,7 @@ For each suggested connection, return a JSON array of objects with:
 - "connection_type": one of "BD", "INV", "Knowledge", "Partnership", "Portfolio"
 - "reasoning": brief explanation of why this connection makes sense (2-3 sentences)
 - "confidence": float between 0.0 and 1.0
+- "suggested_actions": array of 1-3 concrete ways to make this connection (e.g. "Ask [LP/Partner name] for warm intro", "Reference deal memo or deck [doc name]", "Mention at [event/sector conference]", "Leverage portfolio company X for intro"). Empty array if none.
 
 Return ONLY the JSON array, no markdown or explanation.
 If you cannot suggest any meaningful connections, return an empty array: []"""
@@ -6212,6 +6214,7 @@ If you cannot suggest any meaningful connections, return an empty array: []"""
                             "connection_type": {"type": "string", "enum": ["BD", "INV", "Knowledge", "Partnership", "Portfolio"]},
                             "reasoning": {"type": "string"},
                             "confidence": {"type": "number"},
+                            "suggested_actions": {"type": "array", "items": {"type": "string"}, "description": "Ways to make this connection"},
                         },
                         "required": ["source_company", "target_company", "connection_type", "reasoning"],
                     },
@@ -6243,6 +6246,7 @@ If you cannot suggest any meaningful connections, return an empty array: []"""
                     connection_type=s.get("connection_type", "Knowledge"),
                     reasoning=s.get("reasoning", ""),
                     confidence=float(s.get("confidence", 0.5)),
+                    suggested_actions=s.get("suggested_actions") or [],
                 )
                 for s in data.get("suggestions", [])
             ]
@@ -7110,15 +7114,15 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
     return "\n\n".join(lines)
 
 
-async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
-    """Semantic search via VoyageAI embedding + match_document_chunks RPC."""
+async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> tuple[str, list[dict]]:
+    """Semantic search via VoyageAI embedding + match_document_chunks RPC. Returns (text, source_docs)."""
     sb = get_supabase()
     query_text = (tool_input.get("query") or "").strip()
     company_name = (tool_input.get("company_name") or "").strip()
     top_k = min(tool_input.get("top_k", 10), 20)
 
     if not query_text:
-        return "Error: 'query' is required for document search."
+        return "Error: 'query' is required for document search.", []
 
     # Generate embedding using the same provider as the rest of the system
     try:
@@ -7129,7 +7133,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
         else:
             embedding = await generate_embedding_ollama(query_text)
     except Exception as e:
-        return f"Error generating embedding: {str(e)}"
+        return f"Error generating embedding: {str(e)}", []
 
     # When scope is set: resolve doc IDs first, then vector-search ONLY those chunks (faster)
     chunks: list = []
@@ -7137,7 +7141,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
         scoped_doc_ids = await _resolve_scoped_doc_ids(sb, event_id, folder_ids)
         if scoped_doc_ids is not None:
             if not scoped_doc_ids:
-                return f"SCOPE_EMPTY: No documents matching '{query_text}' exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge."
+                return f"SCOPE_EMPTY: No documents matching '{query_text}' exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge.", []
             doc_id_list = list(scoped_doc_ids)
             print(f"[AGENT] Scope: {len(doc_id_list)} docs in {len(folder_ids)} folders — vector search only on these")
             try:
@@ -7159,7 +7163,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
                     }).execute()
                     chunks = result.data or []
                 else:
-                    return f"Error in semantic search: {str(e)}"
+                    return f"Error in semantic search: {str(e)}", []
     if not folder_ids:
         try:
             result = sb.rpc("match_document_chunks", {
@@ -7169,11 +7173,11 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
             }).execute()
             chunks = result.data or []
         except Exception as e:
-            return f"Error in semantic search: {str(e)}"
+            return f"Error in semantic search: {str(e)}", []
 
     if not chunks:
         scope_msg = " within the selected knowledge scope" if folder_ids else ""
-        return f"No documents found matching '{query_text}'{scope_msg}."
+        return f"No documents found matching '{query_text}'{scope_msg}.", []
 
     # Fetch document metadata for all chunks (title, file_name, folder_id)
     doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
@@ -7221,23 +7225,23 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
             print(f"[AGENT] Reranking failed (using original order): {e}")
 
     lines = [f"Found {len(chunks)} relevant document chunks:\n"]
+    source_docs: list[dict] = []
+    seen_ids: set[str] = set()
     for i, chunk in enumerate(chunks, 1):
         doc = doc_map.get(chunk.get("document_id", ""), {})
         doc_id = chunk.get("document_id", "")
         title = doc.get("title") or doc.get("file_name") or "Unknown document"
-        file_name = doc.get("file_name") or ""
         similarity = chunk.get("similarity", 0)
         rerank_score = chunk.get("rerank_score")
-        parent_idx = chunk.get("parent_index", 0)
         text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
         text = text[:1500]
         score_str = f"rerank: {rerank_score:.2f}" if rerank_score is not None else f"relevance: {similarity:.2f}"
-        # Include doc_id and chunk index so the LLM can cite verifiably
-        lines.append(
-            f"[{i}] **{title}** ({score_str}) [doc_id:{doc_id}|chunk:{parent_idx}|file:{file_name}]\n{text}"
-        )
+        lines.append(f"[{i}] **{title}** ({score_str})\n{text}")
+        if doc_id and doc_id not in seen_ids:
+            seen_ids.add(doc_id)
+            source_docs.append({"id": doc_id, "title": title})
 
-    return "\n\n".join(lines)
+    return "\n\n".join(lines), source_docs
 
 
 async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
@@ -7444,13 +7448,26 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str, folder_
     return "\n".join(lines)
 
 
-async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
-    """Dispatch tool calls to the correct handler."""
+async def _execute_agent_tool(
+    tool_name: str,
+    tool_input: dict,
+    event_id: str,
+    folder_ids: list[str] | None = None,
+    agent_sources: list | None = None,
+) -> str:
+    """Dispatch tool calls to the correct handler. Optionally appends source_docs from search_documents to agent_sources."""
     try:
         if tool_name == "search_portfolio":
             return await _agent_search_portfolio(tool_input, event_id, folder_ids)
         elif tool_name == "search_documents":
-            return await _agent_search_documents(tool_input, event_id, folder_ids)
+            text, source_docs = await _agent_search_documents(tool_input, event_id, folder_ids)
+            if agent_sources is not None and source_docs:
+                seen = {d["id"] for d in agent_sources}
+                for d in source_docs:
+                    if d.get("id") and d["id"] not in seen:
+                        seen.add(d["id"])
+                        agent_sources.append({"id": d["id"], "title": d.get("title") or "Document"})
+            return text
         elif tool_name == "get_company_details":
             return await _agent_get_company_details(tool_input, event_id, folder_ids)
         elif tool_name == "search_knowledge_graph":
@@ -7750,7 +7767,8 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 client = _get_anthropic_async_client()
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
-                all_tool_results_text = ""  # Collect tool results for Devil's Advocate
+                all_tool_results_text = ""
+                agent_sources: list[dict] = []  # Documents cited by search_documents for Sources strip
 
                 system_prompt = AGENT_SYSTEM_PROMPT
                 max_iterations = MAX_AGENT_ITERATIONS
@@ -7826,37 +7844,18 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     # If no tool calls, send the final answer
                     if not tool_calls:
                         full_text = "\n".join(text_parts)
-
-                        # Extract verifiable sources from citations
-                        verifiable_sources = extract_verifiable_sources(full_text)
-                        # Clean citations for display (replace verbose tags with [Source N])
-                        display_text = clean_citations_for_display(full_text)
-
-                        if display_text:
+                        if full_text:
                             chunk_size = 80
-                            for i in range(0, len(display_text), chunk_size):
-                                yield f"data: {json.dumps({'text': display_text[i:i+chunk_size]})}\n\n"
+                            for i in range(0, len(full_text), chunk_size):
+                                yield f"data: {json.dumps({'text': full_text[i:i+chunk_size]})}\n\n"
                                 await asyncio.sleep(0)
                         if web_search_citations:
                             sources_text = "\n\n**Web Sources:**"
                             for i, (url, title) in enumerate(web_search_citations.items(), 1):
                                 sources_text += f"\n[{i}] [{title}]({url})"
                             yield f"data: {json.dumps({'text': sources_text})}\n\n"
-
-                        # Send verifiable sources as structured data
-                        if verifiable_sources:
-                            yield f"data: {json.dumps({'verifiable_sources': verifiable_sources})}\n\n"
-
-                        # Devil's Advocate: run critic agent on substantive answers
-                        try:
-                            critic_text = await run_devils_advocate(
-                                full_text, all_tool_results_text, question, model_name
-                            )
-                            if critic_text:
-                                yield f"data: {json.dumps({'critic': critic_text})}\n\n"
-                        except Exception as e:
-                            print(f"[CRITIC] Error: {e}")
-
+                        if agent_sources:
+                            yield f"data: {json.dumps({'source_docs': agent_sources})}\n\n"
                         yield "data: [DONE]\n\n"
                         return
 
@@ -7885,7 +7884,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     tool_results = []
                     for tc in tool_calls:
                         print(f"[AGENT] Executing {tc.name} with {json.dumps(tc.input)[:200]}")
-                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id, folder_ids or None)
+                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id, folder_ids or None, agent_sources)
                         print(f"[AGENT] Result from {tc.name}: {result_text[:200]}...")
                         all_tool_results_text += f"\n--- {tc.name} ---\n{result_text}\n"
                         tool_results.append({
@@ -7916,21 +7915,9 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 except Exception as e:
                     yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
 
-                # Verifiable RAG: extract and send sources; Devil's Advocate: run critic
                 full_final_text = "".join(final_answer_buffer)
-                if full_final_text:
-                    verifiable_sources = extract_verifiable_sources(full_final_text)
-                    if verifiable_sources:
-                        yield f"data: {json.dumps({'verifiable_sources': verifiable_sources})}\n\n"
-                    try:
-                        critic_text = await run_devils_advocate(
-                            full_final_text, all_tool_results_text, question, model_name
-                        )
-                        if critic_text:
-                            yield f"data: {json.dumps({'critic': critic_text})}\n\n"
-                    except Exception as e:
-                        print(f"[CRITIC] Error: {e}")
-
+                if agent_sources:
+                    yield f"data: {json.dumps({'source_docs': agent_sources})}\n\n"
                 yield "data: [DONE]\n\n"
 
             except Exception as e:

@@ -185,7 +185,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -202,6 +202,8 @@ type Message = {
   isStreaming?: boolean;
   /** Verifiable RAG: click-to-source citations from agent */
   verifiableSources?: VerifiableSource[];
+  /** Simple source docs from agent (id + title for Sources strip) */
+  sourceDocs?: SourceDoc[];
   /** Devil's Advocate: red flags / risk critique */
   critic?: string;
 };
@@ -6270,6 +6272,159 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
         </Card>
       ) : (
         <>
+          {/* ========== ADVANCED DECISION ANALYTICS ========== */}
+          <Card className="border-2 border-[#FFED00]/50 bg-transparent">
+            <CardHeader className="border-b-2 border-white">
+              <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                <Sparkles className="h-5 w-5 text-[#FFED00]" />
+                Advanced Decision Analytics
+              </CardTitle>
+              <CardDescription className="text-white/70 font-mono">Insights, calibration, and focus recommendations</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 text-white space-y-6">
+              {/* Advanced Insights KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {analytics.advancedInsights.bestSectorByRate && (
+                  <div className="p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Best sector (rate)</p>
+                    <p className="font-mono font-bold text-[#FFED00]">{analytics.advancedInsights.bestSectorByRate.sector}</p>
+                    <p className="text-xs font-mono text-white/80">{analytics.advancedInsights.bestSectorByRate.rate}% ({analytics.advancedInsights.bestSectorByRate.total} decisions)</p>
+                  </div>
+                )}
+                {analytics.advancedInsights.worstSectorByRate && analytics.advancedInsights.worstSectorByRate.sector !== analytics.advancedInsights.bestSectorByRate?.sector && (
+                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Lowest sector (rate)</p>
+                    <p className="font-mono font-bold text-white">{analytics.advancedInsights.worstSectorByRate.sector}</p>
+                    <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.worstSectorByRate.rate}% ({analytics.advancedInsights.worstSectorByRate.total})</p>
+                  </div>
+                )}
+                {analytics.advancedInsights.topSectorByVolume && (
+                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Top sector (volume)</p>
+                    <p className="font-mono font-bold text-white">{analytics.advancedInsights.topSectorByVolume.sector}</p>
+                    <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.topSectorByVolume.total} decisions</p>
+                  </div>
+                )}
+                <div className="p-3 rounded-lg border border-white/20 bg-white/5">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Concentration (top 3)</p>
+                  <p className="font-mono font-bold text-white">{analytics.advancedInsights.concentrationTop3Pct}%</p>
+                  <p className="text-xs font-mono text-white/70 truncate" title={analytics.advancedInsights.concentrationTop3Sectors.join(", ")}>
+                    {analytics.advancedInsights.concentrationTop3Sectors.join(", ") || "—"}
+                  </p>
+                </div>
+                {analytics.advancedInsights.momDecisionsPct != null && (
+                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM volume change</p>
+                    <p className={`font-mono font-bold ${analytics.advancedInsights.momDecisionsPct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                      {analytics.advancedInsights.momDecisionsPct >= 0 ? "+" : ""}{analytics.advancedInsights.momDecisionsPct}%
+                    </p>
+                    <p className="text-xs font-mono text-white/70">vs previous month</p>
+                  </div>
+                )}
+                {analytics.advancedInsights.momPositiveRatePct != null && (
+                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM positive rate</p>
+                    <p className={`font-mono font-bold ${analytics.advancedInsights.momPositiveRatePct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                      {analytics.advancedInsights.momPositiveRatePct >= 0 ? "+" : ""}{analytics.advancedInsights.momPositiveRatePct}pp
+                    </p>
+                    <p className="text-xs font-mono text-white/70">vs previous month</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Calibration: High vs Low confidence */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg border border-white/20 bg-white/5">
+                  <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — High confidence (81–100)</p>
+                  <p className="font-mono font-bold text-white text-lg">{analytics.advancedInsights.calibrationHighConfidence.positiveRate}% positive rate</p>
+                  <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.calibrationHighConfidence.total} decisions in this band</p>
+                  <p className="text-[10px] font-mono text-white/50 mt-1">When you were very confident, how often were you right?</p>
+                </div>
+                <div className="p-4 rounded-lg border border-white/20 bg-white/5">
+                  <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — Low confidence (0–40)</p>
+                  <p className="font-mono font-bold text-white text-lg">{analytics.advancedInsights.calibrationLowConfidence.positiveRate}% positive rate</p>
+                  <p className="text-xs font-mono text-white/70">{analytics.advancedInsights.calibrationLowConfidence.total} decisions in this band</p>
+                  <p className="text-[10px] font-mono text-white/50 mt-1">When you were uncertain, how often did it still go positive?</p>
+                </div>
+              </div>
+
+              {/* Confidence by outcome */}
+              <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-white/20 bg-white/5">
+                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-[#FFED00]">{analytics.advancedInsights.confidenceWhenPositive}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when negative:</span> <strong className="text-white">{analytics.advancedInsights.confidenceWhenNegative}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-white/60">Pending:</span> <strong className="text-white">{analytics.advancedInsights.pendingPct}%</strong> of decisions</span>
+              </div>
+
+              {/* Suggested focus */}
+              {analytics.advancedInsights.suggestedFocus && (
+                <div className="p-3 rounded-lg border border-[#FFED00]/40 bg-[#FFED00]/10">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mb-1">Suggested focus</p>
+                  <p className="font-mono font-bold text-[#FFED00]">{analytics.advancedInsights.suggestedFocus}</p>
+                </div>
+              )}
+
+              {/* Peak month */}
+              {analytics.advancedInsights.peakMonth && (
+                <p className="text-xs font-mono text-white/50">Peak month: <strong className="text-white">{analytics.advancedInsights.peakMonth.date}</strong> ({analytics.advancedInsights.peakMonth.decisions} decisions)</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Sector × Stage heatmap */}
+          {analytics.sectorStageMatrix.length > 0 && (() => {
+            const stages = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.stage))).sort();
+            const sectors = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.sector))).sort();
+            return (
+              <Card className="border-2 border-white bg-transparent">
+                <CardHeader className="border-b-2 border-white">
+                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                    Sector × Stage Heatmap
+                  </CardTitle>
+                  <CardDescription className="text-white/70 font-mono">Decision volume and positive rate by sector and stage</CardDescription>
+                </CardHeader>
+                <CardContent className="text-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full font-mono text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/30">
+                          <th className="text-left p-2 text-white/80 font-bold">Sector \ Stage</th>
+                          {stages.map((stage) => (
+                            <th key={stage} className="p-2 text-center text-white/80 font-bold truncate max-w-[80px]" title={stage}>{stage}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sectors.map((sector) => (
+                          <tr key={sector} className="border-b border-white/10 hover:bg-white/5">
+                            <td className="p-2 font-bold text-white truncate max-w-[120px]" title={sector}>{sector}</td>
+                            {stages.map((stage) => {
+                              const cell = analytics.sectorStageMatrix.find((c) => c.sector === sector && c.stage === stage);
+                              const total = cell?.total ?? 0;
+                              const rate = cell?.positiveRate ?? 0;
+                              const intensity = total > 0 ? Math.min(1, total / 10) : 0;
+                              return (
+                                <td
+                                  key={`${sector}-${stage}`}
+                                  className="p-2 text-center rounded"
+                                  style={{ backgroundColor: total > 0 ? `rgba(255, 237, 0, ${0.12 + intensity * 0.5})` : "rgba(255,255,255,0.03)" }}
+                                  title={`${sector} × ${stage}: ${total} decisions, ${rate}% positive`}
+                                >
+                                  <span className="font-mono font-bold text-white">{total}</span>
+                                  {total > 0 && <span className="block text-[10px] text-white/80">{rate}%</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Sector Performance */}
           {analytics.sectorStats.length > 0 && (
             <Card className="border-2 border-white bg-transparent">
@@ -8899,6 +9054,9 @@ export default function CIS() {
         setVerifiableSources: (sources: VerifiableSource[]) => {
           setMessages((prev) => patchById(prev, { verifiableSources: sources }));
         },
+        setSourceDocs: (docs: SourceDoc[]) => {
+          setMessages((prev) => patchById(prev, { sourceDocs: docs }));
+        },
         setCritic: (text: string) => {
           setMessages((prev) => patchById(prev, { critic: text }));
         },
@@ -9287,6 +9445,9 @@ export default function CIS() {
             },
             (criticText) => {
               if (!streamCompleted) streamer.setCritic(criticText);
+            },
+            (docs) => {
+              if (!streamCompleted) streamer.setSourceDocs(docs);
             }
           );
 
@@ -11407,14 +11568,16 @@ export default function CIS() {
     connection_type: string;
     reasoning: string;
     confidence: number;
+    suggested_actions?: string[];
   }>>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestForCompany, setSuggestForCompany] = useState<string | null>(null);
 
-  const handleSuggestConnections = useCallback(async () => {
+  const handleSuggestConnections = useCallback(async (companyName?: string | null) => {
     setSuggestionsLoading(true);
     try {
-      // Build sources from documents
-      const docSources = documents.slice(0, 10).map((doc) => ({
+      // Build sources from documents (use more for tier-2 VCs with many docs)
+      const docSources = documents.slice(0, 15).map((doc) => ({
         title: doc.title,
         file_name: null as string | null,
         snippet: null as string | null, // The backend will use titles for context
@@ -11423,7 +11586,8 @@ export default function CIS() {
       const result = await suggestConnections({
         sources: docSources,
         existingConnections: connectionsForChat,
-        maxSuggestions: 5,
+        maxSuggestions: 8,
+        companyName: companyName ?? undefined,
       });
 
       setAiSuggestions(result.suggestions);
@@ -11453,6 +11617,29 @@ export default function CIS() {
       setSuggestionsLoading(false);
     }
   }, [documents, connectionsForChat, toast]);
+
+  const handleAddAllSuggestions = useCallback(async () => {
+    if (!activeEventId || aiSuggestions.length === 0) return;
+    const userId = profile?.id || user?.id || null;
+    try {
+      for (const s of aiSuggestions) {
+        await insertCompanyConnection(activeEventId, {
+          source_company_name: s.source_company,
+          target_company_name: s.target_company,
+          connection_type: s.connection_type as ConnectionType,
+          connection_status: "To Connect",
+          ai_reasoning: s.reasoning + (s.suggested_actions?.length ? `\nWays to connect: ${s.suggested_actions.join("; ")}` : ""),
+          created_by: userId,
+        });
+      }
+      const { data } = await getCompanyConnectionsByEvent(activeEventId);
+      if (data) setCompanyConnections(data as typeof companyConnections);
+      setAiSuggestions([]);
+      toast({ title: "Connections added", description: `${aiSuggestions.length} connection(s) added as To Connect.` });
+    } catch (err) {
+      toast({ title: "Add failed", description: err instanceof Error ? err.message : "Could not add connections.", variant: "destructive" });
+    }
+  }, [activeEventId, aiSuggestions, profile?.id, user?.id]);
 
   const evidence = initialKOs;
   const buildStamp =
@@ -11587,6 +11774,7 @@ export default function CIS() {
       | { type: "p"; content: string }
       | { type: "ul"; items: string[] }
       | { type: "ol"; items: string[] }
+      | { type: "table"; rows: string[][] }
       | { type: "hr" }
       | { type: "blank" };
 
@@ -11594,6 +11782,19 @@ export default function CIS() {
     let ulItems: string[] = [];
     let olItems: string[] = [];
     let paragraph: string[] = [];
+    let tableRows: string[][] = [];
+
+    const isTableRow = (s: string) => /^\|.+\|$/.test(s.trim());
+    const parseTableRow = (s: string) => s.split("|").map((c) => c.trim()).filter((_, i, arr) => i > 0 && i < arr.length - 1);
+    const isTableSeparator = (cells: string[]) => cells.every((c) => /^[-:\s]+$/.test(c));
+
+    const flushTable = () => {
+      if (tableRows.length) {
+        const rows = tableRows.filter((row) => row.some((c) => c.length > 0));
+        if (rows.length) blocks.push({ type: "table", rows });
+        tableRows = [];
+      }
+    };
 
     const flushParagraph = () => {
       if (paragraph.length) {
@@ -11613,7 +11814,7 @@ export default function CIS() {
         olItems = [];
       }
     };
-    const flushAll = () => { flushParagraph(); flushUl(); flushOl(); };
+    const flushAll = () => { flushParagraph(); flushUl(); flushOl(); flushTable(); };
 
     for (const raw of lines) {
       const line = raw.trimEnd();
@@ -11621,6 +11822,18 @@ export default function CIS() {
 
       // Blank line
       if (!trimmed) { flushAll(); continue; }
+
+      // Table row: | cell | cell |
+      if (isTableRow(trimmed)) {
+        flushParagraph(); flushUl(); flushOl();
+        const cells = parseTableRow(trimmed);
+        if (cells.length && !(tableRows.length === 1 && isTableSeparator(cells))) {
+          tableRows.push(cells);
+        }
+        continue;
+      } else {
+        flushTable();
+      }
 
       // Horizontal rule
       if (/^(---+|\*\*\*+|___+)$/.test(trimmed)) { flushAll(); blocks.push({ type: "hr" }); continue; }
@@ -11704,6 +11917,38 @@ export default function CIS() {
               );
             case "hr":
               return <hr key={idx} className="border-white/20 my-3" />;
+            case "table": {
+              const { rows } = block;
+              const [head, ...body] = rows;
+              return (
+                <div key={idx} className="my-3 overflow-x-auto">
+                  <table className="w-full border-collapse text-sm font-mono text-white">
+                    {head && head.length > 0 && (
+                      <thead>
+                        <tr>
+                          {head.map((cell, cidx) => (
+                            <th key={cidx} className="border border-white/30 px-3 py-2 text-left font-bold text-[#FFED00] bg-white/5">
+                              {renderInline(cell, `th-${idx}-${cidx}-`)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                    )}
+                    <tbody>
+                      {body.map((row, ridx) => (
+                        <tr key={ridx}>
+                          {row.map((cell, cidx) => (
+                            <td key={cidx} className="border border-white/20 px-3 py-2 text-white/90">
+                              {renderInline(cell, `td-${idx}-${ridx}-${cidx}-`)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            }
             case "p":
               return (
                 <p key={idx} className="text-sm text-white leading-relaxed">
@@ -12250,36 +12495,22 @@ export default function CIS() {
                                     </>
                                   )}
                                 </div>
-                                {/* Verifiable RAG: click-to-source */}
-                                {!m.isStreaming && m.verifiableSources && m.verifiableSources.length > 0 && (
+                                {/* Sources: click to open document */}
+                                {!m.isStreaming && (m.sourceDocs?.length ?? 0) > 0 && (
                                   <div className="mt-2 pt-2 border-t border-white/10">
                                     <p className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider mb-1.5">Sources</p>
                                     <div className="flex flex-wrap gap-1.5">
-                                      {m.verifiableSources.map((src, idx) => (
-                                        src.type === "document" && src.doc_id ? (
-                                          <Button
-                                            key={`${src.doc_id}-${src.chunk ?? idx}`}
-                                            size="sm"
-                                            variant="outline"
-                                            className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
-                                            onClick={() => handleOpenDocument(src.doc_id!)}
-                                          >
-                                            {idx + 1}. {src.title || "Document"}
-                                          </Button>
-                                        ) : (
-                                          <span key={`${src.title}-${idx}`} className="inline-block text-[11px] text-white/50 font-mono px-2 py-1 border border-white/10 rounded">
-                                            {idx + 1}. {src.title}
-                                          </span>
-                                        )
+                                      {m.sourceDocs!.map((doc, idx) => (
+                                        <Button
+                                          key={doc.id}
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                                          onClick={() => handleOpenDocument(doc.id)}
+                                        >
+                                          {idx + 1}. {doc.title || "Document"}
+                                        </Button>
                                       ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {/* Devil's Advocate: RED FLAGS */}
-                                {!m.isStreaming && m.critic && (
-                                  <div className="mt-2 pt-2 border-t border-red-500/20 bg-red-950/20 rounded-lg px-3 py-2">
-                                    <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_strong]:text-red-300 text-xs font-mono whitespace-pre-wrap">
-                                      {m.critic}
                                     </div>
                                   </div>
                                 )}
