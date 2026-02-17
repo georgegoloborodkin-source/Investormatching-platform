@@ -7289,6 +7289,7 @@ export default function CIS() {
   const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [multiAgentEnabled, setMultiAgentEnabled] = useState(false);
   
   // Company Connections state for visual graph and decision logging
   const [companyConnections, setCompanyConnections] = useState<Array<{
@@ -7923,13 +7924,20 @@ export default function CIS() {
       setChatLoadingStage("Analyzing your question...");
       return;
     }
-    const stages = [
+    const stages = multiAgentEnabled ? [
       "Orchestrator routing query...",
       "Dispatching retrieval agents...",
       "Vector + Graph + KPI search...",
       "Synthesizing multi-agent context...",
       "Generating answer...",
       "Critic verifying...",
+    ] : [
+      "Analyzing your question...",
+      "Searching documents...",
+      "Retrieving relevant context...",
+      "Thinking deeply...",
+      "Synthesizing answer...",
+      "Almost there...",
     ];
     let idx = 0;
     setChatLoadingStage(stages[0]);
@@ -7938,7 +7946,7 @@ export default function CIS() {
       setChatLoadingStage(stages[idx]);
     }, 3000);
     return () => clearInterval(interval);
-  }, [chatIsLoading]);
+  }, [chatIsLoading, multiAgentEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -10240,46 +10248,59 @@ export default function CIS() {
       }
 
       // ════════════════════════════════════════════════════════════════════
-      // MULTI-AGENT RAG — Step 1: Orchestrator (Router Agent)
-      // Decides which retrieval agents to activate based on the question.
+      // MULTI-AGENT RAG (only when toggle is ON)
+      // When OFF → classic single-path RAG (vector + optional web search)
+      // When ON  → Orchestrator → parallel Graph/KPI/Vector → Critic
       // ════════════════════════════════════════════════════════════════════
       let routingPlan = { use_vector: true, use_graph: false, use_kpis: false, use_web: false, reasoning: "", sub_queries: {} as Record<string, string> };
       let graphContext = "";
       let kpiContext = "";
-      try {
-        const threadMsgsForRouter = await getThreadMessages(threadId, 5);
-        routingPlan = await orchestrateQuery({
-          question: finalSearchQuery,
-          previousMessages: threadMsgsForRouter,
-        });
-        console.log("[MULTI-AGENT] Orchestrator plan:", routingPlan);
 
-        // If web search was recommended by orchestrator, enable it
-        if (routingPlan.use_web && !webSearchEnabled) {
-          console.log("[MULTI-AGENT] Orchestrator recommends web search — enabling");
+      if (multiAgentEnabled) {
+        // ── Step 1: Orchestrator (Router Agent) ──
+        try {
+          const threadMsgsForRouter = await getThreadMessages(threadId, 5);
+          routingPlan = await orchestrateQuery({
+            question: finalSearchQuery,
+            previousMessages: threadMsgsForRouter,
+          });
+          console.log("[MULTI-AGENT] Orchestrator plan:", routingPlan);
+
+          if (routingPlan.use_web && !webSearchEnabled) {
+            console.log("[MULTI-AGENT] Orchestrator recommends web search — enabling");
+          }
+        } catch (routerErr) {
+          console.warn("[MULTI-AGENT] Orchestrator failed, falling back to vector-only:", routerErr);
         }
-      } catch (routerErr) {
-        console.warn("[MULTI-AGENT] Orchestrator failed, falling back to vector-only:", routerErr);
+
+        // Client-side override: force graph ON for connection/relationship questions
+        const connectionKeywords = /\b(connect|connections?|relationship|partner|who\s+invest|portfolio|expand|expansion|introduce|introductions?|linked|network|graph)\b/i;
+        if (connectionKeywords.test(question) && !routingPlan.use_graph) {
+          routingPlan.use_graph = true;
+          console.log("[MULTI-AGENT] Client override: forced graph ON (connection keywords detected)");
+        }
+        // Force KPIs ON for metric questions
+        const metricKeywords = /\b(arr|revenue|valuation|burn|runway|growth|metric|kpi|financials?|numbers?)\b/i;
+        if (metricKeywords.test(question) && !routingPlan.use_kpis) {
+          routingPlan.use_kpis = true;
+          console.log("[MULTI-AGENT] Client override: forced KPIs ON (metric keywords detected)");
+        }
+      } else {
+        console.log("[RAG] Standard single-path RAG (multi-agent OFF)");
       }
 
-      // ════════════════════════════════════════════════════════════════════
-      // MULTI-AGENT RAG — Step 2: Parallel Retrieval (all agents at once)
-      // Fire semantic + keyword + graph + KPIs simultaneously.
-      // ════════════════════════════════════════════════════════════════════
-
-      // Start graph retrieval if orchestrator says so
-      const graphPromise = (routingPlan.use_graph && eventId) ? (async () => {
+      // ── Step 2: Parallel Graph/KPI Retrieval (multi-agent only) ──
+      const graphPromise = (multiAgentEnabled && routingPlan.use_graph && eventId) ? (async () => {
         try {
           const entityNames = queryAnalysis?.entities?.map((e: any) => e.name) || [];
           const searchWords = finalSearchQuery.split(/\s+/).filter((w: string) => w.length > 3);
           const result = await retrieveGraphContext(eventId, searchWords, entityNames);
-          console.log("[MULTI-AGENT] Graph agent:", { entities: result.entities.length, edges: result.edges.length });
+          console.log("[MULTI-AGENT] Graph agent:", { entities: result.entities.length, edges: result.edges.length, connections: result.connections.length });
           return result.summary;
         } catch { return ""; }
       })() : Promise.resolve("");
 
-      // Start KPI retrieval if orchestrator says so
-      const kpiPromise = (routingPlan.use_kpis && eventId) ? (async () => {
+      const kpiPromise = (multiAgentEnabled && routingPlan.use_kpis && eventId) ? (async () => {
         try {
           const companyNames = queryAnalysis?.entities
             ?.filter((e: any) => e.type === "company" || e.type === "fund")
@@ -11598,36 +11619,38 @@ export default function CIS() {
           }
         }
         // Web search is now handled natively by Anthropic's web_search tool (no manual DuckDuckGo needed)
-        // Web search: use orchestrator recommendation OR user toggle
-        const effectiveWebSearch = webSearchEnabled || routingPlan.use_web;
+        // Web search: use orchestrator recommendation (multi-agent) OR user toggle
+        const effectiveWebSearch = multiAgentEnabled
+          ? (webSearchEnabled || routingPlan.use_web)
+          : webSearchEnabled;
 
-        // ── MULTI-AGENT RAG — Await graph & KPI agents ──
-        try {
-          const [graphResult, kpiResult] = await Promise.all([graphPromise, kpiPromise]);
-          graphContext = graphResult || "";
-          kpiContext = kpiResult || "";
+        // ── MULTI-AGENT RAG — Await graph & KPI agents (only when enabled) ──
+        if (multiAgentEnabled) {
+          try {
+            const [graphResult, kpiResult] = await Promise.all([graphPromise, kpiPromise]);
+            graphContext = graphResult || "";
+            kpiContext = kpiResult || "";
 
-          // Inject graph context as a source so Claude sees it
-          if (graphContext && graphContext !== "No entities found.\nNo relationships found.") {
-            sources.push({
-              title: "[GRAPH] Knowledge Graph — Entities & Relationships",
-              file_name: null as string | null,
-              snippet: graphContext,
-            });
-            console.log("[MULTI-AGENT] Injected graph context into sources");
+            if (graphContext && !graphContext.startsWith("No entities found")) {
+              sources.push({
+                title: "[GRAPH] Knowledge Graph — Entities & Relationships",
+                file_name: null as string | null,
+                snippet: graphContext,
+              });
+              console.log("[MULTI-AGENT] Injected graph context into sources");
+            }
+
+            if (kpiContext && kpiContext !== "No KPI data found.") {
+              sources.push({
+                title: "[KPIs] Structured Metrics & Numbers",
+                file_name: null as string | null,
+                snippet: kpiContext,
+              });
+              console.log("[MULTI-AGENT] Injected KPI context into sources");
+            }
+          } catch (maErr) {
+            console.warn("[MULTI-AGENT] Graph/KPI await failed (non-fatal):", maErr);
           }
-
-          // Inject KPI context as a source
-          if (kpiContext && kpiContext !== "No KPI data found.") {
-            sources.push({
-              title: "[KPIs] Structured Metrics & Numbers",
-              file_name: null as string | null,
-              snippet: kpiContext,
-            });
-            console.log("[MULTI-AGENT] Injected KPI context into sources");
-          }
-        } catch (maErr) {
-          console.warn("[MULTI-AGENT] Graph/KPI await failed (non-fatal):", maErr);
         }
 
         const decisionsForClaude = decisionIntent
@@ -11710,8 +11733,8 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
 
-        // ── MULTI-AGENT RAG — Step 4: Critic (Verifier Agent, non-blocking) ──
-        if (fullAnswer.length > 50) {
+        // ── MULTI-AGENT RAG — Step 4: Critic (only when multi-agent is ON) ──
+        if (multiAgentEnabled && fullAnswer.length > 50) {
           criticCheck({
             question: questionForClaude,
             answer: fullAnswer,
@@ -13100,10 +13123,19 @@ export default function CIS() {
                         <Globe className="h-3.5 w-3.5" />
                         Web Search {webSearchEnabled ? "ON" : "OFF"}
                       </button>
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border border-[#FFED00]/30 bg-[#FFED00]/5 text-[#FFED00]/70" title="Multi-Agent RAG: Orchestrator routes your query to Vector, Graph, KPI, and Web agents in parallel">
-                        <Sparkles className="h-3 w-3" />
-                        Multi-Agent
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMultiAgentEnabled((prev) => !prev)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                          multiAgentEnabled
+                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
+                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                        }`}
+                        title="Multi-Agent RAG: Orchestrator routes your query to Vector, Graph, KPI, and Web agents in parallel. When OFF, uses standard single-path RAG."
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Multi-Agent {multiAgentEnabled ? "ON" : "OFF"}
+                      </button>
                     </div>
                     <span className="text-[11px] text-white/40 font-mono">
                       {chatIsLoading ? (
