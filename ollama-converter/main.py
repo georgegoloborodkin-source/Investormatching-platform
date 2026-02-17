@@ -7555,9 +7555,9 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
             messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": resolved_question})
 
-        # Build tools list — disable web search when scope is active (it bypasses DB filtering)
+        # Build tools list
         tools = list(AGENT_TOOLS)
-        if request.web_search_enabled and not folder_ids:
+        if request.web_search_enabled:
             tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
         # Choose model
