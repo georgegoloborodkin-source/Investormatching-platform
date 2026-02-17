@@ -4439,6 +4439,67 @@ async def generate_embedding_ollama(text: str) -> List[float]:
     return normalize_embedding(embedding)
 
 # ---------------------------------------------------------------------------
+#  Voyage Reranking — cross-encoder reranker for RAG accuracy
+# ---------------------------------------------------------------------------
+
+VOYAGE_RERANK_MODEL = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5-lite")
+
+async def rerank_with_voyage(
+    query: str,
+    documents: list[str],
+    top_k: int = 5,
+    model: str | None = None,
+) -> list[dict]:
+    """
+    Call Voyage AI rerank API to re-score documents by cross-encoder relevance.
+    Returns list of {index, relevance_score, document} sorted by descending score.
+    Falls back gracefully: returns original order if API fails or no key.
+    """
+    if not VOYAGE_API_KEY:
+        return [{"index": i, "relevance_score": 1.0, "document": d} for i, d in enumerate(documents[:top_k])]
+    if not documents:
+        return []
+
+    rerank_model = model or VOYAGE_RERANK_MODEL
+    payload = {
+        "query": query[:4000],
+        "documents": [d[:8000] for d in documents],
+        "model": rerank_model,
+        "top_k": min(top_k, len(documents)),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                "https://api.voyageai.com/v1/rerank",
+                headers={
+                    "Authorization": f"Bearer {VOYAGE_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            if response.status_code >= 400:
+                print(f"[RERANK] Voyage rerank API error ({response.status_code}): {response.text[:300]}")
+                return [{"index": i, "relevance_score": 1.0, "document": d} for i, d in enumerate(documents[:top_k])]
+
+            data = response.json() or {}
+            results = data.get("data", [])
+            total_tokens = data.get("usage", {}).get("total_tokens", 0)
+            print(f"[RERANK] Reranked {len(documents)} docs → top {top_k}, model={rerank_model}, tokens={total_tokens}")
+            return [
+                {
+                    "index": r.get("index", 0),
+                    "relevance_score": r.get("relevance_score", 0),
+                    "document": documents[r["index"]] if r.get("index", 0) < len(documents) else "",
+                }
+                for r in results
+            ]
+    except Exception as e:
+        print(f"[RERANK] Reranking failed (falling back to original order): {e}")
+        return [{"index": i, "relevance_score": 1.0, "document": d} for i, d in enumerate(documents[:top_k])]
+
+
+# ---------------------------------------------------------------------------
 #  Real-Time SSE Streaming — Long-running agentic workflows
 # ---------------------------------------------------------------------------
 
@@ -6944,9 +7005,10 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
                                 for eid, dids in doc_id_map.items():
                                     if link["document_id"] in dids:
                                         allowed_entity_ids.add(eid)
-                if allowed_entity_ids:
-                    rows = [r for r in rows if r.get("id") in allowed_entity_ids]
-                    print(f"[AGENT] Folder scope: {len(rows)} entities after filtering by {len(folder_ids)} folders")
+                rows = [r for r in rows if r.get("id") in allowed_entity_ids]
+                print(f"[AGENT] Folder scope: {len(rows)} entities after filtering by {len(folder_ids)} folders")
+                if not rows:
+                    return "No portfolio companies found within the selected knowledge scope folders. The user has limited the search to specific folders."
         except Exception as e:
             print(f"[AGENT] Folder scope filter error (continuing without filter): {e}")
 
@@ -7095,11 +7157,10 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
                     .execute()
                 for link in (links_res.data or []):
                     allowed_doc_ids.add(link["document_id"])
-            if allowed_doc_ids:
-                chunks = [c for c in chunks if c.get("document_id") in allowed_doc_ids]
-                print(f"[AGENT] Doc scope filter: {len(chunks)} chunks after folder filtering")
+            chunks = [c for c in chunks if c.get("document_id") in allowed_doc_ids]
+            print(f"[AGENT] Doc scope filter: {len(chunks)} chunks after folder filtering")
             if not chunks:
-                return f"No documents found matching '{query_text}' within the selected knowledge scope folders."
+                return f"No documents found matching '{query_text}' within the selected knowledge scope folders. The user has limited the search to specific folders."
         except Exception as e:
             print(f"[AGENT] Doc folder scope filter error (continuing without filter): {e}")
 
@@ -7115,14 +7176,39 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
         if filtered_chunks:
             chunks = filtered_chunks
 
+    # ── Reranking: use Voyage cross-encoder to re-score chunks ──
+    if len(chunks) > 1:
+        try:
+            chunk_texts = []
+            for c in chunks:
+                doc = doc_map.get(c.get("document_id", ""), {})
+                title = doc.get("title") or doc.get("file_name") or ""
+                text = c.get("parent_text") or c.get("chunk_text") or ""
+                chunk_texts.append(f"{title}\n{text[:3000]}")
+            reranked = await rerank_with_voyage(query_text, chunk_texts, top_k=min(top_k, len(chunks)))
+            if reranked:
+                reranked_chunks = []
+                for r in reranked:
+                    idx = r["index"]
+                    if 0 <= idx < len(chunks):
+                        chunk = dict(chunks[idx])
+                        chunk["rerank_score"] = r["relevance_score"]
+                        reranked_chunks.append(chunk)
+                chunks = reranked_chunks
+                print(f"[AGENT] Reranked {len(chunks)} chunks, top score: {chunks[0].get('rerank_score', 0):.3f}")
+        except Exception as e:
+            print(f"[AGENT] Reranking failed (using original order): {e}")
+
     lines = [f"Found {len(chunks)} relevant document chunks:\n"]
     for i, chunk in enumerate(chunks, 1):
         doc = doc_map.get(chunk.get("document_id", ""), {})
         title = doc.get("title") or doc.get("file_name") or "Unknown document"
         similarity = chunk.get("similarity", 0)
+        rerank_score = chunk.get("rerank_score")
         text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
         text = text[:1500]
-        lines.append(f"[{i}] **{title}** (relevance: {similarity:.2f})\n{text}")
+        score_str = f"rerank: {rerank_score:.2f}" if rerank_score is not None else f"relevance: {similarity:.2f}"
+        lines.append(f"[{i}] **{title}** ({score_str})\n{text}")
 
     return "\n\n".join(lines)
 
@@ -7175,23 +7261,49 @@ async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids
                 best_by_core[core] = {**ent, "_r": richness}
         entities = [v for v in best_by_core.values()]
 
-    # ── Folder scope: prefer entity with docs in selected folders ──
-    if folder_ids and len(entities) > 1:
+    # ── Folder scope: STRICT filter — block entities outside selected folders ──
+    if folder_ids:
         try:
             ent_ids = [e["id"] for e in entities if e.get("id")]
+            in_scope: set[str] = set()
+            # Check direct folder_id on documents
             docs_res = sb.table("documents") \
                 .select("company_entity_id, folder_id") \
                 .in_("company_entity_id", ent_ids) \
                 .execute()
-            in_scope = set()
             for d in (docs_res.data or []):
                 if d.get("folder_id") in folder_ids:
                     in_scope.add(d["company_entity_id"])
-            scoped = [e for e in entities if e.get("id") in in_scope]
-            if scoped:
-                entities = scoped
-        except Exception:
-            pass
+            # Also check document_folder_links
+            doc_id_res = sb.table("documents") \
+                .select("id, company_entity_id") \
+                .in_("company_entity_id", ent_ids) \
+                .execute()
+            doc_id_map: dict[str, list[str]] = {}
+            for d in (doc_id_res.data or []):
+                doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
+            all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
+            if all_doc_ids:
+                for j in range(0, len(all_doc_ids), 50):
+                    link_batch = all_doc_ids[j:j+50]
+                    links_res = sb.table("document_folder_links") \
+                        .select("document_id, folder_id") \
+                        .in_("document_id", link_batch) \
+                        .in_("folder_id", folder_ids) \
+                        .execute()
+                    for link in (links_res.data or []):
+                        for eid, dids in doc_id_map.items():
+                            if link["document_id"] in dids:
+                                in_scope.add(eid)
+            entities = [e for e in entities if e.get("id") in in_scope]
+            if not entities:
+                return (
+                    f"The company '{company_name}' is not in your current knowledge scope. "
+                    "I can only show details for companies within the folders you selected. "
+                    "Please add that company's folder to Knowledge Scope or clear the scope to search the full portfolio."
+                )
+        except Exception as e:
+            print(f"[AGENT] Company details folder scope error: {e}")
 
     entity = entities[0]
     entity_id = entity.get("id")
@@ -7516,11 +7628,15 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 if folder_ids:
                     system_prompt += """
 
-## Knowledge scope (MANDATORY when folders are selected)
-The user has limited this search to specific folders only. You MUST only use information from companies and documents in those folders.
-- If the user asks about a company or topic that is NOT in the selected scope (e.g. they selected only Yindii but ask about Weego), respond clearly: "That company/topic is not in your current knowledge scope. I can only search within the folders you selected. Please add that folder to Knowledge Scope or clear the scope to search the full portfolio."
-- Do NOT use web search or other tools to answer about out-of-scope companies when folder scope is active.
-- Only answer from tool results that fall within the selected folders."""
+## Knowledge scope — STRICT ENFORCEMENT (MANDATORY when folders are selected)
+The user has limited this search to specific folders only. EVERY tool call already enforces folder filtering server-side, so tool results are guaranteed in-scope.
+
+ABSOLUTE RULES:
+1. If a tool returns "not in your current knowledge scope" or "No portfolio companies found within the selected knowledge scope", you MUST relay that verbatim. Do NOT try a different tool or fall back to your own knowledge.
+2. NEVER answer about companies or topics that are NOT returned by the tools. If the tool found zero results, tell the user: "That company/topic is not in your current knowledge scope. I can only search within the folders you selected. Please add that folder to Knowledge Scope or clear the scope to search the full portfolio."
+3. Do NOT use web_search to answer about companies when folder scope is active — web search bypasses the scope.
+4. Do NOT invent, recall, or hallucinate any information about companies that were not returned by the scoped tools. The tools are the single source of truth.
+5. If the user asks about something clearly outside scope, respond IMMEDIATELY with the scope message — do not even call tools."""
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
 

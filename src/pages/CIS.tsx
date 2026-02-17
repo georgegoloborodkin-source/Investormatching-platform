@@ -1632,6 +1632,7 @@ function SourcesTab({
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderCategory, setNewFolderCategory] = useState<string>("Portfolio Companies");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [expandedFolderCategory, setExpandedFolderCategory] = useState<string | null>(null);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [categoryPickerFolders, setCategoryPickerFolders] = useState<Array<{ id: string; name: string; category: string }>>([]);
   const [pendingFolderDocs, setPendingFolderDocs] = useState<Array<{ id: string; title: string | null }>>([]);
@@ -3701,108 +3702,169 @@ function SourcesTab({
             </div>
           </div>
           
-          {/* Existing Folders List – grouped by category */}
-          {sourceFolders.length > 0 && (
-            <div className="pt-2 border-t border-white/20">
-              <Label className="text-white/70 font-mono text-xs mb-2 block">Existing Folders ({sourceFolders.length})</Label>
-              {FOLDER_CATEGORIES.map((cat) => {
-                const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
-                if (catFolders.length === 0) return null;
-                return (
-                  <div key={cat} className="mb-3">
-                    <p className="text-xs font-mono text-[#FFED00]/80 mb-1 uppercase tracking-wide">{cat}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {catFolders.map((folder) => (
-                        <div key={folder.id} className="flex items-center gap-0.5">
-                          <Badge
-                            variant="outline"
-                            className={`cursor-pointer transition-all font-mono ${
-                              selectedFolderId === folder.id
-                                ? "border-[#FFED00] text-[#FFED00] bg-[#FFED00]/10"
-                                : "border-white text-white bg-transparent hover:border-[#FFED00] hover:text-[#FFED00]"
-                            }`}
-                            onClick={() => setSelectedFolderId(folder.id)}
-                          >
-                            <Folder className="h-3 w-3 mr-1" />
-                            {folder.name}
-                          </Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-white/50 hover:text-white/80 hover:bg-white/10">
-                                <ChevronDown className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="border-white/20 bg-slate-900">
-                              {FOLDER_CATEGORIES.map((moveCat) => (
-                                <DropdownMenuItem
-                                  key={moveCat}
-                                  className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-[#FFED00] font-bold" : "text-white/80"} focus:bg-white/10`}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if ((folder.category || "Portfolio Companies") === moveCat) return;
-                                    const { error } = await updateFolderCategory(folder.id, moveCat);
-                                    if (!error) {
-                                      sourceFolders.forEach((f) => { if (f.id === folder.id) f.category = moveCat; });
-                                      toast({ title: "Category updated", description: `"${folder.name}" moved to ${moveCat}` });
-                                    }
-                                  }}
-                                >
-                                  {moveCat}
-                                </DropdownMenuItem>
-                              ))}
-                              {onDeleteFolderAndContents && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-red-400 focus:text-red-300 focus:bg-red-500/20"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setFolderToDelete({ id: folder.id, name: folder.name || "Folder" });
-                                    }}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                    Delete folder & docs
-                                  </DropdownMenuItem>
-                                </>
+          {/* Existing Folders – compact category → root company → subfolders */}
+          {sourceFolders.length > 0 && (() => {
+            const getRootName = (name: string) => {
+              const first = (name || "").split(" / ")[0].trim();
+              return first || name || "Unnamed";
+            };
+            const expandedRootKey = expandedFolderCategory; // re-use for "cat::root" keys
+            const setExpandedRoot = setExpandedFolderCategory;
+
+            return (
+              <div className="pt-2 border-t border-white/20">
+                <Label className="text-white/70 font-mono text-xs mb-2 block">
+                  Document Folders ({sourceFolders.length})
+                </Label>
+
+                {/* Category pills row */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {FOLDER_CATEGORIES.map((cat) => {
+                    const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
+                    if (catFolders.length === 0) return null;
+                    const isCatOpen = expandedRootKey?.startsWith(cat + "::") || expandedRootKey === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setExpandedRoot(isCatOpen ? null : cat)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-mono transition-all ${
+                          isCatOpen
+                            ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00]"
+                            : "border-white/25 text-white/70 hover:border-[#FFED00]/50 hover:text-[#FFED00]"
+                        }`}
+                      >
+                        <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isCatOpen ? "rotate-90" : ""}`} />
+                        {cat}
+                        <span className="text-white/40 tabular-nums">({catFolders.length})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Expanded category → group by root company name */}
+                {expandedRootKey && (() => {
+                  const activeCat = expandedRootKey.includes("::") ? expandedRootKey.split("::")[0] : expandedRootKey;
+                  const activeRoot = expandedRootKey.includes("::") ? expandedRootKey.split("::").slice(1).join("::") : null;
+                  const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === activeCat);
+
+                  // Group by root company name
+                  const rootGroups: Record<string, typeof catFolders> = {};
+                  for (const f of catFolders) {
+                    const root = getRootName(f.name || "");
+                    (rootGroups[root] ??= []).push(f);
+                  }
+                  const sortedRoots = Object.keys(rootGroups).sort((a, b) => a.localeCompare(b));
+
+                  return (
+                    <div className="mt-1 p-2 rounded border border-white/15 bg-white/[0.02] max-h-[300px] overflow-y-auto">
+                      {sortedRoots.map((rootName) => {
+                        const folders = rootGroups[rootName];
+                        const isRootOpen = activeRoot === rootName;
+                        const hasSubfolders = folders.length > 1 || (folders.length === 1 && (folders[0].name || "").includes(" / "));
+                        return (
+                          <div key={rootName} className="mb-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (hasSubfolders) {
+                                  setExpandedRoot(isRootOpen ? activeCat : `${activeCat}::${rootName}`);
+                                } else {
+                                  setSelectedFolderId(folders[0].id);
+                                }
+                              }}
+                              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-[11px] font-mono transition-all ${
+                                isRootOpen
+                                  ? "bg-[#FFED00]/10 text-[#FFED00]"
+                                  : selectedFolderId && folders.some((f) => f.id === selectedFolderId)
+                                    ? "bg-[#FFED00]/5 text-[#FFED00]/80"
+                                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                              }`}
+                            >
+                              {hasSubfolders ? (
+                                <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isRootOpen ? "rotate-90" : ""}`} />
+                              ) : (
+                                <Folder className="h-3 w-3 shrink-0 text-white/40" />
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      ))}
+                              <span className="truncate flex-1">{rootName}</span>
+                              {hasSubfolders && <span className="text-white/30 tabular-nums text-[10px]">{folders.length}</span>}
+                            </button>
+                            {/* Expanded root → show subfolders */}
+                            {isRootOpen && (
+                              <div className="ml-4 border-l border-white/10 pl-2 my-0.5">
+                                {folders.map((folder) => {
+                                  const subPath = (folder.name || "").replace(new RegExp(`^${rootName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*/\\s*`), "");
+                                  const displayName = subPath || rootName;
+                                  return (
+                                    <div key={folder.id} className="flex items-center gap-0.5 py-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedFolderId(folder.id)}
+                                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-all truncate max-w-[280px] ${
+                                          selectedFolderId === folder.id
+                                            ? "bg-[#FFED00]/15 text-[#FFED00] border border-[#FFED00]/40"
+                                            : "text-white/60 hover:text-white hover:bg-white/5"
+                                        }`}
+                                        title={folder.name}
+                                      >
+                                        <Folder className="h-2.5 w-2.5 shrink-0" />
+                                        {displayName}
+                                      </button>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                          <Button variant="ghost" size="icon" className="h-5 w-5 text-white/30 hover:text-white/60 hover:bg-white/10">
+                                            <ChevronDown className="h-2.5 w-2.5" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="border-white/20 bg-slate-900">
+                                          {FOLDER_CATEGORIES.map((moveCat) => (
+                                            <DropdownMenuItem
+                                              key={moveCat}
+                                              className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-[#FFED00] font-bold" : "text-white/80"} focus:bg-white/10`}
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if ((folder.category || "Portfolio Companies") === moveCat) return;
+                                                const { error } = await updateFolderCategory(folder.id, moveCat);
+                                                if (!error) {
+                                                  sourceFolders.forEach((sf) => { if (sf.id === folder.id) sf.category = moveCat; });
+                                                  toast({ title: "Category updated", description: `"${folder.name}" → ${moveCat}` });
+                                                }
+                                              }}
+                                            >
+                                              {moveCat}
+                                            </DropdownMenuItem>
+                                          ))}
+                                          {onDeleteFolderAndContents && (
+                                            <>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem
+                                                className="text-red-400 focus:text-red-300 focus:bg-red-500/20"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setFolderToDelete({ id: folder.id, name: folder.name || "Folder" });
+                                                }}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                                Delete folder & docs
+                                              </DropdownMenuItem>
+                                            </>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                );
-              })}
-              {/* Uncategorized */}
-              {(() => {
-                const uncategorized = sourceFolders.filter((f) => f.category && !FOLDER_CATEGORIES.includes(f.category as any));
-                if (uncategorized.length === 0) return null;
-                return (
-                  <div className="mb-3">
-                    <p className="text-xs font-mono text-white/40 mb-1 uppercase tracking-wide">Other</p>
-                    <div className="flex flex-wrap gap-2">
-                      {uncategorized.map((folder) => (
-                        <div key={folder.id} className="flex items-center gap-0.5">
-                          <Badge
-                            variant="outline"
-                            className={`cursor-pointer transition-all font-mono ${
-                              selectedFolderId === folder.id
-                                ? "border-[#FFED00] text-[#FFED00] bg-[#FFED00]/10"
-                                : "border-white text-white bg-transparent hover:border-[#FFED00] hover:text-[#FFED00]"
-                            }`}
-                            onClick={() => setSelectedFolderId(folder.id)}
-                          >
-                            <Folder className="h-3 w-3 mr-1" />
-                            {folder.name}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+                  );
+                })()}
+              </div>
+            );
+          })()}
           {/* Confirm delete folder and contents */}
           <AlertDialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
             <AlertDialogContent className="border-2 border-white/20 bg-slate-900 text-white">
