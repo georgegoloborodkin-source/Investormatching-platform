@@ -15,16 +15,6 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Force resolution to CJS entry (xlsx.mjs not in published npm tarball on Vercel)
-      xlsx: path.resolve(__dirname, "node_modules/xlsx/xlsx.js"),
-    },
-  },
-  optimizeDeps: {
-    include: ["xlsx"],
-  },
-  build: {
-    commonjsOptions: {
-      include: [/xlsx/, /node_modules/],
     },
   },
 }));

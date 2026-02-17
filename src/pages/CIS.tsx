@@ -188,7 +188,8 @@ import {
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
-import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
+
+// xlsx loaded at runtime from CDN to avoid Vercel build resolution issues
 
 // ============================================================================
 // TYPES
@@ -11761,14 +11762,21 @@ export default function CIS() {
         }
       } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
         const buf = await file.arrayBuffer();
-        const wb = xlsxRead(buf, { type: "array" });
+        const XLSX = await import("https://esm.sh/xlsx@0.18.5");
+        const read = XLSX.read ?? (XLSX.default && XLSX.default.read);
+        const utils = XLSX.utils ?? (XLSX.default && XLSX.default.utils);
+        if (!read || !utils) {
+          toast({ title: "XLSX load failed", description: "Could not load spreadsheet library.", variant: "destructive" });
+          return;
+        }
+        const wb = read(buf, { type: "array" });
         const first = wb.SheetNames[0];
         if (!first) {
           toast({ title: "Invalid XLSX", description: "No sheet found.", variant: "destructive" });
           return;
         }
         const sheet = wb.Sheets[first];
-        rows = xlsxUtils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, unknown>>;
+        rows = utils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, unknown>>;
       } else {
         toast({ title: "Unsupported file", description: "Use .csv or .xlsx", variant: "destructive" });
         return;
