@@ -380,6 +380,15 @@ export async function askClaudeAnswerStream(
  * The backend handles all retrieval (SQL, vector search, graph) via Claude tool use.
  * Frontend just streams the final answer.
  */
+/** Verifiable RAG: source citation from agent (doc_id + chunk for click-to-source) */
+export type VerifiableSource = {
+  type: "document" | "company_card" | "knowledge_graph";
+  title: string;
+  doc_id?: string;
+  chunk?: number;
+  entity_name?: string;
+};
+
 export async function askAgentStream(
   input: {
     question: string;
@@ -391,7 +400,9 @@ export async function askAgentStream(
   onChunk: (text: string) => void,
   onStatus?: (status: string) => void,
   onError?: (error: Error) => void,
-  externalSignal?: AbortSignal
+  externalSignal?: AbortSignal,
+  onVerifiableSources?: (sources: VerifiableSource[]) => void,
+  onCritic?: (text: string) => void
 ): Promise<void> {
   const baseUrl = await resolveConverterApiBaseUrl();
   const controller = new AbortController();
@@ -471,6 +482,10 @@ export async function askAgentStream(
                   onStatus?.(data.status);
                   onChunk(`\n*${data.status}*\n`);
                 }
+              } else if (data.verifiable_sources && Array.isArray(data.verifiable_sources)) {
+                onVerifiableSources?.(data.verifiable_sources as VerifiableSource[]);
+              } else if (data.critic && typeof data.critic === "string") {
+                onCritic(data.critic);
               } else if (data.error) {
                 onError?.(new Error(data.error));
                 return;

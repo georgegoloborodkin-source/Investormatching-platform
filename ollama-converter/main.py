@@ -7223,13 +7223,19 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
     lines = [f"Found {len(chunks)} relevant document chunks:\n"]
     for i, chunk in enumerate(chunks, 1):
         doc = doc_map.get(chunk.get("document_id", ""), {})
+        doc_id = chunk.get("document_id", "")
         title = doc.get("title") or doc.get("file_name") or "Unknown document"
+        file_name = doc.get("file_name") or ""
         similarity = chunk.get("similarity", 0)
         rerank_score = chunk.get("rerank_score")
+        parent_idx = chunk.get("parent_index", 0)
         text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
         text = text[:1500]
         score_str = f"rerank: {rerank_score:.2f}" if rerank_score is not None else f"relevance: {similarity:.2f}"
-        lines.append(f"[{i}] **{title}** ({score_str})\n{text}")
+        # Include doc_id and chunk index so the LLM can cite verifiably
+        lines.append(
+            f"[{i}] **{title}** ({score_str}) [doc_id:{doc_id}|chunk:{parent_idx}|file:{file_name}]\n{text}"
+        )
 
     return "\n\n".join(lines)
 
@@ -7488,6 +7494,18 @@ ALWAYS use your tools to find information before answering. Never guess or say "
 5. **Comparison questions** (compare 2-3 companies):
    → Call `get_company_details` for each company IN PARALLEL (all in one tool-use turn). Then answer from the results.
 
+## VERIFIABLE CITATIONS (CRITICAL — Click-to-Source)
+
+Every fact, number, or claim you state MUST be backed by a citation. Use this format:
+
+- When you get results from `search_documents`, each chunk has a tag like `[doc_id:UUID|chunk:N|file:name.pdf]`.
+- In your answer, cite the source inline using: `[[Source: Document Title | doc_id:UUID | chunk:N]]`
+- Example: "Chari's ARR is $1.2M [[Source: Chari Pitch Deck Q3 2025.pdf | doc_id:abc-123 | chunk:3]]"
+- For portfolio/company card data, cite as: `[[Source: Company Card — Company Name]]`
+- For knowledge graph data, cite as: `[[Source: Knowledge Graph — Entity Name]]`
+- NEVER state a number, revenue figure, metric, or financial claim without a citation.
+- If you cannot cite a source, explicitly say "I could not verify this from the available documents."
+
 ## CONSISTENCY RULES (CRITICAL)
 
 - **Be EXHAUSTIVE**: When the user asks "list ALL companies matching X", you MUST present ALL results from the tool. Do NOT cherry-pick, summarize, or omit any results. If search_portfolio returns 8 companies, list ALL 8.
@@ -7507,6 +7525,156 @@ ALWAYS use your tools to find information before answering. Never guess or say "
 """
 
 MAX_AGENT_ITERATIONS = 4
+
+# ---------------------------------------------------------------------------
+#  Verifiable RAG: extract cited sources from agent answer
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+_SOURCE_CITATION_RE = _re.compile(
+    r"\[\[Source:\s*(.+?)\s*\|\s*doc_id:([a-f0-9\-]+)\s*\|\s*chunk:(\d+)\]\]",
+    _re.IGNORECASE,
+)
+_SOURCE_CARD_RE = _re.compile(
+    r"\[\[Source:\s*Company Card\s*[—–-]\s*(.+?)\]\]",
+    _re.IGNORECASE,
+)
+_SOURCE_KG_RE = _re.compile(
+    r"\[\[Source:\s*Knowledge Graph\s*[—–-]\s*(.+?)\]\]",
+    _re.IGNORECASE,
+)
+
+
+def extract_verifiable_sources(answer_text: str) -> list[dict]:
+    """Parse [[Source: ...]] citations from the agent answer text.
+    Returns a list of dicts: {type, title, doc_id?, chunk?, entity_name?}
+    """
+    sources: list[dict] = []
+    seen: set[str] = set()
+
+    for m in _SOURCE_CITATION_RE.finditer(answer_text):
+        title, doc_id, chunk = m.group(1).strip(), m.group(2).strip(), int(m.group(3))
+        key = f"doc:{doc_id}:{chunk}"
+        if key not in seen:
+            seen.add(key)
+            sources.append({"type": "document", "title": title, "doc_id": doc_id, "chunk": chunk})
+
+    for m in _SOURCE_CARD_RE.finditer(answer_text):
+        name = m.group(1).strip()
+        key = f"card:{name}"
+        if key not in seen:
+            seen.add(key)
+            sources.append({"type": "company_card", "title": f"Company Card — {name}", "entity_name": name})
+
+    for m in _SOURCE_KG_RE.finditer(answer_text):
+        name = m.group(1).strip()
+        key = f"kg:{name}"
+        if key not in seen:
+            seen.add(key)
+            sources.append({"type": "knowledge_graph", "title": f"Knowledge Graph — {name}", "entity_name": name})
+
+    return sources
+
+
+def clean_citations_for_display(answer_text: str) -> str:
+    """Replace verbose [[Source: ...]] tags with compact clickable markers for frontend."""
+    counter = {"n": 0}
+    source_map: dict[str, int] = {}
+
+    def _replace(m: _re.Match) -> str:
+        full = m.group(0)
+        if full not in source_map:
+            counter["n"] += 1
+            source_map[full] = counter["n"]
+        n = source_map[full]
+        return f"[Source {n}]"
+
+    text = _SOURCE_CITATION_RE.sub(_replace, answer_text)
+    text = _SOURCE_CARD_RE.sub(_replace, text)
+    text = _SOURCE_KG_RE.sub(_replace, text)
+    return text
+
+
+# ---------------------------------------------------------------------------
+#  Devil's Advocate Agent (Critic) — finds risks & red flags
+# ---------------------------------------------------------------------------
+
+DEVILS_ADVOCATE_PROMPT = """You are the Devil's Advocate — a rigorous, skeptical VC risk analyst.
+
+You will receive an AI-generated analysis about a startup or portfolio company.
+Your job is to find RED FLAGS, risks, and weaknesses that the analysis missed or glossed over.
+
+## Rules:
+1. Focus ONLY on the data provided. Do NOT hallucinate or invent risks that are not supported by the facts.
+2. Look for these specific risk categories:
+   - **Financial risks**: Unsustainable burn rate, runway concerns, revenue declining, metrics not adding up
+   - **Market risks**: Small TAM, saturated market, regulatory risks, geopolitical risks
+   - **Team risks**: Missing key roles, founder concentration risk, team too small for ambition
+   - **Business model risks**: Unit economics unclear, customer concentration, no moat
+   - **Competitive risks**: Strong incumbents, low barriers to entry
+   - **Data gaps**: Important information that is MISSING from the analysis (e.g., no financials, no TAM)
+3. Be concise. Each red flag should be 1-2 sentences max.
+4. If there are genuinely no red flags, say so honestly. Do NOT fabricate risks.
+5. Rate overall risk: LOW / MEDIUM / HIGH
+
+## Output Format:
+🚩 **RED FLAGS**
+
+1. **[Category]**: [Risk description]
+2. **[Category]**: [Risk description]
+...
+
+**Overall Risk Level**: [LOW/MEDIUM/HIGH]
+**Key Concern**: [One sentence summary of the biggest risk]
+"""
+
+
+async def run_devils_advocate(
+    answer_text: str,
+    tool_results_text: str,
+    question: str,
+    model_name: str = "claude-sonnet-4-20250514",
+) -> str | None:
+    """Run the Devil's Advocate critic on the agent's answer. Returns critic text or None if unavailable."""
+    if not _anthropic_sdk_available:
+        return None
+
+    # Only run critic for substantive answers (not short/empty/scope-empty)
+    if len(answer_text) < 100 or "SCOPE_EMPTY" in answer_text:
+        return None
+
+    # Only run for questions that involve company analysis, not simple lists
+    analysis_keywords = ["tell", "about", "analyze", "details", "revenue", "financials",
+                         "risk", "deep dive", "due diligence", "compare", "valuation",
+                         "burn", "runway", "team", "model", "pitch"]
+    q_lower = question.lower()
+    if not any(kw in q_lower for kw in analysis_keywords):
+        return None
+
+    try:
+        client = _get_anthropic_async_client()
+        critic_input = (
+            f"## User Question:\n{question}\n\n"
+            f"## Agent's Answer:\n{answer_text}\n\n"
+            f"## Raw Tool Data (for verification):\n{tool_results_text[:4000]}"
+        )
+        response = await client.messages.create(
+            model=model_name,
+            max_tokens=1000,
+            temperature=0.2,
+            system=DEVILS_ADVOCATE_PROMPT,
+            messages=[{"role": "user", "content": critic_input}],
+        )
+        critic_text = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                critic_text += block.text
+        return critic_text.strip() if critic_text.strip() else None
+    except Exception as e:
+        print(f"[CRITIC] Devil's Advocate failed: {e}")
+        return None
+
 
 # ---------------------------------------------------------------------------
 #  Agent request model
@@ -7582,6 +7750,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 client = _get_anthropic_async_client()
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
+                all_tool_results_text = ""  # Collect tool results for Devil's Advocate
 
                 system_prompt = AGENT_SYSTEM_PROMPT
                 max_iterations = MAX_AGENT_ITERATIONS
@@ -7657,17 +7826,37 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     # If no tool calls, send the final answer
                     if not tool_calls:
                         full_text = "\n".join(text_parts)
-                        if full_text:
-                            # Send in chunks for progressive rendering
+
+                        # Extract verifiable sources from citations
+                        verifiable_sources = extract_verifiable_sources(full_text)
+                        # Clean citations for display (replace verbose tags with [Source N])
+                        display_text = clean_citations_for_display(full_text)
+
+                        if display_text:
                             chunk_size = 80
-                            for i in range(0, len(full_text), chunk_size):
-                                yield f"data: {json.dumps({'text': full_text[i:i+chunk_size]})}\n\n"
-                                await asyncio.sleep(0)  # yield control for SSE flush
+                            for i in range(0, len(display_text), chunk_size):
+                                yield f"data: {json.dumps({'text': display_text[i:i+chunk_size]})}\n\n"
+                                await asyncio.sleep(0)
                         if web_search_citations:
                             sources_text = "\n\n**Web Sources:**"
                             for i, (url, title) in enumerate(web_search_citations.items(), 1):
                                 sources_text += f"\n[{i}] [{title}]({url})"
                             yield f"data: {json.dumps({'text': sources_text})}\n\n"
+
+                        # Send verifiable sources as structured data
+                        if verifiable_sources:
+                            yield f"data: {json.dumps({'verifiable_sources': verifiable_sources})}\n\n"
+
+                        # Devil's Advocate: run critic agent on substantive answers
+                        try:
+                            critic_text = await run_devils_advocate(
+                                full_text, all_tool_results_text, question, model_name
+                            )
+                            if critic_text:
+                                yield f"data: {json.dumps({'critic': critic_text})}\n\n"
+                        except Exception as e:
+                            print(f"[CRITIC] Error: {e}")
+
                         yield "data: [DONE]\n\n"
                         return
 
@@ -7698,6 +7887,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         print(f"[AGENT] Executing {tc.name} with {json.dumps(tc.input)[:200]}")
                         result_text = await _execute_agent_tool(tc.name, tc.input, event_id, folder_ids or None)
                         print(f"[AGENT] Result from {tc.name}: {result_text[:200]}...")
+                        all_tool_results_text += f"\n--- {tc.name} ---\n{result_text}\n"
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tc.id,
@@ -7706,8 +7896,9 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
 
                     current_messages.append({"role": "user", "content": tool_results})
 
-                # If we exhausted iterations, do a final streaming call
+                # If we exhausted iterations, do a final streaming call (buffer for verifiable sources + critic)
                 yield f"data: {json.dumps({'status': 'Generating final answer...'})}\n\n"
+                final_answer_buffer: list[str] = []
                 try:
                     async with client.messages.stream(
                         model=model_name,
@@ -7719,9 +7910,26 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         async for event in final_stream:
                             if event.type == "content_block_delta" and hasattr(event.delta, "type"):
                                 if event.delta.type == "text_delta" and hasattr(event.delta, "text"):
-                                    yield f"data: {json.dumps({'text': event.delta.text})}\n\n"
+                                    delta = event.delta.text
+                                    final_answer_buffer.append(delta)
+                                    yield f"data: {json.dumps({'text': delta})}\n\n"
                 except Exception as e:
                     yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
+
+                # Verifiable RAG: extract and send sources; Devil's Advocate: run critic
+                full_final_text = "".join(final_answer_buffer)
+                if full_final_text:
+                    verifiable_sources = extract_verifiable_sources(full_final_text)
+                    if verifiable_sources:
+                        yield f"data: {json.dumps({'verifiable_sources': verifiable_sources})}\n\n"
+                    try:
+                        critic_text = await run_devils_advocate(
+                            full_final_text, all_tool_results_text, question, model_name
+                        )
+                        if critic_text:
+                            yield f"data: {json.dumps({'critic': critic_text})}\n\n"
+                    except Exception as e:
+                        print(f"[CRITIC] Error: {e}")
 
                 yield "data: [DONE]\n\n"
 
