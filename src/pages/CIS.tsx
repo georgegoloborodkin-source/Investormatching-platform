@@ -188,6 +188,7 @@ import {
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from "xlsx";
 
 // ============================================================================
 // TYPES
@@ -1562,6 +1563,8 @@ function SourcesTab({
   onCreateSource,
   onCreateFolder,
   onDeleteFolderAndContents,
+  onFolderCategoryUpdated,
+  onFoldersCategoriesSaved,
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
@@ -1597,6 +1600,8 @@ function SourcesTab({
   ) => Promise<void>;
   onCreateFolder: (name: string, category?: string) => Promise<SourceFolder | null>;
   onDeleteFolderAndContents?: (folderId: string) => Promise<{ docCount: number } | { error: string }>;
+  onFolderCategoryUpdated?: (folderId: string, category: string) => Promise<void>;
+  onFoldersCategoriesSaved?: (updates: Array<{ id: string; category: string }>) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
   onAutoLogDecision: (input: {
@@ -3661,20 +3666,25 @@ function SourcesTab({
                 </SelectItem>
                 {FOLDER_CATEGORIES.map((cat) => {
                   const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
-                  if (catFolders.length === 0) return null;
                   return (
                     <React.Fragment key={cat}>
                       <div className="px-2 py-1 text-[10px] font-mono text-[#FFED00]/60 uppercase tracking-wider pointer-events-none">
-                        {cat}
+                        {cat} {catFolders.length > 0 ? `(${catFolders.length})` : "(0)"}
                       </div>
-                      {catFolders.map((folder) => (
-                        <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10 pl-4">
-                          <span className="flex items-center gap-2">
-                            <Folder className="h-4 w-4 text-[#FFED00]" />
-                            {folder.name}
-                          </span>
-                        </SelectItem>
-                      ))}
+                      {catFolders.length > 0 ? (
+                        catFolders.map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10 pl-4">
+                            <span className="flex items-center gap-2">
+                              <Folder className="h-4 w-4 text-[#FFED00]" />
+                              {folder.name}
+                            </span>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-2 py-1.5 text-[10px] font-mono text-white/40 italic pointer-events-none pl-4">
+                          No folders — create one below
+                        </div>
+                      )}
                     </React.Fragment>
                   );
                 })}
@@ -3754,11 +3764,10 @@ function SourcesTab({
                   Document Folders ({sourceFolders.length})
                 </Label>
 
-                {/* Category pills row */}
+                {/* Category pills row — show all categories (Funds, BD, Mentors/Corporates, etc.) even when 0 */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {FOLDER_CATEGORIES.map((cat) => {
                     const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
-                    if (catFolders.length === 0) return null;
                     const isCatOpen = expandedRootKey?.startsWith(cat + "::") || expandedRootKey === cat;
                     return (
                       <button
@@ -3768,18 +3777,20 @@ function SourcesTab({
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-mono transition-all ${
                           isCatOpen
                             ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00]"
-                            : "border-white/25 text-white/70 hover:border-[#FFED00]/50 hover:text-[#FFED00]"
+                            : catFolders.length === 0
+                              ? "border-white/15 text-white/50 hover:border-white/30 hover:text-white/70"
+                              : "border-white/25 text-white/70 hover:border-[#FFED00]/50 hover:text-[#FFED00]"
                         }`}
                       >
                         <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isCatOpen ? "rotate-90" : ""}`} />
                         {cat}
-                        <span className="text-white/40 tabular-nums">({catFolders.length})</span>
+                        <span className={`tabular-nums ${catFolders.length === 0 ? "text-white/30" : "text-white/40"}`}>({catFolders.length})</span>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Expanded category → group by root company name */}
+                {/* Expanded category → group by root company name (or empty state) */}
                 {expandedRootKey && (() => {
                   const activeCat = expandedRootKey.includes("::") ? expandedRootKey.split("::")[0] : expandedRootKey;
                   const activeRoot = expandedRootKey.includes("::") ? expandedRootKey.split("::").slice(1).join("::") : null;
@@ -3795,6 +3806,9 @@ function SourcesTab({
 
                   return (
                     <div className="mt-1 p-2 rounded border border-white/15 bg-white/[0.02] max-h-[300px] overflow-y-auto">
+                      {sortedRoots.length === 0 ? (
+                        <p className="text-[11px] font-mono text-white/50 py-2">No folders in this category. Create one above and choose category &quot;{activeCat}&quot;.</p>
+                      ) : null}
                       {sortedRoots.map((rootName) => {
                         const folders = rootGroups[rootName];
                         const isRootOpen = activeRoot === rootName;
@@ -3861,11 +3875,8 @@ function SourcesTab({
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 if ((folder.category || "Portfolio Companies") === moveCat) return;
-                                                const { error } = await updateFolderCategory(folder.id, moveCat);
-                                                if (!error) {
-                                                  sourceFolders.forEach((sf) => { if (sf.id === folder.id) sf.category = moveCat; });
-                                                  toast({ title: "Category updated", description: `"${folder.name}" → ${moveCat}` });
-                                                }
+                                                await onFolderCategoryUpdated?.(folder.id, moveCat);
+                                                toast({ title: "Category updated", description: `"${folder.name}" → ${moveCat}` });
                                               }}
                                             >
                                               {moveCat}
@@ -4651,10 +4662,7 @@ function SourcesTab({
             <Button
               className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
               onClick={async () => {
-                for (const pf of categoryPickerFolders) {
-                  await updateFolderCategory(pf.id, pf.category);
-                  sourceFolders.forEach((f) => { if (f.id === pf.id) f.category = pf.category; });
-                }
+                await onFoldersCategoriesSaved?.(categoryPickerFolders.map((pf) => ({ id: pf.id, category: pf.category })));
                 toast({ title: "Categories saved", description: `Updated ${categoryPickerFolders.length} folder(s).` });
                 setCategoryPickerOpen(false);
                 setCategoryPickerFolders([]);
@@ -7383,6 +7391,33 @@ export default function CIS() {
       return { docCount: result.docCount };
     },
     [activeEventId]
+  );
+
+  const handleFolderCategoryUpdated = useCallback(
+    async (folderId: string, category: string) => {
+      const { error } = await updateFolderCategory(folderId, category);
+      if (!error) {
+        setSourceFolders((prev) =>
+          prev.map((sf) => (sf.id === folderId ? { ...sf, category } : sf))
+        );
+      }
+    },
+    []
+  );
+
+  const handleFoldersCategoriesSaved = useCallback(
+    async (updates: Array<{ id: string; category: string }>) => {
+      for (const { id, category } of updates) {
+        await updateFolderCategory(id, category);
+      }
+      setSourceFolders((prev) =>
+        prev.map((f) => {
+          const u = updates.find((x) => x.id === f.id);
+          return u ? { ...f, category: u.category } : f;
+        })
+      );
+    },
+    []
   );
 
   const ensureActiveEventId = useCallback(async () => {
@@ -11568,26 +11603,22 @@ export default function CIS() {
     connection_type: string;
     reasoning: string;
     confidence: number;
-    suggested_actions?: string[];
   }>>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [suggestForCompany, setSuggestForCompany] = useState<string | null>(null);
 
-  const handleSuggestConnections = useCallback(async (companyName?: string | null) => {
+  const handleSuggestConnections = useCallback(async () => {
     setSuggestionsLoading(true);
     try {
-      // Build sources from documents (use more for tier-2 VCs with many docs)
-      const docSources = documents.slice(0, 15).map((doc) => ({
+      const docSources = documents.slice(0, 10).map((doc) => ({
         title: doc.title,
         file_name: null as string | null,
-        snippet: null as string | null, // The backend will use titles for context
+        snippet: null as string | null,
       }));
 
       const result = await suggestConnections({
         sources: docSources,
         existingConnections: connectionsForChat,
-        maxSuggestions: 8,
-        companyName: companyName ?? undefined,
+        maxSuggestions: 5,
       });
 
       setAiSuggestions(result.suggestions);
@@ -11618,28 +11649,125 @@ export default function CIS() {
     }
   }, [documents, connectionsForChat, toast]);
 
-  const handleAddAllSuggestions = useCallback(async () => {
-    if (!activeEventId || aiSuggestions.length === 0) return;
+  const handleImportConnections = useCallback(async (file: File) => {
+    if (!activeEventId) {
+      toast({ title: "No event", description: "Select an event first.", variant: "destructive" });
+      return;
+    }
     const userId = profile?.id || user?.id || null;
+    const CONNECTION_TYPES: ConnectionType[] = ["BD", "INV", "Knowledge", "Partnership", "Portfolio"];
+    const CONNECTION_STATUSES: ConnectionStatus[] = ["To Connect", "In Progress", "Connected", "Rejected", "Completed"];
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "_");
+    const findCol = (row: Record<string, unknown>, keys: string[]) => {
+      const rowKeys = Object.keys(row);
+      for (const k of keys) {
+        const n = norm(k);
+        const found = rowKeys.find((rk) => norm(rk) === n || norm(rk).replace(/_/g, "") === n.replace(/_/g, ""));
+        if (found) {
+          const v = row[found];
+          return (v != null ? String(v).trim() : "") || "";
+        }
+      }
+      return "";
+    };
+    let rows: Array<Record<string, unknown>> = [];
+    const name = file.name.toLowerCase();
     try {
-      for (const s of aiSuggestions) {
-        await insertCompanyConnection(activeEventId, {
-          source_company_name: s.source_company,
-          target_company_name: s.target_company,
-          connection_type: s.connection_type as ConnectionType,
-          connection_status: "To Connect",
-          ai_reasoning: s.reasoning + (s.suggested_actions?.length ? `\nWays to connect: ${s.suggested_actions.join("; ")}` : ""),
+      if (name.endsWith(".csv")) {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        if (lines.length < 2) {
+          toast({ title: "Invalid CSV", description: "File must have a header row and at least one data row.", variant: "destructive" });
+          return;
+        }
+        const sep = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
+        const parseLine = (line: string) => {
+          const out: string[] = [];
+          let cur = "";
+          let inQ = false;
+          for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (c === '"') {
+              if (inQ && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+              } else inQ = !inQ;
+              continue;
+            }
+            if (c === sep && !inQ) {
+              out.push(cur.trim());
+              cur = "";
+              continue;
+            }
+            cur += c;
+          }
+          out.push(cur.trim());
+          return out;
+        };
+        const header = parseLine(lines[0]);
+        for (let i = 1; i < lines.length; i++) {
+          const cells = parseLine(lines[i]);
+          const row: Record<string, unknown> = {};
+          header.forEach((h, j) => {
+            row[h] = cells[j] ?? "";
+          });
+          rows.push(row);
+        }
+      } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const first = wb.SheetNames[0];
+        if (!first) {
+          toast({ title: "Invalid XLSX", description: "No sheet found.", variant: "destructive" });
+          return;
+        }
+        const sheet = wb.Sheets[first];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Array<Record<string, unknown>>;
+      } else {
+        toast({ title: "Unsupported file", description: "Use .csv or .xlsx", variant: "destructive" });
+        return;
+      }
+      let added = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      for (const row of rows) {
+        const source = findCol(row, ["source_company_name", "source_company", "source", "Source Company", "From", "Company A"]) || String((row as any)["Source"] ?? "").trim() || String((row as any)["source"] ?? "").trim();
+        const target = findCol(row, ["target_company_name", "target_company", "target", "Target Company", "To", "Company B"]) || String((row as any)["Target"] ?? "").trim() || String((row as any)["target"] ?? "").trim();
+        if (!source || !target) {
+          skipped++;
+          continue;
+        }
+        const typeVal = findCol(row, ["connection_type", "type", "Connection Type", "Type"]);
+        const statusVal = findCol(row, ["connection_status", "status", "Status"]);
+        const notesVal = findCol(row, ["notes", "Notes", "ai_reasoning", "reasoning", "Reasoning"]);
+        const connectionType: ConnectionType = CONNECTION_TYPES.find((t) => norm(t) === norm(typeVal)) ?? "BD";
+        const connectionStatus: ConnectionStatus = CONNECTION_STATUSES.find((s) => norm(s) === norm(statusVal)) ?? "To Connect";
+        const { error } = await insertCompanyConnection(activeEventId, {
+          source_company_name: source,
+          target_company_name: target,
+          connection_type: connectionType,
+          connection_status: connectionStatus,
+          notes: notesVal || null,
           created_by: userId,
         });
+        if (error) {
+          errors.push(`${source} → ${target}: ${error.message}`);
+        } else {
+          added++;
+        }
       }
       const { data } = await getCompanyConnectionsByEvent(activeEventId);
       if (data) setCompanyConnections(data as typeof companyConnections);
-      setAiSuggestions([]);
-      toast({ title: "Connections added", description: `${aiSuggestions.length} connection(s) added as To Connect.` });
+      if (errors.length > 0) {
+        toast({ title: `Imported ${added}`, description: `${skipped} skipped, ${errors.length} errors. ${errors.slice(0, 2).join("; ")}`, variant: "destructive" });
+      } else {
+        toast({ title: "Connections imported", description: `${added} connection(s) added. ${skipped} row(s) skipped (missing source/target).` });
+      }
     } catch (err) {
-      toast({ title: "Add failed", description: err instanceof Error ? err.message : "Could not add connections.", variant: "destructive" });
+      console.error("Import connections failed:", err);
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Could not parse file.", variant: "destructive" });
     }
-  }, [activeEventId, aiSuggestions, profile?.id, user?.id]);
+  }, [activeEventId, profile?.id, user?.id, toast]);
 
   const evidence = initialKOs;
   const buildStamp =
@@ -12179,10 +12307,9 @@ export default function CIS() {
                       </label>
                     ))}
                   </div>
-                  {/* Folder scopes — grouped by category, then by company */}
+                  {/* Folder scopes — grouped by category (show all: Portfolio Companies, Funds, BD, Mentors/Corporates, etc.) */}
                   {(() => {
                     const folderScopes = scopes.filter((s) => s.type === "folder");
-                    if (folderScopes.length === 0) return null;
 
                     // Group by category
                     const catGroups = new Map<string, ScopeItem[]>();
@@ -12195,9 +12322,8 @@ export default function CIS() {
                     const orderedCats = [...FOLDER_CATEGORIES, ...Array.from(catGroups.keys()).filter((c) => !FOLDER_CATEGORIES.includes(c as any))];
 
                     return orderedCats.map((catName) => {
-                      const catItems = catGroups.get(catName);
-                      if (!catItems || catItems.length === 0) return null;
-                      const catAllChecked = catItems.every((i) => i.checked);
+                      const catItems = catGroups.get(catName) ?? [];
+                      const catAllChecked = catItems.length > 0 && catItems.every((i) => i.checked);
                       const catSomeChecked = catItems.some((i) => i.checked);
                       const isCatExpanded = expandedScopeGroups.has(`cat:${catName}`);
 
@@ -12246,9 +12372,12 @@ export default function CIS() {
                             </span>
                           </div>
 
-                          {/* Expanded company groups inside this category */}
+                          {/* Expanded company groups inside this category (or empty state) */}
                           {isCatExpanded && (
                             <div className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-1.5">
+                              {catItems.length === 0 ? (
+                                <span className="text-[9px] font-mono text-white/40">No folders in this category. Add folders in Sources → Document Folders.</span>
+                              ) : null}
                               {Array.from(companyGroups.entries()).map(([groupName, items]) => {
                                 const allChecked = items.every((i) => i.checked);
                                 const someChecked = items.some((i) => i.checked);
@@ -12663,6 +12792,8 @@ export default function CIS() {
               onCreateSource={handleCreateSource}
               onCreateFolder={handleCreateFolder}
               onDeleteFolderAndContents={handleDeleteFolderAndContents}
+              onFolderCategoryUpdated={handleFolderCategoryUpdated}
+              onFoldersCategoriesSaved={handleFoldersCategoriesSaved}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}
@@ -12763,6 +12894,7 @@ export default function CIS() {
               onUpdateStatus={handleUpdateConnectionStatus}
               onAddConnection={() => setLogDecisionDialogOpen(true)}
               onSuggestConnections={handleSuggestConnections}
+              onImportConnections={handleImportConnections}
               onReviewPending={async (edgeId: string, status: "approved" | "rejected") => {
                 const userId = profile?.id || user?.id;
                 if (!userId) {
@@ -12887,9 +13019,7 @@ export default function CIS() {
                           <Button
                             size="sm"
                             onClick={() => {
-                              setPendingDecisionContext({
-                                aiReasoning: s.reasoning,
-                              });
+                              setPendingDecisionContext({ aiReasoning: s.reasoning });
                               setLogDecisionDialogOpen(true);
                             }}
                             className="bg-[#6366f1] text-white hover:bg-[#6366f1]/80 font-bold text-xs"
@@ -14592,6 +14722,7 @@ function ConnectionsGraphTab({
   onSuggestConnections,
   onReviewPending,
   onBatchReviewPending,
+  onImportConnections,
 }: {
   connections: Array<{
     id: string;
@@ -14621,19 +14752,19 @@ function ConnectionsGraphTab({
   onSuggestConnections?: () => void;
   onReviewPending: (edgeId: string, status: "approved" | "rejected") => Promise<void>;
   onBatchReviewPending?: (edgeIds: string[], status: "approved" | "rejected") => Promise<void>;
+  onImportConnections?: (file: File) => void;
 }) {
   const [showAllPending, setShowAllPending] = useState(false);
   const PENDING_PREVIEW_COUNT = 5;
   const pendingToShow = showAllPending ? pendingReviews : pendingReviews.slice(0, PENDING_PREVIEW_COUNT);
   const hasMorePending = pendingReviews.length > PENDING_PREVIEW_COUNT;
-  // Extract unique companies from connections
   const companies = useMemo(() => {
-    const companySet = new Set<string>();
+    const set = new Set<string>();
     connections.forEach((c) => {
-      companySet.add(c.source_company_name);
-      companySet.add(c.target_company_name);
+      set.add(c.source_company_name);
+      set.add(c.target_company_name);
     });
-    return Array.from(companySet);
+    return Array.from(set);
   }, [connections]);
 
   // Group connections by status
@@ -14659,7 +14790,31 @@ function ConnectionsGraphTab({
             {connections.length} connections between {companies.length} companies
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onImportConnections && (
+            <>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                id="connections-file-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onImportConnections(file);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="border-2 border-white/40 text-white hover:bg-white/10 font-bold"
+                onClick={() => document.getElementById("connections-file-input")?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV / XLSX
+              </Button>
+            </>
+          )}
           {onSuggestConnections && (
             <Button
               onClick={onSuggestConnections}

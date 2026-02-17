@@ -117,6 +117,35 @@ export interface RecencyStats {
   momentumPct: number;
 }
 
+/** Sector × Stage cross-tab: count and positive rate per cell */
+export interface SectorStageCell {
+  sector: string;
+  stage: string;
+  total: number;
+  positive: number;
+  positiveRate: number;
+}
+
+/** Advanced insights: best/worst segments, concentration, calibration, momentum */
+export interface AdvancedDecisionInsights {
+  bestSectorByRate: { sector: string; rate: number; total: number } | null;
+  worstSectorByRate: { sector: string; rate: number; total: number } | null;
+  bestStageByRate: { stage: string; rate: number; total: number } | null;
+  worstStageByRate: { stage: string; rate: number; total: number } | null;
+  topSectorByVolume: { sector: string; total: number } | null;
+  concentrationTop3Pct: number; // % of decisions in top 3 sectors
+  concentrationTop3Sectors: string[];
+  confidenceWhenPositive: number; // avg confidence for positive outcomes
+  confidenceWhenNegative: number; // avg confidence for negative outcomes
+  calibrationHighConfidence: { positiveRate: number; total: number }; // 81-100 band
+  calibrationLowConfidence: { positiveRate: number; total: number };  // 0-40 band
+  momDecisionsPct: number | null; // % change vs previous month
+  momPositiveRatePct: number | null; // positive rate change vs previous month
+  pendingPct: number;
+  peakMonth: { date: string; decisions: number } | null;
+  suggestedFocus: string | null; // e.g. "Fintech – highest conversion (85%)"
+}
+
 export interface DecisionEngineAnalytics {
   sectorStats: SectorStats[];
   stageStats: StageStats[];
@@ -133,6 +162,8 @@ export interface DecisionEngineAnalytics {
   geoStats: GeoStats[];
   recencyStats: RecencyStats;
   outcomeRateSeries: Array<{ date: string; positiveRate: number; total: number }>;
+  sectorStageMatrix: SectorStageCell[];
+  advancedInsights: AdvancedDecisionInsights;
   totalDecisions: number;
   avgConfidence: number;
   positiveRate: number;
@@ -143,6 +174,25 @@ export interface DecisionEngineAnalytics {
  * Calculate comprehensive Decision Engine analytics
  */
 export function calculateDecisionEngineAnalytics(decisions: Decision[]): DecisionEngineAnalytics {
+  const emptyAdvanced: AdvancedDecisionInsights = {
+    bestSectorByRate: null,
+    worstSectorByRate: null,
+    bestStageByRate: null,
+    worstStageByRate: null,
+    topSectorByVolume: null,
+    concentrationTop3Pct: 0,
+    concentrationTop3Sectors: [],
+    confidenceWhenPositive: 0,
+    confidenceWhenNegative: 0,
+    calibrationHighConfidence: { positiveRate: 0, total: 0 },
+    calibrationLowConfidence: { positiveRate: 0, total: 0 },
+    momDecisionsPct: null,
+    momPositiveRatePct: null,
+    pendingPct: 0,
+    peakMonth: null,
+    suggestedFocus: null,
+  };
+
   if (decisions.length === 0) {
     return {
       sectorStats: [],
@@ -166,12 +216,36 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
         momentumPct: 0,
       },
       outcomeRateSeries: [],
+      sectorStageMatrix: [],
+      advancedInsights: emptyAdvanced,
       totalDecisions: 0,
       avgConfidence: 0,
       positiveRate: 0,
       avgDecisionVelocity: 0,
     };
   }
+
+  // Sector × Stage matrix
+  const sectorStageMap = new Map<string, { total: number; positive: number }>();
+  decisions.forEach((d) => {
+    const sector = d.context?.sector || "Unknown";
+    const stage = d.context?.stage || "Unknown";
+    const key = `${sector}|${stage}`;
+    const cell = sectorStageMap.get(key) || { total: 0, positive: 0 };
+    cell.total++;
+    if (d.outcome === "positive") cell.positive++;
+    sectorStageMap.set(key, cell);
+  });
+  const sectorStageMatrix: SectorStageCell[] = Array.from(sectorStageMap.entries()).map(([key, cell]) => {
+    const [sector, stage] = key.split("|");
+    return {
+      sector,
+      stage,
+      total: cell.total,
+      positive: cell.positive,
+      positiveRate: cell.total > 0 ? Math.round((cell.positive / cell.total) * 100) : 0,
+    };
+  }).sort((a, b) => b.total - a.total);
 
   // Sector stats
   const sectorMap = new Map<string, { total: number; positive: number; negative: number; pending: number; confidenceSum: number }>();
@@ -482,6 +556,100 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
   const momentumPct = prev30 > 0 ? Math.round(((last30 - prev30) / prev30) * 100) : (last30 > 0 ? 100 : 0);
   const recencyStats: RecencyStats = { last7, last30, last90, prev30, momentumPct };
 
+  // --- Advanced insights ---
+  const sectorWithRate = sectorStats.filter((s) => s.total >= 2).map((s) => ({ sector: s.sector, rate: s.conversionRate, total: s.total }));
+  const bestSectorByRate = sectorWithRate.length ? sectorWithRate.reduce((a, b) => (a.rate >= b.rate ? a : b)) : null;
+  const worstSectorByRate = sectorWithRate.length ? sectorWithRate.reduce((a, b) => (a.rate <= b.rate ? a : b)) : null;
+  const stageWithRate = stageStats.filter((s) => s.total >= 2).map((s) => ({ stage: s.stage, rate: s.conversionRate, total: s.total }));
+  const bestStageByRate = stageWithRate.length ? stageWithRate.reduce((a, b) => (a.rate >= b.rate ? a : b)) : null;
+  const worstStageByRate = stageWithRate.length ? stageWithRate.reduce((a, b) => (a.rate <= b.rate ? a : b)) : null;
+  const topSectorByVolume = sectorStats.length ? { sector: sectorStats[0].sector, total: sectorStats[0].total } : null;
+  const top3Total = sectorStats.slice(0, 3).reduce((sum, s) => sum + s.total, 0);
+  const concentrationTop3Pct = totalDecisions > 0 ? Math.round((top3Total / totalDecisions) * 100) : 0;
+  const concentrationTop3Sectors = sectorStats.slice(0, 3).map((s) => s.sector);
+
+  const positiveDecisions = decisions.filter((d) => d.outcome === "positive");
+  const negativeDecisions = decisions.filter((d) => d.outcome === "negative");
+  const confidenceWhenPositive = positiveDecisions.length
+    ? Math.round(positiveDecisions.reduce((s, d) => s + d.confidenceScore, 0) / positiveDecisions.length)
+    : 0;
+  const confidenceWhenNegative = negativeDecisions.length
+    ? Math.round(negativeDecisions.reduce((s, d) => s + d.confidenceScore, 0) / negativeDecisions.length)
+    : 0;
+
+  const highConfDecisions = decisions.filter((d) => d.confidenceScore >= 81);
+  const lowConfDecisions = decisions.filter((d) => d.confidenceScore <= 40);
+  const calibrationHighConfidence = {
+    total: highConfDecisions.length,
+    positiveRate: highConfDecisions.length
+      ? Math.round((highConfDecisions.filter((d) => d.outcome === "positive").length / highConfDecisions.length) * 100)
+      : 0,
+  };
+  const calibrationLowConfidence = {
+    total: lowConfDecisions.length,
+    positiveRate: lowConfDecisions.length
+      ? Math.round((lowConfDecisions.filter((d) => d.outcome === "positive").length / lowConfDecisions.length) * 100)
+      : 0,
+  };
+
+  const pendingCount = decisions.filter((d) => d.outcome === "pending" || !d.outcome).length;
+  const pendingPct = totalDecisions > 0 ? Math.round((pendingCount / totalDecisions) * 100) : 0;
+
+  const thisMonthKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
+  const lastMonth = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
+  const thisMonthData = timeSeries.find((t) => t.date === thisMonthKey);
+  const lastMonthData = timeSeries.find((t) => t.date === lastMonth);
+  const momDecisionsPct =
+    lastMonthData && lastMonthData.decisions > 0 && thisMonthData
+      ? Math.round(((thisMonthData.decisions - lastMonthData.decisions) / lastMonthData.decisions) * 100)
+      : null;
+  const thisMonthPositiveRate = thisMonthData && thisMonthData.decisions > 0
+    ? Math.round((thisMonthData.positive / thisMonthData.decisions) * 100)
+    : null;
+  const lastMonthPositiveRate = lastMonthData && lastMonthData.decisions > 0
+    ? Math.round((lastMonthData.positive / lastMonthData.decisions) * 100)
+    : null;
+  const momPositiveRatePct =
+    thisMonthPositiveRate != null && lastMonthPositiveRate != null
+      ? thisMonthPositiveRate - lastMonthPositiveRate
+      : null;
+
+  const peakMonth =
+    timeSeries.length > 0
+      ? timeSeries.reduce((a, b) => (a.decisions >= b.decisions ? a : b), timeSeries[0])
+      : null;
+
+  const suggestedFocus =
+    sectorWithRate.length > 0 && bestSectorByRate && bestSectorByRate.rate >= 50
+      ? `${bestSectorByRate.sector} – highest conversion (${bestSectorByRate.rate}%)`
+      : null;
+
+  const advancedInsights: AdvancedDecisionInsights = {
+    bestSectorByRate: bestSectorByRate ? { sector: bestSectorByRate.sector, rate: bestSectorByRate.rate, total: bestSectorByRate.total } : null,
+    worstSectorByRate: worstSectorByRate ? { sector: worstSectorByRate.sector, rate: worstSectorByRate.rate, total: worstSectorByRate.total } : null,
+    bestStageByRate: bestStageByRate ? { stage: bestStageByRate.stage, rate: bestStageByRate.rate, total: bestStageByRate.total } : null,
+    worstStageByRate: worstStageByRate ? { stage: worstStageByRate.stage, rate: worstStageByRate.rate, total: worstStageByRate.total } : null,
+    topSectorByVolume,
+    concentrationTop3Pct,
+    concentrationTop3Sectors,
+    confidenceWhenPositive,
+    confidenceWhenNegative,
+    calibrationHighConfidence,
+    calibrationLowConfidence,
+    momDecisionsPct,
+    momPositiveRatePct,
+    pendingPct,
+    peakMonth: peakMonth ? { date: peakMonth.date, decisions: peakMonth.decisions } : null,
+    suggestedFocus,
+  };
+
   return {
     sectorStats,
     stageStats,
@@ -498,6 +666,8 @@ export function calculateDecisionEngineAnalytics(decisions: Decision[]): Decisio
     geoStats,
     recencyStats,
     outcomeRateSeries,
+    sectorStageMatrix,
+    advancedInsights,
     totalDecisions,
     avgConfidence,
     positiveRate,

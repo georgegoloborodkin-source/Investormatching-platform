@@ -262,6 +262,8 @@ export async function ensureDefaultFoldersForEvent(eventId: string): Promise<voi
     { name: 'Deals', category: 'Sourcing' },
     { name: 'Market Research', category: 'Sourcing' },
     { name: 'Due Diligence', category: 'Portfolio Companies' },
+    { name: 'BD', category: 'BD' },
+    { name: 'Mentors / Corporates', category: 'Mentors / Corporates' },
   ];
 
   // Get existing folders for this event
@@ -276,8 +278,6 @@ export async function ensureDefaultFoldersForEvent(eventId: string): Promise<voi
   const foldersToCreate = defaultFolders.filter(d => !existingNames.has(d.name.toLowerCase()));
   
   if (foldersToCreate.length > 0) {
-    // Omit category so folder creation works even if migration 20260216000002 hasn't run yet.
-    // UI treats null category as 'Portfolio Companies'; user can set category via updateFolderCategory.
     await supabase
       .from("source_folders")
       .insert(
@@ -285,6 +285,7 @@ export async function ensureDefaultFoldersForEvent(eventId: string): Promise<voi
           event_id: eventId,
           name: d.name,
           created_by: null, // System-created
+          category: d.category,
         }))
       );
   }
@@ -303,15 +304,17 @@ export async function insertSourceFolder(
   eventId: string,
   payload: { name: string; created_by: string | null; category?: string | null }
 ) {
-  // Omit category so folder creation works even if migration 20260216000002 hasn't run yet.
-  // Caller can set category via updateFolderCategory after insert if needed.
+  const row: { event_id: string; name: string; created_by: string | null; category?: string } = {
+    event_id: eventId,
+    name: payload.name,
+    created_by: payload.created_by,
+  };
+  if (payload.category != null && payload.category !== "") {
+    row.category = payload.category;
+  }
   return supabase
     .from("source_folders")
-    .insert({
-      event_id: eventId,
-      name: payload.name,
-      created_by: payload.created_by,
-    })
+    .insert(row)
     .select("*")
     .single();
 }
