@@ -4643,7 +4643,7 @@ function SourcesTab({
 }
 
 // ============================================================================
-// DASHBOARD TAB (task hub: MD assigns tasks, team sees my tasks + Gantt)
+// DASHBOARD TAB (task hub: MD assigns tasks, team sees my tasks + Gantt + Decision Engine for MD)
 // ============================================================================
 
 type TeamMember = { id: string; email: string | null; full_name: string | null; role: string };
@@ -4657,6 +4657,7 @@ function DashboardTab({
   decisions,
   documents,
   sources,
+  companyCards,
 }: {
   profile: UserProfile | null;
   activeEventId: string | null;
@@ -4666,14 +4667,17 @@ function DashboardTab({
   decisions: Decision[];
   documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
   sources: SourceRecord[];
+  companyCards: Array<{ company_id: string; company_name: string; entity_type?: string; company_properties: Record<string, any>; document_count: number }>;
 }) {
   const { toast } = useToast();
   const isMD = profile?.role === "managing_partner" || profile?.role === "organizer";
+  const isLP = profile?.role === "lp";
   const orgId = profile?.organization_id;
 
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [addTaskTitle, setAddTaskTitle] = useState("");
   const [addTaskDescription, setAddTaskDescription] = useState("");
+  const [addTaskStartDate, setAddTaskStartDate] = useState("");
   const [addTaskDeadline, setAddTaskDeadline] = useState("");
   const [addTaskAssignee, setAddTaskAssignee] = useState<string>("");
   const [addTaskSaving, setAddTaskSaving] = useState(false);
@@ -4685,6 +4689,9 @@ function DashboardTab({
   const [statusNote, setStatusNote] = useState<Record<string, string>>({});
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [dashboardSection, setDashboardSection] = useState<"tasks" | "analytics">("tasks");
+  const [ganttRange, setGanttRange] = useState<4 | 8 | 12>(8);
+  const [ganttGroupBy, setGanttGroupBy] = useState<"none" | "assignee">("none");
 
   const myTasks = useMemo(
     () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
@@ -4723,6 +4730,7 @@ function DashboardTab({
         assignee_user_id: addTaskAssignee || null,
         title: addTaskTitle.trim(),
         description: addTaskDescription.trim() || null,
+        start_date: addTaskStartDate ? new Date(addTaskStartDate).toISOString() : null,
         deadline: addTaskDeadline ? new Date(addTaskDeadline).toISOString() : null,
         created_by: currentUserId,
       });
@@ -4731,6 +4739,7 @@ function DashboardTab({
       setAddTaskOpen(false);
       setAddTaskTitle("");
       setAddTaskDescription("");
+      setAddTaskStartDate("");
       setAddTaskDeadline("");
       setAddTaskAssignee("");
       await onRefetchTasks();
@@ -4739,7 +4748,7 @@ function DashboardTab({
     } finally {
       setAddTaskSaving(false);
     }
-  }, [activeEventId, currentUserId, addTaskTitle, addTaskDescription, addTaskDeadline, addTaskAssignee, onRefetchTasks, toast]);
+  }, [activeEventId, currentUserId, addTaskTitle, addTaskDescription, addTaskStartDate, addTaskDeadline, addTaskAssignee, onRefetchTasks, toast]);
 
   const handleUpdateStatus = useCallback(
     async (taskId: string, status: Task["status"], note?: string) => {
@@ -4781,16 +4790,159 @@ function DashboardTab({
   };
 
   const now = Date.now();
-  const ganttWeeks = 12;
+  const ganttWeeks = ganttRange;
   const weekMs = 7 * 24 * 60 * 60 * 1000;
   const ganttStart = new Date(now);
   ganttStart.setHours(0, 0, 0, 0);
   const ganttStartMs = ganttStart.getTime();
 
+  // LP Dashboard: portfolio-level KPIs only
+  if (isLP) {
+    const portfolioCount = companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).length;
+    const fundCount = companyCards.filter((c) => c.entity_type === "fund").length;
+    const lastUpdated = documents.length > 0 ? "Recently" : "No data yet";
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
+            <Building2 className="h-5 w-5 text-[#FFED00]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-mono font-black text-white uppercase tracking-tight">LP Dashboard</h2>
+            <p className="text-xs text-white/60 font-mono">Portfolio overview for limited partners</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <Building2 className="h-5 w-5 text-[#FFED00]" />
+                </div>
+                <div>
+                  <p className="text-2xl font-mono font-black">{portfolioCount}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Portfolio Companies</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <Briefcase className="h-5 w-5 text-[#FFED00]" />
+                </div>
+                <div>
+                  <p className="text-2xl font-mono font-black">{fundCount}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Funds</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                  <FileText className="h-5 w-5 text-[#FFED00]" />
+                </div>
+                <div>
+                  <p className="text-2xl font-mono font-black">{documents.length}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Documents</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-white bg-transparent">
+            <CardContent className="pt-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
+                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                </div>
+                <div>
+                  <p className="text-2xl font-mono font-black">{lastUpdated}</p>
+                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Last Updated</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="border-2 border-white bg-transparent">
+          <CardHeader className="border-b-2 border-white">
+            <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[#FFED00]" />
+              Portfolio Companies
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).length === 0 ? (
+              <p className="text-white/60 font-mono text-sm py-4">No portfolio companies yet.</p>
+            ) : (
+              <div className="grid gap-3">
+                {companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).map((card) => (
+                  <div key={card.company_id} className="flex items-center justify-between p-3 border border-white/20 rounded-lg bg-white/5">
+                    <div>
+                      <div className="font-mono font-bold text-white">{card.company_name}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {card.company_properties?.industry && (
+                          <Badge variant="outline" className="text-xs border-white/40 text-white/70">{card.company_properties.industry}</Badge>
+                        )}
+                        {card.company_properties?.funding_stage && (
+                          <Badge variant="outline" className="text-xs border-[#FFED00]/40 text-[#FFED00]">{card.company_properties.funding_stage}</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {card.company_properties?.arr && (
+                        <div className="text-sm font-mono text-[#FFED00] font-bold">{card.company_properties.arr}</div>
+                      )}
+                      <div className="text-xs text-white/50 font-mono">{card.document_count} docs</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Summary stats: MD sees all; team sees same (optional: hide for team — per spec critical stats = MD only; we keep these as general dashboard stats for all) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Section switcher: Tasks (all) / Analytics (MD only) */}
+      {isMD && (
+        <div className="flex items-center gap-1 border-b-2 border-white/20 pb-2">
+          <button
+            onClick={() => setDashboardSection("tasks")}
+            className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
+              dashboardSection === "tasks" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+            }`}
+          >
+            <ListTodo className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Tasks & Overview
+          </button>
+          <button
+            onClick={() => setDashboardSection("analytics")}
+            className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
+              dashboardSection === "analytics" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+            }`}
+          >
+            <BarChart3 className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Decision Analytics
+          </button>
+        </div>
+      )}
+
+      {/* Decision Analytics section (MD only) */}
+      {isMD && dashboardSection === "analytics" && (
+        <DecisionEngineDashboardTab decisions={decisions} />
+      )}
+
+      {/* Tasks & Overview section (shown for everyone when not on analytics) */}
+      {(dashboardSection === "tasks" || !isMD) && (
+      <>
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="border-2 border-white bg-transparent">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
@@ -4839,6 +4991,19 @@ function DashboardTab({
               <div>
                 <p className="text-2xl font-mono font-black">{isMD ? tasks.length : myTasks.length}</p>
                 <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Tasks</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-2 border-white bg-transparent">
+          <CardContent className="pt-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
+                <Building2 className="h-5 w-5 text-[#FFED00]" />
+              </div>
+              <div>
+                <p className="text-2xl font-mono font-black">{companyCards.length}</p>
+                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Companies</p>
               </div>
             </div>
           </CardContent>
@@ -4919,50 +5084,110 @@ function DashboardTab({
           )}
 
           {viewMode === "gantt" ? (
-            <div className="overflow-x-auto">
-              <div className="min-w-[600px]">
-                <div className="grid font-mono text-xs text-white/70 border-b border-white/30 pb-2 mb-2" style={{ gridTemplateColumns: isMD ? "180px 1fr" : "140px 1fr" }}>
-                  <div>{isMD ? "Task / Assignee" : "Task"}</div>
-                  <div className="flex">
-                    {Array.from({ length: ganttWeeks }, (_, i) => {
-                      const d = new Date(ganttStartMs + i * weekMs);
-                      return (
-                        <div key={i} className="flex-1 text-center min-w-[48px]">
-                          {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="space-y-3">
+              {/* Gantt controls: time range + group by */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-white/60 font-mono uppercase">Range:</span>
+                  {([4, 8, 12] as const).map((w) => (
+                    <button
+                      key={w}
+                      onClick={() => setGanttRange(w)}
+                      className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                    >
+                      {w}w
+                    </button>
+                  ))}
                 </div>
-                {filteredTasks.map((task) => {
-                  const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
-                  const startMs = Math.max(now, ganttStartMs);
-                  const endMs = deadlineMs && deadlineMs > ganttStartMs ? Math.min(deadlineMs, ganttStartMs + ganttWeeks * weekMs) : ganttStartMs + weekMs;
-                  const left = ((startMs - ganttStartMs) / (ganttWeeks * weekMs)) * 100;
-                  const width = ((endMs - startMs) / (ganttWeeks * weekMs)) * 100;
-                  const color = task.status === "done" ? "#22c55e" : task.status === "in_progress" ? "#FFED00" : "#6b7280";
-                  return (
-                    <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "180px 1fr" : "140px 1fr" }}>
-                      <div className="text-white truncate" title={task.title}>
-                        {task.title}
-                        {isMD && (
-                          <span className="block text-xs text-white/60 truncate">{displayName(task.assignee_user_id)}</span>
-                        )}
-                      </div>
-                      <div className="relative h-6 flex">
-                        <div
-                          className="absolute h-5 rounded border border-white/30"
-                          style={{ left: `${left}%`, width: `${Math.max(width, 2)}%`, backgroundColor: color, opacity: 0.9 }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredTasks.length === 0 && (
-                  <div className="text-white/50 font-mono text-sm py-8 text-center">
-                    {isMD ? "No tasks. Add one to see the timeline." : "No tasks assigned to you."}
+                {isMD && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-white/60 font-mono uppercase">Group:</span>
+                    <button
+                      onClick={() => setGanttGroupBy("none")}
+                      className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                    >
+                      Flat
+                    </button>
+                    <button
+                      onClick={() => setGanttGroupBy("assignee")}
+                      className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                    >
+                      By Assignee
+                    </button>
                   </div>
                 )}
+              </div>
+              <div className="overflow-x-auto">
+                <div className="min-w-[600px]">
+                  {/* Gantt header */}
+                  <div className="grid font-mono text-xs text-white/70 border-b border-white/30 pb-2 mb-2" style={{ gridTemplateColumns: isMD ? "200px 1fr" : "160px 1fr" }}>
+                    <div>{isMD ? "Task / Assignee" : "Task"}</div>
+                    <div className="flex">
+                      {Array.from({ length: ganttWeeks }, (_, i) => {
+                        const d = new Date(ganttStartMs + i * weekMs);
+                        return (
+                          <div key={i} className="flex-1 text-center min-w-[48px]">
+                            {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Gantt rows — optionally grouped by assignee */}
+                  {(() => {
+                    const totalMs = ganttWeeks * weekMs;
+                    const renderRow = (task: Task) => {
+                      const taskStartMs = task.start_date ? new Date(task.start_date).getTime() : (task.created_at ? new Date(task.created_at).getTime() : now);
+                      const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
+                      const barStart = Math.max(taskStartMs, ganttStartMs);
+                      const barEnd = deadlineMs && deadlineMs > ganttStartMs ? Math.min(deadlineMs, ganttStartMs + totalMs) : Math.min(barStart + weekMs, ganttStartMs + totalMs);
+                      const left = Math.max(0, ((barStart - ganttStartMs) / totalMs) * 100);
+                      const width = Math.max(2, ((barEnd - barStart) / totalMs) * 100);
+                      const color = task.status === "done" ? "#22c55e" : task.status === "in_progress" ? "#FFED00" : "#6b7280";
+                      const isOverdue = deadlineMs && deadlineMs < now && task.status !== "done";
+                      return (
+                        <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "200px 1fr" : "160px 1fr" }}>
+                          <div className="text-white truncate pr-2" title={task.title}>
+                            <span className={isOverdue ? "text-red-400" : ""}>{task.title}</span>
+                            {isMD && (
+                              <span className="block text-xs text-white/60 truncate">{displayName(task.assignee_user_id)}</span>
+                            )}
+                          </div>
+                          <div className="relative h-6 flex">
+                            <div
+                              className={`absolute h-5 rounded border ${isOverdue ? "border-red-500" : "border-white/30"}`}
+                              style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color, opacity: 0.9 }}
+                              title={`${task.start_date ? new Date(task.start_date).toLocaleDateString() : "No start"} → ${task.deadline ? new Date(task.deadline).toLocaleDateString() : "No deadline"}`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    if (ganttGroupBy === "assignee" && isMD) {
+                      const grouped = new Map<string, Task[]>();
+                      for (const t of filteredTasks) {
+                        const key = t.assignee_user_id || "__unassigned__";
+                        if (!grouped.has(key)) grouped.set(key, []);
+                        grouped.get(key)!.push(t);
+                      }
+                      return Array.from(grouped.entries()).map(([userId, groupTasks]) => (
+                        <div key={userId} className="mb-3">
+                          <div className="text-xs font-mono text-[#FFED00] uppercase tracking-wider mb-1 border-b border-[#FFED00]/30 pb-1">
+                            {userId === "__unassigned__" ? "Unassigned" : displayName(userId)}
+                          </div>
+                          {groupTasks.map(renderRow)}
+                        </div>
+                      ));
+                    }
+                    return filteredTasks.map(renderRow);
+                  })()}
+                  {filteredTasks.length === 0 && (
+                    <div className="text-white/50 font-mono text-sm py-8 text-center">
+                      {isMD ? "No tasks. Add one to see the timeline." : "No tasks assigned to you."}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -5074,14 +5299,25 @@ function DashboardTab({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-white font-mono font-bold">Deadline</Label>
-              <Input
-                type="datetime-local"
-                className="border-2 border-white bg-transparent text-white mt-1 font-mono"
-                value={addTaskDeadline}
-                onChange={(e) => setAddTaskDeadline(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-white font-mono font-bold">Start Date</Label>
+                <Input
+                  type="datetime-local"
+                  className="border-2 border-white bg-transparent text-white mt-1 font-mono"
+                  value={addTaskStartDate}
+                  onChange={(e) => setAddTaskStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-white font-mono font-bold">Deadline</Label>
+                <Input
+                  type="datetime-local"
+                  className="border-2 border-white bg-transparent text-white mt-1 font-mono"
+                  value={addTaskDeadline}
+                  onChange={(e) => setAddTaskDeadline(e.target.value)}
+                />
+              </div>
             </div>
             <div>
               <Label className="text-white font-mono font-bold">Description (optional)</Label>
@@ -5169,6 +5405,8 @@ function DashboardTab({
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -6446,9 +6684,12 @@ export default function CIS() {
     stage?: string;
   } | null>(null);
 
-  // Team members cannot see Engine tab; redirect if they're on it
+  // Team members cannot see Engine tab; LP can only see Dashboard
   useEffect(() => {
     if (profile && profile.role === "team_member" && activeTab === "dashboard") {
+      setActiveTab("overview");
+    }
+    if (profile && profile.role === "lp" && activeTab !== "overview" && activeTab !== "account") {
       setActiveTab("overview");
     }
   }, [profile?.role, activeTab]);
@@ -11075,14 +11316,16 @@ export default function CIS() {
               <span className="font-bold text-white text-lg tracking-tight hidden sm:inline">CIS</span>
             </div>
             <nav className="flex items-center gap-0.5 flex-wrap">
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "chat" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Chat
-              </button>
+              {profile?.role !== "lp" && (
+                <button
+                  onClick={() => setActiveTab("chat")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "chat" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Chat
+                </button>
+              )}
               {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
                 <button
                   onClick={() => setActiveTab("onboarding")}
@@ -11101,46 +11344,44 @@ export default function CIS() {
               >
                 Dashboard
               </button>
-              <button
-                onClick={() => setActiveTab("sources")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "sources" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Sources
-              </button>
-              <button
-                onClick={() => setActiveTab("decisions")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "decisions" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Decisions
-              </button>
-              <button
-                onClick={() => setActiveTab("companies")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "companies" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Companies
-              </button>
-              <button
-                onClick={() => setActiveTab("connections")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "connections" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Connections
-              </button>
-              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
+              {profile?.role !== "lp" && (
                 <button
-                  onClick={() => setActiveTab("dashboard")}
+                  onClick={() => setActiveTab("sources")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "dashboard" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "sources" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  Engine
+                  Sources
+                </button>
+              )}
+              {profile?.role !== "lp" && (
+                <button
+                  onClick={() => setActiveTab("decisions")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "decisions" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Decisions
+                </button>
+              )}
+              {profile?.role !== "lp" && (
+                <button
+                  onClick={() => setActiveTab("companies")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "companies" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Companies
+                </button>
+              )}
+              {profile?.role !== "lp" && (
+                <button
+                  onClick={() => setActiveTab("connections")}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "connections" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Connections
                 </button>
               )}
               {(profile?.role as string) === "admin" && (
@@ -11781,6 +12022,7 @@ export default function CIS() {
               decisions={decisions}
               documents={documents}
               sources={sources}
+              companyCards={companyCards}
             />
           </TabsContent>
 
@@ -11980,11 +12222,6 @@ export default function CIS() {
               </Card>
             )}
           </TabsContent>
-
-              {/* Decision Engine Dashboard Tab */}
-              <TabsContent value="dashboard">
-                <DecisionEngineDashboardTab decisions={decisions} />
-              </TabsContent>
 
               {/* Account Tab */}
               <TabsContent value="account">

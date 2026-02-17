@@ -276,13 +276,14 @@ export async function ensureDefaultFoldersForEvent(eventId: string): Promise<voi
   const foldersToCreate = defaultFolders.filter(d => !existingNames.has(d.name.toLowerCase()));
   
   if (foldersToCreate.length > 0) {
+    // Omit category so folder creation works even if migration 20260216000002 hasn't run yet.
+    // UI treats null category as 'Portfolio Companies'; user can set category via updateFolderCategory.
     await supabase
       .from("source_folders")
       .insert(
         foldersToCreate.map(d => ({
           event_id: eventId,
           name: d.name,
-          category: d.category,
           created_by: null, // System-created
         }))
       );
@@ -302,9 +303,15 @@ export async function insertSourceFolder(
   eventId: string,
   payload: { name: string; created_by: string | null; category?: string | null }
 ) {
+  // Omit category so folder creation works even if migration 20260216000002 hasn't run yet.
+  // Caller can set category via updateFolderCategory after insert if needed.
   return supabase
     .from("source_folders")
-    .insert({ event_id: eventId, ...payload })
+    .insert({
+      event_id: eventId,
+      name: payload.name,
+      created_by: payload.created_by,
+    })
     .select("*")
     .single();
 }
@@ -1356,7 +1363,7 @@ export async function getMyTasks(eventId: string, userId: string): Promise<Supab
 
 export async function insertTask(
   eventId: string,
-  payload: { assignee_user_id: string | null; title: string; description?: string | null; deadline?: string | null; created_by: string }
+  payload: { assignee_user_id: string | null; title: string; description?: string | null; start_date?: string | null; deadline?: string | null; created_by: string }
 ): Promise<SupabaseResult<Task>> {
   const { data, error } = await supabase
     .from("tasks")
@@ -1366,6 +1373,7 @@ export async function insertTask(
       title: payload.title,
       description: payload.description ?? null,
       status: "not_started",
+      start_date: payload.start_date ?? null,
       deadline: payload.deadline ?? null,
       created_by: payload.created_by,
     })
@@ -1376,7 +1384,7 @@ export async function insertTask(
 
 export async function updateTask(
   taskId: string,
-  updates: Partial<Pick<Task, "assignee_user_id" | "title" | "description" | "status" | "deadline" | "status_note">>
+  updates: Partial<Pick<Task, "assignee_user_id" | "title" | "description" | "status" | "start_date" | "deadline" | "status_note">>
 ): Promise<SupabaseResult<Task>> {
   const { data, error } = await supabase
     .from("tasks")

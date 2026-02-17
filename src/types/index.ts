@@ -136,8 +136,8 @@ export const EXPERTISE_AREAS = [
 ];
 
 // User & Organization Types
-// Simplified 2-role system: organizer (admin) and investor (participant)
-export type UserRole = 'organizer' | 'managing_partner' | 'team_member';
+// Roles: organizer/managing_partner (MD), team_member, lp (limited partner read-only)
+export type UserRole = 'organizer' | 'managing_partner' | 'team_member' | 'lp';
 
 export interface UserProfile {
   id: string;
@@ -244,6 +244,7 @@ export interface Task {
   title: string;
   description: string | null;
   status: TaskStatus;
+  start_date: string | null;
   deadline: string | null;
   status_note: string | null;
   created_by: string | null;

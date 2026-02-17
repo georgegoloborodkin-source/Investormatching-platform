@@ -40,7 +40,7 @@
             target_company_name,
             connection_type,
             connection_status,
-            source_document_id,
+            source_document_id,X  
             ai_reasoning,
             created_by
           ) VALUES (
