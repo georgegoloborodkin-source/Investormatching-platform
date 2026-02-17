@@ -499,6 +499,163 @@ export async function getEntityProperties(entityId: string): Promise<{ name: str
   return { name: (data as any).name, properties: (data as any).properties || {} };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// MULTI-AGENT RAG — Graph & KPI Retrieval
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface GraphRetrievalResult {
+  entities: Array<{ id: string; name: string; type: string; properties: Record<string, any> }>;
+  edges: Array<{ source: string; target: string; relation: string; properties: Record<string, any> }>;
+  summary: string;
+}
+
+/**
+ * Retrieve entities and relationships from the knowledge graph for a given query.
+ * Returns entities matching the search terms and their connecting edges.
+ */
+export async function retrieveGraphContext(
+  eventId: string,
+  searchTerms: string[],
+  entityNames?: string[],
+): Promise<GraphRetrievalResult> {
+  const entities: GraphRetrievalResult["entities"] = [];
+  const edges: GraphRetrievalResult["edges"] = [];
+
+  try {
+    // Search entities by name (partial match)
+    const allTerms = [...new Set([...(searchTerms || []), ...(entityNames || [])])].filter(Boolean);
+    if (allTerms.length === 0) {
+      return { entities: [], edges: [], summary: "No search terms provided." };
+    }
+
+    // Build OR filter for entity name matching
+    const nameFilters = allTerms.map((t) => `name.ilike.%${t}%`).join(",");
+
+    const { data: entityData } = await supabase
+      .from("kg_entities")
+      .select("id, name, entity_type, properties")
+      .eq("event_id", eventId)
+      .or(nameFilters);
+
+    if (entityData && entityData.length > 0) {
+      for (const e of entityData as any[]) {
+        entities.push({
+          id: e.id,
+          name: e.name,
+          type: e.entity_type,
+          properties: e.properties || {},
+        });
+      }
+
+      // Get edges connecting these entities
+      const entityIds = entities.map((e) => e.id);
+      const { data: edgeData } = await supabase
+        .from("kg_edges")
+        .select("source_entity_id, target_entity_id, relation_type, properties")
+        .eq("event_id", eventId)
+        .or(`source_entity_id.in.(${entityIds.join(",")}),target_entity_id.in.(${entityIds.join(",")})`);
+
+      if (edgeData) {
+        const entityNameMap = new Map(entities.map((e) => [e.id, e.name]));
+        for (const edge of edgeData as any[]) {
+          edges.push({
+            source: entityNameMap.get(edge.source_entity_id) || edge.source_entity_id,
+            target: entityNameMap.get(edge.target_entity_id) || edge.target_entity_id,
+            relation: edge.relation_type,
+            properties: edge.properties || {},
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[GraphRetrieval] Error:", err);
+  }
+
+  // Build summary text
+  const entitySummaries = entities.map(
+    (e) => `${e.name} (${e.type})${e.properties.bio ? ": " + e.properties.bio : ""}`
+  );
+  const edgeSummaries = edges.map(
+    (e) => `${e.source} --[${e.relation}]--> ${e.target}`
+  );
+  const summary = [
+    entities.length > 0 ? `Entities found: ${entitySummaries.join("; ")}` : "No entities found.",
+    edges.length > 0 ? `Relationships: ${edgeSummaries.join("; ")}` : "No relationships found.",
+  ].join("\n");
+
+  return { entities, edges, summary };
+}
+
+
+export interface KpiRetrievalResult {
+  kpis: Array<{
+    company: string;
+    metric: string;
+    value: number;
+    unit: string;
+    period: string;
+    category: string;
+    confidence: number;
+  }>;
+  summary: string;
+}
+
+/**
+ * Retrieve structured KPIs/metrics from the company_kpis table.
+ * Searches by company name and/or metric name.
+ */
+export async function retrieveKpiContext(
+  eventId: string,
+  companyNames?: string[],
+  metricNames?: string[],
+): Promise<KpiRetrievalResult> {
+  const kpis: KpiRetrievalResult["kpis"] = [];
+
+  try {
+    let query = supabase
+      .from("company_kpis")
+      .select("company_name, metric_name, value, unit, period, metric_category, confidence")
+      .eq("event_id", eventId);
+
+    // Filter by company names if provided
+    if (companyNames && companyNames.length > 0) {
+      const filters = companyNames.map((n) => `company_name.ilike.%${n}%`).join(",");
+      query = query.or(filters);
+    }
+
+    // Filter by metric names if provided
+    if (metricNames && metricNames.length > 0) {
+      const filters = metricNames.map((m) => `metric_name.ilike.%${m}%`).join(",");
+      query = query.or(filters);
+    }
+
+    const { data } = await query.order("period", { ascending: false }).limit(50);
+
+    if (data) {
+      for (const row of data as any[]) {
+        kpis.push({
+          company: row.company_name,
+          metric: row.metric_name,
+          value: row.value,
+          unit: row.unit || "",
+          period: row.period || "",
+          category: row.metric_category || "",
+          confidence: row.confidence || 0,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[KpiRetrieval] Error:", err);
+  }
+
+  // Build summary
+  const summary = kpis.length > 0
+    ? kpis.map((k) => `${k.company}: ${k.metric} = ${k.value} ${k.unit} (${k.period})`).join("\n")
+    : "No KPI data found.";
+
+  return { kpis, summary };
+}
+
 /**
  * Smart merge: fill empty fields from AI extraction, never overwrite user edits,
  * detect conflicts, and track property sources.

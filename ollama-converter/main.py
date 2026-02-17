@@ -4121,6 +4121,283 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                 continue
 
 
+# ---------------------------------------------------------------------------
+#  Multi-Agent RAG — Orchestrator, Graph/KPI Retrieval, Critic
+# ---------------------------------------------------------------------------
+
+class OrchestrateRequest(BaseModel):
+    question: str
+    previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
+    model_config = {"populate_by_name": True}
+
+class OrchestrateResponse(BaseModel):
+    use_vector: bool = True
+    use_graph: bool = False
+    use_kpis: bool = False
+    use_web: bool = False
+    reasoning: str = ""
+    sub_queries: Dict[str, str] = Field(default_factory=dict)
+
+
+@app.post("/orchestrate-query", response_model=OrchestrateResponse)
+async def orchestrate_query(request: OrchestrateRequest):
+    """
+    Multi-Agent RAG — ORCHESTRATOR (Router Agent).
+    Analyzes the user question and decides which retrieval agents to activate.
+    Returns a routing plan: use_vector, use_graph, use_kpis, use_web.
+    """
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return OrchestrateResponse(use_vector=True, reasoning="No AI available, defaulting to vector search")
+
+    question = (request.question or "").strip()
+    if not question:
+        return OrchestrateResponse(use_vector=True, reasoning="Empty question")
+
+    # Build conversation context for the router
+    conv_context = ""
+    if request.previous_messages:
+        recent = request.previous_messages[-5:]
+        conv_context = "\nRecent conversation:\n" + "\n".join(
+            f"{'User' if m.role == 'user' else 'Assistant'}: {m.content[:200]}"
+            for m in recent
+        )
+
+    prompt = (
+        "You are the router for a VC intelligence RAG system. You do NOT answer the question. "
+        "You only decide which retrieval agents to use.\n\n"
+        "Available agents:\n"
+        "- **vector**: semantic search over uploaded documents (pitch decks, memos, PDFs). "
+        "Use for: company description, product, problem/solution, narrative, 'what does X do', 'what did the deck say'.\n"
+        "- **graph**: knowledge graph of entities and relationships (companies, people, funds, rounds). "
+        "Use for: 'who invested in X', 'connections', 'partners', 'portfolio', 'relationships', 'who is connected to X'.\n"
+        "- **kpis**: structured numbers (ARR, valuation, burn, runway, metrics). "
+        "Use for: 'ARR of X', 'valuation', 'burn rate', 'metrics', 'numbers', 'financials', comparisons.\n"
+        "- **web**: live web search. "
+        "Use for: 'latest', 'recent', 'news', 'today', 'current', or when the question is about "
+        "public companies/funding/news and internal docs might be stale.\n\n"
+        "Rules:\n"
+        "- If the question is vague or conversational (greeting, meta), use ONLY vector.\n"
+        "- If the question asks about a company's info, use vector.\n"
+        "- If the question asks about connections or relationships, use vector + graph.\n"
+        "- If the question asks for numbers or metrics, use vector + kpis.\n"
+        "- If the question asks to 'compare X and Y', use vector + graph + kpis.\n"
+        "- If the question explicitly asks for 'latest', 'news', or 'current', include web.\n"
+        "- For each enabled agent, optionally provide a sub_query (a more targeted query for that agent).\n\n"
+        "Output ONLY valid JSON. No markdown, no explanation.\n"
+        "Format: {\"use_vector\": bool, \"use_graph\": bool, \"use_kpis\": bool, \"use_web\": bool, "
+        "\"reasoning\": \"one sentence\", \"sub_queries\": {\"graph\": \"optional targeted query\", \"kpis\": \"optional targeted query\"}}\n\n"
+        f"Question: \"{question}\""
+        f"{conv_context}"
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await client.messages.create(
+            model=HAIKU_MODEL,
+            max_tokens=300,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                return OrchestrateResponse(use_vector=True, reasoning="Could not parse router output")
+
+        return OrchestrateResponse(
+            use_vector=data.get("use_vector", True),
+            use_graph=data.get("use_graph", False),
+            use_kpis=data.get("use_kpis", False),
+            use_web=data.get("use_web", False),
+            reasoning=data.get("reasoning", ""),
+            sub_queries=data.get("sub_queries", {}),
+        )
+    except Exception as e:
+        print(f"[ORCHESTRATOR] Error: {e}")
+        return OrchestrateResponse(use_vector=True, reasoning=f"Router error: {str(e)[:100]}")
+
+
+class CriticRequest(BaseModel):
+    question: str
+    answer: str
+    context_vector: str = ""
+    context_graph: str = ""
+    context_kpis: str = ""
+    context_web: str = ""
+
+
+class CriticResponse(BaseModel):
+    issues: List[str] = Field(default_factory=list)
+    is_grounded: bool = True
+    confidence: float = 1.0
+
+
+@app.post("/critic-check", response_model=CriticResponse)
+async def critic_check(request: CriticRequest):
+    """
+    Multi-Agent RAG — CRITIC (Verifier Agent).
+    Checks whether the generated answer is grounded in the provided context.
+    Returns a list of unsupported claims.
+    """
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return CriticResponse(issues=[], is_grounded=True, confidence=1.0)
+
+    answer = (request.answer or "").strip()
+    if not answer:
+        return CriticResponse(issues=[], is_grounded=True, confidence=1.0)
+
+    context_parts = []
+    if request.context_vector:
+        context_parts.append(f"[DOCUMENT SOURCES]\n{request.context_vector[:4000]}")
+    if request.context_graph:
+        context_parts.append(f"[GRAPH / RELATIONSHIPS]\n{request.context_graph[:2000]}")
+    if request.context_kpis:
+        context_parts.append(f"[KPIs / METRICS]\n{request.context_kpis[:2000]}")
+    if request.context_web:
+        context_parts.append(f"[WEB SEARCH RESULTS]\n{request.context_web[:2000]}")
+
+    if not context_parts:
+        return CriticResponse(issues=[], is_grounded=True, confidence=0.5)
+
+    context_text = "\n\n".join(context_parts)
+
+    prompt = (
+        "You are a verifier. You do NOT answer the question. "
+        "You only check whether each factual claim in the ASSISTANT ANSWER is supported by the PROVIDED CONTEXT.\n\n"
+        "Rules:\n"
+        "- If a claim is directly stated in the context, it is supported.\n"
+        "- If a claim is a reasonable inference from the context, it is supported.\n"
+        "- If a claim has no basis in the context, flag it.\n"
+        "- Generic/conversational statements don't need support.\n\n"
+        f"PROVIDED CONTEXT:\n{context_text}\n\n"
+        f"ASSISTANT ANSWER:\n{answer}\n\n"
+        "Output ONLY valid JSON: {\"issues\": [\"string for each unsupported claim\"], "
+        "\"is_grounded\": bool, \"confidence\": float 0.0-1.0}.\n"
+        "If everything is supported, output {\"issues\": [], \"is_grounded\": true, \"confidence\": 0.95}."
+    )
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await client.messages.create(
+            model=HAIKU_MODEL,
+            max_tokens=500,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            data = json.loads(json_match.group()) if json_match else {"issues": [], "is_grounded": True, "confidence": 0.5}
+
+        return CriticResponse(
+            issues=data.get("issues", []),
+            is_grounded=data.get("is_grounded", True),
+            confidence=data.get("confidence", 0.5),
+        )
+    except Exception as e:
+        print(f"[CRITIC] Error: {e}")
+        return CriticResponse(issues=[], is_grounded=True, confidence=0.5)
+
+
+# ---------------------------------------------------------------------------
+#  Multi-Agent RAG — Synthesis prompt builder
+# ---------------------------------------------------------------------------
+
+def build_multiagent_answer_prompt(
+    question: str,
+    vector_context: str,
+    graph_context: str,
+    kpi_context: str,
+    web_context: str,
+    decisions: List[AskDecision] = None,
+    previous_messages: List[ChatMessage] = None,
+    connections: List[AskConnection] = None,
+) -> str:
+    """
+    Build the synthesis prompt for multi-agent RAG.
+    Takes pre-retrieved context from each agent and produces a unified prompt.
+    """
+    # Decisions
+    decision_lines: List[str] = []
+    for d in decisions or []:
+        summary = " | ".join([part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part])
+        if summary:
+            decision_lines.append(f"- {summary}")
+    decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history."
+
+    # Connections graph
+    connection_lines: List[str] = []
+    for conn in connections or []:
+        parts = [
+            f"{conn.source_company_name} -> {conn.target_company_name}",
+            f"type={conn.connection_type}" if conn.connection_type else None,
+            f"status={conn.connection_status}" if conn.connection_status else None,
+            f"reason: {conn.ai_reasoning[:120]}" if conn.ai_reasoning else None,
+        ]
+        connection_lines.append("- " + " | ".join(p for p in parts if p))
+    connections_block = "\n".join(connection_lines) if connection_lines else "No connections."
+
+    # Conversation history
+    conversation_context = ""
+    if previous_messages:
+        recent = previous_messages[-10:]
+        conversation_context = (
+            "\n\n=== CONVERSATION HISTORY ===\n"
+            + "\n".join(
+                f"{'User' if m.role == 'user' else 'Assistant'}: {m.content[:500]}"
+                for m in recent
+            )
+            + "\n=== END HISTORY ===\n"
+        )
+
+    return f"""You are Orbit AI, a VC intelligence synthesis agent. You received pre-retrieved context from multiple retrieval agents. Your job is to produce a single, coherent, well-cited answer.
+
+CITATION RULES:
+- Cite document sources with [1], [2], etc.
+- Cite graph relationships with [G]
+- Cite KPI/metrics data with [K]
+- Cite web search results with [W]
+- Every factual claim MUST have a citation
+- If no context answers the question, say so clearly
+
+ANSWER RULES:
+- Prioritize document sources (highest confidence) over web results
+- Integrate graph relationships naturally into the answer
+- Present KPIs/metrics with exact numbers when available
+- Be thorough but concise — no unnecessary filler
+- For comprehensive questions, be exhaustive with all available details
+{conversation_context}
+Question:
+{question}
+
+[DOCUMENTS] (semantic search results from uploaded documents):
+{vector_context if vector_context else "No document results."}
+
+[GRAPH] (knowledge graph — entities and relationships):
+{graph_context if graph_context else "No graph results."}
+
+[KPIS] (structured metrics and numbers):
+{kpi_context if kpi_context else "No KPI data."}
+
+[WEB] (live web search results):
+{web_context if web_context else "No web results."}
+
+Decision history:
+{decisions_block}
+
+Company Connections:
+{connections_block}
+
+Provide the final answer with proper citations."""
+
+
 @app.post("/ask", response_model=AskResponse)
 async def ask_fund(request: AskRequest, auth: AuthContext = Depends(get_auth_context)):
     """Ask a question about fund documents.  ACL: user sees only their scoped sources."""
@@ -6121,7 +6398,6 @@ class SuggestedConnection(BaseModel):
     connection_type: str              # BD, INV, Knowledge, Partnership, Portfolio
     reasoning: str                    # Why this connection makes sense
     confidence: float = 0.0           # 0.0 – 1.0
-    suggested_actions: List[str] = [] # Ways to make this connection (e.g. "Ask LP X for intro", "Reference deck Y")
 
 class SuggestConnectionsResponse(BaseModel):
     suggestions: List[SuggestedConnection] = []
@@ -6192,7 +6468,6 @@ For each suggested connection, return a JSON array of objects with:
 - "connection_type": one of "BD", "INV", "Knowledge", "Partnership", "Portfolio"
 - "reasoning": brief explanation of why this connection makes sense (2-3 sentences)
 - "confidence": float between 0.0 and 1.0
-- "suggested_actions": array of 1-3 concrete ways to make this connection (e.g. "Ask [LP/Partner name] for warm intro", "Reference deal memo or deck [doc name]", "Mention at [event/sector conference]", "Leverage portfolio company X for intro"). Empty array if none.
 
 Return ONLY the JSON array, no markdown or explanation.
 If you cannot suggest any meaningful connections, return an empty array: []"""
@@ -6214,7 +6489,6 @@ If you cannot suggest any meaningful connections, return an empty array: []"""
                             "connection_type": {"type": "string", "enum": ["BD", "INV", "Knowledge", "Partnership", "Portfolio"]},
                             "reasoning": {"type": "string"},
                             "confidence": {"type": "number"},
-                            "suggested_actions": {"type": "array", "items": {"type": "string"}, "description": "Ways to make this connection"},
                         },
                         "required": ["source_company", "target_company", "connection_type", "reasoning"],
                     },
@@ -6246,7 +6520,6 @@ If you cannot suggest any meaningful connections, return an empty array: []"""
                     connection_type=s.get("connection_type", "Knowledge"),
                     reasoning=s.get("reasoning", ""),
                     confidence=float(s.get("confidence", 0.5)),
-                    suggested_actions=s.get("suggested_actions") or [],
                 )
                 for s in data.get("suggestions", [])
             ]

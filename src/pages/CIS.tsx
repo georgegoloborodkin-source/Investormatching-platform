@@ -181,11 +181,13 @@ import {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  retrieveGraphContext,
+  retrieveKpiContext,
   type ConnectionType,
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1576,6 +1578,7 @@ function SourcesTab({
   indexDocumentEmbeddings,
   onRefreshCompanyCards,
   initialDriveSyncConfig,
+  onSyncCategoriesFromDrive,
   onSourceFoldersRefetch,
 }: {
   sources: SourceRecord[];
@@ -1603,6 +1606,7 @@ function SourcesTab({
   onCreateFolder: (name: string, category?: string) => Promise<SourceFolder | null>;
   onDeleteFolderAndContents?: (folderId: string) => Promise<{ docCount: number } | { error: string }>;
   onFolderCategoryUpdated?: (folderId: string, category: string) => Promise<void>;
+  onSyncCategoriesFromDrive?: () => Promise<void>;
   onFoldersCategoriesSaved?: (updates: Array<{ id: string; category: string }>) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
@@ -1685,6 +1689,8 @@ function SourcesTab({
   const [driveSyncProgress, setDriveSyncProgress] = useState<{ phase: string; current: number; total: number; currentItem: string } | null>(null);
   const [driveSyncResults, setDriveSyncResults] = useState<Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }>>([]);
   const [lastDriveSyncAt, setLastDriveSyncAt] = useState<string | null>(null);
+  const [isSyncingCategoriesFromDrive, setIsSyncingCategoriesFromDrive] = useState(false);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(new Set());
   // Auto-sync interval (15 minutes)
   const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSyncingDriveRef = useRef(false);
@@ -3784,9 +3790,32 @@ function SourcesTab({
 
             return (
               <div className="pt-2 border-t border-white/20">
-                <Label className="text-white/70 font-mono text-xs mb-2 block">
-                  Document Folders ({sourceFolders.length}) — Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
-                </Label>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <Label className="text-white/70 font-mono text-xs">
+                    Document Folders ({sourceFolders.length}) — Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
+                  </Label>
+                  {onSyncCategoriesFromDrive && initialDriveSyncConfig?.folders?.length ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs"
+                      disabled={isSyncingCategoriesFromDrive}
+                      onClick={async () => {
+                        setIsSyncingCategoriesFromDrive(true);
+                        try {
+                          await onSyncCategoriesFromDrive();
+                          toast({ title: "Categories synced", description: "Folder categories updated from Google Drive roots." });
+                        } catch {
+                          toast({ title: "Sync failed", description: "Could not sync categories from Drive.", variant: "destructive" });
+                        } finally {
+                          setIsSyncingCategoriesFromDrive(false);
+                        }
+                      }}
+                    >
+                      {isSyncingCategoriesFromDrive ? "Syncing…" : "Sync categories from Drive"}
+                    </Button>
+                  ) : null}
+                </div>
 
                 {/* Category pills row — always show all 5 base categories */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
@@ -3814,6 +3843,40 @@ function SourcesTab({
                   })}
                 </div>
 
+                {/* Bulk selection bar — Move selected to category */}
+                {selectedFolderIds.size > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-[#FFED00]/30 bg-[#FFED00]/5">
+                    <span className="text-[11px] font-mono text-[#FFED00] tabular-nums">{selectedFolderIds.size} selected</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs">
+                          Move to…
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="border-white/20 bg-slate-900">
+                        {FOLDER_CATEGORIES.map((moveCat) => (
+                          <DropdownMenuItem
+                            key={moveCat}
+                            className="font-mono text-xs text-white/80 focus:bg-white/10"
+                            onClick={async () => {
+                              if (!onFoldersCategoriesSaved) return;
+                              const updates = Array.from(selectedFolderIds).map((id) => ({ id, category: moveCat }));
+                              await onFoldersCategoriesSaved(updates);
+                              setSelectedFolderIds(new Set());
+                              toast({ title: "Categories updated", description: `${updates.length} folder(s) → ${moveCat}` });
+                            }}
+                          >
+                            {moveCat}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button variant="ghost" size="sm" className="text-white/60 hover:text-white font-mono text-xs" onClick={() => setSelectedFolderIds(new Set())}>
+                      Clear selection
+                    </Button>
+                  </div>
+                )}
+
                 {/* Expanded category → group by root company name (or empty state) */}
                 {expandedRootKey && (() => {
                   const activeCat = expandedRootKey.includes("::") ? expandedRootKey.split("::")[0] : expandedRootKey;
@@ -3830,6 +3893,21 @@ function SourcesTab({
 
                   return (
                     <div className="mt-1 p-2 rounded border border-white/15 bg-white/[0.02] max-h-[300px] overflow-y-auto">
+                      {sortedRoots.length > 0 ? (
+                        <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
+                          <button
+                            type="button"
+                            className="text-[10px] font-mono text-[#FFED00]/80 hover:text-[#FFED00]"
+                            onClick={() => setSelectedFolderIds((prev) => {
+                              const next = new Set(prev);
+                              for (const f of catFolders) next.add(f.id);
+                              return next;
+                            })}
+                          >
+                            Select all in category ({catFolders.length})
+                          </button>
+                        </div>
+                      ) : null}
                       {sortedRoots.length === 0 ? (
                         <p className="text-[11px] font-mono text-white/50 py-2">No folders in this category. Create one above and choose category &quot;{activeCat}&quot;.</p>
                       ) : null}
@@ -3870,8 +3948,22 @@ function SourcesTab({
                                 {folders.map((folder) => {
                                   const subPath = (folder.name || "").replace(new RegExp(`^${rootName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*/\\s*`), "");
                                   const displayName = subPath || rootName;
+                                  const isSelected = selectedFolderIds.has(folder.id);
                                   return (
                                     <div key={folder.id} className="flex items-center gap-0.5 py-0.5">
+                                      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={(checked) => {
+                                            setSelectedFolderIds((prev) => {
+                                              const next = new Set(prev);
+                                              if (checked) next.add(folder.id); else next.delete(folder.id);
+                                              return next;
+                                            });
+                                          }}
+                                          className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] h-3.5 w-3.5"
+                                        />
+                                      </div>
                                       <button
                                         type="button"
                                         onClick={() => setSelectedFolderId(folder.id)}
@@ -7474,6 +7566,37 @@ export default function CIS() {
     []
   );
 
+  /** Run backfill: set source_folder categories from Drive sync config (each root → category). Call on demand from Document Folders. */
+  const handleSyncCategoriesFromDrive = useCallback(async () => {
+    if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
+    const driveFolders = initialDriveSyncConfig.folders;
+    const updates: Array<{ id: string; category: string }> = [];
+    const seen = new Set<string>();
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
+      if (!rootName) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const rootLower = rootName.toLowerCase();
+      const prefix = rootLower + " / ";
+      for (const sf of sourceFolders) {
+        const name = (sf.name || "").trim();
+        const nameLower = name.toLowerCase();
+        const belongsToRoot = nameLower === rootLower || nameLower.startsWith(prefix);
+        if (!belongsToRoot) continue;
+        if ((sf.category || "Portfolio Companies") !== wantCategory && !seen.has(sf.id)) {
+          seen.add(sf.id);
+          updates.push({ id: sf.id, category: wantCategory });
+        }
+      }
+    }
+    for (const { id, category } of updates) {
+      const { error } = await updateFolderCategory(id, category);
+      if (error) throw new Error(error.message);
+    }
+    const { data } = await getSourceFoldersByEvent(activeEventId);
+    setSourceFolders((data || []) as SourceFolder[]);
+  }, [activeEventId, initialDriveSyncConfig, sourceFolders]);
+
   const handleFoldersCategoriesSaved = useCallback(
     async (updates: Array<{ id: string; category: string }>) => {
       for (const { id, category } of updates) {
@@ -7770,12 +7893,12 @@ export default function CIS() {
       return;
     }
     const stages = [
-      "Analyzing your question...",
-      "Searching documents...",
-      "Retrieving relevant context...",
-      "Thinking deeply...",
-      "Synthesizing answer...",
-      "Almost there...",
+      "Orchestrator routing query...",
+      "Dispatching retrieval agents...",
+      "Vector + Graph + KPI search...",
+      "Synthesizing multi-agent context...",
+      "Generating answer...",
+      "Critic verifying...",
     ];
     let idx = 0;
     setChatLoadingStage(stages[0]);
@@ -10086,6 +10209,60 @@ export default function CIS() {
       }
 
       // ════════════════════════════════════════════════════════════════════
+      // MULTI-AGENT RAG — Step 1: Orchestrator (Router Agent)
+      // Decides which retrieval agents to activate based on the question.
+      // ════════════════════════════════════════════════════════════════════
+      let routingPlan = { use_vector: true, use_graph: false, use_kpis: false, use_web: false, reasoning: "", sub_queries: {} as Record<string, string> };
+      let graphContext = "";
+      let kpiContext = "";
+      try {
+        const threadMsgsForRouter = await getThreadMessages(threadId, 5);
+        routingPlan = await orchestrateQuery({
+          question: finalSearchQuery,
+          previousMessages: threadMsgsForRouter,
+        });
+        console.log("[MULTI-AGENT] Orchestrator plan:", routingPlan);
+
+        // If web search was recommended by orchestrator, enable it
+        if (routingPlan.use_web && !webSearchEnabled) {
+          console.log("[MULTI-AGENT] Orchestrator recommends web search — enabling");
+        }
+      } catch (routerErr) {
+        console.warn("[MULTI-AGENT] Orchestrator failed, falling back to vector-only:", routerErr);
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // MULTI-AGENT RAG — Step 2: Parallel Retrieval (all agents at once)
+      // Fire semantic + keyword + graph + KPIs simultaneously.
+      // ════════════════════════════════════════════════════════════════════
+
+      // Start graph retrieval if orchestrator says so
+      const graphPromise = (routingPlan.use_graph && eventId) ? (async () => {
+        try {
+          const entityNames = queryAnalysis?.entities?.map((e: any) => e.name) || [];
+          const searchWords = finalSearchQuery.split(/\s+/).filter((w: string) => w.length > 3);
+          const result = await retrieveGraphContext(eventId, searchWords, entityNames);
+          console.log("[MULTI-AGENT] Graph agent:", { entities: result.entities.length, edges: result.edges.length });
+          return result.summary;
+        } catch { return ""; }
+      })() : Promise.resolve("");
+
+      // Start KPI retrieval if orchestrator says so
+      const kpiPromise = (routingPlan.use_kpis && eventId) ? (async () => {
+        try {
+          const companyNames = queryAnalysis?.entities
+            ?.filter((e: any) => e.type === "company" || e.type === "fund")
+            ?.map((e: any) => e.name) || [];
+          const metricNames = queryAnalysis?.entities
+            ?.filter((e: any) => e.type === "metric")
+            ?.map((e: any) => e.name) || [];
+          const result = await retrieveKpiContext(eventId, companyNames.length > 0 ? companyNames : undefined, metricNames.length > 0 ? metricNames : undefined);
+          console.log("[MULTI-AGENT] KPI agent:", { kpis: result.kpis.length });
+          return result.summary;
+        } catch { return ""; }
+      })() : Promise.resolve("");
+
+      // ════════════════════════════════════════════════════════════════════
       // PARALLEL RETRIEVAL with global time budget (8s)
       // Fire semantic + keyword search simultaneously, merge with RRF.
       // Only run heavier fallbacks if both came back empty.
@@ -11390,6 +11567,37 @@ export default function CIS() {
           }
         }
         // Web search is now handled natively by Anthropic's web_search tool (no manual DuckDuckGo needed)
+        // Web search: use orchestrator recommendation OR user toggle
+        const effectiveWebSearch = webSearchEnabled || routingPlan.use_web;
+
+        // ── MULTI-AGENT RAG — Await graph & KPI agents ──
+        try {
+          const [graphResult, kpiResult] = await Promise.all([graphPromise, kpiPromise]);
+          graphContext = graphResult || "";
+          kpiContext = kpiResult || "";
+
+          // Inject graph context as a source so Claude sees it
+          if (graphContext && graphContext !== "No entities found.\nNo relationships found.") {
+            sources.push({
+              title: "[GRAPH] Knowledge Graph — Entities & Relationships",
+              file_name: null as string | null,
+              snippet: graphContext,
+            });
+            console.log("[MULTI-AGENT] Injected graph context into sources");
+          }
+
+          // Inject KPI context as a source
+          if (kpiContext && kpiContext !== "No KPI data found.") {
+            sources.push({
+              title: "[KPIs] Structured Metrics & Numbers",
+              file_name: null as string | null,
+              snippet: kpiContext,
+            });
+            console.log("[MULTI-AGENT] Injected KPI context into sources");
+          }
+        } catch (maErr) {
+          console.warn("[MULTI-AGENT] Graph/KPI await failed (non-fatal):", maErr);
+        }
 
         const decisionsForClaude = decisionIntent
           ? decisionMatches.map((d) => ({
@@ -11429,7 +11637,7 @@ export default function CIS() {
             decisions: decisionsForClaude,
             connections: connectionsForChat,
             previousMessages: threadMessages,
-            webSearchEnabled,
+            webSearchEnabled: effectiveWebSearch,
           },
           (chunk) => {
             if (!streamCompleted) {
@@ -11470,6 +11678,23 @@ export default function CIS() {
           estOutputTokens: estimate.estOutputTokens,
           estCostUsd: estimate.estCostUsd,
         });
+
+        // ── MULTI-AGENT RAG — Step 4: Critic (Verifier Agent, non-blocking) ──
+        if (fullAnswer.length > 50) {
+          criticCheck({
+            question: questionForClaude,
+            answer: fullAnswer,
+            contextVector: sources.map((s) => `${s.title}: ${(s.snippet || "").slice(0, 500)}`).join("\n"),
+            contextGraph: graphContext,
+            contextKpis: kpiContext,
+          }).then((criticResult) => {
+            if (criticResult.issues.length > 0) {
+              console.warn("[MULTI-AGENT] Critic found issues:", criticResult.issues);
+            } else {
+              console.log("[MULTI-AGENT] Critic: answer is grounded (confidence:", criticResult.confidence, ")");
+            }
+          }).catch(() => { /* non-fatal */ });
+        }
       } catch (error: any) {
         streamCompleted = true;
         clearTimeout(streamTimeout);
@@ -12830,19 +13055,25 @@ export default function CIS() {
                     </Button>
                   </div>
                   <div className="flex items-center justify-between mt-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setWebSearchEnabled((prev) => !prev)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
-                        webSearchEnabled
-                          ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                          : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
-                      }`}
-                      title="Enable web search to find information about companies not in your documents"
-                    >
-                      <Globe className="h-3.5 w-3.5" />
-                      Web Search {webSearchEnabled ? "ON" : "OFF"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWebSearchEnabled((prev) => !prev)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                          webSearchEnabled
+                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
+                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                        }`}
+                        title="Enable web search to find information about companies not in your documents"
+                      >
+                        <Globe className="h-3.5 w-3.5" />
+                        Web Search {webSearchEnabled ? "ON" : "OFF"}
+                      </button>
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border border-[#FFED00]/30 bg-[#FFED00]/5 text-[#FFED00]/70" title="Multi-Agent RAG: Orchestrator routes your query to Vector, Graph, KPI, and Web agents in parallel">
+                        <Sparkles className="h-3 w-3" />
+                        Multi-Agent
+                      </span>
+                    </div>
                     <span className="text-[11px] text-white/40 font-mono">
                       {chatIsLoading ? (
                         <span className="text-[#FFED00]/70 flex items-center gap-1.5">
@@ -12869,6 +13100,7 @@ export default function CIS() {
               onCreateFolder={handleCreateFolder}
               onDeleteFolderAndContents={handleDeleteFolderAndContents}
               onFolderCategoryUpdated={handleFolderCategoryUpdated}
+              onSyncCategoriesFromDrive={handleSyncCategoriesFromDrive}
               onFoldersCategoriesSaved={handleFoldersCategoriesSaved}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}

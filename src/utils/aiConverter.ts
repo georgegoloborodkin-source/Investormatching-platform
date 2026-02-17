@@ -1250,8 +1250,6 @@ export interface SuggestedConnection {
   connection_type: string;
   reasoning: string;
   confidence: number;
-  /** Ways to make this connection (e.g. "Ask LP X for intro", "Reference deck Y") */
-  suggested_actions?: string[];
 }
 
 export async function suggestConnections(input: {
@@ -1382,6 +1380,109 @@ export async function extractCompanyProperties(input: {
   } catch (error) {
     console.error("[extractCompanyProperties] Error:", error);
     return empty;
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Multi-Agent RAG — Orchestrator, Critic
+// ---------------------------------------------------------------------------
+
+export interface OrchestrateResult {
+  use_vector: boolean;
+  use_graph: boolean;
+  use_kpis: boolean;
+  use_web: boolean;
+  reasoning: string;
+  sub_queries: Record<string, string>;
+}
+
+/**
+ * Multi-Agent RAG — ORCHESTRATOR (Router Agent).
+ * Analyzes the user question and returns a routing plan.
+ */
+export async function orchestrateQuery(input: {
+  question: string;
+  previousMessages?: ChatMessage[];
+}): Promise<OrchestrateResult> {
+  const fallback: OrchestrateResult = {
+    use_vector: true,
+    use_graph: false,
+    use_kpis: false,
+    use_web: false,
+    reasoning: "Fallback: vector only",
+    sub_queries: {},
+  };
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/orchestrate-query`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: input.question,
+          previousMessages: input.previousMessages || [],
+        }),
+      },
+      8000 // 8s timeout — router should be fast
+    );
+    if (!response.ok) return fallback;
+    const data = await response.json();
+    return {
+      use_vector: data.use_vector ?? true,
+      use_graph: data.use_graph ?? false,
+      use_kpis: data.use_kpis ?? false,
+      use_web: data.use_web ?? false,
+      reasoning: data.reasoning || "",
+      sub_queries: data.sub_queries || {},
+    };
+  } catch (error) {
+    console.error("[orchestrateQuery] Error:", error);
+    return fallback;
+  }
+}
+
+export interface CriticResult {
+  issues: string[];
+  is_grounded: boolean;
+  confidence: number;
+}
+
+/**
+ * Multi-Agent RAG — CRITIC (Verifier Agent).
+ * Checks whether the answer is grounded in the provided context.
+ */
+export async function criticCheck(input: {
+  question: string;
+  answer: string;
+  contextVector?: string;
+  contextGraph?: string;
+  contextKpis?: string;
+  contextWeb?: string;
+}): Promise<CriticResult> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/critic-check`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: input.question,
+          answer: input.answer,
+          context_vector: input.contextVector || "",
+          context_graph: input.contextGraph || "",
+          context_kpis: input.contextKpis || "",
+          context_web: input.contextWeb || "",
+        }),
+      },
+      15000
+    );
+    if (!response.ok) return { issues: [], is_grounded: true, confidence: 0.5 };
+    return await response.json();
+  } catch (error) {
+    console.error("[criticCheck] Error:", error);
+    return { issues: [], is_grounded: true, confidence: 0.5 };
   }
 }
 
