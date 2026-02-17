@@ -4765,14 +4765,14 @@ function DashboardTab({
   }, [isMD, tasks, myTasks, filterAssignee, filterStatus]);
 
   useEffect(() => {
-    if (!isMD || !orgId) return;
+    if (!orgId) return;
     supabase
       .from("user_profiles")
       .select("id, email, full_name, role")
       .eq("organization_id", orgId)
       .order("created_at", { ascending: false })
       .then(({ data }) => setTeamMembers((data as TeamMember[]) || []));
-  }, [isMD, orgId]);
+  }, [orgId]);
 
   const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
   const latestDecision = decisions[0];
@@ -4805,11 +4805,11 @@ function DashboardTab({
       await onRefetchTasks();
     } catch (e: any) {
       const msg = e?.message || "Unknown error";
-      const isNoTable = /relation.*tasks.*does not exist|404/i.test(msg);
+      const isNoTable = /relation.*tasks.*does not exist|schema cache|404/i.test(msg);
       toast({
         title: isNoTable ? "Tasks table not found" : "Failed to create task",
         description: isNoTable
-          ? "Please run the tasks migration in Supabase SQL Editor first."
+          ? "The tasks table is missing. Run the migration in Supabase: Dashboard → SQL Editor, or run supabase db push."
           : msg,
         variant: "destructive",
       });
@@ -4824,7 +4824,7 @@ function DashboardTab({
       try {
         const { error } = await updateTaskStatus(taskId, status, note ?? undefined);
         if (error) throw error;
-        toast({ title: `Marked ${status === "done" ? "Done" : "In progress"}` });
+        toast({ title: `Marked ${status === "done" ? "Done" : status === "cancelled" ? "Cancelled" : status === "in_progress" ? "In progress" : "Not started"}` });
         await onRefetchTasks();
       } catch (e: any) {
         toast({ title: "Update failed", description: e?.message, variant: "destructive" });
@@ -5154,6 +5154,7 @@ function DashboardTab({
                     <SelectItem value="not_started" className="text-white">Not started</SelectItem>
                     <SelectItem value="in_progress" className="text-white">In progress</SelectItem>
                     <SelectItem value="done" className="text-white">Done</SelectItem>
+                    <SelectItem value="cancelled" className="text-white">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -5162,80 +5163,135 @@ function DashboardTab({
 
           {viewMode === "gantt" ? (
             <div className="space-y-3">
-              {/* Gantt controls: time range + group by */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-white/60 font-mono uppercase">Range:</span>
-                  {([4, 8, 12] as const).map((w) => (
-                    <button
-                      key={w}
-                      onClick={() => setGanttRange(w)}
-                      className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
-                    >
-                      {w}w
-                    </button>
+              {/* Gantt controls: time range + group by + legend */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-white/60 font-mono uppercase">Range:</span>
+                    {([4, 8, 12] as const).map((w) => (
+                      <button
+                        key={w}
+                        onClick={() => setGanttRange(w)}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                      >
+                        {w}w
+                      </button>
+                    ))}
+                  </div>
+                  {isMD && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-white/60 font-mono uppercase">Group:</span>
+                      <button
+                        onClick={() => setGanttGroupBy("none")}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                      >
+                        Flat
+                      </button>
+                      <button
+                        onClick={() => setGanttGroupBy("assignee")}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                      >
+                        By Assignee
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Legend */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {[
+                    { label: "Not started", color: "#6b7280" },
+                    { label: "In progress", color: "#FFED00" },
+                    { label: "Done", color: "#22c55e" },
+                    { label: "Cancelled", color: "#ef4444" },
+                    { label: "Overdue", color: "#f97316" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
+                      <span className="text-[10px] text-white/60 font-mono">{item.label}</span>
+                    </div>
                   ))}
                 </div>
-                {isMD && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-white/60 font-mono uppercase">Group:</span>
-                    <button
-                      onClick={() => setGanttGroupBy("none")}
-                      className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
-                    >
-                      Flat
-                    </button>
-                    <button
-                      onClick={() => setGanttGroupBy("assignee")}
-                      className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
-                    >
-                      By Assignee
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="overflow-x-auto">
-                <div className="min-w-[600px]">
+                <div className="min-w-[700px]">
                   {/* Gantt header */}
-                  <div className="grid font-mono text-xs text-white/70 border-b border-white/30 pb-2 mb-2" style={{ gridTemplateColumns: isMD ? "200px 1fr" : "160px 1fr" }}>
+                  <div className="grid font-mono text-xs text-white/70 border-b border-white/30 pb-2 mb-2" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
                     <div>{isMD ? "Task / Assignee" : "Task"}</div>
                     <div className="flex">
                       {Array.from({ length: ganttWeeks }, (_, i) => {
                         const d = new Date(ganttStartMs + i * weekMs);
                         return (
-                          <div key={i} className="flex-1 text-center min-w-[48px]">
+                          <div key={i} className="flex-1 text-center min-w-[56px] relative">
                             {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  {/* Gantt rows — optionally grouped by assignee */}
+                  {/* Today marker info */}
+                  <div className="text-[10px] text-white/40 font-mono mb-1">Today: {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
+                  {/* Gantt rows */}
                   {(() => {
                     const totalMs = ganttWeeks * weekMs;
+                    const todayLeft = Math.max(0, Math.min(100, ((now - ganttStartMs) / totalMs) * 100));
+                    const ganttStatusColor = (task: Task) => {
+                      const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
+                      const isOverdue = deadlineMs && deadlineMs < now && task.status !== "done" && task.status !== "cancelled";
+                      if (task.status === "cancelled") return { bg: "#ef4444", border: "#dc2626", opacity: 0.5 };
+                      if (isOverdue) return { bg: "#f97316", border: "#ea580c", opacity: 0.95 };
+                      if (task.status === "done") return { bg: "#22c55e", border: "#16a34a", opacity: 0.9 };
+                      if (task.status === "in_progress") return { bg: "#FFED00", border: "#d4c800", opacity: 0.9 };
+                      return { bg: "#6b7280", border: "#4b5563", opacity: 0.75 };
+                    };
                     const renderRow = (task: Task) => {
                       const taskStartMs = task.start_date ? new Date(task.start_date).getTime() : (task.created_at ? new Date(task.created_at).getTime() : now);
                       const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
+                      const effectiveEnd = deadlineMs ?? taskStartMs + 2 * weekMs;
                       const barStart = Math.max(taskStartMs, ganttStartMs);
-                      const barEnd = deadlineMs && deadlineMs > ganttStartMs ? Math.min(deadlineMs, ganttStartMs + totalMs) : Math.min(barStart + weekMs, ganttStartMs + totalMs);
-                      const left = Math.max(0, ((barStart - ganttStartMs) / totalMs) * 100);
-                      const width = Math.max(2, ((barEnd - barStart) / totalMs) * 100);
-                      const color = task.status === "done" ? "#22c55e" : task.status === "in_progress" ? "#FFED00" : "#6b7280";
-                      const isOverdue = deadlineMs && deadlineMs < now && task.status !== "done";
-                      return (
-                        <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "200px 1fr" : "160px 1fr" }}>
-                          <div className="text-white truncate pr-2" title={task.title}>
-                            <span className={isOverdue ? "text-red-400" : ""}>{task.title}</span>
-                            {isMD && (
-                              <span className="block text-xs text-white/60 truncate">{displayName(task.assignee_user_id)}</span>
-                            )}
+                      const barEnd = Math.min(effectiveEnd, ganttStartMs + totalMs);
+                      if (barEnd <= barStart) {
+                        // Task is entirely outside the visible range — show thin marker at left or right edge
+                        const edgeLeft = taskStartMs < ganttStartMs ? 0 : 99.5;
+                        const { bg, border: borderColor } = ganttStatusColor(task);
+                        return (
+                          <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
+                            <div className="text-white truncate pr-2" title={task.title}>
+                              <span className={task.status === "cancelled" ? "line-through text-white/40" : ""}>{task.title}</span>
+                              {isMD && <span className="block text-xs text-white/50 truncate">{displayName(task.assignee_user_id)}</span>}
+                            </div>
+                            <div className="relative h-7">
+                              <div className="absolute top-0.5 h-6 w-1 rounded" style={{ left: `${edgeLeft}%`, backgroundColor: bg, borderLeft: `2px solid ${borderColor}` }} title={`${task.title}: outside visible range`} />
+                              <div className="absolute top-0 bottom-0 w-px bg-blue-400/40" style={{ left: `${todayLeft}%` }} />
+                            </div>
                           </div>
-                          <div className="relative h-6 flex">
+                        );
+                      }
+                      const left = Math.max(0, ((barStart - ganttStartMs) / totalMs) * 100);
+                      const width = Math.max(1.5, ((barEnd - barStart) / totalMs) * 100);
+                      const { bg, border: borderColor, opacity } = ganttStatusColor(task);
+                      const statusLabel = task.status === "not_started" ? "Not started" : task.status === "in_progress" ? "In progress" : task.status === "done" ? "Done" : "Cancelled";
+                      const tooltipText = `${task.title}\nStatus: ${statusLabel}\n${task.start_date ? "Start: " + new Date(task.start_date).toLocaleDateString() : "No start date"}${task.deadline ? "\nDeadline: " + new Date(task.deadline).toLocaleDateString() : "\nNo deadline"}${task.assignee_user_id ? "\nAssignee: " + displayName(task.assignee_user_id) : ""}`;
+                      return (
+                        <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
+                          <div className="text-white truncate pr-2" title={task.title}>
+                            <span className={task.status === "cancelled" ? "line-through text-white/40" : ""}>{task.title}</span>
+                            {isMD && <span className="block text-xs text-white/50 truncate">{displayName(task.assignee_user_id)}</span>}
+                          </div>
+                          <div className="relative h-7">
+                            {/* Today line */}
+                            <div className="absolute top-0 bottom-0 w-px bg-blue-400/40 z-10" style={{ left: `${todayLeft}%` }} />
+                            {/* Task bar */}
                             <div
-                              className={`absolute h-5 rounded border ${isOverdue ? "border-red-500" : "border-white/30"}`}
-                              style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color, opacity: 0.9 }}
-                              title={`${task.start_date ? new Date(task.start_date).toLocaleDateString() : "No start"} → ${task.deadline ? new Date(task.deadline).toLocaleDateString() : "No deadline"}`}
-                            />
+                              className="absolute top-0.5 h-6 rounded-md transition-all cursor-default"
+                              style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bg, border: `1.5px solid ${borderColor}`, opacity }}
+                              title={tooltipText}
+                            >
+                              {width > 8 && (
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold truncate px-1" style={{ color: bg === "#FFED00" ? "#000" : "#fff" }}>
+                                  {task.title.length > 18 ? task.title.slice(0, 16) + ".." : task.title}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -5272,71 +5328,106 @@ function DashboardTab({
               {filteredTasks.length === 0 ? (
                 <p className="text-white/60 font-mono text-sm">No tasks {isMD ? "" : "assigned to you"}.</p>
               ) : (
-                filteredTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex flex-wrap items-center gap-3 p-3 border-2 border-white/20 rounded-lg bg-white/5 hover:border-white/40"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-mono font-bold text-white">{task.title}</div>
-                      {task.description && <div className="text-sm text-white/70 font-mono mt-0.5">{task.description}</div>}
-                      <div className="flex flex-wrap gap-2 mt-1.5">
-                        {isMD && <Badge variant="outline" className="text-xs border-white/50 text-white/80">{displayName(task.assignee_user_id)}</Badge>}
-                        <Badge variant="outline" className={task.status === "done" ? "border-green-500 text-green-400" : task.status === "in_progress" ? "border-[#FFED00] text-[#FFED00]" : "border-white/50 text-white/60"}>
-                          {task.status === "not_started" ? "Not started" : task.status === "in_progress" ? "In progress" : "Done"}
-                        </Badge>
-                        {task.deadline && (
-                          <span className="text-xs text-white/60 font-mono flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(task.deadline).toLocaleDateString(undefined, { dateStyle: "short" })}
-                          </span>
+                filteredTasks.map((task) => {
+                  const statusBadgeClass =
+                    task.status === "done" ? "border-green-500 text-green-400" :
+                    task.status === "in_progress" ? "border-[#FFED00] text-[#FFED00]" :
+                    task.status === "cancelled" ? "border-red-500 text-red-400" :
+                    "border-white/50 text-white/60";
+                  const statusLabel =
+                    task.status === "not_started" ? "Not started" :
+                    task.status === "in_progress" ? "In progress" :
+                    task.status === "done" ? "Done" : "Cancelled";
+                  const isTerminal = task.status === "done" || task.status === "cancelled";
+                  const deadlineMs = task.deadline ? new Date(task.deadline).getTime() : null;
+                  const isOverdue = deadlineMs && deadlineMs < now && !isTerminal;
+                  return (
+                    <div
+                      key={task.id}
+                      className={`flex flex-wrap items-center gap-3 p-3 border-2 rounded-lg bg-white/5 hover:border-white/40 transition-all ${
+                        isOverdue ? "border-orange-500/50" : task.status === "cancelled" ? "border-red-500/20 opacity-70" : "border-white/20"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className={`font-mono font-bold ${task.status === "cancelled" ? "text-white/40 line-through" : "text-white"}`}>{task.title}</div>
+                        {task.description && <div className="text-sm text-white/70 font-mono mt-0.5">{task.description}</div>}
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {isMD && <Badge variant="outline" className="text-xs border-white/50 text-white/80">{displayName(task.assignee_user_id)}</Badge>}
+                          <Badge variant="outline" className={statusBadgeClass}>{statusLabel}</Badge>
+                          {task.deadline && (
+                            <span className={`text-xs font-mono flex items-center gap-1 ${isOverdue ? "text-orange-400 font-bold" : "text-white/60"}`}>
+                              <Clock className="h-3 w-3" />
+                              {isOverdue && <AlertTriangle className="h-3 w-3" />}
+                              {new Date(task.deadline).toLocaleDateString(undefined, { dateStyle: "short" })}
+                            </span>
+                          )}
+                          {task.start_date && (
+                            <span className="text-xs text-white/40 font-mono">
+                              Start: {new Date(task.start_date).toLocaleDateString(undefined, { dateStyle: "short" })}
+                            </span>
+                          )}
+                          {task.status_note && (
+                            <span className="text-xs text-white/50 font-mono italic truncate max-w-[200px]" title={task.status_note}>
+                              "{task.status_note}"
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Status action buttons — shown for everyone, with role-appropriate controls */}
+                      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                        {!isTerminal && (
+                          <>
+                            <Input
+                              placeholder="Note (optional)"
+                              className="w-28 border border-white/30 bg-transparent text-white text-xs font-mono h-8"
+                              value={statusNote[task.id] ?? ""}
+                              onChange={(e) => setStatusNote((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                            />
+                            {task.status === "not_started" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-[#FFED00] text-[#FFED00] hover:bg-[#FFED00]/10 text-xs h-8"
+                                disabled={statusUpdatingId === task.id}
+                                onClick={() => handleUpdateStatus(task.id, "in_progress", statusNote[task.id] || undefined)}
+                              >
+                                {statusUpdatingId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start"}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              className="bg-[#22c55e] text-white hover:bg-[#22c55e]/90 text-xs h-8"
+                              disabled={statusUpdatingId === task.id}
+                              onClick={() => handleUpdateStatus(task.id, "done", statusNote[task.id] || undefined)}
+                            >
+                              {statusUpdatingId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle className="h-3.5 w-3.5 mr-1" />Done</>}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs h-8"
+                              disabled={statusUpdatingId === task.id}
+                              onClick={() => handleUpdateStatus(task.id, "cancelled", statusNote[task.id] || undefined)}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+                        {isMD && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-white/30 hover:text-red-400 hover:bg-red-500/10 h-8 w-8 p-0"
+                            onClick={() => setTaskToDelete(task)}
+                            title="Delete task"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         )}
                       </div>
                     </div>
-                    {isMD && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-                          onClick={() => setTaskToDelete(task)}
-                          title="Delete task"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                    {!isMD && task.status !== "done" && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Input
-                          placeholder="Note (optional)"
-                          className="w-32 border border-white/30 bg-transparent text-white text-xs font-mono"
-                          value={statusNote[task.id] ?? ""}
-                          onChange={(e) => setStatusNote((prev) => ({ ...prev, [task.id]: e.target.value }))}
-                        />
-                        {task.status === "not_started" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-[#FFED00] text-[#FFED00] hover:bg-[#FFED00]/10"
-                            disabled={statusUpdatingId === task.id}
-                            onClick={() => handleUpdateStatus(task.id, "in_progress", statusNote[task.id] || undefined)}
-                          >
-                            {statusUpdatingId === task.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "In progress"}
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          className="bg-[#22c55e] text-white hover:bg-[#22c55e]/90"
-                          disabled={statusUpdatingId === task.id}
-                          onClick={() => handleUpdateStatus(task.id, "done", statusNote[task.id] || undefined)}
-                        >
-                          {statusUpdatingId === task.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Done"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -5406,10 +5497,14 @@ function DashboardTab({
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAddTaskOpen(false)} className="border-white text-white">
+              <Button
+                variant="ghost"
+                onClick={() => setAddTaskOpen(false)}
+                className="border border-white/30 text-white/80 hover:bg-white/10 hover:border-white/50 hover:text-white font-mono font-semibold"
+              >
                 Cancel
               </Button>
-              <Button onClick={handleCreateTask} disabled={addTaskSaving} className="bg-[#FFED00] text-black font-bold">
+              <Button onClick={handleCreateTask} disabled={addTaskSaving} className="bg-[#FFED00] text-black font-bold font-mono">
                 {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </div>
@@ -6761,11 +6856,8 @@ export default function CIS() {
     stage?: string;
   } | null>(null);
 
-  // Team members cannot see Engine tab; LP can only see Dashboard
+  // LP can only see Dashboard and Account
   useEffect(() => {
-    if (profile && profile.role === "team_member" && activeTab === "dashboard") {
-      setActiveTab("overview");
-    }
     if (profile && profile.role === "lp" && activeTab !== "overview" && activeTab !== "account") {
       setActiveTab("overview");
     }

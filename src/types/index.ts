@@ -235,7 +235,7 @@ export interface SourceRecord {
   updated_at: string;
 }
 
-export type TaskStatus = 'not_started' | 'in_progress' | 'done';
+export type TaskStatus = 'not_started' | 'in_progress' | 'done' | 'cancelled';
 
 export interface Task {
   id: string;
