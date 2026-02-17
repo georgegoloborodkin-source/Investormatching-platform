@@ -7295,27 +7295,26 @@ export default function CIS() {
     });
   }, [sourceFolders]);
 
-  // Skip backfill if a previous run failed (e.g. category column missing or RLS blocks updates)
-  const backfillCategoryFailedRef = useRef(false);
-
-  // Backfill source_folder categories from Drive sync config. Source folder names are full paths (e.g. "Pitch Deck / CompanyA");
-  // config folders are root names (e.g. "Pitch Deck"). Match by root segment so Funds/BD/Mentors show correctly.
-  // If the first update fails (400 = column may not exist; run migration 20260216000002_add_folder_category.sql), we stop and don't retry.
+  // Backfill source_folder categories from Drive sync config. Match by config ROOT: for each root (e.g. "SquareFeet", "Urent"),
+  // find all source_folders whose name equals the root OR starts with "rootName / " and set their category to the root's category.
   useEffect(() => {
-    if (backfillCategoryFailedRef.current || !activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
+    if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
-    for (const sf of sourceFolders) {
-      const name = (sf.name || "").trim();
-      const rootName = name.includes(" / ") ? name.split(" / ")[0].trim() : name;
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
       if (!rootName) continue;
-      const df = driveFolders.find(
-        (f) => (f.name || "").trim().toLowerCase() === rootName.toLowerCase()
-      );
-      if (!df) continue;
       const wantCategory = df.category ?? "Portfolio Companies";
-      if ((sf.category || "Portfolio Companies") !== wantCategory) {
-        updates.push({ id: sf.id, category: wantCategory });
+      const rootLower = rootName.toLowerCase();
+      const prefix = rootLower + " / ";
+      for (const sf of sourceFolders) {
+        const name = (sf.name || "").trim();
+        const nameLower = name.toLowerCase();
+        const belongsToRoot = nameLower === rootLower || nameLower.startsWith(prefix);
+        if (!belongsToRoot) continue;
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          updates.push({ id: sf.id, category: wantCategory });
+        }
       }
     }
     if (updates.length === 0) return;
@@ -7326,8 +7325,7 @@ export default function CIS() {
         const { id, category } = updates[i];
         const { error } = await updateFolderCategory(id, category);
         if (error) {
-          backfillCategoryFailedRef.current = true;
-          console.warn("[CIS] Folder category update failed (ensure migration 20260216000002_add_folder_category.sql is applied):", error.message);
+          console.warn("[CIS] Folder category update failed:", error.message);
           return;
         }
       }
