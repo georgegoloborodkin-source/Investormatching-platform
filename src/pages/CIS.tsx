@@ -1639,6 +1639,8 @@ function SourcesTab({
   const [folderAssignmentIds, setFolderAssignmentIds] = useState<string[]>([]);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isAssigningFolders, setIsAssigningFolders] = useState(false);
+  const [folderDialogCategory, setFolderDialogCategory] = useState<string>("Portfolio Companies");
+  const [folderDialogNewName, setFolderDialogNewName] = useState("");
 
   // ── Google Drive Folder Sync state ──
   const [connectedDriveFolderId, setConnectedDriveFolderId] = useState<string | null>(null);
@@ -1736,6 +1738,8 @@ function SourcesTab({
       setPendingFolderDocs(docs);
       const defaults = selectedFolderId !== "none" ? [selectedFolderId] : [];
       setFolderAssignmentIds(defaults);
+      setFolderDialogCategory("Portfolio Companies");
+      setFolderDialogNewName("");
       setIsFolderDialogOpen(true);
     },
     [selectedFolderId]
@@ -4265,57 +4269,167 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white">
+        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight">Assign Folders</DialogTitle>
-            <DialogDescription className="text-white/70 font-mono">
-              Choose one or more folders for your uploaded documents.
+            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
+              <FolderPlus className="h-4 w-4 text-[#FFED00]" />
+              Categorize &amp; Assign Folder
+            </DialogTitle>
+            <DialogDescription className="text-white/70 font-mono text-xs">
+              Pick a category, then select or create a folder for your uploaded documents.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="text-xs text-white/70 font-mono">
-              {pendingFolderDocs.length} document{pendingFolderDocs.length > 1 ? "s" : ""} uploaded:
-            </div>
-            <div className="space-y-1 max-h-[160px] overflow-y-auto border border-white/20 rounded-md p-2">
+          <div className="space-y-4">
+            {/* Documents summary */}
+            <div className="space-y-1 max-h-[100px] overflow-y-auto border border-white/20 rounded-md p-2">
+              <div className="text-[10px] text-white/50 font-mono mb-1">
+                {pendingFolderDocs.length} document{pendingFolderDocs.length > 1 ? "s" : ""}:
+              </div>
               {pendingFolderDocs.map((doc) => (
                 <div key={doc.id} className="text-xs text-white font-mono truncate">
                   • {doc.title || "Untitled document"}
                 </div>
               ))}
             </div>
-            {sourceFolders.length === 0 ? (
-              <div className="text-xs text-white/70 font-mono border border-white/20 rounded-md p-2">
-                No folders yet. Create a folder first to organize these documents.
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+
+            {/* Step 1: Category selector */}
+            <div>
+              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+                Step 1 — Choose Category
+              </Label>
+              <div className="flex flex-wrap gap-2">
                 {FOLDER_CATEGORIES.map((cat) => {
-                  const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
-                  if (catFolders.length === 0) return null;
+                  const isActive = folderDialogCategory === cat;
                   return (
-                    <div key={cat}>
-                      <p className="text-[10px] font-mono text-[#FFED00]/70 uppercase tracking-wider mb-1">{cat}</p>
-                      <div className="space-y-1">
-                        {catFolders.map((folder) => (
-                          <label
-                            key={folder.id}
-                            className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono"
-                          >
-                            <Checkbox
-                              checked={folderAssignmentIds.includes(folder.id)}
-                              onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
-                              className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
-                            />
-                            <Folder className="h-3 w-3 text-white/70" />
-                            <span className="flex-1">{folder.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFolderDialogCategory(cat)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-mono border-2 transition-all ${
+                        isActive
+                          ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00] font-bold shadow-[0_0_8px_rgba(255,237,0,0.25)]"
+                          : "border-white/30 text-white/70 hover:border-white/60 hover:text-white"
+                      }`}
+                    >
+                      {cat}
+                    </button>
                   );
                 })}
               </div>
-            )}
+            </div>
+
+            {/* Step 2: Folder selection */}
+            <div>
+              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+                Step 2 — Select or Create Folder
+              </Label>
+
+              {/* Quick create inside dialog */}
+              <div className="flex items-center gap-2 mb-3">
+                <Input
+                  value={folderDialogNewName}
+                  onChange={(e) => setFolderDialogNewName(e.target.value)}
+                  placeholder={`New folder name (${folderDialogCategory})`}
+                  className="flex-1 border border-white/30 bg-transparent text-white text-xs placeholder:text-white/40 h-8"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && folderDialogNewName.trim()) {
+                      e.preventDefault();
+                      (async () => {
+                        const folder = await onCreateFolder(folderDialogNewName.trim(), folderDialogCategory);
+                        if (folder) {
+                          setFolderDialogNewName("");
+                          setFolderAssignmentIds([folder.id]);
+                          toast({ title: "Folder created", description: `"${folder.name}" in ${folderDialogCategory}` });
+                        }
+                      })();
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  disabled={!folderDialogNewName.trim()}
+                  className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold h-8 text-xs px-3"
+                  onClick={async () => {
+                    if (!folderDialogNewName.trim()) return;
+                    const folder = await onCreateFolder(folderDialogNewName.trim(), folderDialogCategory);
+                    if (folder) {
+                      setFolderDialogNewName("");
+                      setFolderAssignmentIds([folder.id]);
+                      toast({ title: "Folder created", description: `"${folder.name}" in ${folderDialogCategory}` });
+                    }
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Create
+                </Button>
+              </div>
+
+              {/* Existing folders filtered by selected category */}
+              {(() => {
+                const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === folderDialogCategory);
+                if (catFolders.length === 0) {
+                  return (
+                    <div className="text-xs text-white/50 font-mono border border-white/15 rounded-md p-3 text-center">
+                      No folders in &ldquo;{folderDialogCategory}&rdquo; yet. Create one above.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {catFolders.map((folder) => (
+                      <label
+                        key={folder.id}
+                        className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono"
+                      >
+                        <Checkbox
+                          checked={folderAssignmentIds.includes(folder.id)}
+                          onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
+                          className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                        />
+                        <Folder className="h-3 w-3 text-white/70" />
+                        <span className="flex-1">{folder.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Show other categories' folders collapsed */}
+              {sourceFolders.filter((f) => (f.category || "Portfolio Companies") !== folderDialogCategory).length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-[10px] font-mono text-white/40 cursor-pointer hover:text-white/60">
+                    Show other categories
+                  </summary>
+                  <div className="space-y-2 mt-2">
+                    {FOLDER_CATEGORIES.filter((c) => c !== folderDialogCategory).map((cat) => {
+                      const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
+                      if (catFolders.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="text-[10px] font-mono text-white/40 uppercase tracking-wider mb-1">{cat}</p>
+                          <div className="space-y-1">
+                            {catFolders.map((folder) => (
+                              <label
+                                key={folder.id}
+                                className="flex items-center gap-2 text-xs border border-white/20 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white/60 font-mono"
+                              >
+                                <Checkbox
+                                  checked={folderAssignmentIds.includes(folder.id)}
+                                  onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
+                                  className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                                />
+                                <Folder className="h-3 w-3 text-white/40" />
+                                <span className="flex-1">{folder.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button
@@ -4335,7 +4449,7 @@ function SourcesTab({
               onClick={assignFoldersToDocuments}
             >
               {isAssigningFolders ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
-              Assign folders
+              Assign to folder
             </Button>
           </div>
         </DialogContent>
