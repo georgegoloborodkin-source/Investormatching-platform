@@ -1576,6 +1576,7 @@ function SourcesTab({
   indexDocumentEmbeddings,
   onRefreshCompanyCards,
   initialDriveSyncConfig,
+  onSourceFoldersRefetch,
 }: {
   sources: SourceRecord[];
   documents: Array<{
@@ -1626,6 +1627,7 @@ function SourcesTab({
     folders: Array<{ id: string; name: string; category?: string }>;
     lastSyncAt: string | null;
   } | null;
+  onSourceFoldersRefetch?: () => Promise<void>;
 }) {
   /** Root folder types for Google Drive sync (each connected root can be tagged as one of these). */
   const DRIVE_ROOT_CATEGORIES = [
@@ -2112,6 +2114,9 @@ function SourcesTab({
           );
           if (existingFolder) {
             platformFolderId = existingFolder.id;
+            if (onFolderCategoryUpdated && (existingFolder.category || "Portfolio Companies") !== folderCategory) {
+              await onFolderCategoryUpdated(existingFolder.id, folderCategory);
+            }
           } else {
             const created = await onCreateFolder(normalizedCompanyName, folderCategory);
             if (created) {
@@ -2458,6 +2463,10 @@ function SourcesTab({
         description: `${results.length} companies — ${totalNew} new, ${totalUpdated} updated, ${totalSkipped} unchanged.`,
       });
 
+      if (onSourceFoldersRefetch) {
+        await onSourceFoldersRefetch();
+      }
+
       // Show category picker for any newly created folders
       if (newlyCreatedFolderIds.length > 0) {
         setCategoryPickerFolders(newlyCreatedFolderIds.map((f) => ({ ...f, category: "Portfolio Companies" })));
@@ -2482,7 +2491,7 @@ function SourcesTab({
       setIsSyncingDrive(false);
       setDriveSyncProgress(null);
     }
-  }, [activeEventId, connectedDriveFolderId, connectedDriveFolderName, connectedDriveFolders, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onRefreshCompanyCards, sourceFolders, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolderName, connectedDriveFolders, currentUserId, ensureActiveEventId, getGoogleAccessToken, indexDocumentEmbeddings, onCreateFolder, onDocumentSaved, onFolderCategoryUpdated, onRefreshCompanyCards, onSourceFoldersRefetch, sourceFolders, toast]);
 
   // Keep ref updated so connectDrivePortfolioFolder can call sync without TDZ
   useEffect(() => {
@@ -7286,17 +7295,22 @@ export default function CIS() {
     });
   }, [sourceFolders]);
 
-  // Backfill source_folder categories from Drive sync config so Funds/BD/Mentors show in Document Folders and Knowledge Scope
+  // Backfill source_folder categories from Drive sync config. Source folder names are full paths (e.g. "Pitch Deck / CompanyA");
+  // config folders are root names (e.g. "Pitch Deck"). Match by root segment so Funds/BD/Mentors show correctly.
   useEffect(() => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
-    for (const df of driveFolders) {
-      const wantCategory = df.category ?? "Portfolio Companies";
-      const sf = sourceFolders.find(
-        (f) => (f.name || "").trim().toLowerCase() === (df.name || "").trim().toLowerCase()
+    for (const sf of sourceFolders) {
+      const name = (sf.name || "").trim();
+      const rootName = name.includes(" / ") ? name.split(" / ")[0].trim() : name;
+      if (!rootName) continue;
+      const df = driveFolders.find(
+        (f) => (f.name || "").trim().toLowerCase() === rootName.toLowerCase()
       );
-      if (sf && (sf.category || "Portfolio Companies") !== wantCategory) {
+      if (!df) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      if ((sf.category || "Portfolio Companies") !== wantCategory) {
         updates.push({ id: sf.id, category: wantCategory });
       }
     }
@@ -12868,6 +12882,12 @@ export default function CIS() {
                 }
               }}
               initialDriveSyncConfig={initialDriveSyncConfig}
+              onSourceFoldersRefetch={async () => {
+                if (activeEventId) {
+                  const { data } = await getSourceFoldersByEvent(activeEventId);
+                  setSourceFolders((data || []) as SourceFolder[]);
+                }
+              }}
             />
           </TabsContent>
 
