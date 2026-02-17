@@ -6990,7 +6990,7 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
         if allowed_entity_ids is not None:
             print(f"[AGENT] DB scope: {len(allowed_entity_ids)} entities in {len(folder_ids)} folders")
             if not allowed_entity_ids:
-                return "No portfolio companies found within the selected knowledge scope."
+                return "SCOPE_EMPTY: No portfolio companies exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge."
 
     # When scope is set, fetch ONLY in-scope entities (much faster than fetch-all-then-filter)
     query = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company")
@@ -7137,7 +7137,7 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
         scoped_doc_ids = await _resolve_scoped_doc_ids(sb, event_id, folder_ids)
         if scoped_doc_ids is not None:
             if not scoped_doc_ids:
-                return f"No documents found matching '{query_text}' within the selected knowledge scope."
+                return f"SCOPE_EMPTY: No documents matching '{query_text}' exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge."
             doc_id_list = list(scoped_doc_ids)
             print(f"[AGENT] Scope: {len(doc_id_list)} docs in {len(folder_ids)} folders — vector search only on these")
             try:
@@ -7288,7 +7288,7 @@ async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids
         if allowed is not None:
             entities = [e for e in entities if e.get("id") in allowed]
             if not entities:
-                return f"No information found for '{company_name}' within the selected knowledge scope."
+                return f"SCOPE_EMPTY: '{company_name}' is not in the selected folders. Tell the user this company is outside their current knowledge scope. Do NOT answer from your own knowledge."
 
     entity = entities[0]
     entity_id = entity.get("id")
@@ -7393,7 +7393,7 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str, folder_
         if allowed is not None:
             entities = [e for e in entities if e.get("id") in allowed]
             if not entities:
-                return f"No entity matching '{entity_name}' found within the selected knowledge scope."
+                return f"SCOPE_EMPTY: '{entity_name}' is not in the selected folders. Tell the user this entity is outside their current knowledge scope. Do NOT answer from your own knowledge."
 
     if not entities:
         return f"No entity found matching '{entity_name}'" + (f" (type: {entity_type})" if entity_type else "")
@@ -7555,9 +7555,9 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
             messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": resolved_question})
 
-        # Build tools list
+        # Build tools list — disable web search when scope is active (it bypasses DB filtering)
         tools = list(AGENT_TOOLS)
-        if request.web_search_enabled:
+        if request.web_search_enabled and not folder_ids:
             tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
         # Choose model
@@ -7579,6 +7579,18 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
                 system_prompt = AGENT_SYSTEM_PROMPT
+                if folder_ids:
+                    system_prompt += (
+                        "\n\n## KNOWLEDGE SCOPE IS ACTIVE\n"
+                        "The user narrowed the search to specific folders. All tools already filter at the database level — "
+                        "they only return data from those folders. You will NEVER see out-of-scope data.\n\n"
+                        "RULES:\n"
+                        "- If a tool returns no results for a company/topic, say: "
+                        "\"[Name] is not in your current knowledge scope. Please add that folder to Knowledge Scope or clear the scope.\"\n"
+                        "- Do NOT speculate, suggest, recommend, or use your own knowledge about companies not found by the tools.\n"
+                        "- Do NOT use web search to answer about companies when scope is active.\n"
+                        "- Keep your answer SHORT: only state what the tools returned. Nothing more."
+                    )
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
 
