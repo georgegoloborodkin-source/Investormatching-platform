@@ -185,7 +185,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -194,7 +194,17 @@ import { supabase } from "@/integrations/supabase/client";
 // ============================================================================
 
 type ScopeItem = { id: string; label: string; checked: boolean; type: "portfolio" | "deal" | "thread" | "global" | "folder"; category?: string };
-type Message = { id: string; author: "user" | "assistant"; text: string; threadId: string; isStreaming?: boolean };
+type Message = {
+  id: string;
+  author: "user" | "assistant";
+  text: string;
+  threadId: string;
+  isStreaming?: boolean;
+  /** Verifiable RAG: click-to-source citations from agent */
+  verifiableSources?: VerifiableSource[];
+  /** Devil's Advocate: red flags / risk critique */
+  critic?: string;
+};
 type Thread = { id: string; title: string; parentId?: string };
 type KnowledgeObject = {
   id: string;
@@ -4757,6 +4767,7 @@ function DashboardTab({
   const [dashboardSection, setDashboardSection] = useState<"tasks" | "analytics">("tasks");
   const [ganttRange, setGanttRange] = useState<4 | 8 | 12>(8);
   const [ganttGroupBy, setGanttGroupBy] = useState<"none" | "assignee">("none");
+  const [extraProfiles, setExtraProfiles] = useState<Record<string, { full_name?: string | null; email?: string | null }>>({});
 
   const myTasks = useMemo(
     () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
@@ -4778,6 +4789,31 @@ function DashboardTab({
       .order("created_at", { ascending: false })
       .then(({ data }) => setTeamMembers((data as TeamMember[]) || []));
   }, [orgId]);
+
+  // Resolve "Created by" / assignee when not in teamMembers (e.g. RLS or timing)
+  useEffect(() => {
+    const ids = new Set<string>();
+    tasks.forEach((t) => {
+      if (t.created_by) ids.add(t.created_by);
+      if (t.assignee_user_id) ids.add(t.assignee_user_id);
+    });
+    const teamIds = new Set(teamMembers.map((m) => m.id));
+    const currentId = profile?.id;
+    const missing = [...ids].filter((id) => !teamIds.has(id) && id !== currentId);
+    if (missing.length === 0) return;
+    supabase
+      .from("user_profiles")
+      .select("id, full_name, email")
+      .in("id", missing)
+      .then(({ data }) => {
+        if (!data?.length) return;
+        const byId: Record<string, { full_name?: string | null; email?: string | null }> = {};
+        (data as { id: string; full_name?: string | null; email?: string | null }[]).forEach((row) => {
+          byId[row.id] = { full_name: row.full_name, email: row.email };
+        });
+        setExtraProfiles((prev) => ({ ...prev, ...byId }));
+      });
+  }, [tasks, teamMembers, profile?.id]);
 
   const stats = useMemo(() => calculateDecisionStats(decisions), [decisions]);
   const latestDecision = decisions[0];
@@ -4860,7 +4896,11 @@ function DashboardTab({
   const displayName = (userId: string | null) => {
     if (!userId) return "Unassigned";
     const m = teamMembers.find((x) => x.id === userId);
-    return m?.full_name || m?.email || "Unknown";
+    if (m) return m.full_name || m.email || "Team member";
+    const extra = extraProfiles[userId];
+    if (extra) return extra.full_name || extra.email || "Team member";
+    if (profile?.id === userId) return profile.full_name || profile.email || "You";
+    return "Team member";
   };
 
   const now = Date.now();
@@ -5601,7 +5641,7 @@ function DashboardTab({
                       </div>
                     </div>
                     <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Created by</div>
+                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider" title="Who set this requirement">Created by</div>
                       <div className="text-sm font-mono text-white flex items-center gap-1.5">
                         <User className="h-3.5 w-3.5 text-white/40" />
                         {displayName(t.created_by)}
@@ -8856,6 +8896,12 @@ export default function CIS() {
             sourceDocIds: sourceDocIds || null,
           });
         },
+        setVerifiableSources: (sources: VerifiableSource[]) => {
+          setMessages((prev) => patchById(prev, { verifiableSources: sources }));
+        },
+        setCritic: (text: string) => {
+          setMessages((prev) => patchById(prev, { critic: text }));
+        },
       };
     },
     [persistChatMessage, scrollChatToBottom]
@@ -9235,7 +9281,13 @@ export default function CIS() {
                 setIsClaudeLoading(false);
               }
             },
-            chatAbortRef.current?.signal
+            chatAbortRef.current?.signal,
+            (sources) => {
+              if (!streamCompleted) streamer.setVerifiableSources(sources);
+            },
+            (criticText) => {
+              if (!streamCompleted) streamer.setCritic(criticText);
+            }
           );
 
           if (!streamCompleted) {
@@ -11416,6 +11468,20 @@ export default function CIS() {
       .filter((t) => t.length > 3);
   }, [lastEvidence?.question]);
 
+  /** Replace verbose [[Source: ...]] tags with [N] so inline badge renderer shows them (Verifiable RAG) */
+  const cleanVerifiableCitationTags = useCallback((text: string) => {
+    let n = 0;
+    const byTag: Record<string, number> = {};
+    return text
+      .replace(/\[\[Source:\s*[^\]]+\]\]/gi, (tag) => {
+        if (byTag[tag] == null) {
+          n += 1;
+          byTag[tag] = n;
+        }
+        return `[${byTag[tag]}]`;
+      });
+  }, []);
+
   const renderAssistantContent = useCallback((text: string) => {
     // ── Inline markdown renderer ──
     // Converts **bold**, *italic*, `code`, [n] references into React elements
@@ -12177,13 +12243,46 @@ export default function CIS() {
                                     </span>
                                   ) : (
                                     <>
-                                      {renderAssistantContent(m.text)}
+                                      {renderAssistantContent(cleanVerifiableCitationTags(m.text))}
                                       {m.isStreaming && (
                                         <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
                                       )}
                                     </>
                                   )}
                                 </div>
+                                {/* Verifiable RAG: click-to-source */}
+                                {!m.isStreaming && m.verifiableSources && m.verifiableSources.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-white/10">
+                                    <p className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider mb-1.5">Sources</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {m.verifiableSources.map((src, idx) => (
+                                        src.type === "document" && src.doc_id ? (
+                                          <Button
+                                            key={`${src.doc_id}-${src.chunk ?? idx}`}
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                                            onClick={() => handleOpenDocument(src.doc_id!)}
+                                          >
+                                            {idx + 1}. {src.title || "Document"}
+                                          </Button>
+                                        ) : (
+                                          <span key={`${src.title}-${idx}`} className="inline-block text-[11px] text-white/50 font-mono px-2 py-1 border border-white/10 rounded">
+                                            {idx + 1}. {src.title}
+                                          </span>
+                                        )
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Devil's Advocate: RED FLAGS */}
+                                {!m.isStreaming && m.critic && (
+                                  <div className="mt-2 pt-2 border-t border-red-500/20 bg-red-950/20 rounded-lg px-3 py-2">
+                                    <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_strong]:text-red-300 text-xs font-mono whitespace-pre-wrap">
+                                      {m.critic}
+                                    </div>
+                                  </div>
+                                )}
                                 {/* Log Connection button - appears after each AI response */}
                                 {!m.isStreaming && m.text && m.text !== "..." && (
                                   <div className="mt-2 pt-2 border-t border-white/10">
