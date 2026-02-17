@@ -6932,6 +6932,44 @@ def _extract_core_company_name(name: str) -> str:
     return s
 
 
+# ---------------------------------------------------------------------------
+#  DB-level scope helpers — single RPC call to resolve folder_ids → IDs
+# ---------------------------------------------------------------------------
+
+async def _resolve_scoped_entity_ids(sb, event_id: str, folder_ids: list[str]) -> set[str] | None:
+    """Call resolve_scoped_entity_ids RPC to get entity IDs that have docs in the selected folders.
+    Returns None if RPC fails (caller should fall back to unscoped)."""
+    try:
+        result = sb.rpc("resolve_scoped_entity_ids", {
+            "p_event_id": event_id,
+            "p_folder_ids": folder_ids,
+        }).execute()
+        ids = result.data if result.data else []
+        if isinstance(ids, list):
+            return set(str(i) for i in ids)
+        return set()
+    except Exception as e:
+        print(f"[SCOPE] resolve_scoped_entity_ids RPC failed: {e}")
+        return None
+
+
+async def _resolve_scoped_doc_ids(sb, event_id: str, folder_ids: list[str]) -> set[str] | None:
+    """Call resolve_scoped_document_ids RPC to get document IDs in the selected folders.
+    Returns None if RPC fails (caller should fall back to unscoped)."""
+    try:
+        result = sb.rpc("resolve_scoped_document_ids", {
+            "p_event_id": event_id,
+            "p_folder_ids": folder_ids,
+        }).execute()
+        ids = result.data if result.data else []
+        if isinstance(ids, list):
+            return set(str(i) for i in ids)
+        return set()
+    except Exception as e:
+        print(f"[SCOPE] resolve_scoped_document_ids RPC failed: {e}")
+        return None
+
+
 async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
     """Search portfolio companies via SQL on kg_entities with JSONB filters and synonym expansion."""
     sb = get_supabase()
@@ -6945,6 +6983,15 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
     sector_terms = _expand_synonyms(sector, _SECTOR_SYNONYMS) if sector else set()
     model_terms = _expand_synonyms(biz_model, _MODEL_SYNONYMS) if biz_model else set()
 
+    # ── DB-level scope: resolve allowed entity IDs BEFORE querying kg_entities ──
+    allowed_entity_ids: set[str] | None = None
+    if folder_ids:
+        allowed_entity_ids = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
+        if allowed_entity_ids is not None:
+            print(f"[AGENT] DB scope: {len(allowed_entity_ids)} entities in {len(folder_ids)} folders")
+            if not allowed_entity_ids:
+                return "No portfolio companies found within the selected knowledge scope."
+
     query = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company")
     result = query.execute()
     raw_rows = result.data or []
@@ -6953,8 +7000,6 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
         return "No portfolio companies found in the database."
 
     # ── Deduplicate: keep the richest entity per core company name ──
-    # "Chhaya", "Chhaya Technologies Limited", "CHHAYA TECHNOLOGIES PTE. LTD."
-    # all share the core name "chhaya" → keep the one with most content.
     best_by_core: dict[str, dict] = {}
     for row in raw_rows:
         raw_name = row.get("normalized_name") or row.get("name", "")
@@ -6968,49 +7013,12 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
             best_by_core[core] = {**row, "_richness": richness}
     rows = sorted(best_by_core.values(), key=lambda r: (r.get("name") or "").lower())
 
-    # ── Folder scope filter: restrict to entities with docs in selected folders ──
-    if folder_ids:
-        try:
-            entity_ids = [r["id"] for r in rows if r.get("id")]
-            if entity_ids:
-                # Find which entities have documents in the selected folders
-                allowed_entity_ids: set[str] = set()
-                for i in range(0, len(entity_ids), 25):
-                    batch = entity_ids[i:i+25]
-                    docs_res = sb.table("documents") \
-                        .select("company_entity_id, folder_id") \
-                        .in_("company_entity_id", batch) \
-                        .execute()
-                    for d in (docs_res.data or []):
-                        if d.get("folder_id") in folder_ids:
-                            allowed_entity_ids.add(d["company_entity_id"])
-                    # Also check document_folder_links
-                    doc_id_res = sb.table("documents") \
-                        .select("id, company_entity_id") \
-                        .in_("company_entity_id", batch) \
-                        .execute()
-                    doc_id_map = {}
-                    for d in (doc_id_res.data or []):
-                        doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
-                    all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
-                    if all_doc_ids:
-                        for j in range(0, len(all_doc_ids), 50):
-                            link_batch = all_doc_ids[j:j+50]
-                            links_res = sb.table("document_folder_links") \
-                                .select("document_id, folder_id") \
-                                .in_("document_id", link_batch) \
-                                .in_("folder_id", folder_ids) \
-                                .execute()
-                            for link in (links_res.data or []):
-                                for eid, dids in doc_id_map.items():
-                                    if link["document_id"] in dids:
-                                        allowed_entity_ids.add(eid)
-                rows = [r for r in rows if r.get("id") in allowed_entity_ids]
-                print(f"[AGENT] Folder scope: {len(rows)} entities after filtering by {len(folder_ids)} folders")
-                if not rows:
-                    return "No portfolio companies found within the selected knowledge scope folders. The user has limited the search to specific folders."
-        except Exception as e:
-            print(f"[AGENT] Folder scope filter error (continuing without filter): {e}")
+    # Apply DB-level scope filter
+    if allowed_entity_ids is not None:
+        rows = [r for r in rows if r.get("id") in allowed_entity_ids]
+        print(f"[AGENT] Scope applied: {len(rows)} entities visible")
+        if not rows:
+            return "No portfolio companies found within the selected knowledge scope."
 
     def _field_text(props: dict, keys: list[str]) -> str:
         return " ".join(str(props.get(f, "")) for f in keys).lower()
@@ -7114,20 +7122,39 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
     except Exception as e:
         return f"Error generating embedding: {str(e)}"
 
-    # Call match_document_chunks RPC
+    # Call scoped RPC — folder filtering happens at DB level
     try:
-        result = sb.rpc("match_document_chunks", {
+        rpc_params: dict = {
             "query_embedding": embedding,
             "match_count": top_k,
             "filter_event_id": event_id,
-        }).execute()
+        }
+        if folder_ids:
+            rpc_params["filter_folder_ids"] = folder_ids
+            rpc_name = "match_document_chunks_scoped"
+            print(f"[AGENT] Using scoped RPC with {len(folder_ids)} folders")
+        else:
+            rpc_name = "match_document_chunks"
+        result = sb.rpc(rpc_name, rpc_params).execute()
     except Exception as e:
-        return f"Error in semantic search: {str(e)}"
+        # Fall back to unscoped RPC if scoped one doesn't exist yet
+        if folder_ids and "match_document_chunks_scoped" in str(e):
+            try:
+                result = sb.rpc("match_document_chunks", {
+                    "query_embedding": embedding,
+                    "match_count": top_k,
+                    "filter_event_id": event_id,
+                }).execute()
+            except Exception as e2:
+                return f"Error in semantic search: {str(e2)}"
+        else:
+            return f"Error in semantic search: {str(e)}"
 
     chunks = result.data or []
 
     if not chunks:
-        return f"No documents found matching: '{query_text}'"
+        scope_msg = " within the selected knowledge scope" if folder_ids else ""
+        return f"No documents found matching '{query_text}'{scope_msg}."
 
     # Fetch document metadata for all chunks (title, file_name, folder_id)
     doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
@@ -7138,31 +7165,6 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
             doc_map = {d["id"]: d for d in (docs_result.data or [])}
         except Exception:
             pass
-
-    # ── Folder scope filter: restrict to documents in selected folders ──
-    if folder_ids and doc_ids:
-        try:
-            allowed_doc_ids: set[str] = set()
-            # Check direct folder_id
-            for did, doc in doc_map.items():
-                if doc.get("folder_id") in folder_ids:
-                    allowed_doc_ids.add(did)
-            # Check document_folder_links
-            for i in range(0, len(doc_ids), 50):
-                batch = doc_ids[i:i+50]
-                links_res = sb.table("document_folder_links") \
-                    .select("document_id, folder_id") \
-                    .in_("document_id", batch) \
-                    .in_("folder_id", folder_ids) \
-                    .execute()
-                for link in (links_res.data or []):
-                    allowed_doc_ids.add(link["document_id"])
-            chunks = [c for c in chunks if c.get("document_id") in allowed_doc_ids]
-            print(f"[AGENT] Doc scope filter: {len(chunks)} chunks after folder filtering")
-            if not chunks:
-                return f"No documents found matching '{query_text}' within the selected knowledge scope folders. The user has limited the search to specific folders."
-        except Exception as e:
-            print(f"[AGENT] Doc folder scope filter error (continuing without filter): {e}")
 
     # If company_name filter, further restrict by document title
     if company_name:
@@ -7261,49 +7263,13 @@ async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids
                 best_by_core[core] = {**ent, "_r": richness}
         entities = [v for v in best_by_core.values()]
 
-    # ── Folder scope: STRICT filter — block entities outside selected folders ──
+    # ── DB-level scope: resolve allowed entity IDs via single RPC call ──
     if folder_ids:
-        try:
-            ent_ids = [e["id"] for e in entities if e.get("id")]
-            in_scope: set[str] = set()
-            # Check direct folder_id on documents
-            docs_res = sb.table("documents") \
-                .select("company_entity_id, folder_id") \
-                .in_("company_entity_id", ent_ids) \
-                .execute()
-            for d in (docs_res.data or []):
-                if d.get("folder_id") in folder_ids:
-                    in_scope.add(d["company_entity_id"])
-            # Also check document_folder_links
-            doc_id_res = sb.table("documents") \
-                .select("id, company_entity_id") \
-                .in_("company_entity_id", ent_ids) \
-                .execute()
-            doc_id_map: dict[str, list[str]] = {}
-            for d in (doc_id_res.data or []):
-                doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
-            all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
-            if all_doc_ids:
-                for j in range(0, len(all_doc_ids), 50):
-                    link_batch = all_doc_ids[j:j+50]
-                    links_res = sb.table("document_folder_links") \
-                        .select("document_id, folder_id") \
-                        .in_("document_id", link_batch) \
-                        .in_("folder_id", folder_ids) \
-                        .execute()
-                    for link in (links_res.data or []):
-                        for eid, dids in doc_id_map.items():
-                            if link["document_id"] in dids:
-                                in_scope.add(eid)
-            entities = [e for e in entities if e.get("id") in in_scope]
+        allowed = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
+        if allowed is not None:
+            entities = [e for e in entities if e.get("id") in allowed]
             if not entities:
-                return (
-                    f"The company '{company_name}' is not in your current knowledge scope. "
-                    "I can only show details for companies within the folders you selected. "
-                    "Please add that company's folder to Knowledge Scope or clear the scope to search the full portfolio."
-                )
-        except Exception as e:
-            print(f"[AGENT] Company details folder scope error: {e}")
+                return f"No information found for '{company_name}' within the selected knowledge scope."
 
     entity = entities[0]
     entity_id = entity.get("id")
@@ -7402,44 +7368,13 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str, folder_
     if entity_type:
         entities = [e for e in entities if (e.get("entity_type") or "").lower() == entity_type.lower()]
 
-    # ── Folder scope: only entities with docs in selected folders ──
+    # ── DB-level scope: resolve allowed entity IDs via single RPC call ──
     if folder_ids and entities:
-        try:
-            entity_ids = [e["id"] for e in entities if e.get("id")]
-            allowed = set()
-            for i in range(0, len(entity_ids), 25):
-                batch = entity_ids[i : i + 25]
-                docs_res = sb.table("documents").select("company_entity_id, folder_id").in_("company_entity_id", batch).execute()
-                for d in (docs_res.data or []):
-                    if d.get("folder_id") in folder_ids:
-                        allowed.add(d["company_entity_id"])
-                doc_id_res = sb.table("documents").select("id, company_entity_id").in_("company_entity_id", batch).execute()
-                doc_id_map = {}
-                for d in (doc_id_res.data or []):
-                    doc_id_map.setdefault(d.get("company_entity_id"), []).append(d["id"])
-                all_doc_ids = [did for dids in doc_id_map.values() for did in dids]
-                if all_doc_ids:
-                    for j in range(0, len(all_doc_ids), 50):
-                        link_batch = all_doc_ids[j : j + 50]
-                        links_res = (
-                            sb.table("document_folder_links")
-                            .select("document_id, folder_id")
-                            .in_("document_id", link_batch)
-                            .in_("folder_id", folder_ids)
-                            .execute()
-                        )
-                        for link in (links_res.data or []):
-                            for eid, dids in doc_id_map.items():
-                                if link["document_id"] in dids:
-                                    allowed.add(eid)
+        allowed = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
+        if allowed is not None:
             entities = [e for e in entities if e.get("id") in allowed]
             if not entities:
-                return (
-                    f"No entity matching '{entity_name}' found in the selected knowledge scope. "
-                    "The user has limited search to specific folders; this entity is outside that scope."
-                )
-        except Exception as e:
-            print(f"[AGENT] KG folder scope filter error: {e}")
+                return f"No entity matching '{entity_name}' found within the selected knowledge scope."
 
     if not entities:
         return f"No entity found matching '{entity_name}'" + (f" (type: {entity_type})" if entity_type else "")
@@ -7625,18 +7560,6 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
                 system_prompt = AGENT_SYSTEM_PROMPT
-                if folder_ids:
-                    system_prompt += """
-
-## Knowledge scope — STRICT ENFORCEMENT (MANDATORY when folders are selected)
-The user has limited this search to specific folders only. EVERY tool call already enforces folder filtering server-side, so tool results are guaranteed in-scope.
-
-ABSOLUTE RULES:
-1. If a tool returns "not in your current knowledge scope" or "No portfolio companies found within the selected knowledge scope", you MUST relay that verbatim. Do NOT try a different tool or fall back to your own knowledge.
-2. NEVER answer about companies or topics that are NOT returned by the tools. If the tool found zero results, tell the user: "That company/topic is not in your current knowledge scope. I can only search within the folders you selected. Please add that folder to Knowledge Scope or clear the scope to search the full portfolio."
-3. Do NOT use web_search to answer about companies when folder scope is active — web search bypasses the scope.
-4. Do NOT invent, recall, or hallucinate any information about companies that were not returned by the scoped tools. The tools are the single source of truth.
-5. If the user asks about something clearly outside scope, respond IMMEDIATELY with the scope message — do not even call tools."""
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
 
