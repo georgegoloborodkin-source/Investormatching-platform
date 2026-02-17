@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,
   status TEXT NOT NULL DEFAULT 'not_started'
     CHECK (status IN ('not_started', 'in_progress', 'done')),
+  start_date TIMESTAMP WITH TIME ZONE,
   deadline TIMESTAMP WITH TIME ZONE,
   status_note TEXT,
   created_by UUID REFERENCES user_profiles(id) ON DELETE SET NULL,

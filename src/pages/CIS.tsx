@@ -1602,10 +1602,20 @@ function SourcesTab({
   initialDriveSyncConfig?: {
     folderId: string;
     folderName: string;
-    folders: Array<{ id: string; name: string }>;
+    folders: Array<{ id: string; name: string; category?: string }>;
     lastSyncAt: string | null;
   } | null;
 }) {
+  /** Root folder types for Google Drive sync (each connected root can be tagged as one of these). */
+  const DRIVE_ROOT_CATEGORIES = [
+    "Portfolio Companies",
+    "BD",
+    "Sourcing",
+    "Funds",
+    "Mentors / Corporates",
+  ] as const;
+  type DriveFolderEntry = { id: string; name: string; category?: string };
+
   const { toast } = useToast();
   const [clickUpListId, setClickUpListId] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -1646,8 +1656,8 @@ function SourcesTab({
   // ── Google Drive Folder Sync state ──
   const [connectedDriveFolderId, setConnectedDriveFolderId] = useState<string | null>(null);
   const [connectedDriveFolderName, setConnectedDriveFolderName] = useState<string | null>(null);
-  // Support multiple connected folders
-  const [connectedDriveFolders, setConnectedDriveFolders] = useState<Array<{ id: string; name: string }>>([]);
+  // Support multiple connected folders (each can have a root-folder type / category)
+  const [connectedDriveFolders, setConnectedDriveFolders] = useState<DriveFolderEntry[]>([]);
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [driveSyncProgress, setDriveSyncProgress] = useState<{ phase: string; current: number; total: number; currentItem: string } | null>(null);
   const [driveSyncResults, setDriveSyncResults] = useState<Array<{ companyName: string; newFiles: number; updatedFiles: number; skippedFiles: number }>>([]);
@@ -1682,8 +1692,12 @@ function SourcesTab({
     setConnectedDriveFolderName(initialDriveSyncConfig.folderName);
     // Only update array state if contents actually changed (avoids reference churn)
     setConnectedDriveFolders(prev => {
-      const next = initialDriveSyncConfig.folders;
-      if (prev.length === next.length && prev.every((f, i) => f.id === next[i]?.id)) return prev;
+      const next = initialDriveSyncConfig.folders.map((f): DriveFolderEntry => ({
+        id: f.id,
+        name: f.name,
+        category: f.category ?? "Portfolio Companies",
+      }));
+      if (prev.length === next.length && prev.every((f, i) => f.id === next[i]?.id && f.category === next[i]?.category)) return prev;
       return next;
     });
     setLastDriveSyncAt(initialDriveSyncConfig.lastSyncAt);
@@ -1704,18 +1718,23 @@ function SourcesTab({
           console.warn("[DriveSync] sync_configurations not available:", error.message);
           return;
         }
-        const row = data?.[0] as { config?: { google_drive_folder_id?: string; google_drive_folder_name?: string; folders?: Array<{ id: string; name: string }> }; last_sync_at?: string } | undefined;
+        const row = data?.[0] as { config?: { google_drive_folder_id?: string; google_drive_folder_name?: string; folders?: Array<{ id: string; name: string; category?: string }> }; last_sync_at?: string } | undefined;
         if (row?.config?.google_drive_folder_id) {
           setConnectedDriveFolderId(row.config.google_drive_folder_id);
           setConnectedDriveFolderName(row.config.google_drive_folder_name || "Portfolio folder");
           setLastDriveSyncAt(row.last_sync_at || null);
           const folders = row.config.folders;
           if (folders && Array.isArray(folders) && folders.length > 0) {
-            setConnectedDriveFolders(folders);
+            setConnectedDriveFolders(folders.map((f): DriveFolderEntry => ({
+              id: f.id,
+              name: f.name,
+              category: f.category ?? "Portfolio Companies",
+            })));
           } else {
             setConnectedDriveFolders([{
               id: row.config.google_drive_folder_id,
               name: row.config.google_drive_folder_name || "Portfolio folder",
+              category: "Portfolio Companies",
             }]);
           }
         }
@@ -1801,7 +1820,7 @@ function SourcesTab({
   }, []);
 
   // Ref to avoid "Cannot access syncGoogleDriveFolder before initialization" when Sources tab mounts
-  const syncGoogleDriveFolderRef = useRef<((foldersOverride?: Array<{ id: string; name: string }>) => Promise<void>) | null>(null);
+  const syncGoogleDriveFolderRef = useRef<((foldersOverride?: DriveFolderEntry[]) => Promise<void>) | null>(null);
 
   // ── Connect a Google Drive root portfolio folder via Picker ──
   const connectDrivePortfolioFolder = useCallback(async () => {
@@ -1846,8 +1865,11 @@ function SourcesTab({
             const folderName = folder.name || "Portfolio folder";
             console.log("[DriveSync] Connected folder:", folderName, folderId);
             
-            // Add to folders list (avoid duplicates)
-            const updatedFolders = [...connectedDriveFolders.filter(f => f.id !== folderId), { id: folderId, name: folderName }];
+            // Add to folders list (avoid duplicates); new folder defaults to Portfolio Companies
+            const updatedFolders: DriveFolderEntry[] = [
+              ...connectedDriveFolders.filter(f => f.id !== folderId),
+              { id: folderId, name: folderName, category: "Portfolio Companies" },
+            ];
             setConnectedDriveFolders(updatedFolders);
             // Keep primary folder for backward compat
             if (!connectedDriveFolderId) {
@@ -1882,7 +1904,7 @@ function SourcesTab({
                 config: {
                   google_drive_folder_id: updatedFolders[0].id,
                   google_drive_folder_name: updatedFolders[0].name,
-                  folders: updatedFolders,
+                  folders: updatedFolders.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" })),
                 },
                 sync_frequency: "hourly",
                 is_active: true,
@@ -4025,14 +4047,51 @@ function SourcesTab({
             <>
               {/* Connected folders list */}
               <div className="space-y-2">
-                {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder" }]).map((folder) => (
-                  <div key={folder.id} className="flex items-center justify-between p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5">
-                    <div className="flex items-center gap-3">
-                      <Folder className="h-5 w-5 text-[#FFED00]" />
-                      <div>
+                {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder", category: "Portfolio Companies" as const }]).map((folder) => (
+                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Folder className="h-5 w-5 text-[#FFED00] shrink-0" />
+                      <div className="min-w-0">
                         <div className="font-mono font-bold text-white text-sm">{folder.name}</div>
                         <div className="text-[10px] text-white/40 font-mono truncate max-w-[200px]">{folder.id}</div>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Label className="text-[10px] text-white/50 font-mono whitespace-nowrap">Root folder type:</Label>
+                      <Select
+                        value={folder.category ?? "Portfolio Companies"}
+                        onValueChange={async (value) => {
+                          const updated = connectedDriveFolders.map((f) =>
+                            f.id === folder.id ? { ...f, category: value } : f
+                          );
+                          setConnectedDriveFolders(updated);
+                          if (activeEventId) {
+                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
+                            await supabase.from("sync_configurations")
+                              .update({
+                                config: {
+                                  google_drive_folder_id: updated[0]?.id || null,
+                                  google_drive_folder_name: updated[0]?.name || null,
+                                  folders: foldersToSave,
+                                },
+                              })
+                              .eq("event_id", activeEventId)
+                              .eq("source_type", "google_drive");
+                            toast({ title: "Folder type updated", description: `"${folder.name}" is now ${value}.` });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-white/20 bg-transparent text-white font-mono">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#050505] border-2 border-white">
+                          {DRIVE_ROOT_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     {connectedDriveFolders.length > 1 && (
                       <Button
@@ -4048,14 +4107,15 @@ function SourcesTab({
                             setConnectedDriveFolderId(null);
                             setConnectedDriveFolderName(null);
                           }
-                          // Persist updated list
+                          // Persist updated list (include category for each folder)
                           if (activeEventId) {
+                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
                             await supabase.from("sync_configurations")
                               .update({
                                 config: {
                                   google_drive_folder_id: updated[0]?.id || null,
                                   google_drive_folder_name: updated[0]?.name || null,
-                                  folders: updated,
+                                  folders: foldersToSave,
                                 },
                               })
                               .eq("event_id", activeEventId)
@@ -4744,7 +4804,15 @@ function DashboardTab({
       setAddTaskAssignee("");
       await onRefetchTasks();
     } catch (e: any) {
-      toast({ title: "Failed to create task", description: e?.message || "Unknown error", variant: "destructive" });
+      const msg = e?.message || "Unknown error";
+      const isNoTable = /relation.*tasks.*does not exist|404/i.test(msg);
+      toast({
+        title: isNoTable ? "Tasks table not found" : "Failed to create task",
+        description: isNoTable
+          ? "Please run the tasks migration in Supabase SQL Editor first."
+          : msg,
+        variant: "destructive",
+      });
     } finally {
       setAddTaskSaving(false);
     }
@@ -5012,36 +5080,45 @@ function DashboardTab({
 
       {/* Task hub */}
       <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white flex flex-row items-center justify-between gap-4">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
+        <CardHeader className="border-b-2 border-white flex flex-row items-center justify-between gap-4 py-3">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2 text-base">
             <ListTodo className="h-5 w-5 text-[#FFED00]" />
             {isMD ? "All tasks" : "My tasks"}
           </CardTitle>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className={viewMode === "list" ? "bg-[#FFED00]/15 border-[#FFED00] text-[#FFED00]" : "border-white text-white"}
-            >
-              <ListTodo className="h-4 w-4 mr-1" />
-              List
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewMode("gantt")}
-              className={viewMode === "gantt" ? "bg-[#FFED00]/15 border-[#FFED00] text-[#FFED00]" : "border-white text-white"}
-            >
-              <GanttChart className="h-4 w-4 mr-1" />
-              Gantt
-            </Button>
+          <div className="flex items-center gap-3">
+            {/* Segmented toggle for List / Gantt */}
+            <div className="flex items-center rounded-lg border-2 border-white/30 overflow-hidden">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
+                  viewMode === "list"
+                    ? "bg-[#FFED00] text-black"
+                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                <ListTodo className="h-3.5 w-3.5" />
+                List
+              </button>
+              <div className="w-px h-5 bg-white/20" />
+              <button
+                onClick={() => setViewMode("gantt")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
+                  viewMode === "gantt"
+                    ? "bg-[#FFED00] text-black"
+                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                <GanttChart className="h-3.5 w-3.5" />
+                Gantt
+              </button>
+            </div>
             {isMD && activeEventId && (
               <Button
+                size="sm"
                 onClick={() => setAddTaskOpen(true)}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold"
+                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-mono font-bold uppercase tracking-wider text-xs border-2 border-[#FFED00] transition-all hover:shadow-[0_0_16px_rgba(255,237,0,0.4)]"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Add task
               </Button>
             )}
@@ -5285,12 +5362,12 @@ function DashboardTab({
             </div>
             <div>
               <Label className="text-white font-mono font-bold">Assignee</Label>
-              <Select value={addTaskAssignee} onValueChange={setAddTaskAssignee}>
+              <Select value={addTaskAssignee || "unassigned"} onValueChange={(v) => setAddTaskAssignee(v === "unassigned" ? "" : v)}>
                 <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
                   <SelectValue placeholder="Select assignee" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="" className="text-white">Unassigned</SelectItem>
+                  <SelectItem value="unassigned" className="text-white">Unassigned</SelectItem>
                   {teamMembers.map((m) => (
                     <SelectItem key={m.id} value={m.id} className="text-white">
                       {m.full_name || m.email || m.id.slice(0, 8)}
@@ -6650,7 +6727,7 @@ export default function CIS() {
   const [initialDriveSyncConfig, setInitialDriveSyncConfig] = useState<{
     folderId: string;
     folderName: string;
-    folders: Array<{ id: string; name: string }>;
+    folders: Array<{ id: string; name: string; category?: string }>;
     lastSyncAt: string | null;
   } | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
@@ -7193,9 +7270,14 @@ export default function CIS() {
         .limit(1);
       if (!cancelled && (syncRows as any)?.[0]?.config?.google_drive_folder_id) {
         const row = (syncRows as any)[0];
-        const folders = Array.isArray(row.config.folders) && row.config.folders.length > 0
+        const rawFolders = Array.isArray(row.config.folders) && row.config.folders.length > 0
           ? row.config.folders
           : [{ id: row.config.google_drive_folder_id, name: row.config.google_drive_folder_name || "Portfolio folder" }];
+        const folders = rawFolders.map((f: { id: string; name: string; category?: string }) => ({
+          id: f.id,
+          name: f.name,
+          category: f.category ?? "Portfolio Companies",
+        }));
         setInitialDriveSyncConfig({
           folderId: row.config.google_drive_folder_id,
           folderName: row.config.google_drive_folder_name || "Portfolio folder",
