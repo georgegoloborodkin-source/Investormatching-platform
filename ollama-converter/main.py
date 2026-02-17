@@ -6983,7 +6983,7 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
     sector_terms = _expand_synonyms(sector, _SECTOR_SYNONYMS) if sector else set()
     model_terms = _expand_synonyms(biz_model, _MODEL_SYNONYMS) if biz_model else set()
 
-    # ── DB-level scope: resolve allowed entity IDs BEFORE querying kg_entities ──
+    # ── DB-level scope: resolve allowed entity IDs, then query ONLY those (faster) ──
     allowed_entity_ids: set[str] | None = None
     if folder_ids:
         allowed_entity_ids = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
@@ -6992,9 +6992,23 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
             if not allowed_entity_ids:
                 return "No portfolio companies found within the selected knowledge scope."
 
+    # When scope is set, fetch ONLY in-scope entities (much faster than fetch-all-then-filter)
     query = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company")
-    result = query.execute()
-    raw_rows = result.data or []
+    if allowed_entity_ids is not None:
+        # Supabase .in_() works with list; batch if > 500 to avoid URL length limits
+        id_list = list(allowed_entity_ids)
+        if len(id_list) > 500:
+            raw_rows = []
+            for i in range(0, len(id_list), 500):
+                batch = id_list[i : i + 500]
+                r = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company").in_("id", batch).execute()
+                raw_rows.extend(r.data or [])
+        else:
+            result = query.in_("id", id_list).execute()
+            raw_rows = result.data or []
+    else:
+        result = query.execute()
+        raw_rows = result.data or []
 
     if not raw_rows:
         return "No portfolio companies found in the database."
@@ -7012,13 +7026,8 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: l
         if prev is None or richness > prev["_richness"]:
             best_by_core[core] = {**row, "_richness": richness}
     rows = sorted(best_by_core.values(), key=lambda r: (r.get("name") or "").lower())
-
-    # Apply DB-level scope filter
     if allowed_entity_ids is not None:
-        rows = [r for r in rows if r.get("id") in allowed_entity_ids]
-        print(f"[AGENT] Scope applied: {len(rows)} entities visible")
-        if not rows:
-            return "No portfolio companies found within the selected knowledge scope."
+        print(f"[AGENT] Scope: fetched {len(raw_rows)} entities, {len(rows)} after dedup")
 
     def _field_text(props: dict, keys: list[str]) -> str:
         return " ".join(str(props.get(f, "")) for f in keys).lower()
@@ -7122,35 +7131,45 @@ async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: l
     except Exception as e:
         return f"Error generating embedding: {str(e)}"
 
-    # Call scoped RPC — folder filtering happens at DB level
-    try:
-        rpc_params: dict = {
-            "query_embedding": embedding,
-            "match_count": top_k,
-            "filter_event_id": event_id,
-        }
-        if folder_ids:
-            rpc_params["filter_folder_ids"] = folder_ids
-            rpc_name = "match_document_chunks_scoped"
-            print(f"[AGENT] Using scoped RPC with {len(folder_ids)} folders")
-        else:
-            rpc_name = "match_document_chunks"
-        result = sb.rpc(rpc_name, rpc_params).execute()
-    except Exception as e:
-        # Fall back to unscoped RPC if scoped one doesn't exist yet
-        if folder_ids and "match_document_chunks_scoped" in str(e):
+    # When scope is set: resolve doc IDs first, then vector-search ONLY those chunks (faster)
+    chunks: list = []
+    if folder_ids:
+        scoped_doc_ids = await _resolve_scoped_doc_ids(sb, event_id, folder_ids)
+        if scoped_doc_ids is not None:
+            if not scoped_doc_ids:
+                return f"No documents found matching '{query_text}' within the selected knowledge scope."
+            doc_id_list = list(scoped_doc_ids)
+            print(f"[AGENT] Scope: {len(doc_id_list)} docs in {len(folder_ids)} folders — vector search only on these")
             try:
-                result = sb.rpc("match_document_chunks", {
+                result = sb.rpc("match_document_chunks_by_doc_ids", {
                     "query_embedding": embedding,
                     "match_count": top_k,
                     "filter_event_id": event_id,
+                    "filter_document_ids": doc_id_list,
                 }).execute()
-            except Exception as e2:
-                return f"Error in semantic search: {str(e2)}"
-        else:
+                chunks = result.data or []
+            except Exception as e:
+                if "match_document_chunks_by_doc_ids" in str(e):
+                    # Migration not applied — fall back to folder-scoped RPC
+                    result = sb.rpc("match_document_chunks_scoped", {
+                        "query_embedding": embedding,
+                        "match_count": top_k,
+                        "filter_event_id": event_id,
+                        "filter_folder_ids": folder_ids,
+                    }).execute()
+                    chunks = result.data or []
+                else:
+                    return f"Error in semantic search: {str(e)}"
+    if not folder_ids:
+        try:
+            result = sb.rpc("match_document_chunks", {
+                "query_embedding": embedding,
+                "match_count": top_k,
+                "filter_event_id": event_id,
+            }).execute()
+            chunks = result.data or []
+        except Exception as e:
             return f"Error in semantic search: {str(e)}"
-
-    chunks = result.data or []
 
     if not chunks:
         scope_msg = " within the selected knowledge scope" if folder_ids else ""

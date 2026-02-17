@@ -93,3 +93,42 @@ AS $$
       AND dfl.folder_id = ANY(p_folder_ids)
   ) sub;
 $$;
+
+-- Faster scoped search: vector similarity runs ONLY on chunks in filter_document_ids.
+-- Use after resolve_scoped_document_ids so we only scan a small subset of embeddings.
+CREATE OR REPLACE FUNCTION match_document_chunks_by_doc_ids(
+  query_embedding VECTOR(1536),
+  match_count INT,
+  filter_event_id UUID,
+  filter_document_ids UUID[]
+)
+RETURNS TABLE (
+  document_id UUID,
+  similarity FLOAT,
+  chunk_text TEXT,
+  parent_text TEXT,
+  parent_index INT,
+  child_index INT
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    de.document_id,
+    1 - (de.embedding <=> query_embedding) AS similarity,
+    de.chunk_text,
+    de.parent_text,
+    de.parent_index,
+    de.child_index
+  FROM document_embeddings de
+  JOIN documents d ON d.id = de.document_id
+  WHERE d.event_id = filter_event_id
+    AND array_length(filter_document_ids, 1) > 0
+    AND de.document_id = ANY(filter_document_ids)
+  ORDER BY de.embedding <=> query_embedding
+  LIMIT match_count;
+$$;
+
+-- Index so filter by document_id is fast when scope is narrow
+CREATE INDEX IF NOT EXISTS idx_document_embeddings_document_id
+  ON document_embeddings(document_id);
