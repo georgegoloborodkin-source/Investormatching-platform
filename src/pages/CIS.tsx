@@ -208,6 +208,8 @@ type Message = {
   verifiableSources?: VerifiableSource[];
   /** Simple source docs from agent (id + title for Sources strip) */
   sourceDocs?: SourceDoc[];
+  /** Non-document context used (e.g. "Knowledge Graph", "Structured KPIs") — shown under Sources */
+  contextLabels?: string[];
   /** Devil's Advocate: red flags / risk critique */
   critic?: string;
 };
@@ -2072,16 +2074,21 @@ function SourcesTab({
         return null;
       };
 
+      const normPath = (s: string) => (s || "").trim().toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+      const normPathSegment = (s: string) => normPath(s).replace(/\s*-\s*.*$/, "").trim();
       const getCategoryForPath = (path: string): string => {
-        // First: check if any root folder has an explicit category
+        // First: check if any root folder has an explicit category (same normalized + first-segment logic as backfill)
         for (const root of foldersToSync) {
           const rootName = root.name?.trim() || "";
           if (!rootName) continue;
-          if (path === rootName || path.startsWith(rootName + " / ")) {
+          const pathNorm = normPath(path);
+          const rootNorm = normPath(rootName);
+          const rootNormSeg = normPathSegment(rootName);
+          const firstSegNorm = normPathSegment(path.split(/\s*\/\s*/)[0] || path);
+          const belongsToRoot = pathNorm === rootNorm || pathNorm.startsWith(rootNorm + " / ") || firstSegNorm === rootNormSeg;
+          if (belongsToRoot) {
             const rootCategory = (root as { id: string; name: string; category?: string }).category;
-            if (rootCategory && rootCategory !== "Portfolio Companies") {
-              return rootCategory;
-            }
+            if (rootCategory != null) return rootCategory;
           }
         }
 
@@ -7290,6 +7297,7 @@ export default function CIS() {
   const [activeTab, setActiveTab] = useState("chat");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [multiAgentEnabled, setMultiAgentEnabled] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   
   // Company Connections state for visual graph and decision logging
   const [companyConnections, setCompanyConnections] = useState<Array<{
@@ -7419,24 +7427,46 @@ export default function CIS() {
     });
   }, [sourceFolders]);
 
-  // Backfill source_folder categories from Drive sync config. Match by config ROOT: for each root (e.g. "SquareFeet", "Urent"),
-  // find all source_folders whose name equals the root OR starts with "rootName / " and set their category to the root's category.
+  // Normalize folder/root name for matching: trim, lower, strip parentheticals, collapse spaces.
+  const normalizeFolderMatch = useCallback((s: string): string => {
+    return (s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }, []);
+  // For root/first-segment comparison only: also strip trailing " - suffix" so "Root - Pipeline" matches "Root".
+  const normRootOrSegment = useCallback((s: string): string => {
+    return normalizeFolderMatch(s).replace(/\s*-\s*.*$/, "").trim();
+  }, [normalizeFolderMatch]);
+
+  // Backfill source_folder categories from Drive sync config. Match by config ROOT using normalized
+  // name and first path segment so more folders sync (e.g. "Square Feet / X" or "SquareFeet (Pipeline) / X").
   useEffect(() => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
+    const assigned = new Set<string>();
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
       const wantCategory = df.category ?? "Portfolio Companies";
-      const rootLower = rootName.toLowerCase();
-      const prefix = rootLower + " / ";
+      const rootNorm = normalizeFolderMatch(rootName);
+      const rootNormSegment = normRootOrSegment(rootName);
+      const prefixNorm = rootNorm + " / ";
       for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
         const name = (sf.name || "").trim();
-        const nameLower = name.toLowerCase();
-        const belongsToRoot = nameLower === rootLower || nameLower.startsWith(prefix);
+        const nameNorm = normalizeFolderMatch(name);
+        const firstSegmentNorm = normRootOrSegment(name.split(/\s*\/\s*/)[0] || name);
+        const belongsToRoot =
+          nameNorm === rootNorm ||
+          nameNorm.startsWith(prefixNorm) ||
+          firstSegmentNorm === rootNormSegment;
         if (!belongsToRoot) continue;
         if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          assigned.add(sf.id);
           updates.push({ id: sf.id, category: wantCategory });
         }
       }
@@ -7458,7 +7488,7 @@ export default function CIS() {
       setSourceFolders((data || []) as SourceFolder[]);
     })();
     return () => { cancelled = true; };
-  }, [activeEventId, initialDriveSyncConfig, sourceFolders]);
+  }, [activeEventId, initialDriveSyncConfig, sourceFolders, normalizeFolderMatch, normRootOrSegment]);
 
   // Auto-expand folder list if any folder is selected
   useEffect(() => {
@@ -7598,25 +7628,31 @@ export default function CIS() {
     []
   );
 
-  /** Run backfill: set source_folder categories from Drive sync config (each root → category). Call on demand from Document Folders. */
+  /** Run backfill: set source_folder categories from Drive sync config (each root → category). Uses same normalized + first-segment matching as auto backfill. */
   const handleSyncCategoriesFromDrive = useCallback(async () => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
-    const seen = new Set<string>();
+    const assigned = new Set<string>();
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
       const wantCategory = df.category ?? "Portfolio Companies";
-      const rootLower = rootName.toLowerCase();
-      const prefix = rootLower + " / ";
+      const rootNorm = normalizeFolderMatch(rootName);
+      const rootNormSegment = normRootOrSegment(rootName);
+      const prefixNorm = rootNorm + " / ";
       for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
         const name = (sf.name || "").trim();
-        const nameLower = name.toLowerCase();
-        const belongsToRoot = nameLower === rootLower || nameLower.startsWith(prefix);
+        const nameNorm = normalizeFolderMatch(name);
+        const firstSegmentNorm = normRootOrSegment(name.split(/\s*\/\s*/)[0] || name);
+        const belongsToRoot =
+          nameNorm === rootNorm ||
+          nameNorm.startsWith(prefixNorm) ||
+          firstSegmentNorm === rootNormSegment;
         if (!belongsToRoot) continue;
-        if ((sf.category || "Portfolio Companies") !== wantCategory && !seen.has(sf.id)) {
-          seen.add(sf.id);
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          assigned.add(sf.id);
           updates.push({ id: sf.id, category: wantCategory });
         }
       }
@@ -7627,7 +7663,7 @@ export default function CIS() {
     }
     const { data } = await getSourceFoldersByEvent(activeEventId);
     setSourceFolders((data || []) as SourceFolder[]);
-  }, [activeEventId, initialDriveSyncConfig, sourceFolders]);
+  }, [activeEventId, initialDriveSyncConfig, sourceFolders, normalizeFolderMatch, normRootOrSegment]);
 
   const handleFoldersCategoriesSaved = useCallback(
     async (updates: Array<{ id: string; category: string }>) => {
@@ -9326,6 +9362,9 @@ export default function CIS() {
         setCritic: (text: string) => {
           setMessages((prev) => patchById(prev, { critic: text }));
         },
+        setContextLabels: (labels: string[]) => {
+          setMessages((prev) => patchById(prev, { contextLabels: labels }));
+        },
       };
     },
     [persistChatMessage, scrollChatToBottom]
@@ -10285,6 +10324,18 @@ export default function CIS() {
           routingPlan.use_kpis = true;
           console.log("[MULTI-AGENT] Client override: forced KPIs ON (metric keywords detected)");
         }
+        // Force graph + KPIs ON for multi-company comparison / differs / business model questions
+        const comparisonKeywords = /\b(compare|comparison|differs?|difference|versus|vs\.?|business\s*model|between\s+\w+\s+and)\b/i;
+        if (comparisonKeywords.test(question)) {
+          if (!routingPlan.use_graph) {
+            routingPlan.use_graph = true;
+            console.log("[MULTI-AGENT] Client override: forced graph ON (comparison/differs detected)");
+          }
+          if (!routingPlan.use_kpis) {
+            routingPlan.use_kpis = true;
+            console.log("[MULTI-AGENT] Client override: forced KPIs ON (comparison/differs detected)");
+          }
+        }
       } else {
         console.log("[RAG] Standard single-path RAG (multi-agent OFF)");
       }
@@ -11067,7 +11118,7 @@ export default function CIS() {
             streamer.setError("Request timed out. Please try again.");
             setIsClaudeLoading(false);
           }
-        }, 75000);
+        }, 120000);
         try {
           // Answer meta-questions with general knowledge (streaming)
           // Get thread messages for context (from state or DB)
@@ -11134,7 +11185,7 @@ export default function CIS() {
             streamer.setError("Request timed out. Please try again.");
             setIsClaudeLoading(false);
           }
-        }, 75000);
+        }, 120000);
         try {
           const claudeTokens = searchQuestion
             .toLowerCase()
@@ -11253,7 +11304,7 @@ export default function CIS() {
               streamer.setError("Request timed out. Please try again.");
               setIsClaudeLoading(false);
             }
-          }, 75000);
+          }, 120000);
           try {
             const claudeTokens = question
               .toLowerCase()
@@ -11335,7 +11386,7 @@ export default function CIS() {
               streamer.setError("Request timed out. Please try again.");
               setIsClaudeLoading(false);
             }
-          }, 75000);
+          }, 120000);
           try {
             await askClaudeAnswerStream(
               {
@@ -11430,7 +11481,7 @@ export default function CIS() {
             streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
             setIsClaudeLoading(false);
           }
-        }, 75000);
+        }, 120000);
         
         try {
           // Get previous messages from this thread for context
@@ -11571,17 +11622,21 @@ export default function CIS() {
       // Always use Claude for the final answer once sources exist
       setIsClaudeLoading(true);
       const streamer = createStreamingAssistantMessage(threadId, answerDocs.map((doc) => doc.id));
+      // Ensure Sources strip appears under the answer: set doc list from retrieved docs (backend does not send source_docs for /ask/stream)
+      streamer.setSourceDocs(
+        answerDocs.map((doc) => ({ id: doc.id, title: doc.title || doc.file_name || "Document" }))
+      );
       let fullAnswer = "";
       let streamCompleted = false;
       
       // Add timeout to prevent infinite hanging
       const streamTimeout = setTimeout(() => {
         if (!streamCompleted) {
-          console.error("Stream timeout - no response after 75 seconds");
+          console.error("Stream timeout - no response after 120 seconds");
           streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
           setIsClaudeLoading(false);
         }
-      }, 75000);
+      }, 120000);
       
       try {
         const docsForClaude = answerDocs;
@@ -11648,6 +11703,11 @@ export default function CIS() {
               });
               console.log("[MULTI-AGENT] Injected KPI context into sources");
             }
+            // Set context labels so user can see multi-agent sources (Knowledge Graph, KPIs) under the answer
+            const labels: string[] = [];
+            if (graphContext && !graphContext.startsWith("No entities found")) labels.push("Knowledge Graph");
+            if (kpiContext && kpiContext !== "No KPI data found.") labels.push("Structured KPIs");
+            if (labels.length > 0) streamer.setContextLabels(labels);
           } catch (maErr) {
             console.warn("[MULTI-AGENT] Graph/KPI await failed (non-fatal):", maErr);
           }
@@ -11812,6 +11872,18 @@ export default function CIS() {
   const addMessage = async () => {
     if (chatIsLoading || isClaudeLoading) return;
     if (!input.trim()) return;
+    const question = input.trim();
+    // If editing a previous message: remove that message and all following messages in this thread, then resend
+    if (editingMessageId) {
+      setMessages((prev) => {
+        const scoped = prev.filter((m) => m.threadId === activeThread);
+        const idx = scoped.findIndex((m) => m.id === editingMessageId);
+        if (idx < 0) return prev;
+        const toRemoveIds = new Set(scoped.slice(idx).map((m) => m.id));
+        return prev.filter((m) => !toRemoveIds.has(m.id));
+      });
+      setEditingMessageId(null);
+    }
     let threadId = activeThread;
     if (!threadId) {
       const createdId = await createChatThread("Main thread");
@@ -11820,7 +11892,6 @@ export default function CIS() {
       setActiveThread(newThreadId);
       threadId = newThreadId;
     }
-    const question = input.trim();
     const id = `m-${Date.now()}`;
     setMessages((prev) => [...prev, { id, author: "user", text: question, threadId }]);
     void persistChatMessage({
@@ -12979,23 +13050,28 @@ export default function CIS() {
                                     </>
                                   )}
                                 </div>
-                                {/* Sources: click to open document */}
-                                {!m.isStreaming && (m.sourceDocs?.length ?? 0) > 0 && (
+                                {/* Sources: compact list of where the answer came from (documents + optional graph/KPIs) */}
+                                {!m.isStreaming && ((m.sourceDocs?.length ?? 0) > 0 || (m.contextLabels?.length ?? 0) > 0) && (
                                   <div className="mt-2 pt-2 border-t border-white/10">
                                     <p className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider mb-1.5">Sources</p>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {m.sourceDocs!.map((doc, idx) => (
-                                        <Button
-                                          key={doc.id}
-                                          size="sm"
-                                          variant="outline"
-                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
-                                          onClick={() => handleOpenDocument(doc.id)}
-                                        >
-                                          {idx + 1}. {doc.title || "Document"}
-                                        </Button>
-                                      ))}
-                                    </div>
+                                    {m.sourceDocs && m.sourceDocs.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 mb-1">
+                                        {m.sourceDocs.map((doc, idx) => (
+                                          <Button
+                                            key={doc.id}
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                                            onClick={() => handleOpenDocument(doc.id)}
+                                          >
+                                            {idx + 1}. {doc.title || "Document"}
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {m.contextLabels && m.contextLabels.length > 0 && (
+                                      <p className="text-[10px] font-mono text-white/40">Also used: {m.contextLabels.join(", ")}</p>
+                                    )}
                                   </div>
                                 )}
                                 {/* Log Connection button - appears after each AI response */}
@@ -13014,7 +13090,23 @@ export default function CIS() {
                                 )}
                               </>
                             ) : (
-                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-black">{m.text}</div>
+                              <div className="group flex items-start gap-2">
+                                <div className="text-sm leading-relaxed whitespace-pre-wrap text-black flex-1">{m.text}</div>
+                                {!chatIsLoading && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingMessageId(m.id);
+                                      setInput(m.text);
+                                      setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='Ask a question']")?.focus(), 50);
+                                    }}
+                                    className="flex-shrink-0 p-1.5 rounded-lg text-black/50 hover:text-black hover:bg-black/10 transition-all opacity-60 hover:opacity-100"
+                                    title="Edit and resend"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                           {m.author === "user" && (
@@ -13078,12 +13170,24 @@ export default function CIS() {
 
                 {/* Input bar — at bottom of card */}
                 <div className="border-t-2 border-white/15 bg-black/50 backdrop-blur-md p-4 flex-shrink-0">
+                  {editingMessageId && (
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <span className="text-xs font-mono text-[#FFED00]/90">Editing message</span>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingMessageId(null); setInput(""); }}
+                        className="text-xs font-mono text-white/60 hover:text-white underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                   <div className="flex gap-3 items-end">
                     <div className="flex-1 relative">
                       <Textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask a question about your portfolio..."
+                        placeholder={editingMessageId ? "Edit your question and press Enter to resend..." : "Ask a question about your portfolio..."}
                         className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {

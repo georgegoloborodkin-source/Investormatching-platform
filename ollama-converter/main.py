@@ -4180,7 +4180,7 @@ async def orchestrate_query(request: OrchestrateRequest):
         "- If the question asks about a company's info, use vector.\n"
         "- If the question asks about connections or relationships, use vector + graph.\n"
         "- If the question asks for numbers or metrics, use vector + kpis.\n"
-        "- If the question asks to 'compare X and Y', use vector + graph + kpis.\n"
+        "- If the question asks to 'compare X and Y', or 'how X differs from Y', or 'difference between X and Y', or 'business model of X vs Y', use vector + graph + kpis.\n"
         "- If the question explicitly asks for 'latest', 'news', or 'current', include web.\n"
         "- For each enabled agent, optionally provide a sub_query (a more targeted query for that agent).\n\n"
         "Output ONLY valid JSON. No markdown, no explanation.\n"

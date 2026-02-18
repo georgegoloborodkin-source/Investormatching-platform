@@ -514,12 +514,15 @@ export async function getEntityProperties(entityId: string): Promise<{ name: str
 export interface GraphRetrievalResult {
   entities: Array<{ id: string; name: string; type: string; properties: Record<string, any> }>;
   edges: Array<{ source: string; target: string; relation: string; properties: Record<string, any> }>;
+  connections: Array<{ source: string; target: string; type: string; status: string; reasoning: string }>;
   summary: string;
 }
 
 /**
- * Retrieve entities and relationships from the knowledge graph for a given query.
- * Returns entities matching the search terms and their connecting edges.
+ * Retrieve entities, relationships, AND company connections from the knowledge graph.
+ * - Searches kg_entities by entity name (prioritizes exact names over generic words)
+ * - Fetches kg_edges for those entities
+ * - Also fetches company_connections (the user-facing connections table)
  */
 export async function retrieveGraphContext(
   eventId: string,
@@ -528,22 +531,46 @@ export async function retrieveGraphContext(
 ): Promise<GraphRetrievalResult> {
   const entities: GraphRetrievalResult["entities"] = [];
   const edges: GraphRetrievalResult["edges"] = [];
+  const connections: GraphRetrievalResult["connections"] = [];
+
+  // Filter out noise words — only keep likely entity names
+  const noiseWords = new Set([
+    "about", "tell", "what", "which", "where", "when", "how", "could", "would", "should",
+    "they", "them", "their", "this", "that", "with", "from", "into", "have", "been",
+    "more", "most", "some", "also", "just", "make", "like", "want", "need", "give",
+    "strategy", "expand", "connect", "know", "information", "details", "explain",
+  ]);
+
+  // Prioritize entity names from query analysis, then use meaningful search terms
+  const cleanedEntityNames = (entityNames || []).filter(n => n && n.length > 1);
+  const cleanedSearchTerms = (searchTerms || [])
+    .filter(t => t && t.length > 2 && !noiseWords.has(t.toLowerCase()))
+    .slice(0, 8);
+
+  // Entity names get priority; if we have them, they're the primary search
+  const primaryTerms = cleanedEntityNames.length > 0 ? cleanedEntityNames : cleanedSearchTerms;
+  const allTerms = [...new Set([...primaryTerms, ...cleanedSearchTerms])].filter(Boolean);
+
+  if (allTerms.length === 0) {
+    return { entities: [], edges: [], connections: [], summary: "No search terms provided." };
+  }
+
+  console.log("[GraphRetrieval] Searching with terms:", allTerms);
 
   try {
-    // Search entities by name (partial match)
-    const allTerms = [...new Set([...(searchTerms || []), ...(entityNames || [])])].filter(Boolean);
-    if (allTerms.length === 0) {
-      return { entities: [], edges: [], summary: "No search terms provided." };
-    }
-
-    // Build OR filter for entity name matching
+    // ── Step 1: Find entities by name ──
     const nameFilters = allTerms.map((t) => `name.ilike.%${t}%`).join(",");
 
-    const { data: entityData } = await supabase
+    const { data: entityData, error: entityErr } = await supabase
       .from("kg_entities")
       .select("id, name, entity_type, properties")
       .eq("event_id", eventId)
-      .or(nameFilters);
+      .or(nameFilters)
+      .limit(30);
+
+    if (entityErr) {
+      console.error("[GraphRetrieval] Entity query error:", entityErr.message);
+    }
 
     if (entityData && entityData.length > 0) {
       for (const e of entityData as any[]) {
@@ -554,18 +581,59 @@ export async function retrieveGraphContext(
           properties: e.properties || {},
         });
       }
+      console.log("[GraphRetrieval] Found", entities.length, "entities:", entities.map(e => e.name));
 
-      // Get edges connecting these entities
+      // ── Step 2: Get kg_edges connecting these entities (use .in() separately) ──
       const entityIds = entities.map((e) => e.id);
-      const { data: edgeData } = await supabase
-        .from("kg_edges")
-        .select("source_entity_id, target_entity_id, relation_type, properties")
-        .eq("event_id", eventId)
-        .or(`source_entity_id.in.(${entityIds.join(",")}),target_entity_id.in.(${entityIds.join(",")})`);
+      try {
+        // Query edges where source OR target is in our entity set
+        const [sourceEdges, targetEdges] = await Promise.all([
+          supabase
+            .from("kg_edges")
+            .select("source_entity_id, target_entity_id, relation_type, properties")
+            .eq("event_id", eventId)
+            .in("source_entity_id", entityIds)
+            .limit(50),
+          supabase
+            .from("kg_edges")
+            .select("source_entity_id, target_entity_id, relation_type, properties")
+            .eq("event_id", eventId)
+            .in("target_entity_id", entityIds)
+            .limit(50),
+        ]);
 
-      if (edgeData) {
+        const edgeMap = new Map<string, any>();
+        for (const result of [sourceEdges, targetEdges]) {
+          if (result.data) {
+            for (const edge of result.data as any[]) {
+              const key = `${edge.source_entity_id}-${edge.target_entity_id}-${edge.relation_type}`;
+              if (!edgeMap.has(key)) edgeMap.set(key, edge);
+            }
+          }
+        }
+
+        // Also fetch names for entities we found via edges but aren't in our initial set
+        const allEdgeEntityIds = new Set<string>();
+        for (const edge of edgeMap.values()) {
+          allEdgeEntityIds.add(edge.source_entity_id);
+          allEdgeEntityIds.add(edge.target_entity_id);
+        }
+        const missingIds = [...allEdgeEntityIds].filter(id => !entities.find(e => e.id === id));
         const entityNameMap = new Map(entities.map((e) => [e.id, e.name]));
-        for (const edge of edgeData as any[]) {
+
+        if (missingIds.length > 0) {
+          const { data: extraEntities } = await supabase
+            .from("kg_entities")
+            .select("id, name")
+            .in("id", missingIds);
+          if (extraEntities) {
+            for (const e of extraEntities as any[]) {
+              entityNameMap.set(e.id, e.name);
+            }
+          }
+        }
+
+        for (const edge of edgeMap.values()) {
           edges.push({
             source: entityNameMap.get(edge.source_entity_id) || edge.source_entity_id,
             target: entityNameMap.get(edge.target_entity_id) || edge.target_entity_id,
@@ -573,25 +641,77 @@ export async function retrieveGraphContext(
             properties: edge.properties || {},
           });
         }
+        console.log("[GraphRetrieval] Found", edges.length, "edges");
+      } catch (edgeErr) {
+        console.error("[GraphRetrieval] Edge query error:", edgeErr);
       }
     }
+
+    // ── Step 3: Also search company_connections (user-facing connections table) ──
+    try {
+      const connFilters = allTerms
+        .map((t) => `source_company_name.ilike.%${t}%,target_company_name.ilike.%${t}%`)
+        .join(",");
+
+      const { data: connData, error: connErr } = await supabase
+        .from("company_connections")
+        .select("source_company_name, target_company_name, connection_type, connection_status, ai_reasoning, notes")
+        .eq("event_id", eventId)
+        .or(connFilters)
+        .limit(30);
+
+      if (connErr) {
+        console.error("[GraphRetrieval] Connection query error:", connErr.message);
+      }
+
+      if (connData) {
+        for (const c of connData as any[]) {
+          connections.push({
+            source: c.source_company_name,
+            target: c.target_company_name,
+            type: c.connection_type,
+            status: c.connection_status,
+            reasoning: c.ai_reasoning || c.notes || "",
+          });
+        }
+        console.log("[GraphRetrieval] Found", connections.length, "company connections");
+      }
+    } catch (connErr) {
+      console.error("[GraphRetrieval] Connection query error:", connErr);
+    }
+
   } catch (err) {
     console.error("[GraphRetrieval] Error:", err);
   }
 
   // Build summary text
-  const entitySummaries = entities.map(
-    (e) => `${e.name} (${e.type})${e.properties.bio ? ": " + e.properties.bio : ""}`
-  );
+  const entitySummaries = entities.map((e) => {
+    const props = e.properties || {};
+    const details = [
+      props.bio,
+      props.funding_stage ? `Stage: ${props.funding_stage}` : null,
+      props.industry ? `Industry: ${props.industry}` : null,
+      props.website ? `Website: ${props.website}` : null,
+      props.hq || props.location ? `Location: ${props.hq || props.location}` : null,
+    ].filter(Boolean).join(", ");
+    return `${e.name} (${e.type})${details ? ": " + details : ""}`;
+  });
+
   const edgeSummaries = edges.map(
     (e) => `${e.source} --[${e.relation}]--> ${e.target}`
   );
-  const summary = [
-    entities.length > 0 ? `Entities found: ${entitySummaries.join("; ")}` : "No entities found.",
-    edges.length > 0 ? `Relationships: ${edgeSummaries.join("; ")}` : "No relationships found.",
-  ].join("\n");
 
-  return { entities, edges, summary };
+  const connectionSummaries = connections.map(
+    (c) => `${c.source} --[${c.type}, ${c.status}]--> ${c.target}${c.reasoning ? ` (${c.reasoning.slice(0, 150)})` : ""}`
+  );
+
+  const summary = [
+    entities.length > 0 ? `Entities found:\n${entitySummaries.join("\n")}` : "No entities found in knowledge graph.",
+    edges.length > 0 ? `Knowledge graph relationships:\n${edgeSummaries.join("\n")}` : "No knowledge graph relationships found.",
+    connections.length > 0 ? `Company connections:\n${connectionSummaries.join("\n")}` : "No company connections found.",
+  ].join("\n\n");
+
+  return { entities, edges, connections, summary };
 }
 
 

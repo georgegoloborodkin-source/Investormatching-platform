@@ -1485,4 +1485,3 @@ export async function criticCheck(input: {
     return { issues: [], is_grounded: true, confidence: 0.5 };
   }
 }
-
