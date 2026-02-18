@@ -70,6 +70,7 @@ import {
   Clock,
   DollarSign,
   Sparkles,
+  Square,
   Folder,
   ChevronDown,
   ChevronRight,
@@ -13198,13 +13199,18 @@ export default function CIS() {
                       />
                     </div>
                     <Button 
-                      onClick={addMessage} 
-                      disabled={chatIsLoading || !input.trim()}
+                      onClick={chatIsLoading ? stopGenerating : addMessage} 
+                      disabled={!chatIsLoading && !input.trim()}
                       size="lg"
-                      className="h-[52px] w-[52px] p-0 bg-[#FFED00] text-black hover:bg-[#FFED00]/90 font-bold border-2 border-[#FFED00] rounded-xl transition-all hover:shadow-[0_0_24px_rgba(255,237,0,0.4)] disabled:opacity-40 disabled:hover:shadow-none"
+                      title={chatIsLoading ? "Cancel" : "Send"}
+                      className={`h-[52px] w-[52px] p-0 font-bold border-2 rounded-xl transition-all ${
+                        chatIsLoading
+                          ? "bg-red-500/90 text-white border-red-400 hover:bg-red-500 hover:shadow-[0_0_24px_rgba(239,68,68,0.3)]"
+                          : "bg-[#FFED00] text-black hover:bg-[#FFED00]/90 border-[#FFED00] hover:shadow-[0_0_24px_rgba(255,237,0,0.4)]"
+                      } disabled:opacity-40 disabled:hover:shadow-none`}
                     >
                       {chatIsLoading ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <Square className="h-5 w-5 fill-current" />
                       ) : (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
