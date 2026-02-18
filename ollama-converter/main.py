@@ -746,6 +746,79 @@ class GDriveDownloadFileResponse(BaseModel):
     sourceType: str
     mimeType: str
 
+# ---------- Gmail Sync Models ----------
+
+class GmailListMessagesRequest(BaseModel):
+    access_token: str
+    query: Optional[str] = None
+    label_ids: Optional[List[str]] = None
+    max_results: int = 50
+    page_token: Optional[str] = None
+
+class GmailMessageSnippet(BaseModel):
+    id: str
+    threadId: str
+    snippet: Optional[str] = None
+
+class GmailListMessagesResponse(BaseModel):
+    messages: List[GmailMessageSnippet] = []
+    next_page_token: Optional[str] = None
+    result_size_estimate: int = 0
+
+class GmailGetMessageRequest(BaseModel):
+    access_token: str
+    message_id: str
+
+class GmailAttachmentMeta(BaseModel):
+    id: str
+    filename: str
+    mimeType: str
+    size: int = 0
+
+class GmailGetMessageResponse(BaseModel):
+    id: str
+    threadId: str
+    subject: str = ""
+    sender: str = ""
+    to: List[str] = []
+    cc: List[str] = []
+    date: Optional[str] = None
+    body_text: str = ""
+    body_html: str = ""
+    labels: List[str] = []
+    attachments: List[GmailAttachmentMeta] = []
+
+class GmailDownloadAttachmentRequest(BaseModel):
+    access_token: str
+    message_id: str
+    attachment_id: str
+
+class GmailDownloadAttachmentResponse(BaseModel):
+    data: str  # base64
+    filename: str
+    mimeType: str
+    size: int = 0
+
+class GmailIngestRequest(BaseModel):
+    access_token: str
+    message_id: str
+    extract_attachments: bool = False
+
+class GmailIngestResponse(BaseModel):
+    title: str
+    content: str
+    raw_content: str
+    sourceType: str
+    email_from: str = ""
+    email_to: List[str] = []
+    email_cc: List[str] = []
+    email_subject: str = ""
+    email_date: Optional[str] = None
+    gmail_thread_id: str = ""
+    gmail_labels: List[str] = []
+    has_attachments: bool = False
+    attachments: List[GmailAttachmentMeta] = []
+
 # System prompt for Ollama
 SYSTEM_PROMPT = """You are a data extraction and conversion expert. Your task is to extract structured information from unstructured text and convert it into JSON format.
 
@@ -5386,11 +5459,24 @@ async def extract_entities(request: EntityExtractionRequest):
     if not text and not has_pdf:
         return EntityExtractionResponse()
 
+    # Build extraction instructions — add email-specific guidance when document_type is 'email'
+    email_hints = ""
+    if request.document_type == "email":
+        email_hints = (
+            "\nEMAIL-SPECIFIC INSTRUCTIONS:\n"
+            "- Extract the sender and all recipients as 'person' entities.\n"
+            "- Infer company names from email domains (e.g. jane@acme.com → company 'Acme').\n"
+            "- Look for deal-related language: 'term sheet', 'Series A', 'valuation', 'cap table', 'closing'.\n"
+            "- Extract any mentioned meeting dates, deadlines, or milestones.\n"
+            "- Create 'works_at' relationships between people and their domain-inferred companies.\n"
+            "- Create 'invested_in' or 'partner_of' relationships if investment or partnership context is present.\n\n"
+        )
+
     extraction_instructions = (
         "Extract ALL of the following from this VC/investment document:\n\n"
         "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
         '   Format: [{{"name": "...", "type": "company|person|fund|round|sector|location", '
-        '"properties": {{"industry": "...", "role": "...", etc.}}, "confidence": 0.0-1.0}}]\n\n'
+        '"properties": {{"industry": "...", "role": "...", "email": "...", etc.}}, "confidence": 0.0-1.0}}]\n\n'
         "2. RELATIONSHIPS between entities:\n"
         '   Format: [{{"source_name": "...", "target_name": "...", '
         '"relation_type": "founded|works_at|invested_in|raised|led_round|partner_of|'
@@ -5402,6 +5488,7 @@ async def extract_entities(request: EntityExtractionRequest):
         '"value": 123.0, "unit": "USD|%|count", "period": "2024-Q3", '
         '"category": "financial|growth|fundraising|operational|market|tokenomics", '
         '"confidence": 0.0-1.0}}]\n\n'
+        f"{email_hints}"
         'Return JSON with keys: "entities", "relationships", "kpis". Return ONLY valid JSON.'
     )
 
@@ -6782,6 +6869,230 @@ async def gdrive_download_file(request: GDriveDownloadFileRequest):
         raw_content=content,
         sourceType=source_type,
         mimeType=final_mime,
+    )
+
+
+# ─────────── Gmail API ───────────────────────────────────────────────────────
+
+GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
+
+
+def _parse_gmail_headers(headers: List[Dict[str, str]]) -> Dict[str, str]:
+    """Extract useful headers from Gmail message payload."""
+    out: Dict[str, str] = {}
+    for h in headers:
+        name = h.get("name", "").lower()
+        if name in ("from", "to", "cc", "subject", "date"):
+            out[name] = h.get("value", "")
+    return out
+
+
+def _parse_email_addresses(raw: str) -> List[str]:
+    """Split a comma-separated header like To/Cc into individual addresses."""
+    if not raw:
+        return []
+    return [addr.strip() for addr in raw.split(",") if addr.strip()]
+
+
+def _extract_body_from_parts(parts: List[dict], prefer_plain: bool = True) -> Tuple[str, str]:
+    """Recursively walk MIME parts and return (plain_text, html_text)."""
+    plain, html = "", ""
+    for part in parts:
+        mime = part.get("mimeType", "")
+        body_data = part.get("body", {}).get("data", "")
+        nested = part.get("parts", [])
+
+        if nested:
+            p, h = _extract_body_from_parts(nested, prefer_plain)
+            if p: plain = p
+            if h: html = h
+        elif mime == "text/plain" and body_data:
+            plain = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+        elif mime == "text/html" and body_data:
+            html = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+    return plain, html
+
+
+def _strip_html(html: str) -> str:
+    """Rough HTML-to-text conversion for email bodies."""
+    text = re.sub(r"<style[^>]*>[\s\S]*?</style>", "", html, flags=re.I)
+    text = re.sub(r"<script[^>]*>[\s\S]*?</script>", "", text, flags=re.I)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r" {2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _extract_attachments_meta(parts: List[dict]) -> List[GmailAttachmentMeta]:
+    """Walk MIME parts to find attachment metadata."""
+    attachments: List[GmailAttachmentMeta] = []
+    for part in parts:
+        nested = part.get("parts", [])
+        if nested:
+            attachments.extend(_extract_attachments_meta(nested))
+        filename = part.get("filename", "")
+        att_id = part.get("body", {}).get("attachmentId", "")
+        if filename and att_id:
+            attachments.append(GmailAttachmentMeta(
+                id=att_id,
+                filename=filename,
+                mimeType=part.get("mimeType", "application/octet-stream"),
+                size=part.get("body", {}).get("size", 0),
+            ))
+    return attachments
+
+
+@app.post("/gmail/list-messages", response_model=GmailListMessagesResponse)
+async def gmail_list_messages(request: GmailListMessagesRequest):
+    """List Gmail messages matching a query and/or label filter."""
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+    params: Dict[str, Any] = {"maxResults": min(request.max_results, 500)}
+    if request.query:
+        params["q"] = request.query
+    if request.label_ids:
+        params["labelIds"] = request.label_ids
+    if request.page_token:
+        params["pageToken"] = request.page_token
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(f"{GMAIL_API}/messages", headers=headers, params=params)
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code,
+                                detail=f"Gmail API list error: {res.text[:500]}")
+        data = res.json()
+
+    messages_raw = data.get("messages", [])
+    snippets: List[GmailMessageSnippet] = []
+    for m in messages_raw:
+        snippets.append(GmailMessageSnippet(
+            id=m["id"],
+            threadId=m.get("threadId", m["id"]),
+            snippet=None,
+        ))
+
+    return GmailListMessagesResponse(
+        messages=snippets,
+        next_page_token=data.get("nextPageToken"),
+        result_size_estimate=data.get("resultSizeEstimate", len(snippets)),
+    )
+
+
+@app.post("/gmail/get-message", response_model=GmailGetMessageResponse)
+async def gmail_get_message(request: GmailGetMessageRequest):
+    """Fetch a full Gmail message by ID, parse headers, body, and attachments."""
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.get(
+            f"{GMAIL_API}/messages/{request.message_id}",
+            headers=headers,
+            params={"format": "full"},
+        )
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code,
+                                detail=f"Gmail API get-message error: {res.text[:500]}")
+        msg = res.json()
+
+    payload = msg.get("payload", {})
+    hdrs = _parse_gmail_headers(payload.get("headers", []))
+    parts = payload.get("parts", [])
+
+    if parts:
+        body_plain, body_html = _extract_body_from_parts(parts)
+        attachments = _extract_attachments_meta(parts)
+    else:
+        body_data = payload.get("body", {}).get("data", "")
+        mime = payload.get("mimeType", "")
+        if body_data:
+            decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+            body_plain = decoded if mime == "text/plain" else ""
+            body_html = decoded if mime == "text/html" else ""
+        else:
+            body_plain, body_html = "", ""
+        attachments = []
+
+    return GmailGetMessageResponse(
+        id=msg["id"],
+        threadId=msg.get("threadId", msg["id"]),
+        subject=hdrs.get("subject", ""),
+        sender=hdrs.get("from", ""),
+        to=_parse_email_addresses(hdrs.get("to", "")),
+        cc=_parse_email_addresses(hdrs.get("cc", "")),
+        date=hdrs.get("date"),
+        body_text=body_plain,
+        body_html=body_html,
+        labels=msg.get("labelIds", []),
+        attachments=attachments,
+    )
+
+
+@app.post("/gmail/download-attachment", response_model=GmailDownloadAttachmentResponse)
+async def gmail_download_attachment(request: GmailDownloadAttachmentRequest):
+    """Download a single email attachment by its ID."""
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        res = await client.get(
+            f"{GMAIL_API}/messages/{request.message_id}/attachments/{request.attachment_id}",
+            headers=headers,
+        )
+        if res.status_code >= 400:
+            raise HTTPException(status_code=res.status_code,
+                                detail=f"Gmail attachment error: {res.text[:500]}")
+        data = res.json()
+
+    raw_b64 = data.get("data", "")
+    size = data.get("size", 0)
+
+    return GmailDownloadAttachmentResponse(
+        data=raw_b64,
+        filename="",
+        mimeType="application/octet-stream",
+        size=size,
+    )
+
+
+@app.post("/ingest/gmail", response_model=GmailIngestResponse)
+async def ingest_gmail(request: GmailIngestRequest):
+    """Fetch, parse, and return a structured email document ready for storage."""
+    msg_req = GmailGetMessageRequest(
+        access_token=request.access_token,
+        message_id=request.message_id,
+    )
+    msg = await gmail_get_message(msg_req)
+
+    body = msg.body_text
+    if not body.strip() and msg.body_html:
+        body = _strip_html(msg.body_html)
+
+    subject = msg.subject or "(no subject)"
+    sender = msg.sender or "unknown"
+    date_str = msg.date or ""
+
+    header_block = f"From: {sender}\nTo: {', '.join(msg.to)}\n"
+    if msg.cc:
+        header_block += f"Cc: {', '.join(msg.cc)}\n"
+    header_block += f"Date: {date_str}\nSubject: {subject}\n"
+
+    content = f"{header_block}\n{body}"
+    title = f"[Email] {subject}"
+
+    return GmailIngestResponse(
+        title=title,
+        content=content,
+        raw_content=content,
+        sourceType="gmail",
+        email_from=sender,
+        email_to=msg.to,
+        email_cc=msg.cc,
+        email_subject=subject,
+        email_date=date_str,
+        gmail_thread_id=msg.threadId,
+        gmail_labels=msg.labels,
+        has_attachments=len(msg.attachments) > 0,
+        attachments=msg.attachments,
     )
 
 

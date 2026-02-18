@@ -190,6 +190,7 @@ import {
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
+import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
 import { supabase } from "@/integrations/supabase/client";
 
 // xlsx loaded at runtime from CDN to avoid Vercel build resolution issues
@@ -1699,6 +1700,16 @@ function SourcesTab({
   const isSyncingDriveRef = useRef(false);
   const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
+  // ── Gmail Sync state ──
+  const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [isSyncingGmail, setIsSyncingGmail] = useState(false);
+  const [gmailSyncProgress, setGmailSyncProgress] = useState<{ current: number; total: number; currentItem: string } | null>(null);
+  const [lastGmailSyncAt, setLastGmailSyncAt] = useState<string | null>(null);
+  const [gmailQuery, setGmailQuery] = useState("");
+  const [gmailMaxPerSync, setGmailMaxPerSync] = useState(50);
+  const [gmailIncludeAttachments, setGmailIncludeAttachments] = useState(true);
+  const [gmailSyncResults, setGmailSyncResults] = useState<{ synced: number; skipped: number; errors: number } | null>(null);
+
   const MAX_IMPORT_CHARS = 24000;
   const MAX_PDF_PAGES = 6;
   const canImport = Boolean(activeEventId);
@@ -1775,6 +1786,32 @@ function SourcesTab({
       }
     })();
   }, [activeEventId, initialDriveSyncConfig]);
+
+  // ── Load existing Gmail sync configuration when activeEventId changes ──
+  useEffect(() => {
+    if (!activeEventId) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("sync_configurations")
+          .select("config, last_sync_at")
+          .eq("event_id", activeEventId)
+          .eq("source_type", "gmail")
+          .limit(1);
+        if (error) { console.warn("[GmailSync] sync_configurations not available:", error.message); return; }
+        const row = data?.[0] as { config?: { gmail_query?: string; max_emails_per_sync?: number; include_attachments?: boolean }; last_sync_at?: string } | undefined;
+        if (row) {
+          setIsGmailConnected(true);
+          setLastGmailSyncAt(row.last_sync_at || null);
+          if (row.config?.gmail_query) setGmailQuery(row.config.gmail_query);
+          if (row.config?.max_emails_per_sync) setGmailMaxPerSync(row.config.max_emails_per_sync);
+          if (row.config?.include_attachments !== undefined) setGmailIncludeAttachments(row.config.include_attachments);
+        }
+      } catch (err) {
+        console.warn("[GmailSync] Failed to load sync config:", err);
+      }
+    })();
+  }, [activeEventId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2604,6 +2641,285 @@ function SourcesTab({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDriveFolders, activeEventId]);
+
+  // ── Connect Gmail: save sync config to Supabase ──
+  const connectGmail = useCallback(async (query?: string) => {
+    const eventId = activeEventId || (await ensureActiveEventId());
+    if (!eventId) { toast({ title: "No active event", variant: "destructive" }); return; }
+    const token = await getGoogleAccessToken();
+    if (!token) { toast({ title: "Google access needed", description: "Sign in again to grant Gmail read access.", variant: "destructive" }); return; }
+
+    // Verify token works for Gmail
+    try {
+      await gmailListMessages(token, { maxResults: 1 });
+    } catch (err) {
+      toast({ title: "Gmail access denied", description: "Please sign out and sign in again — Gmail read permission is required.", variant: "destructive" });
+      return;
+    }
+
+    const profile_ = (await supabase.auth.getUser()).data.user;
+    const orgId = (await supabase.from("user_profiles").select("organization_id").eq("id", profile_?.id ?? "").single()).data?.organization_id;
+
+    const configPayload = {
+      gmail_query: query || gmailQuery || "",
+      max_emails_per_sync: gmailMaxPerSync,
+      include_attachments: gmailIncludeAttachments,
+    };
+
+    const { error } = await supabase.from("sync_configurations").upsert({
+      organization_id: orgId,
+      event_id: eventId,
+      source_type: "gmail",
+      config: configPayload,
+      sync_frequency: "daily",
+      is_active: true,
+      created_by: profile_?.id ?? null,
+    }, { onConflict: "organization_id,event_id,source_type" });
+
+    if (error) {
+      console.error("[GmailSync] Failed to save config:", error);
+      toast({ title: "Failed to save Gmail config", description: error.message, variant: "destructive" });
+      return;
+    }
+    setIsGmailConnected(true);
+    toast({ title: "Gmail connected", description: "Gmail inbox sync is now configured. Click Sync Now to start." });
+  }, [activeEventId, ensureActiveEventId, getGoogleAccessToken, gmailIncludeAttachments, gmailMaxPerSync, gmailQuery, toast]);
+
+  // ── Sync Gmail Inbox: fetch, dedupe, ingest, store ──
+  const syncGmailInbox = useCallback(async () => {
+    const eventId = activeEventId || (await ensureActiveEventId());
+    if (!eventId) { toast({ title: "No active event", variant: "destructive" }); return; }
+    const token = await getGoogleAccessToken();
+    if (!token) { toast({ title: "Google access needed", description: "Sign in again to grant Gmail access.", variant: "destructive" }); return; }
+
+    setIsSyncingGmail(true);
+    setGmailSyncResults(null);
+    setGmailSyncProgress({ current: 0, total: 0, currentItem: "Fetching message list…" });
+
+    let synced = 0, skipped = 0, errors = 0;
+
+    try {
+      // Build Gmail query — append "after:" for incremental sync
+      let q = gmailQuery || "";
+      if (lastGmailSyncAt) {
+        const epoch = Math.floor(new Date(lastGmailSyncAt).getTime() / 1000);
+        q = q ? `${q} after:${epoch}` : `after:${epoch}`;
+      }
+
+      const listResult = await gmailListMessages(token, { query: q || undefined, maxResults: gmailMaxPerSync });
+      const messageIds = listResult.messages;
+
+      if (messageIds.length === 0) {
+        toast({ title: "No new emails", description: "No new emails match your filter criteria." });
+        setGmailSyncProgress(null);
+        setIsSyncingGmail(false);
+        return;
+      }
+
+      setGmailSyncProgress({ current: 0, total: messageIds.length, currentItem: "Processing emails…" });
+
+      // Fetch existing gmail_message_ids for dedup
+      const { data: existingDocs } = await supabase
+        .from("documents")
+        .select("gmail_message_id")
+        .eq("event_id", eventId)
+        .eq("source_type", "gmail")
+        .not("gmail_message_id", "is", null);
+      const existingIds = new Set((existingDocs ?? []).map((d: any) => d.gmail_message_id));
+
+      for (let i = 0; i < messageIds.length; i++) {
+        const msgSnippet = messageIds[i];
+        setGmailSyncProgress({ current: i + 1, total: messageIds.length, currentItem: `Email ${i + 1}/${messageIds.length}` });
+
+        if (existingIds.has(msgSnippet.id)) { skipped++; continue; }
+
+        try {
+          const ingested: GmailIngestResult = await gmailIngestMessage(token, msgSnippet.id, gmailIncludeAttachments);
+
+          const docTitle = ingested.email_subject || ingested.title || "(no subject)";
+          const { data: docRow, error: docErr } = await supabase.from("documents").insert({
+            event_id: eventId,
+            title: docTitle,
+            source_type: "gmail",
+            file_name: null,
+            raw_content: ingested.content,
+            detected_type: "email",
+            gmail_message_id: msgSnippet.id,
+            gmail_thread_id: ingested.gmail_thread_id,
+            gmail_labels: ingested.gmail_labels,
+            email_from: ingested.email_from,
+            email_to: ingested.email_to,
+            email_cc: ingested.email_cc,
+            email_subject: ingested.email_subject,
+            email_sent_at: ingested.email_date,
+            email_has_attachments: ingested.has_attachments,
+            created_by: currentUserId,
+          }).select("id, title, storage_path, folder_id").single();
+
+          if (docErr || !docRow) { console.error("[GmailSync] Insert doc error:", docErr); errors++; continue; }
+
+          onDocumentSaved({ id: docRow.id, title: docRow.title, storage_path: docRow.storage_path, folder_id: (docRow as any).folder_id });
+
+          // Insert attachment records + download processable ones
+          if (ingested.has_attachments && ingested.attachments?.length) {
+            const PROCESSABLE_MIMES = new Set([
+              "application/pdf",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+              "text/plain", "text/csv",
+            ]);
+            const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MB
+
+            for (const att of ingested.attachments) {
+              const { error: attErr } = await supabase.from("email_attachments").insert({
+                document_id: docRow.id,
+                gmail_attachment_id: att.id,
+                filename: att.filename,
+                mime_type: att.mimeType,
+                size_bytes: att.size,
+              });
+              if (attErr) { console.warn("[GmailSync] Attachment insert error:", attErr.message); continue; }
+
+              // Download and create a separate document for processable attachments
+              if (gmailIncludeAttachments && PROCESSABLE_MIMES.has(att.mimeType) && att.size <= MAX_ATTACHMENT_SIZE) {
+                try {
+                  const downloaded = await gmailDownloadAttachment(token, msgSnippet.id, att.id);
+                  if (downloaded.data) {
+                    const isPdf = att.mimeType === "application/pdf";
+                    const attTitle = `[Attachment] ${att.filename} — from "${docTitle}"`;
+                    const { data: attDoc } = await supabase.from("documents").insert({
+                      event_id: eventId,
+                      title: attTitle,
+                      source_type: "gmail",
+                      file_name: att.filename,
+                      detected_type: isPdf ? "pdf" : "document",
+                      gmail_message_id: `${msgSnippet.id}_att_${att.id}`,
+                      gmail_thread_id: ingested.gmail_thread_id,
+                      email_from: ingested.email_from,
+                      email_subject: ingested.email_subject,
+                      email_has_attachments: false,
+                      created_by: currentUserId,
+                    }).select("id").single();
+
+                    if (attDoc) {
+                      // For PDFs, pass base64 directly for visual extraction; for text, decode
+                      if (isPdf) {
+                        indexDocumentEmbeddings(attDoc.id, att.filename, attTitle, downloaded.data);
+                      } else {
+                        try {
+                          const textContent = atob(downloaded.data.replace(/-/g, "+").replace(/_/g, "/"));
+                          await supabase.from("documents").update({ raw_content: textContent.slice(0, 50000) }).eq("id", attDoc.id);
+                          indexDocumentEmbeddings(attDoc.id, textContent, attTitle);
+                        } catch { /* non-text binary — skip embedding */ }
+                      }
+                      // Mark attachment as processed
+                      await supabase.from("email_attachments")
+                        .update({ processed: true })
+                        .eq("document_id", docRow.id)
+                        .eq("gmail_attachment_id", att.id);
+                    }
+                  }
+                } catch (attDownloadErr) {
+                  console.warn(`[GmailSync] Attachment download failed for ${att.filename}:`, attDownloadErr);
+                }
+              }
+            }
+          }
+
+          // Upsert email_threads row
+          if (ingested.gmail_thread_id) {
+            await supabase.from("email_threads").upsert({
+              event_id: eventId,
+              gmail_thread_id: ingested.gmail_thread_id,
+              subject: ingested.email_subject || null,
+              participants: [...new Set([ingested.email_from, ...ingested.email_to, ...ingested.email_cc].filter(Boolean))],
+              last_message_at: ingested.email_date || new Date().toISOString(),
+            }, { onConflict: "event_id,gmail_thread_id" }).then(({ error: thErr }) => {
+              if (thErr) console.warn("[GmailSync] Thread upsert error:", thErr.message);
+            });
+          }
+
+          // Embed document content for RAG
+          indexDocumentEmbeddings(docRow.id, ingested.content, docTitle);
+          synced++;
+        } catch (msgErr) {
+          console.error(`[GmailSync] Error processing message ${msgSnippet.id}:`, msgErr);
+          errors++;
+        }
+      }
+
+      // Update sync timestamp
+      const now = new Date().toISOString();
+      await supabase.from("sync_configurations")
+        .update({ last_sync_at: now, last_sync_status: "success", last_sync_error: null, updated_at: now })
+        .eq("event_id", eventId)
+        .eq("source_type", "gmail");
+      setLastGmailSyncAt(now);
+
+      setGmailSyncResults({ synced, skipped, errors });
+      toast({ title: "Gmail sync complete", description: `${synced} new emails synced, ${skipped} already existed, ${errors} errors.` });
+    } catch (err) {
+      console.error("[GmailSync] Sync failed:", err);
+      toast({ title: "Gmail sync failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+      if (activeEventId) {
+        await supabase.from("sync_configurations")
+          .update({ last_sync_status: "error", last_sync_error: err instanceof Error ? err.message : "Unknown" })
+          .eq("event_id", activeEventId)
+          .eq("source_type", "gmail");
+      }
+    } finally {
+      setGmailSyncProgress(null);
+      setIsSyncingGmail(false);
+    }
+  }, [activeEventId, currentUserId, ensureActiveEventId, getGoogleAccessToken, gmailIncludeAttachments, gmailMaxPerSync, gmailQuery, indexDocumentEmbeddings, lastGmailSyncAt, onDocumentSaved, toast]);
+
+  // ── Gmail auto-sync on login: fire once per session when connected ──
+  const gmailAutoSyncFiredRef = useRef(false);
+  const isSyncingGmailRef = useRef(false);
+  useEffect(() => { isSyncingGmailRef.current = isSyncingGmail; }, [isSyncingGmail]);
+  const syncGmailInboxRef = useRef(syncGmailInbox);
+  useEffect(() => { syncGmailInboxRef.current = syncGmailInbox; }, [syncGmailInbox]);
+
+  useEffect(() => {
+    if (gmailAutoSyncFiredRef.current) return;
+    if (!isGmailConnected || !activeEventId || isSyncingGmail) return;
+    (async () => {
+      const token = await getGoogleAccessToken();
+      if (!token) return;
+      if (lastGmailSyncAt) {
+        const elapsed = Date.now() - new Date(lastGmailSyncAt).getTime();
+        if (elapsed < SYNC_INTERVAL_MS) {
+          gmailAutoSyncFiredRef.current = true;
+          return;
+        }
+      }
+      gmailAutoSyncFiredRef.current = true;
+      console.log("[GmailSync] Auto-sync on login triggered");
+      syncGmailInbox();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGmailConnected, activeEventId, isSyncingGmail, getGoogleAccessToken, lastGmailSyncAt, syncGmailInbox]);
+
+  // ── Gmail auto-sync interval (every 15 min) ──
+  const gmailAutoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!isGmailConnected || !activeEventId) {
+      if (gmailAutoSyncIntervalRef.current) { clearInterval(gmailAutoSyncIntervalRef.current); gmailAutoSyncIntervalRef.current = null; }
+      return;
+    }
+    if (!gmailAutoSyncIntervalRef.current) {
+      gmailAutoSyncIntervalRef.current = setInterval(() => {
+        if (isSyncingGmailRef.current) return;
+        console.log("[GmailSync] Auto-sync interval triggered");
+        syncGmailInboxRef.current?.();
+      }, SYNC_INTERVAL_MS);
+    }
+    return () => {
+      if (gmailAutoSyncIntervalRef.current) { clearInterval(gmailAutoSyncIntervalRef.current); gmailAutoSyncIntervalRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGmailConnected, activeEventId]);
 
   const handleImportClickUp = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
@@ -4423,6 +4739,168 @@ function SourcesTab({
               </Button>
               <p className="text-[10px] text-white/40 font-mono">
                 Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Gmail Inbox Sync ── */}
+      <Card className="border-2 border-white bg-transparent">
+        <CardHeader className="border-b-2 border-white">
+          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
+            <Mail className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            Gmail Inbox Sync
+          </CardTitle>
+          <CardDescription className="text-white/70 font-mono">
+            Read emails from your Gmail inbox. Emails are embedded and available for RAG queries.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isGmailConnected ? (
+            <>
+              {/* Config panel */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <Label className="text-white font-mono font-bold text-xs">Gmail Search Filter</Label>
+                  <Input
+                    value={gmailQuery}
+                    onChange={(e) => setGmailQuery(e.target.value)}
+                    placeholder='e.g. from:founder@startup.com, subject:"pitch deck", has:attachment'
+                    className="border-2 border-white bg-transparent text-white placeholder:text-white/40 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-white/40 font-mono mt-1">Standard Gmail search operators. Leave blank to sync all inbox mail.</p>
+                </div>
+                <div>
+                  <Label className="text-white font-mono font-bold text-xs">Max emails per sync</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={gmailMaxPerSync}
+                    onChange={(e) => setGmailMaxPerSync(Math.min(500, Math.max(1, Number(e.target.value) || 50)))}
+                    className="border-2 border-white bg-transparent text-white text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="gmail-attachments"
+                  checked={gmailIncludeAttachments}
+                  onCheckedChange={(v) => setGmailIncludeAttachments(!!v)}
+                  className="border-white/50 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                />
+                <Label htmlFor="gmail-attachments" className="text-white/70 font-mono text-xs cursor-pointer">
+                  Process email attachments (PDFs, docs)
+                </Label>
+              </div>
+              {/* Save config changes */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/20 text-white/70 hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-mono text-[10px] h-7"
+                onClick={async () => {
+                  if (!activeEventId) return;
+                  await supabase.from("sync_configurations")
+                    .update({ config: { gmail_query: gmailQuery, max_emails_per_sync: gmailMaxPerSync, include_attachments: gmailIncludeAttachments } })
+                    .eq("event_id", activeEventId)
+                    .eq("source_type", "gmail");
+                  toast({ title: "Gmail config saved" });
+                }}
+              >
+                <Save className="h-3 w-3 mr-1" /> Save Settings
+              </Button>
+
+              {/* Sync status bar */}
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-white/15 bg-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">GMAIL CONNECTED</span>
+                  </div>
+                  {lastGmailSyncAt && (
+                    <span className="text-[10px] text-white/40 font-mono">
+                      Last sync: {new Date(lastGmailSyncAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={syncGmailInbox}
+                    disabled={isSyncingGmail || !canImport}
+                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
+                  >
+                    {isSyncingGmail ? (
+                      <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Syncing…</>
+                    ) : (
+                      <><RefreshCw className="h-3.5 w-3.5 mr-1" />Sync Now</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Sync progress */}
+              {gmailSyncProgress && (
+                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-white/80">
+                      {gmailSyncProgress.currentItem}
+                    </span>
+                    {gmailSyncProgress.total > 0 && (
+                      <span className="text-xs font-mono text-white/50">
+                        {Math.round((gmailSyncProgress.current / gmailSyncProgress.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {gmailSyncProgress.total > 0 && (
+                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${(gmailSyncProgress.current / gmailSyncProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sync results */}
+              {gmailSyncResults && !gmailSyncProgress && (
+                <div className="flex items-center gap-4 p-3 rounded-lg border border-white/15 bg-white/[0.03]">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">{gmailSyncResults.synced} synced</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                    <Clock className="h-3.5 w-3.5 text-white/40" />
+                    <span className="text-white/40">{gmailSyncResults.skipped} skipped</span>
+                  </div>
+                  {gmailSyncResults.errors > 0 && (
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                      <span className="text-red-400">{gmailSyncResults.errors} errors</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-6 space-y-3">
+              <Mail className="h-10 w-10 text-white/30 mx-auto" />
+              <p className="text-sm text-white/50 font-mono">Gmail inbox not connected yet.</p>
+              <Button
+                onClick={() => connectGmail()}
+                disabled={!canImport}
+                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Connect Gmail
+              </Button>
+              <p className="text-[10px] text-white/40 font-mono">
+                Emails will be read (read-only), extracted, embedded and available in the RAG knowledge base.
               </p>
             </div>
           )}
@@ -8980,11 +9458,22 @@ export default function CIS() {
       (async () => {
         try {
           const hasPdf = !!pdfBase64ForExtraction;
-          console.log(`[EXTRACT] Extracting entities from doc ${documentId} — PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
+          // Detect document type from content/title for better extraction
+          const lowerContent = (rawContent || "").slice(0, 500).toLowerCase();
+          const lowerTitle = (docTitle || "").toLowerCase();
+          let detectedDocType = "pitch_deck";
+          if (lowerContent.startsWith("from:") || lowerContent.includes("\nto:") || lowerTitle.includes("email") || lowerContent.includes("\nsubject:")) {
+            detectedDocType = "email";
+          } else if (lowerTitle.includes("memo") || lowerTitle.includes("note")) {
+            detectedDocType = "memo";
+          } else if (lowerTitle.includes("report") || lowerTitle.includes("analysis")) {
+            detectedDocType = "report";
+          }
+          console.log(`[EXTRACT] Extracting entities from doc ${documentId} — type: ${detectedDocType}, PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
           const extraction = await extractEntities({
             document_title: docTitle,
-            document_text: rawContent?.slice(0, 12000) || "", // Limit for API
-            document_type: "pitch_deck", // Could be smarter — detect from filename
+            document_text: rawContent?.slice(0, 12000) || "",
+            document_type: detectedDocType,
             pdf_base64: pdfBase64ForExtraction || undefined,
           });
 

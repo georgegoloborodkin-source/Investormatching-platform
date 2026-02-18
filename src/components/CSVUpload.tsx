@@ -395,22 +395,22 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                     <Download className="h-4 w-4 mr-2" />
                     Mentor
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                <Button
+                  variant="outline"
+                  size="sm"
                     onClick={() => {
                       const link = document.createElement('a');
                       link.href = '/templates/corporate-template.csv';
                       link.download = 'corporate-template.csv';
                       link.click();
                     }}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
+                >
+                  <Download className="h-4 w-4 mr-2" />
                     Corporate
-                  </Button>
+                </Button>
                 </div>
               </div>
-
+              
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="auto-csv">Select any file format</Label>
@@ -451,9 +451,9 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+            <div className="space-y-4">
             {/* Preview Header */}
-            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-medium">
                   Preview: {
@@ -486,8 +486,8 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
                 <X className="h-4 w-4 mr-2" />
                 Change File
               </Button>
-            </div>
-
+              </div>
+              
             {/* Column Mappings */}
             {previewData.mappings.length > 0 && (
               <div className="space-y-2">
@@ -839,11 +839,11 @@ export function CSVUpload({ onStartupsImported, onInvestorsImported, onMentorsIm
         )}
 
         {!previewData && (
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={onClose} disabled={isProcessing}>
-              Cancel
-            </Button>
-          </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <Button variant="outline" onClick={onClose} disabled={isProcessing}>
+            Cancel
+          </Button>
+        </div>
         )}
       </CardContent>
     </Card>

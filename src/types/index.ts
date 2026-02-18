@@ -195,6 +195,15 @@ export interface DocumentRecord {
   extracted_json: Record<string, any> | null;
   created_by: string | null;
   folder_id?: string | null;
+  gmail_message_id?: string | null;
+  gmail_thread_id?: string | null;
+  gmail_labels?: string[] | null;
+  email_from?: string | null;
+  email_to?: string[] | null;
+  email_cc?: string[] | null;
+  email_subject?: string | null;
+  email_sent_at?: string | null;
+  email_has_attachments?: boolean;
   created_at: string;
   updated_at: string;
 }

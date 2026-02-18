@@ -5,16 +5,20 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { RefreshCw, CheckCircle, AlertCircle, Clock, Cloud, Database, Folder } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Clock, Cloud, Database, Folder, Mail } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SyncConfig {
   id: string;
-  source_type: "clickup" | "google_drive";
+  source_type: "clickup" | "google_drive" | "gmail";
   config: {
     clickup_list_id?: string;
     google_drive_folder_id?: string;
     google_drive_folder_name?: string;
+    gmail_query?: string;
+    gmail_label_ids?: string[];
+    max_emails_per_sync?: number;
+    include_attachments?: boolean;
     sync_frequency?: string;
   };
   sync_frequency: string | null;
@@ -70,7 +74,7 @@ export function SyncStatus() {
     }
   }, [isMD, orgId, loadSyncConfigs]);
 
-  const triggerSync = async (configId: string, sourceType: "clickup" | "google_drive") => {
+  const triggerSync = async (configId: string, sourceType: "clickup" | "google_drive" | "gmail") => {
     setSyncing(configId);
     try {
       if (sourceType === "google_drive") {
@@ -83,6 +87,16 @@ export function SyncStatus() {
         toast({
           title: "Sync triggered",
           description: "Google Drive sync has been queued. Go to the Sources tab to see progress.",
+        });
+      } else if (sourceType === "gmail") {
+        await supabase
+          .from("sync_configurations")
+          .update({ last_sync_status: "pending" })
+          .eq("id", configId);
+
+        toast({
+          title: "Gmail sync triggered",
+          description: "Gmail sync has been queued. Go to the Sources tab to see progress.",
         });
       } else if (sourceType === "clickup") {
         toast({
@@ -175,11 +189,13 @@ export function SyncStatus() {
                 <div className="flex items-center gap-2">
                   {config.source_type === "clickup" ? (
                     <Database className="h-4 w-4 text-muted-foreground" />
+                  ) : config.source_type === "gmail" ? (
+                    <Mail className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <Cloud className="h-4 w-4 text-muted-foreground" />
                   )}
                   <span className="font-medium capitalize">
-                    {config.source_type === "clickup" ? "ClickUp" : "Google Drive"}
+                    {config.source_type === "clickup" ? "ClickUp" : config.source_type === "gmail" ? "Gmail" : "Google Drive"}
                   </span>
                   {getStatusBadge(config.last_sync_status)}
                 </div>
@@ -213,6 +229,21 @@ export function SyncStatus() {
                     <span className="font-medium">{config.config.google_drive_folder_name}</span>
                   </div>
                 )}
+                {config.source_type === "gmail" && config.config.gmail_query && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      Query:
+                    </span>
+                    <span className="font-medium truncate max-w-[200px]">{config.config.gmail_query}</span>
+                  </div>
+                )}
+                {config.source_type === "gmail" && (
+                  <div className="flex items-center justify-between">
+                    <span>Attachments:</span>
+                    <span>{config.config.include_attachments ? "Included" : "Skipped"}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span>Last sync:</span>
                   <span>{formatLastSync(config.last_sync_at)}</span>
@@ -238,9 +269,9 @@ export function SyncStatus() {
 
         <Alert>
           <AlertDescription className="text-xs">
-            <strong>Auto-sync:</strong> Google Drive folders are automatically synced on login.
-            Use the Sources tab to connect folders and trigger manual syncs.
-            Re-login for Google Drive is normal when the token expires; reconnect via Sources if needed.
+            <strong>Auto-sync:</strong> Google Drive folders and Gmail are automatically synced on login and every 15 minutes.
+            Use the Sources tab to connect folders or Gmail, and trigger manual syncs.
+            Re-login is normal when the token expires; reconnect via Sources if needed.
           </AlertDescription>
         </Alert>
       </CardContent>
