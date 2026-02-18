@@ -450,12 +450,17 @@ export async function askAgentStream(
 
     let buffer = "";
     let hasReceivedData = false;
+    let hasReceivedText = false;
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          if (!hasReceivedData && !timeoutFired) {
-            onError?.(new Error("Stream ended without data."));
+          if (!hasReceivedText && !timeoutFired) {
+            onError?.(new Error(
+              hasReceivedData
+                ? "The server started processing but returned no answer. It may have encountered an internal error. Please try again."
+                : "Stream ended without data. The backend may be down."
+            ));
           }
           break;
         }
@@ -480,6 +485,7 @@ export async function askAgentStream(
             try {
               const data = JSON.parse(dataStr);
               if (data.text) {
+                hasReceivedText = true;
                 onChunk(data.text);
               } else if (data.status) {
                 if (typeof data.status === "string") {
@@ -491,7 +497,7 @@ export async function askAgentStream(
               } else if (data.source_docs && Array.isArray(data.source_docs)) {
                 onSourceDocs?.(data.source_docs as SourceDoc[]);
               } else if (data.critic && typeof data.critic === "string") {
-                onCritic(data.critic);
+                onCritic?.(data.critic);
               } else if (data.error) {
                 onError?.(new Error(data.error));
                 return;
