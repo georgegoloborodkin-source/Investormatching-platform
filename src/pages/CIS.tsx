@@ -7266,6 +7266,8 @@ export default function CIS() {
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [activeThread, setActiveThread] = useState<string>(initialThreads[0]?.id ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const messagesRef = useRef<Message[]>(initialMessages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState("");
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
@@ -7732,13 +7734,33 @@ export default function CIS() {
     const loadChatHistory = async () => {
       if (!profile) return;
       // Never replace messages while the AI is still streaming a response
-      if (isClaudeLoading) return;
+      if (isClaudeLoading || chatIsLoading) return;
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
+
+      // Preserve in-memory enrichment (sourceDocs, contextLabels, etc.) across DB reloads
+      const preserveEnrichment = (loaded: Message[]): Message[] => {
+        const currentMsgs = messagesRef.current;
+        if (!currentMsgs.length) return loaded;
+        const enrichMap = new Map<string, Partial<Message>>();
+        for (const m of currentMsgs) {
+          const extras: Partial<Message> = {};
+          if (m.sourceDocs?.length) extras.sourceDocs = m.sourceDocs;
+          if (m.contextLabels?.length) extras.contextLabels = m.contextLabels;
+          if (m.verifiableSources?.length) extras.verifiableSources = m.verifiableSources;
+          if (m.critic) extras.critic = m.critic;
+          if (Object.keys(extras).length) enrichMap.set(m.id, extras);
+        }
+        if (!enrichMap.size) return loaded;
+        return loaded.map((m) => {
+          const extras = enrichMap.get(m.id);
+          return extras ? { ...m, ...extras } : m;
+        });
+      };
       
       const mergeLocalMessages = (threadId: string, loadedMessages: Message[]) => {
         const cache = readLocalChatCache();
-        if (!cache.length) return loadedMessages;
+        if (!cache.length) return preserveEnrichment(loadedMessages);
         const otherThreads = cache.filter((m) => m.threadId !== threadId);
         const threadCache = cache.filter((m) => m.threadId === threadId);
         const existingKeys = new Set(loadedMessages.map((m) => `${m.author}|${m.text}`));
@@ -7757,7 +7779,7 @@ export default function CIS() {
           }
         }
         writeLocalChatCache([...otherThreads, ...remaining]);
-        return merged;
+        return preserveEnrichment(merged);
       };
 
       try {
@@ -7802,14 +7824,13 @@ export default function CIS() {
               }));
             setMessages(mergeLocalMessages(targetThreadId, threadMessages));
           } else if (messageRows?.length && !targetThreadId) {
-            // If no thread matches, load all messages (shouldn't happen, but fallback)
             const mappedMessages = messageRows.map((m: any) => ({
               id: m.id,
               author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
               text: m.content,
               threadId: m.thread_id,
             }));
-            setMessages(mappedMessages);
+            setMessages(preserveEnrichment(mappedMessages));
           } else {
             // No messages found for this thread - clear messages array
             if (targetThreadId) {
@@ -7819,14 +7840,13 @@ export default function CIS() {
             }
           }
         } else if (messageRows?.length) {
-          // If no threads but messages exist, load all messages
           const mappedMessages = messageRows.map((m: any) => ({
             id: m.id,
             author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
             text: m.content,
             threadId: m.thread_id,
           }));
-          setMessages(mappedMessages);
+          setMessages(preserveEnrichment(mappedMessages));
         } else {
           // No threads and no messages - ensure empty state
           setMessages([]);
@@ -7843,7 +7863,8 @@ export default function CIS() {
     };
 
     void loadChatHistory();
-  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, isClaudeLoading, readLocalChatCache, writeLocalChatCache]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, activeEventId, activeThread, ensureActiveEventId, isInitialLoad, readLocalChatCache, writeLocalChatCache]);
 
   const getGoogleAccessToken = useCallback(async (forceRefresh = false) => {
     if (forceRefresh) {
@@ -9301,6 +9322,10 @@ export default function CIS() {
       const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       let currentText = "";
 
+      // Keep reference to sourceDocs/contextLabels so finalize can re-apply them
+      let _sourceDocs: SourceDoc[] = [];
+      let _contextLabels: string[] = [];
+
       // Create placeholder message with thinking indicator (dots)
       setMessages((prev) => [
         ...prev,
@@ -9335,7 +9360,13 @@ export default function CIS() {
           const cleanText = currentText
             .replace(/\n?\*(?:Analyzing|Searching|Generating)[^*]*\*\n?/g, "")
             .replace(/^\s+/, "");
-          setMessages((prev) => patchById(prev, { text: cleanText || currentText, isStreaming: false }));
+          // Re-apply sourceDocs and contextLabels so they survive the finalize patch
+          setMessages((prev) => patchById(prev, {
+            text: cleanText || currentText,
+            isStreaming: false,
+            sourceDocs: _sourceDocs.length > 0 ? _sourceDocs : undefined,
+            contextLabels: _contextLabels.length > 0 ? _contextLabels : undefined,
+          }));
           void persistChatMessage({
             threadId,
             role: "assistant",
@@ -9358,12 +9389,14 @@ export default function CIS() {
           setMessages((prev) => patchById(prev, { verifiableSources: sources }));
         },
         setSourceDocs: (docs: SourceDoc[]) => {
+          _sourceDocs = docs;
           setMessages((prev) => patchById(prev, { sourceDocs: docs }));
         },
         setCritic: (text: string) => {
           setMessages((prev) => patchById(prev, { critic: text }));
         },
         setContextLabels: (labels: string[]) => {
+          _contextLabels = labels;
           setMessages((prev) => patchById(prev, { contextLabels: labels }));
         },
       };
@@ -12210,18 +12243,34 @@ export default function CIS() {
       .filter((t) => t.length > 3);
   }, [lastEvidence?.question]);
 
-  /** Replace verbose [[Source: ...]] tags with [N] so inline badge renderer shows them (Verifiable RAG) */
+  /** Replace verbose [[Source: ...]] tags with [N] so inline badge renderer shows them (Verifiable RAG).
+   *  Also strips raw `doc_id:` and `chunk:` fragments that leak from the backend prompt.
+   *  Handles nested brackets like [[Source: [Kuration AI] - Meeting Notes | doc_id:... | chunk:1]]. */
   const cleanVerifiableCitationTags = useCallback((text: string) => {
     let n = 0;
     const byTag: Record<string, number> = {};
     return text
-      .replace(/\[\[Source:\s*[^\]]+\]\]/gi, (tag) => {
+      // Replace full [[Source: ... ]] blocks (allowing nested [ ] inside via greedy match to last ]])
+      .replace(/\[\[Source:[\s\S]*?\]\]/gi, (tag) => {
         if (byTag[tag] == null) {
           n += 1;
           byTag[tag] = n;
         }
         return `[${byTag[tag]}]`;
-      });
+      })
+      // Catch single-bracket leftover: [Source: ...]
+      .replace(/\[Source:[^\]]*\]/gi, (tag) => {
+        if (byTag[tag] == null) {
+          n += 1;
+          byTag[tag] = n;
+        }
+        return `[${byTag[tag]}]`;
+      })
+      // Catch naked doc_id / chunk refs that leak outside brackets
+      .replace(/\s*\|?\s*doc_id:[^\]|)}\n]*/gi, "")
+      .replace(/\s*\|?\s*chunk:\d+/gi, "")
+      // Catch stray (doc_id:...) or (20230519)) leftovers from partially stripped tags
+      .replace(/\s*\(\s*(?:doc_id:|20\d{6}\))\)?\s*/gi, "");
   }, []);
 
   const renderAssistantContent = useCallback((text: string) => {
@@ -13191,7 +13240,7 @@ export default function CIS() {
                         placeholder={editingMessageId ? "Edit your question and press Enter to resend..." : "Ask a question about your portfolio..."}
                         className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey && !chatIsLoading) {
+                          if (e.key === "Enter" && !e.shiftKey && !(chatIsLoading || isClaudeLoading)) {
                             e.preventDefault();
                             addMessage();
                           }
@@ -13199,17 +13248,17 @@ export default function CIS() {
                       />
                     </div>
                     <Button 
-                      onClick={chatIsLoading ? stopGenerating : addMessage} 
-                      disabled={!chatIsLoading && !input.trim()}
+                      onClick={(chatIsLoading || isClaudeLoading) ? stopGenerating : addMessage} 
+                      disabled={!(chatIsLoading || isClaudeLoading) && !input.trim()}
                       size="lg"
-                      title={chatIsLoading ? "Cancel" : "Send"}
+                      title={(chatIsLoading || isClaudeLoading) ? "Cancel" : "Send"}
                       className={`h-[52px] w-[52px] p-0 font-bold border-2 rounded-xl transition-all ${
-                        chatIsLoading
+                        (chatIsLoading || isClaudeLoading)
                           ? "bg-red-500/90 text-white border-red-400 hover:bg-red-500 hover:shadow-[0_0_24px_rgba(239,68,68,0.3)]"
                           : "bg-[#FFED00] text-black hover:bg-[#FFED00]/90 border-[#FFED00] hover:shadow-[0_0_24px_rgba(255,237,0,0.4)]"
                       } disabled:opacity-40 disabled:hover:shadow-none`}
                     >
-                      {chatIsLoading ? (
+                      {(chatIsLoading || isClaudeLoading) ? (
                         <Square className="h-5 w-5 fill-current" />
                       ) : (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
