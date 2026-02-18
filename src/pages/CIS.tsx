@@ -9750,7 +9750,9 @@ export default function CIS() {
       // When enabled, the backend handles ALL retrieval (SQL, vector search,
       // knowledge graph) via Claude's tool_use loop. The frontend just streams.
       // ════════════════════════════════════════════════════════════════════
-      const USE_AGENT_RAG = true; // Feature flag: set to false to revert to old pipeline
+      // When multi-agent is ON, use the legacy pipeline which has orchestrator + graph + KPI agents.
+      // When OFF, use the faster backend-driven agent RAG.
+      const USE_AGENT_RAG = !multiAgentEnabled;
 
       if (USE_AGENT_RAG) {
         setChatIsLoading(false);
@@ -11911,6 +11913,7 @@ export default function CIS() {
       persistCostLog,
       getThreadMessages,
       webSearchEnabled,
+      multiAgentEnabled,
     ]
   );
 
