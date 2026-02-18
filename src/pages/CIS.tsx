@@ -7373,6 +7373,10 @@ export default function CIS() {
   const [documents, setDocuments] = useState<
     Array<{ id: string; title: string | null; storage_path: string | null; folder_id?: string | null }>
   >([]);
+  const documentsRef = useRef<Array<{ id: string; title: string | null; storage_path: string | null; folder_id?: string | null }>>([]);
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
 
   const readLocalChatCache = useCallback((): LocalChatMessage[] => {
     if (typeof window === "undefined") return [];
@@ -7738,23 +7742,54 @@ export default function CIS() {
       const eventId = activeEventId || (await ensureActiveEventId());
       if (!eventId) return;
 
+      const mapSourceDocsFromIds = (sourceDocIds: unknown): SourceDoc[] | undefined => {
+        const ids = Array.isArray(sourceDocIds)
+          ? sourceDocIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+          : [];
+        if (ids.length === 0) return undefined;
+        const titleById = new Map(
+          documentsRef.current.map((doc) => [doc.id, doc.title || doc.storage_path?.split("/").pop() || "Document"] as const)
+        );
+        return ids.map((id) => ({ id, title: titleById.get(id) || "Document" }));
+      };
+
+      const mapMessageRow = (m: any): Message => ({
+        id: m.id,
+        author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        text: m.content,
+        threadId: m.thread_id,
+        sourceDocs: mapSourceDocsFromIds(m.source_doc_ids),
+      });
+
       // Preserve in-memory enrichment (sourceDocs, contextLabels, etc.) across DB reloads
       const preserveEnrichment = (loaded: Message[]): Message[] => {
         const currentMsgs = messagesRef.current;
         if (!currentMsgs.length) return loaded;
-        const enrichMap = new Map<string, Partial<Message>>();
+        const enrichById = new Map<string, Partial<Message>>();
+        const enrichBySignature = new Map<string, Partial<Message>>();
         for (const m of currentMsgs) {
           const extras: Partial<Message> = {};
           if (m.sourceDocs?.length) extras.sourceDocs = m.sourceDocs;
           if (m.contextLabels?.length) extras.contextLabels = m.contextLabels;
           if (m.verifiableSources?.length) extras.verifiableSources = m.verifiableSources;
           if (m.critic) extras.critic = m.critic;
-          if (Object.keys(extras).length) enrichMap.set(m.id, extras);
+          if (Object.keys(extras).length) {
+            enrichById.set(m.id, extras);
+            enrichBySignature.set(`${m.threadId}|${m.author}|${m.text}`, extras);
+          }
         }
-        if (!enrichMap.size) return loaded;
+        if (!enrichById.size && !enrichBySignature.size) return loaded;
         return loaded.map((m) => {
-          const extras = enrichMap.get(m.id);
-          return extras ? { ...m, ...extras } : m;
+          const signature = `${m.threadId}|${m.author}|${m.text}`;
+          const extras = enrichById.get(m.id) || enrichBySignature.get(signature);
+          if (!extras) return m;
+          return {
+            ...m,
+            sourceDocs: m.sourceDocs?.length ? m.sourceDocs : extras.sourceDocs,
+            contextLabels: m.contextLabels?.length ? m.contextLabels : extras.contextLabels,
+            verifiableSources: m.verifiableSources?.length ? m.verifiableSources : extras.verifiableSources,
+            critic: m.critic || extras.critic,
+          };
         });
       };
       
@@ -7816,20 +7851,10 @@ export default function CIS() {
           if (targetThreadId && messageRows?.length) {
             const threadMessages = messageRows
               .filter((m: any) => m.thread_id === targetThreadId)
-              .map((m: any) => ({
-                id: m.id,
-                author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
-                text: m.content,
-                threadId: m.thread_id,
-              }));
+              .map(mapMessageRow);
             setMessages(mergeLocalMessages(targetThreadId, threadMessages));
           } else if (messageRows?.length && !targetThreadId) {
-            const mappedMessages = messageRows.map((m: any) => ({
-              id: m.id,
-              author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
-              text: m.content,
-              threadId: m.thread_id,
-            }));
+            const mappedMessages = messageRows.map(mapMessageRow);
             setMessages(preserveEnrichment(mappedMessages));
           } else {
             // No messages found for this thread - clear messages array
@@ -7840,12 +7865,7 @@ export default function CIS() {
             }
           }
         } else if (messageRows?.length) {
-          const mappedMessages = messageRows.map((m: any) => ({
-            id: m.id,
-            author: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
-            text: m.content,
-            threadId: m.thread_id,
-          }));
+          const mappedMessages = messageRows.map(mapMessageRow);
           setMessages(preserveEnrichment(mappedMessages));
         } else {
           // No threads and no messages - ensure empty state
@@ -13100,28 +13120,57 @@ export default function CIS() {
                                     </>
                                   )}
                                 </div>
-                                {/* Sources: compact list of where the answer came from (documents + optional graph/KPIs) */}
+                                {/* Sources: one button that expands a clickable list */}
                                 {!m.isStreaming && ((m.sourceDocs?.length ?? 0) > 0 || (m.contextLabels?.length ?? 0) > 0) && (
                                   <div className="mt-2 pt-2 border-t border-white/10">
-                                    <p className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider mb-1.5">Sources</p>
-                                    {m.sourceDocs && m.sourceDocs.length > 0 && (
-                                      <div className="flex flex-wrap gap-1.5 mb-1">
-                                        {m.sourceDocs.map((doc, idx) => (
-                                          <Button
-                                            key={doc.id}
-                                            size="sm"
-                                            variant="outline"
-                                            className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
-                                            onClick={() => handleOpenDocument(doc.id)}
-                                          >
-                                            {idx + 1}. {doc.title || "Document"}
-                                          </Button>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {m.contextLabels && m.contextLabels.length > 0 && (
-                                      <p className="text-[10px] font-mono text-white/40">Also used: {m.contextLabels.join(", ")}</p>
-                                    )}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                                        >
+                                          <FileText className="h-3 w-3 mr-1.5" />
+                                          Sources
+                                          <span className="ml-1 text-white/50">({(m.sourceDocs?.length ?? 0) + (m.contextLabels?.length ?? 0)})</span>
+                                          <ChevronDown className="h-3 w-3 ml-1.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="w-80 bg-black/95 border border-white/20 text-white">
+                                        {m.sourceDocs && m.sourceDocs.length > 0 && (
+                                          <>
+                                            <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/50">
+                                              Documents
+                                            </div>
+                                            {m.sourceDocs.map((doc, idx) => (
+                                              <DropdownMenuItem
+                                                key={doc.id}
+                                                className="font-mono text-xs cursor-pointer"
+                                                onSelect={(e) => {
+                                                  e.preventDefault();
+                                                  handleOpenDocument(doc.id);
+                                                }}
+                                              >
+                                                {idx + 1}. {doc.title || "Document"}
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </>
+                                        )}
+                                        {m.contextLabels && m.contextLabels.length > 0 && (
+                                          <>
+                                            {m.sourceDocs && m.sourceDocs.length > 0 && <DropdownMenuSeparator />}
+                                            <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/50">
+                                              Also used
+                                            </div>
+                                            {m.contextLabels.map((label) => (
+                                              <DropdownMenuItem key={label} disabled className="font-mono text-xs text-white/60">
+                                                {label}
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 )}
                                 {/* Log Connection button - appears after each AI response */}
@@ -13254,12 +13303,12 @@ export default function CIS() {
                       title={(chatIsLoading || isClaudeLoading) ? "Cancel" : "Send"}
                       className={`h-[52px] w-[52px] p-0 font-bold border-2 rounded-xl transition-all ${
                         (chatIsLoading || isClaudeLoading)
-                          ? "bg-red-500/90 text-white border-red-400 hover:bg-red-500 hover:shadow-[0_0_24px_rgba(239,68,68,0.3)]"
+                          ? "bg-white/[0.08] text-[#FFED00] border-white/30 hover:bg-white/[0.14] hover:border-[#FFED00]/50 hover:shadow-[0_0_20px_rgba(255,237,0,0.18)]"
                           : "bg-[#FFED00] text-black hover:bg-[#FFED00]/90 border-[#FFED00] hover:shadow-[0_0_24px_rgba(255,237,0,0.4)]"
                       } disabled:opacity-40 disabled:hover:shadow-none`}
                     >
                       {(chatIsLoading || isClaudeLoading) ? (
-                        <Square className="h-5 w-5 fill-current" />
+                        <Square className="h-4 w-4 fill-current animate-pulse" />
                       ) : (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
