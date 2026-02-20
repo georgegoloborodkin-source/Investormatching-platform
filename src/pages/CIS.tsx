@@ -5111,7 +5111,7 @@ function SourcesTab({
                       onClick={() => setFolderDialogCategory(cat)}
                       className={`px-3 py-1.5 rounded-full text-xs font-mono border-2 transition-all ${
                         isActive
-                          ? "border-blue-600 bg-blue-600/15 text-blue-600 font-bold shadow-lg shadow-blue-500/20"
+                          ? "border-blue-600 bg-[#3b82f6]/15 text-blue-600 font-bold shadow-[0_0_8px_rgba(255,237,0,0.25)]"
                           : "border-white/30 text-white/70 hover:border-white/60 hover:text-white"
                       }`}
                     >
@@ -12875,3 +12875,82 @@ export default function CIS() {
                     href={linkData.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                  >
+                    {linkData.text}
+                  </a>
+                );
+              }
+            } else {
+              parts.push(part);
+            }
+          });
+        }
+        // Process the matched markdown element
+        const fullMatch = match[0];
+        if (match[2] !== undefined) {
+          // ***bold italic***
+          parts.push(<strong key={`${keyPrefix}bi-${i}`}><em>{match[2]}</em></strong>);
+        } else if (match[3] !== undefined) {
+          // **bold**
+          parts.push(<strong key={`${keyPrefix}b-${i}`}>{match[3]}</strong>);
+        } else if (match[4] !== undefined) {
+          // *italic*
+          parts.push(<em key={`${keyPrefix}i-${i}`}>{match[4]}</em>);
+        } else if (match[5] !== undefined) {
+          // `code`
+          parts.push(<code key={`${keyPrefix}code-${i}`} className="bg-muted px-1 py-0.5 rounded text-xs font-mono">{match[5]}</code>);
+        } else if (match[6] !== undefined) {
+          // [n] source reference
+          const refNum = parseInt(match[6], 10);
+          const sourceDoc = evidenceDocs?.[refNum - 1];
+          if (sourceDoc) {
+            parts.push(
+              <Badge
+                key={`${keyPrefix}ref-${i}`}
+                variant="outline"
+                className="mx-0.5 cursor-pointer border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white text-[10px] px-1 py-0 font-mono"
+                onClick={() => {
+                  setSelectedDocument(sourceDoc);
+                  setShowDocumentModal(true);
+                }}
+              >
+                [{refNum}]
+              </Badge>
+            );
+          } else {
+            parts.push(<span key={`${keyPrefix}ref-${i}`} className="text-muted-foreground">[{refNum}]</span>);
+          }
+        }
+        lastIndex = match.index + fullMatch.length;
+        i++;
+      }
+      // Handle remaining text after last match
+      if (lastIndex < processedText.length) {
+        const remainingText = processedText.slice(lastIndex);
+        const remainingParts = remainingText.split(/(__LINK_\d+__)/g);
+        remainingParts.forEach((part, idx) => {
+          if (part.startsWith('__LINK_') && part.endsWith('__')) {
+            const linkData = linkPlaceholders[part];
+            if (linkData) {
+              parts.push(
+                <a
+                  key={`${keyPrefix}link-end-${idx}`}
+                  href={linkData.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {linkData.text}
+                </a>
+              );
+            }
+          } else if (part) {
+            parts.push(part);
+          }
+        });
+      }
+      return parts.length > 0 ? parts : [raw];
+    };
+    
+    const cleaned = cleanVerifiableCitationTags(text);
+    return <>{renderInline(cleaned)}</>;
+  }, [evidenceDocs, setSelectedDocument, setShowDocumentModal]);
