@@ -1485,3 +1485,143 @@ export async function criticCheck(input: {
     return { issues: [], is_grounded: true, confidence: 0.5 };
   }
 }
+
+// ---------------------------------------------------------------------------
+//  System 2 RAG — Test-Time Compute (Reflect → Search → Refine)
+// ---------------------------------------------------------------------------
+
+export interface System2ReflectResult {
+  needs_more_data: boolean;
+  missing_data_types: string[];
+  follow_up_queries: string[];
+  reasoning: string;
+  refined_answer: string;
+  confidence: number;
+}
+
+/**
+ * System 2 RAG — REFLECTOR.
+ * Analyzes a draft answer and identifies gaps that need more data.
+ */
+export async function system2Reflect(input: {
+  question: string;
+  draftAnswer: string;
+  vectorContext?: string;
+  graphContext?: string;
+  kpiContext?: string;
+  iteration?: number;
+  maxIterations?: number;
+}): Promise<System2ReflectResult> {
+  const fallback: System2ReflectResult = {
+    needs_more_data: false,
+    missing_data_types: [],
+    follow_up_queries: [],
+    reasoning: "Reflection unavailable",
+    refined_answer: "",
+    confidence: 0.7,
+  };
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/system2-reflect`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: input.question,
+          draft_answer: input.draftAnswer,
+          vector_context: input.vectorContext || "",
+          graph_context: input.graphContext || "",
+          kpi_context: input.kpiContext || "",
+          iteration: input.iteration ?? 0,
+          max_iterations: input.maxIterations ?? 3,
+        }),
+      },
+      12000,
+    );
+    if (!response.ok) return fallback;
+    return await response.json();
+  } catch (error) {
+    console.error("[system2Reflect] Error:", error);
+    return fallback;
+  }
+}
+
+/**
+ * System 2 RAG — REFINER (streaming).
+ * Produces a refined answer incorporating additional context.
+ * Returns an SSE ReadableStream.
+ */
+export async function system2RefineStream(input: {
+  question: string;
+  draftAnswer: string;
+  originalContext?: string;
+  additionalContext?: string;
+  reflectionReasoning?: string;
+  previousMessages?: ChatMessage[];
+}): Promise<Response> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  return fetch(`${baseUrl}/system2-refine/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question: input.question,
+      draft_answer: input.draftAnswer,
+      original_context: input.originalContext || "",
+      additional_context: input.additionalContext || "",
+      reflection_reasoning: input.reflectionReasoning || "",
+      previousMessages: input.previousMessages || [],
+    }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+//  ColBERT Late Interaction Reranking
+// ---------------------------------------------------------------------------
+
+export interface ColBERTRerankResult {
+  results: Array<{
+    index: number;
+    doc_id: string;
+    relevance_score: number;
+    voyage_score: number;
+    maxsim_score: number;
+    document: string;
+  }>;
+  method: string;
+}
+
+/**
+ * ColBERT-style late-interaction reranking.
+ * Combines Voyage cross-encoder with token-level MaxSim scoring.
+ */
+export async function colbertRerank(input: {
+  query: string;
+  documents: string[];
+  docIds?: string[];
+  topK?: number;
+}): Promise<ColBERTRerankResult> {
+  const fallback: ColBERTRerankResult = { results: [], method: "error" };
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/colbert-rerank`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: input.query,
+          documents: input.documents,
+          doc_ids: input.docIds || [],
+          top_k: input.topK ?? 10,
+        }),
+      },
+      30000,
+    );
+    if (!response.ok) return fallback;
+    return await response.json();
+  } catch (error) {
+    console.error("[colbertRerank] Error:", error);
+    return fallback;
+  }
+}

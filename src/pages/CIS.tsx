@@ -8586,8 +8586,12 @@ export default function CIS() {
       "Orchestrator routing query...",
       "Dispatching retrieval agents...",
       "Vector + Graph + KPI search...",
+      "ColBERT reranking documents...",
       "Synthesizing multi-agent context...",
-      "Generating answer...",
+      "Generating initial answer...",
+      "System 2: Reflecting on answer...",
+      "System 2: Searching for gaps...",
+      "System 2: Refining answer...",
       "Critic verifying...",
     ] : [
       "Analyzing your question...",
@@ -11717,6 +11721,36 @@ export default function CIS() {
         }
       }
 
+
+      // ── ColBERT Late Interaction Reranking (multi-agent only) ──
+      // Uses token-level MaxSim scoring for fine-grained relevance matching
+      if (multiAgentEnabled && rankedDocs.length > 1) {
+        try {
+          const colbertDocs = rankedDocs.map((doc) => {
+            const snippet = snippetByDocId.get(doc.id);
+            return (snippet || buildNormalizedDocText(doc) || "").slice(0, 1500);
+          });
+          const colbertResult = await colbertRerank({
+            query: question,
+            documents: colbertDocs,
+            docIds: rankedDocs.map((d) => d.id),
+            topK: Math.min(10, rankedDocs.length),
+          });
+          if (colbertResult.results.length > 0) {
+            const docMap = new Map(rankedDocs.map((d) => [d.id, d]));
+            const colbertReranked = colbertResult.results
+              .map((r) => docMap.get(r.doc_id))
+              .filter(Boolean) as typeof rankedDocs;
+            if (colbertReranked.length > 0) {
+              rankedDocs = colbertReranked;
+              console.log(`[MULTI-AGENT] ColBERT reranked ${colbertReranked.length} docs (method: ${colbertResult.method})`);
+            }
+          }
+        } catch (colbertErr) {
+          console.warn("[MULTI-AGENT] ColBERT reranking failed (non-fatal):", colbertErr);
+        }
+      }
+
       // Check if this is a meta-question (about capabilities/system)
       const isMetaQuestion = (() => {
         const q = normalizedQuestion;
@@ -12456,6 +12490,127 @@ export default function CIS() {
             }
           }).catch(() => { /* non-fatal */ });
         }
+
+        // ── MULTI-AGENT RAG — System 2 RAG: Test-Time Compute (Reflect → Search → Refine) ──
+        // After initial answer, reflect on gaps, search again, and produce refined answer
+        if (multiAgentEnabled && fullAnswer.length > 100) {
+          try {
+            const vectorContextStr = sources.map((s) => `${s.title}: ${(s.snippet || "").slice(0, 500)}`).join("\n");
+            let draftForReflection = fullAnswer;
+            let totalIterations = 0;
+            const MAX_SYSTEM2_ITERATIONS = 2;
+
+            for (let iter = 0; iter < MAX_SYSTEM2_ITERATIONS; iter++) {
+              console.log(`[SYSTEM2] Reflection iteration ${iter + 1}...`);
+              setChatLoadingStage?.(`System 2: Reflecting (iteration ${iter + 1})...`);
+
+              const reflection = await system2Reflect({
+                question: questionForClaude,
+                draftAnswer: draftForReflection,
+                vectorContext: vectorContextStr,
+                graphContext,
+                kpiContext,
+                iteration: iter,
+                maxIterations: MAX_SYSTEM2_ITERATIONS,
+              });
+
+              console.log("[SYSTEM2] Reflection result:", {
+                needs_more_data: reflection.needs_more_data,
+                confidence: reflection.confidence,
+                queries: reflection.follow_up_queries,
+                missing: reflection.missing_data_types,
+              });
+
+              if (!reflection.needs_more_data || reflection.confidence >= 0.85) {
+                console.log(`[SYSTEM2] Satisfied at iteration ${iter + 1} (confidence: ${reflection.confidence})`);
+                break;
+              }
+
+              totalIterations++;
+              setChatLoadingStage?.(`System 2: Searching for missing data...`);
+
+              // Execute follow-up searches based on reflection
+              let additionalContext = "";
+              for (const fq of reflection.follow_up_queries.slice(0, 2)) {
+                try {
+                  const fqEmbedding = await embedQuery(fq);
+                  if (fqEmbedding && eventId) {
+                    const { data: extraChunks } = await supabase.rpc("match_document_chunks", {
+                      query_embedding: fqEmbedding,
+                      match_threshold: 0.3,
+                      match_count: 5,
+                      filter_event_id: eventId,
+                    });
+                    if (extraChunks?.length) {
+                      additionalContext += extraChunks
+                        .map((ch: any) => `[Follow-up: ${fq}] ${ch.content?.slice(0, 600) || ""}`)
+                        .join("\n\n");
+                    }
+                  }
+                } catch { /* non-fatal */ }
+              }
+
+              if (!additionalContext) {
+                console.log("[SYSTEM2] No additional context found, stopping.");
+                break;
+              }
+
+              // Stream refined answer
+              setChatLoadingStage?.("System 2: Refining answer...");
+              try {
+                const refineResp = await system2RefineStream({
+                  question: questionForClaude,
+                  draftAnswer: draftForReflection,
+                  originalContext: vectorContextStr,
+                  additionalContext,
+                  reflectionReasoning: reflection.reasoning,
+                  previousMessages: threadMessages,
+                });
+
+                if (refineResp.ok && refineResp.body) {
+                  let refinedText = "";
+                  const reader = refineResp.body.getReader();
+                  const decoder = new TextDecoder();
+                  // Append refinement separator and stream refined version
+                  streamer.appendChunk("\n\n---\n\n**Refined answer (System 2):**\n\n");
+                  
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    const sseLines = chunk.split("\n");
+                    for (const line of sseLines) {
+                      if (!line.startsWith("data: ")) continue;
+                      const payload = line.slice(6).trim();
+                      if (payload === "[DONE]") continue;
+                      try {
+                        const parsed = JSON.parse(payload);
+                        if (parsed.text) {
+                          refinedText += parsed.text;
+                          streamer.appendChunk(parsed.text);
+                        }
+                      } catch { /* skip */ }
+                    }
+                  }
+                  
+                  if (refinedText.length > 50) {
+                    fullAnswer = refinedText;
+                    draftForReflection = refinedText;
+                    console.log(`[SYSTEM2] Refined answer (iteration ${iter + 1}): ${refinedText.length} chars`);
+                  }
+                }
+              } catch (refineErr) {
+                console.warn("[SYSTEM2] Refinement streaming failed:", refineErr);
+              }
+            }
+            if (totalIterations > 0) {
+              console.log(`[SYSTEM2] Completed ${totalIterations} reflection iterations`);
+            }
+          } catch (s2err) {
+            console.warn("[SYSTEM2] System 2 RAG failed (non-fatal):", s2err);
+          }
+        }
+
       } catch (error: any) {
         streamCompleted = true;
         clearTimeout(streamTimeout);

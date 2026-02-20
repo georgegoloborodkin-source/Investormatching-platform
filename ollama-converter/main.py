@@ -4534,6 +4534,383 @@ async def critic_check(request: CriticRequest):
 
 
 # ---------------------------------------------------------------------------
+#  System 2 RAG — Test-Time Compute (Iterative Think → Search → Refine)
+# ---------------------------------------------------------------------------
+
+class System2ReflectRequest(BaseModel):
+    question: str
+    draft_answer: str
+    vector_context: str = ""
+    graph_context: str = ""
+    kpi_context: str = ""
+    iteration: int = 0
+    max_iterations: int = 3
+
+class System2ReflectResponse(BaseModel):
+    needs_more_data: bool = False
+    missing_data_types: List[str] = Field(default_factory=list)
+    follow_up_queries: List[str] = Field(default_factory=list)
+    reasoning: str = ""
+    refined_answer: str = ""
+    confidence: float = 0.0
+
+
+@app.post("/system2-reflect", response_model=System2ReflectResponse)
+async def system2_reflect(request: System2ReflectRequest):
+    """
+    System 2 RAG — REFLECTOR (Test-Time Compute).
+    Analyzes a draft answer, identifies gaps, and generates follow-up queries.
+    The frontend calls this in a loop: draft → reflect → search → draft → reflect ...
+    """
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return System2ReflectResponse(
+            needs_more_data=False,
+            refined_answer=request.draft_answer,
+            confidence=0.8,
+            reasoning="No AI available for reflection",
+        )
+
+    context_summary = []
+    if request.vector_context:
+        context_summary.append(f"[DOCUMENTS]: {request.vector_context[:3000]}")
+    if request.graph_context:
+        context_summary.append(f"[GRAPH]: {request.graph_context[:1500]}")
+    if request.kpi_context:
+        context_summary.append(f"[KPIS]: {request.kpi_context[:1500]}")
+    context_block = "\n\n".join(context_summary) or "No context provided."
+
+    prompt = f"""You are a reflective VC intelligence analyst performing test-time compute.
+You must evaluate a DRAFT ANSWER and decide if more information is needed.
+
+ITERATION: {request.iteration + 1} of {request.max_iterations}
+
+ORIGINAL QUESTION:
+{request.question}
+
+AVAILABLE CONTEXT:
+{context_block}
+
+DRAFT ANSWER:
+{request.draft_answer}
+
+TASK: Analyze the draft and decide:
+1. Is the answer complete and well-supported by the context?
+2. Are there specific facts, metrics, or relationships that are mentioned but lack supporting data?
+3. If data is missing, what specific follow-up search queries would fill the gaps?
+
+OUTPUT ONLY valid JSON:
+{{"needs_more_data": bool, "missing_data_types": ["vector" | "graph" | "kpis"], "follow_up_queries": ["specific search query 1", "specific search query 2"], "reasoning": "one paragraph explaining what is missing and why", "confidence": float_0_to_1}}
+
+RULES:
+- If confidence >= 0.85 OR this is the final iteration, set needs_more_data to false
+- follow_up_queries should be specific, actionable search queries (not vague)
+- missing_data_types tells the frontend WHICH agents to re-query
+- Maximum 3 follow-up queries per reflection
+- If the draft is good enough, just return needs_more_data: false with high confidence"""
+
+    try:
+        client = _get_anthropic_async_client()
+        message = await client.messages.create(
+            model=HAIKU_MODEL,
+            max_tokens=600,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                return System2ReflectResponse(
+                    needs_more_data=False,
+                    refined_answer=request.draft_answer,
+                    confidence=0.7,
+                    reasoning="Could not parse reflection output",
+                )
+
+        if request.iteration + 1 >= request.max_iterations:
+            data["needs_more_data"] = False
+
+        return System2ReflectResponse(
+            needs_more_data=data.get("needs_more_data", False),
+            missing_data_types=data.get("missing_data_types", []),
+            follow_up_queries=data.get("follow_up_queries", [])[:3],
+            reasoning=data.get("reasoning", ""),
+            refined_answer=data.get("refined_answer", ""),
+            confidence=data.get("confidence", 0.5),
+        )
+    except Exception as e:
+        print(f"[SYSTEM2-REFLECT] Error: {e}")
+        return System2ReflectResponse(
+            needs_more_data=False,
+            refined_answer=request.draft_answer,
+            confidence=0.5,
+            reasoning=f"Reflection error: {str(e)[:100]}",
+        )
+
+
+class System2RefineRequest(BaseModel):
+    question: str
+    draft_answer: str
+    original_context: str = ""
+    additional_context: str = ""
+    reflection_reasoning: str = ""
+    previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
+    model_config = {"populate_by_name": True}
+
+
+@app.post("/system2-refine/stream")
+async def system2_refine_stream(request: System2RefineRequest):
+    """
+    System 2 RAG — REFINER (streaming).
+    Takes the draft answer + additional context from follow-up searches
+    and produces an improved, refined final answer via streaming SSE.
+    """
+    prompt = f"""You are Orbit AI, a VC intelligence synthesis agent performing iterative refinement.
+
+You previously produced a draft answer, but upon reflection, you identified gaps.
+Additional data has been retrieved. Your job: produce an IMPROVED, REFINED answer
+that integrates ALL available context.
+
+REFLECTION NOTES (what was missing):
+{request.reflection_reasoning}
+
+ORIGINAL QUESTION:
+{request.question}
+
+ORIGINAL CONTEXT:
+{request.original_context[:6000] if request.original_context else "None"}
+
+ADDITIONAL CONTEXT (from follow-up searches):
+{request.additional_context[:4000] if request.additional_context else "None"}
+
+PREVIOUS DRAFT:
+{request.draft_answer[:3000]}
+
+CITATION RULES:
+- Cite document sources with [1], [2], etc.
+- Cite graph relationships with [G]
+- Cite KPI/metrics data with [K]
+- Every factual claim MUST have a citation
+
+REFINEMENT RULES:
+- DO NOT repeat the draft verbatim — integrate the new data
+- If new data contradicts the draft, prefer the new data
+- Be thorough but concise
+- Ensure the answer is complete and addresses the original question fully"""
+
+    async def generate():
+        try:
+            yield f"data: {json.dumps({'status': 'Refining answer with additional context...'})}" + "\n\n"
+            async for chunk in stream_anthropic_answer(prompt, question=request.question):
+                yield f"data: {chunk}" + "\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f'data: {{"error": "{str(e)[:200]}"}}' + "\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+#  ColBERT Late Interaction Reranking
+# ---------------------------------------------------------------------------
+
+class ColBERTRerankRequest(BaseModel):
+    query: str
+    documents: List[str]
+    doc_ids: List[str] = Field(default_factory=list)
+    top_k: int = 10
+
+class ColBERTRerankResponse(BaseModel):
+    results: List[dict] = Field(default_factory=list)
+    method: str = "colbert_late_interaction"
+
+
+@app.post("/colbert-rerank", response_model=ColBERTRerankResponse)
+async def colbert_rerank(request: ColBERTRerankRequest):
+    """
+    ColBERT-style Late Interaction Reranking.
+    Computes token-level embeddings for query and documents, then uses MaxSim
+    scoring for fine-grained relevance matching, combined with Voyage reranker.
+    """
+    if not request.documents:
+        return ColBERTRerankResponse(results=[])
+
+    query = request.query.strip()
+    if not query:
+        return ColBERTRerankResponse(results=[])
+
+    try:
+        # Phase 1: Cross-encoder reranking via Voyage rerank-2.5
+        voyage_results = await rerank_with_voyage(
+            query=query,
+            documents=request.documents,
+            top_k=min(request.top_k * 2, len(request.documents)),
+        )
+
+        # Phase 2: Token-level late-interaction scoring
+        query_tokens = _tokenize_for_colbert(query)
+        query_token_embeddings = await _batch_embed_tokens(query_tokens)
+
+        scored_results = []
+        for vr in voyage_results:
+            doc_idx = vr.get("index", 0)
+            doc_text = request.documents[doc_idx] if doc_idx < len(request.documents) else ""
+            voyage_score = vr.get("relevance_score", 0.0)
+
+            doc_tokens = _tokenize_for_colbert(doc_text[:1000])
+            if doc_tokens and query_token_embeddings:
+                doc_token_embeddings = await _batch_embed_tokens(doc_tokens)
+                maxsim_score = _compute_maxsim(query_token_embeddings, doc_token_embeddings)
+            else:
+                maxsim_score = 0.0
+
+            combined_score = 0.6 * voyage_score + 0.4 * maxsim_score
+
+            scored_results.append({
+                "index": doc_idx,
+                "doc_id": request.doc_ids[doc_idx] if doc_idx < len(request.doc_ids) else "",
+                "relevance_score": round(combined_score, 4),
+                "voyage_score": round(voyage_score, 4),
+                "maxsim_score": round(maxsim_score, 4),
+                "document": doc_text[:200],
+            })
+
+        scored_results.sort(key=lambda x: x["relevance_score"], reverse=True)
+        scored_results = scored_results[:request.top_k]
+
+        return ColBERTRerankResponse(results=scored_results, method="colbert_late_interaction")
+
+    except Exception as e:
+        print(f"[COLBERT-RERANK] Error in late-interaction: {e}, falling back to Voyage only")
+        try:
+            fallback = await rerank_with_voyage(
+                query=query,
+                documents=request.documents,
+                top_k=request.top_k,
+            )
+            return ColBERTRerankResponse(
+                results=[{
+                    "index": r.get("index", i),
+                    "doc_id": request.doc_ids[r.get("index", i)] if r.get("index", i) < len(request.doc_ids) else "",
+                    "relevance_score": r.get("relevance_score", 0.0),
+                    "voyage_score": r.get("relevance_score", 0.0),
+                    "maxsim_score": 0.0,
+                    "document": request.documents[r.get("index", i)][:200] if r.get("index", i) < len(request.documents) else "",
+                } for i, r in enumerate(fallback)],
+                method="voyage_fallback",
+            )
+        except Exception as e2:
+            print(f"[COLBERT-RERANK] Fallback also failed: {e2}")
+            return ColBERTRerankResponse(results=[], method="error")
+
+
+def _tokenize_for_colbert(text: str) -> List[str]:
+    """Tokenize text into meaningful chunks for ColBERT late interaction."""
+    text = text.strip()
+    if not text:
+        return []
+
+    words = re.findall(r'\b\w+\b', text.lower())
+    if not words:
+        return []
+
+    stop_words = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+                  "being", "have", "has", "had", "do", "does", "did", "will",
+                  "would", "could", "should", "may", "might", "shall", "can",
+                  "to", "of", "in", "for", "on", "with", "at", "by", "from",
+                  "as", "into", "through", "during", "before", "after", "and",
+                  "but", "or", "not", "no", "so", "if", "than", "too", "very",
+                  "just", "about", "it", "its", "this", "that", "these", "those"}
+
+    meaningful_words = [w for w in words if w not in stop_words and len(w) > 1]
+    tokens = meaningful_words[:30]
+
+    for i in range(min(len(meaningful_words) - 1, 15)):
+        tokens.append(f"{meaningful_words[i]} {meaningful_words[i+1]}")
+
+    return tokens
+
+
+async def _batch_embed_tokens(tokens: List[str]) -> List[List[float]]:
+    """Embed a batch of tokens using Voyage API's batch endpoint."""
+    if not tokens or not VOYAGE_API_KEY:
+        return []
+
+    payload = {
+        "model": VOYAGE_EMBEDDING_MODEL,
+        "input": tokens[:50],
+        "input_type": "query",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.voyageai.com/v1/embeddings",
+                headers={
+                    "Authorization": f"Bearer {VOYAGE_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+            if response.status_code >= 400:
+                print(f"[COLBERT] Batch embed error: {response.status_code}")
+                return []
+
+            data = response.json() or {}
+            embeddings = []
+            for item in data.get("data", []):
+                emb = item.get("embedding", [])
+                if emb:
+                    embeddings.append(emb)
+            return embeddings
+    except Exception as e:
+        print(f"[COLBERT] Batch embed failed: {e}")
+        return []
+
+
+def _compute_maxsim(
+    query_embeddings: List[List[float]],
+    doc_embeddings: List[List[float]],
+) -> float:
+    """Compute ColBERT MaxSim score: for each query token, find max cosine
+    similarity with any document token, then average across query tokens."""
+    if not query_embeddings or not doc_embeddings:
+        return 0.0
+
+    import math
+
+    def cosine_sim(a: List[float], b: List[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+        if norm_a < 1e-9 or norm_b < 1e-9:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    total_maxsim = 0.0
+    for q_emb in query_embeddings:
+        max_sim = max(cosine_sim(q_emb, d_emb) for d_emb in doc_embeddings)
+        total_maxsim += max_sim
+
+    return total_maxsim / len(query_embeddings)
+
+
+# ---------------------------------------------------------------------------
 #  Multi-Agent RAG — Synthesis prompt builder
 # ---------------------------------------------------------------------------
 
