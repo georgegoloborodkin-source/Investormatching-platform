@@ -12902,7 +12902,7 @@ export default function CIS() {
         } else if (match[6] !== undefined) {
           // [n] source reference
           const refNum = parseInt(match[6], 10);
-          const sourceDoc = evidenceDocs?.[refNum - 1];
+          const sourceDoc = lastEvidence?.docs?.[refNum - 1];
           if (sourceDoc) {
             parts.push(
               <Badge
@@ -12910,8 +12910,7 @@ export default function CIS() {
                 variant="outline"
                 className="mx-0.5 cursor-pointer border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white text-[10px] px-1 py-0 font-mono"
                 onClick={() => {
-                  setSelectedDocument(sourceDoc);
-                  setShowDocumentModal(true);
+                  void handleOpenDocument(sourceDoc.id);
                 }}
               >
                 [{refNum}]
@@ -12950,9 +12949,9 @@ export default function CIS() {
       }
       return parts.length > 0 ? parts : [raw];
     };
-    
+
     const cleaned = cleanVerifiableCitationTags(text);
     return <>{renderInline(cleaned)}</>;
-  }, [evidenceDocs, setSelectedDocument, setShowDocumentModal]);
+  }, [lastEvidence?.docs, handleOpenDocument]);
 
 }
