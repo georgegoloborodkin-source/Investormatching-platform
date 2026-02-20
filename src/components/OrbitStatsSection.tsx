@@ -66,7 +66,7 @@ export function OrbitStatsSection() {
   return (
     <section
       ref={sectionRef}
-      className="orbit-void relative overflow-hidden border-2 border-white bg-[#050505] text-white py-12"
+      className="orbit-void relative overflow-hidden border-2 border-slate-200 bg-[#050505] text-slate-900 py-12"
     >
       {/* Animated Grid Background (Parallax Layer 1) */}
       <div
@@ -154,7 +154,7 @@ export function OrbitStatsSection() {
           {stats.map((stat, index) => (
             <div
               key={stat.label}
-              className="group relative flex min-h-[170px] flex-col justify-between border-2 border-white px-6 py-5 transition-all duration-500 hover:border-[#3b82f6] hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
+              className="group relative flex min-h-[170px] flex-col justify-between border-2 border-slate-200 px-6 py-5 transition-all duration-500 hover:border-[#3b82f6] hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
               style={{
                 transform: `translateY(${scrollY * (0.02 + index * 0.01)}px)`,
                 opacity: isVisible ? 1 : 0,
@@ -168,7 +168,7 @@ export function OrbitStatsSection() {
                 <span className="orbit-stat-label underline decoration-2 underline-offset-4">
                   {stat.label}
                 </span>
-                <span className="flex items-center gap-1 text-xs text-white/70">
+                <span className="flex items-center gap-1 text-xs text-slate-500">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-[#3b82f6]" />
                   LIVE
                 </span>
@@ -185,7 +185,7 @@ export function OrbitStatsSection() {
 
         {/* Cookie Banner with Parallax */}
         <div
-          className="mt-10 border-2 border-white px-4 py-3 transition-all duration-300 hover:border-[#3b82f6]"
+          className="mt-10 border-2 border-slate-200 px-4 py-3 transition-all duration-300 hover:border-[#3b82f6]"
           style={{
             transform: `translateY(${scrollY * 0.03}px)`,
             opacity: isVisible ? 1 : 0,
@@ -193,8 +193,8 @@ export function OrbitStatsSection() {
           }}
         >
           <div className="flex flex-col gap-3 text-xs md:flex-row md:items-center md:justify-between">
-            <span className="orbit-stat-label text-white">COOKIE NOTICE</span>
-            <span className="text-white/70">
+            <span className="orbit-stat-label text-slate-900">COOKIE NOTICE</span>
+            <span className="text-slate-500">
               This terminal uses cookies for analytics and session continuity.
             </span>
             <button className="orbit-accent-button relative overflow-hidden px-3 py-2 text-xs group">

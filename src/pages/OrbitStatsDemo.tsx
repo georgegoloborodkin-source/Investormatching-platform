@@ -147,7 +147,7 @@ export default function OrbitStatsDemo() {
   const isVisible = (i: number) => visible.has(i);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden font-['Plus_Jakarta_Sans',_Inter,_system-ui,_sans-serif]">
+    <div className="min-h-screen bg-slate-950 text-slate-900 relative overflow-hidden font-['Plus_Jakarta_Sans',_Inter,_system-ui,_sans-serif]">
       {/* Background */}
       <div
         className="fixed inset-0 pointer-events-none"
@@ -177,9 +177,9 @@ export default function OrbitStatsDemo() {
       />
 
       {/* Sticky header with Log in */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200/5 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-white tracking-tight">
+          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
             <span className="text-xl">Venture</span>
             <span className="text-xl text-amber-400">OS</span>
           </Link>
@@ -227,7 +227,7 @@ export default function OrbitStatsDemo() {
           </div>
 
           <h1
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-3 animate-fade-in-up"
+            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 mb-3 animate-fade-in-up"
             style={{ animationDelay: "0.2s", animationFillMode: "both" }}
           >
             Venture
@@ -257,7 +257,7 @@ export default function OrbitStatsDemo() {
             <Link to="/cis">
               <Button
                 variant="outline"
-                className="rounded-xl border border-slate-600 bg-slate-800/40 text-slate-200 hover:bg-slate-700/50 hover:border-slate-500 hover:text-white px-8 py-6 text-base h-auto font-semibold transition-all duration-200"
+                className="rounded-xl border border-slate-600 bg-slate-800/40 text-slate-200 hover:bg-slate-700/50 hover:border-slate-500 hover:text-slate-900 px-8 py-6 text-base h-auto font-semibold transition-all duration-200"
               >
                 View Platform
               </Button>
@@ -282,7 +282,7 @@ export default function OrbitStatsDemo() {
             <p className="text-amber-400 text-sm font-semibold uppercase tracking-widest mb-3">
               Why we exist
             </p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">
               The problem we solve
               <br />
               <span className="text-slate-400 font-medium">and the future we're building</span>
@@ -308,7 +308,7 @@ export default function OrbitStatsDemo() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 mb-6 group-hover:bg-amber-500/20 transition-colors duration-300">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">{item.title}</h3>
                     <p className="text-slate-400 text-sm leading-relaxed">{item.description}</p>
                   </div>
                 </div>
@@ -334,7 +334,7 @@ export default function OrbitStatsDemo() {
             <p className="text-amber-400 text-sm font-semibold uppercase tracking-widest mb-3">
               What we've built
             </p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">
               Platform capabilities that transform
               <br />
               <span className="text-slate-400 font-medium">how VC teams operate</span>
@@ -360,7 +360,7 @@ export default function OrbitStatsDemo() {
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 mb-4 group-hover:bg-amber-500/20 transition-colors duration-300">
                       <Icon className="h-5 w-5" />
                     </div>
-                    <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
                     <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
                   </div>
                 </div>
@@ -386,7 +386,7 @@ export default function OrbitStatsDemo() {
             <p className="text-amber-400 text-sm font-semibold uppercase tracking-widest mb-3">
               Roadmap
             </p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">
               Our vision for the future
               <br />
               <span className="text-slate-400 font-medium">of VC operations</span>
@@ -414,7 +414,7 @@ export default function OrbitStatsDemo() {
                       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">
                         {phase.phase}
                       </p>
-                      <h3 className="text-xl md:text-2xl font-bold text-white">{phase.title}</h3>
+                      <h3 className="text-xl md:text-2xl font-bold text-slate-900">{phase.title}</h3>
                     </div>
                   </div>
                   <RoadmapBadge status={phase.status} />
@@ -454,7 +454,7 @@ export default function OrbitStatsDemo() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-400 mx-auto mb-6">
             <Sparkles className="h-7 w-7" />
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 tracking-tight">
             Ready to transform your deal flow?
           </h2>
           <p className="text-slate-400 text-lg mb-8 max-w-xl mx-auto">
@@ -471,7 +471,7 @@ export default function OrbitStatsDemo() {
             <Link to="/cis">
               <Button
                 variant="outline"
-                className="rounded-xl border border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700/50 hover:border-slate-500 hover:text-white px-8 py-6 text-base h-auto font-semibold transition-all duration-200"
+                className="rounded-xl border border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700/50 hover:border-slate-500 hover:text-slate-900 px-8 py-6 text-base h-auto font-semibold transition-all duration-200"
               >
                 Explore platform
               </Button>

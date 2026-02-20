@@ -21,16 +21,16 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(245,158,11,0.08),transparent)]" />
-      <header className="border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+      <header className="border-b border-slate-200/5 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link
             to="/orbit-stats"
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium"
+            className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors text-sm font-medium"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to home
           </Link>
-          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-white tracking-tight">
+          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
             <span>Venture</span>
             <span className="text-amber-400">OS</span>
           </Link>
@@ -46,7 +46,7 @@ export default function Login() {
                   <Brain className="h-7 w-7" />
                 </div>
                 <div>
-                  <CardTitle className="text-2xl font-bold text-white">Welcome back</CardTitle>
+                  <CardTitle className="text-2xl font-bold text-slate-900">Welcome back</CardTitle>
                   <CardDescription className="text-slate-400 text-sm mt-1">
                     Sign in to access VentureOS and your deal flow.
                   </CardDescription>

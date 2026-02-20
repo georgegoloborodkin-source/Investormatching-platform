@@ -146,7 +146,7 @@ export default function AdminPanel() {
       <div className="flex items-center justify-center min-h-screen p-4 page-content">
         <Card className="w-full max-w-md border border-slate-700/60 bg-slate-900/50 backdrop-blur-sm rounded-2xl overflow-hidden">
           <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-slate-900 flex items-center gap-2">
               <Shield className="h-5 w-5 text-amber-400" />
               Access Denied
             </CardTitle>
@@ -163,7 +163,7 @@ export default function AdminPanel() {
     <div className="container mx-auto py-8 px-4 space-y-6 page-content">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
             <Shield className="h-8 w-8 text-amber-400" />
             Admin Panel
           </h1>
@@ -176,7 +176,7 @@ export default function AdminPanel() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
           <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-            <CardTitle className="flex items-center gap-2 text-white font-semibold">
+            <CardTitle className="flex items-center gap-2 text-slate-900 font-semibold">
               <Plus className="h-5 w-5 text-amber-400" />
               Create Fund Code
             </CardTitle>
@@ -192,21 +192,21 @@ export default function AdminPanel() {
                 value={fundName}
                 onChange={(e) => setFundName(e.target.value)}
                 disabled={isCreating}
-                className="bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-500"
+                className="bg-slate-800/50 border-slate-600 text-slate-900 placeholder:text-slate-500"
               />
             </div>
 
             <div className="space-y-2">
               <Label className="text-slate-300">Fund Type</Label>
               <Select value={fundType} onValueChange={setFundType} disabled={isCreating}>
-                <SelectTrigger className="bg-slate-800/50 border-slate-600 text-white">
+                <SelectTrigger className="bg-slate-800/50 border-slate-600 text-slate-900">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-600">
-                  <SelectItem value="vc" className="text-white focus:bg-slate-700">Venture Capital</SelectItem>
-                  <SelectItem value="angel" className="text-white focus:bg-slate-700">Angel Fund</SelectItem>
-                  <SelectItem value="syndicate" className="text-white focus:bg-slate-700">Syndicate</SelectItem>
-                  <SelectItem value="family_office" className="text-white focus:bg-slate-700">Family Office</SelectItem>
+                  <SelectItem value="vc" className="text-slate-900 focus:bg-slate-700">Venture Capital</SelectItem>
+                  <SelectItem value="angel" className="text-slate-900 focus:bg-slate-700">Angel Fund</SelectItem>
+                  <SelectItem value="syndicate" className="text-slate-900 focus:bg-slate-700">Syndicate</SelectItem>
+                  <SelectItem value="family_office" className="text-slate-900 focus:bg-slate-700">Family Office</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -219,7 +219,7 @@ export default function AdminPanel() {
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
                 disabled={isCreating}
-                className="bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-500"
+                className="bg-slate-800/50 border-slate-600 text-slate-900 placeholder:text-slate-500"
               />
             </div>
 
@@ -245,23 +245,23 @@ export default function AdminPanel() {
 
         <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
           <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-            <CardTitle className="text-white font-semibold">How It Works</CardTitle>
+            <CardTitle className="text-slate-900 font-semibold">How It Works</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm pt-6">
             <div className="space-y-2">
-              <p className="font-medium text-white">1. Create Fund Code</p>
+              <p className="font-medium text-slate-900">1. Create Fund Code</p>
               <p className="text-slate-400">
                 Enter fund details and generate a unique code (e.g., VOS-1234)
               </p>
             </div>
             <div className="space-y-2">
-              <p className="font-medium text-white">2. Share with MD</p>
+              <p className="font-medium text-slate-900">2. Share with MD</p>
               <p className="text-slate-400">
                 Give the code to the Managing Partner. They'll enter it during signup.
               </p>
             </div>
             <div className="space-y-2">
-              <p className="font-medium text-white">3. MD Creates Fund</p>
+              <p className="font-medium text-slate-900">3. MD Creates Fund</p>
               <p className="text-slate-400">
                 First MD to use the code creates the fund. Subsequent MDs join the same fund.
               </p>
@@ -278,7 +278,7 @@ export default function AdminPanel() {
 
       <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-          <CardTitle className="text-white font-semibold">Fund Codes ({fundCodes.length})</CardTitle>
+          <CardTitle className="text-slate-900 font-semibold">Fund Codes ({fundCodes.length})</CardTitle>
           <CardDescription className="text-slate-400">All fund codes you've created</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -307,13 +307,13 @@ export default function AdminPanel() {
                 <TableBody>
                   {fundCodes.map((code) => (
                     <TableRow key={code.id} className="border-slate-700/60 hover:bg-slate-800/40">
-                      <TableCell className="text-white">
+                      <TableCell className="text-slate-900">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-amber-400">{code.code}</span>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 text-slate-400 hover:text-white"
+                            className="h-6 w-6 text-slate-400 hover:text-slate-900"
                             onClick={() => copyCode(code.code)}
                           >
                             {copiedCode === code.code ? (
@@ -346,7 +346,7 @@ export default function AdminPanel() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-slate-400 hover:text-white"
+                            className="text-slate-400 hover:text-slate-900"
                             onClick={() => copyCode(code.code)}
                           >
                             <Copy className="h-4 w-4 mr-1" />

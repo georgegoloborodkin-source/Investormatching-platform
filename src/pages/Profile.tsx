@@ -146,7 +146,7 @@ export default function Profile() {
                   Fix Profile
                 </Button>
               ) : null}
-              <Button variant="ghost" onClick={handleSignOut} className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11">
+              <Button variant="ghost" onClick={handleSignOut} className="w-full rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-800 h-11">
                 Log out
               </Button>
             </div>
@@ -161,7 +161,7 @@ export default function Profile() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">My Profile</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">My Profile</h1>
             <p className="text-slate-400 text-sm mt-1">
               Manage your account and availability
             </p>
@@ -179,7 +179,7 @@ export default function Profile() {
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
             <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-              <CardTitle className="flex items-center gap-2 text-white font-semibold">
+              <CardTitle className="flex items-center gap-2 text-slate-900 font-semibold">
                 <UserIcon className="h-5 w-5 text-amber-400" />
                 Profile Information
               </CardTitle>
@@ -208,20 +208,20 @@ export default function Profile() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your full name"
-                  className="bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-500"
+                  className="bg-slate-800/50 border-slate-600 text-slate-900 placeholder:text-slate-500"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label className="text-slate-300">Role</Label>
                 <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger className="bg-slate-800/50 border-slate-600 text-white">
+                  <SelectTrigger className="bg-slate-800/50 border-slate-600 text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="managing_partner" className="text-white focus:bg-slate-700">Managing Partner</SelectItem>
-                    <SelectItem value="team_member" className="text-white focus:bg-slate-700">Team Member</SelectItem>
-                    <SelectItem value="organizer" className="text-white focus:bg-slate-700">Organizer</SelectItem>
+                    <SelectItem value="managing_partner" className="text-slate-900 focus:bg-slate-700">Managing Partner</SelectItem>
+                    <SelectItem value="team_member" className="text-slate-900 focus:bg-slate-700">Team Member</SelectItem>
+                    <SelectItem value="organizer" className="text-slate-900 focus:bg-slate-700">Organizer</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-slate-500">
@@ -254,7 +254,7 @@ export default function Profile() {
           {profile.role === 'investor' && (
             <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
               <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-                <CardTitle className="text-white font-semibold">Time Slot Availability</CardTitle>
+                <CardTitle className="text-slate-900 font-semibold">Time Slot Availability</CardTitle>
                 <CardDescription className="text-slate-400 text-sm">
                   Set which time slots you're available for meetings
                 </CardDescription>
@@ -273,7 +273,7 @@ export default function Profile() {
                       <div className="space-y-2">
                         <Label className="text-slate-300">Select Event</Label>
                         <select
-                          className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-white"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-slate-900"
                           value={activeEventId || ""}
                           onChange={(e) => setActiveEventId(e.target.value)}
                         >

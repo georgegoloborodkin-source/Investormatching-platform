@@ -276,35 +276,35 @@ export function EditableSchedule({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-mono font-black uppercase tracking-tight text-white">Investment Team Call Schedule</h2>
-          <p className="text-sm text-white/70 font-mono mt-1">
+          <h2 className="text-2xl font-mono font-black uppercase tracking-tight text-slate-900">Investment Team Call Schedule</h2>
+          <p className="text-sm text-slate-500 font-mono mt-1">
             View meetings by time slot. Each card shows which team member needs to call which startup.
           </p>
         </div>
-        <Button variant="outline" onClick={autoFixConflicts} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
+        <Button variant="outline" onClick={autoFixConflicts} className="border-2 border-slate-200 bg-transparent text-slate-900 hover:bg-slate-100 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
           Auto-fix conflicts
         </Button>
       </div>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
+      <Card className="border-2 border-slate-200 bg-transparent">
+        <CardHeader className="border-b-2 border-slate-200">
+          <CardTitle className="flex items-center gap-2 text-slate-900 font-mono font-black uppercase tracking-tight">
             <Phone className="h-5 w-5 text-[#3b82f6]" />
             Call Sheet (by investment member)
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-white">
+        <CardContent className="space-y-3 text-slate-900">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="flex-1">
-              <Label className="text-white font-mono font-bold">Investment team member</Label>
+              <Label className="text-slate-900 font-mono font-bold">Investment team member</Label>
                 <Select value={memberFocus} onValueChange={setMemberFocus}>
-                <SelectTrigger className="mt-1 border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="mt-1 border-2 border-slate-200 bg-transparent text-slate-900">
                     <SelectValue placeholder="Select member to focus" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value={MEMBER_ALL} className="text-white">All members</SelectItem>
+                <SelectContent className="bg-[#050505] border-2 border-slate-200">
+                    <SelectItem value={MEMBER_ALL} className="text-slate-900">All members</SelectItem>
                   {memberOptions.map((m) => (
-                    <SelectItem key={m} value={m} className="text-white">
+                    <SelectItem key={m} value={m} className="text-slate-900">
                       {m}
                     </SelectItem>
                   ))}
@@ -312,10 +312,10 @@ export function EditableSchedule({
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
+              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus} className="border-2 border-slate-200 bg-transparent text-slate-900 hover:bg-slate-100 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
                 Export CSV
               </Button>
-              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
+              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus} className="border-2 border-slate-200 bg-transparent text-slate-900 hover:bg-slate-100 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
                 Export .ics
               </Button>
             </div>
@@ -324,19 +324,19 @@ export function EditableSchedule({
             {!isAllMembers && (
             <div className="space-y-2">
               {callSheetSorted.length === 0 ? (
-                <div className="text-sm text-white/70 font-mono">No calls for this member.</div>
+                <div className="text-sm text-slate-500 font-mono">No calls for this member.</div>
               ) : (
                 <div className="space-y-1">
                   {callSheetSorted.map((m) => {
                     const slot = timeSlots.find((t) => t.label === m.timeSlot);
                     const inv = investors.find((i) => i.id === m.investorId);
                     return (
-                      <div key={m.id} className="flex items-center justify-between text-sm border-2 border-white rounded-md px-3 py-2 bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
-                        <div className="text-white/70 font-mono">
+                      <div key={m.id} className="flex items-center justify-between text-sm border-2 border-slate-200 rounded-md px-3 py-2 bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
+                        <div className="text-slate-500 font-mono">
                           {slot ? `${slot.startTime}-${slot.endTime}` : m.slotTime} • {m.timeSlot}
                         </div>
-                        <div className="font-mono font-bold text-white">{m.startupName}</div>
-                        <div className="text-white/70 font-mono">
+                        <div className="font-mono font-bold text-slate-900">{m.startupName}</div>
+                        <div className="text-slate-500 font-mono">
                           {inv?.firmName}
                           {inv?.tableNumber ? ` (Table ${inv.tableNumber})` : ""}
                         </div>
@@ -355,14 +355,14 @@ export function EditableSchedule({
           const slotMatches = groupedMatches[timeSlot.label] || [];
           
           return (
-            <Card key={timeSlot.id} className="overflow-hidden border-2 border-white bg-transparent">
-              <CardHeader className="pb-3 border-b-2 border-white">
-                <CardTitle className="text-lg flex items-center gap-3 text-white">
-                  <div className="flex items-center gap-2 bg-transparent border-2 border-white px-3 py-1.5 rounded-lg">
+            <Card key={timeSlot.id} className="overflow-hidden border-2 border-slate-200 bg-transparent">
+              <CardHeader className="pb-3 border-b-2 border-slate-200">
+                <CardTitle className="text-lg flex items-center gap-3 text-slate-900">
+                  <div className="flex items-center gap-2 bg-transparent border-2 border-slate-200 px-3 py-1.5 rounded-lg">
                     <Clock className="h-5 w-5 text-[#3b82f6]" />
-                    <span className="font-mono font-bold text-white">{timeSlot.startTime} - {timeSlot.endTime}</span>
+                    <span className="font-mono font-bold text-slate-900">{timeSlot.startTime} - {timeSlot.endTime}</span>
                   </div>
-                  <span className="text-white/70 font-mono">({timeSlot.label})</span>
+                  <span className="text-slate-500 font-mono">({timeSlot.label})</span>
                   <div className="ml-auto flex items-center gap-3">
                     {conflictBySlot[timeSlot.label] > 0 && (
                       <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
@@ -370,7 +370,7 @@ export function EditableSchedule({
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
-                      <Label className="text-sm font-mono font-bold text-white">Slot Done</Label>
+                      <Label className="text-sm font-mono font-bold text-slate-900">Slot Done</Label>
                       <Switch
                         checked={!!timeSlot.isDone}
                         onCheckedChange={(checked) => handleToggleSlotDone(timeSlot.id, checked)}
@@ -379,16 +379,16 @@ export function EditableSchedule({
                     </div>
                     <Badge 
                       variant="outline"
-                      className={timeSlot.isDone ? "border-white/50 text-white/50 bg-transparent font-mono" : "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono"}
+                      className={timeSlot.isDone ? "border-slate-200/50 text-slate-400 bg-transparent font-mono" : "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono"}
                     >
                       {timeSlot.isDone ? "Completed" : `${slotMatches.length} call${slotMatches.length !== 1 ? 's' : ''}`}
                     </Badge>
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 text-white">
+              <CardContent className="p-4 text-slate-900">
                 {slotMatches.length === 0 ? (
-                  <div className="text-center py-8 text-white/70 font-mono">
+                  <div className="text-center py-8 text-slate-500 font-mono">
                     No meetings scheduled for this slot
                   </div>
                 ) : (
@@ -407,23 +407,23 @@ export function EditableSchedule({
                             ? 'bg-transparent border-[#3b82f6]/50 opacity-75' 
                             : match.locked
                             ? 'bg-transparent border-[#3b82f6]'
-                            : 'bg-transparent border-white hover:border-[#3b82f6] hover:bg-[#3b82f6]/5'
+                            : 'bg-transparent border-slate-200 hover:border-[#3b82f6] hover:bg-[#3b82f6]/5'
                         }`}
                       >
                         {isEditing ? (
                           <div className="space-y-4">
                             <div className="space-y-2">
-                              <Label className="text-white font-mono font-bold">Startup</Label>
+                              <Label className="text-slate-900 font-mono font-bold">Startup</Label>
                               <Select
                                 value={editForm.startupId}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, startupId: value }))}
                               >
-                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                                <SelectTrigger className="border-2 border-slate-200 bg-transparent text-slate-900">
                                   <SelectValue placeholder="Select startup" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-[#050505] border-2 border-white">
+                                <SelectContent className="bg-[#050505] border-2 border-slate-200">
                                   {startups.map(s => (
-                                    <SelectItem key={s.id} value={s.id} className="text-white">
+                                    <SelectItem key={s.id} value={s.id} className="text-slate-900">
                                       {s.companyName}
                                     </SelectItem>
                                   ))}
@@ -432,17 +432,17 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="space-y-2">
-                              <Label className="text-white font-mono font-bold">Investor</Label>
+                              <Label className="text-slate-900 font-mono font-bold">Investor</Label>
                               <Select
                                 value={editForm.investorId}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, investorId: value }))}
                               >
-                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                                <SelectTrigger className="border-2 border-slate-200 bg-transparent text-slate-900">
                                   <SelectValue placeholder="Select investor" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-[#050505] border-2 border-white">
+                                <SelectContent className="bg-[#050505] border-2 border-slate-200">
                                   {investors.map(i => (
-                                    <SelectItem key={i.id} value={i.id} className="text-white">
+                                    <SelectItem key={i.id} value={i.id} className="text-slate-900">
                                       {i.firmName} ({i.memberName})
                                     </SelectItem>
                                   ))}
@@ -451,17 +451,17 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="space-y-2">
-                              <Label className="text-white font-mono font-bold">Time Slot</Label>
+                              <Label className="text-slate-900 font-mono font-bold">Time Slot</Label>
                               <Select
                                 value={editForm.timeSlot}
                                 onValueChange={(value) => setEditForm(prev => ({ ...prev, timeSlot: value }))}
                               >
-                                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                                <SelectTrigger className="border-2 border-slate-200 bg-transparent text-slate-900">
                                   <SelectValue placeholder="Select time slot" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-[#050505] border-2 border-white">
+                                <SelectContent className="bg-[#050505] border-2 border-slate-200">
                                   {timeSlots.map(ts => (
-                                    <SelectItem key={ts.id} value={ts.label} className="text-white">
+                                    <SelectItem key={ts.id} value={ts.label} className="text-slate-900">
                                       {ts.label} ({ts.startTime} - {ts.endTime})
                                     </SelectItem>
                                   ))}
@@ -474,7 +474,7 @@ export function EditableSchedule({
                                 <Save className="h-4 w-4 mr-2" />
                                 Save
                               </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
+                              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="border-2 border-slate-200 bg-transparent text-slate-900 hover:bg-slate-100 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
                                 <X className="h-4 w-4 mr-2" />
                                 Cancel
                               </Button>
@@ -483,17 +483,17 @@ export function EditableSchedule({
                         ) : (
                           <div className="space-y-3">
                             {/* Investment Team Member Call Info - Prominent */}
-                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#3b82f6] transition-all">
+                            <div className="bg-transparent border-2 border-slate-200 p-3 rounded-lg hover:border-[#3b82f6] transition-all">
                               <div className="flex items-center gap-2 mb-2">
                                 <Phone className="h-4 w-4 text-[#3b82f6]" />
                                 <span className="text-xs font-mono font-bold text-[#3b82f6] uppercase tracking-wide">Call Assignment</span>
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-white/70" />
-                                  <span className="font-mono font-bold text-base text-white">{investor?.memberName || 'Unknown Member'}</span>
+                                  <Building2 className="h-4 w-4 text-slate-500" />
+                                  <span className="font-mono font-bold text-base text-slate-900">{investor?.memberName || 'Unknown Member'}</span>
                                 </div>
-                                <div className="text-sm text-white/70 font-mono pl-6">
+                                <div className="text-sm text-slate-500 font-mono pl-6">
                                   from <span className="font-bold">{investor?.firmName || 'Unknown Firm'}</span>
                                   {investor?.tableNumber && (
                                     <span className="ml-2 px-2 py-0.5 border border-[#3b82f6] text-[#3b82f6] bg-transparent text-xs rounded font-mono font-bold">
@@ -505,20 +505,20 @@ export function EditableSchedule({
                             </div>
 
                             {/* Startup to Call */}
-                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#3b82f6] transition-all">
-                              <div className="text-xs font-mono font-bold text-white/70 uppercase tracking-wide mb-1">Startup to Call</div>
-                              <div className="font-mono font-black text-lg text-white">
+                            <div className="bg-transparent border-2 border-slate-200 p-3 rounded-lg hover:border-[#3b82f6] transition-all">
+                              <div className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wide mb-1">Startup to Call</div>
+                              <div className="font-mono font-black text-lg text-slate-900">
                                 {match.startupName}
                               </div>
                               {startup && (
-                                <div className="text-xs text-white/70 font-mono mt-1 space-y-0.5">
+                                <div className="text-xs text-slate-500 font-mono mt-1 space-y-0.5">
                                   <div>Industry: <span className="font-bold">{startup.industry}</span></div>
                                   <div>Stage: <span className="font-bold">{startup.fundingStage}</span> • Target: <span className="font-bold">${(startup.fundingTarget / 1000000).toFixed(1)}M</span></div>
                                 </div>
                               )}
                             </div>
 
-                            <div className="flex items-start justify-between pt-2 border-t border-white/30">
+                            <div className="flex items-start justify-between pt-2 border-t border-slate-200/30">
                               <div className="flex gap-2 flex-wrap">
                                 <Badge variant="outline" className="text-xs border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                                   Match Score: {match.compatibilityScore}%
@@ -541,7 +541,7 @@ export function EditableSchedule({
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => onToggleCompleted(match.id)}
-                                  className={match.completed ? "text-[#3b82f6] hover:bg-white/10" : "text-white hover:text-[#3b82f6] hover:bg-white/10"}
+                                  className={match.completed ? "text-[#3b82f6] hover:bg-slate-100" : "text-slate-900 hover:text-[#3b82f6] hover:bg-slate-100"}
                                 >
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
@@ -569,7 +569,7 @@ export function EditableSchedule({
                             {/* Attendance Controls */}
                             <div className="space-y-2 pt-2 border-t border-border">
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs font-mono font-bold text-white">Startup Attending</Label>
+                                <Label className="text-xs font-mono font-bold text-slate-900">Startup Attending</Label>
                                 <Switch
                                   checked={match.startupAttending !== false}
                                   onCheckedChange={(checked) => 
@@ -578,7 +578,7 @@ export function EditableSchedule({
                                 />
                               </div>
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs font-mono font-bold text-white">Investor Attending</Label>
+                                <Label className="text-xs font-mono font-bold text-slate-900">Investor Attending</Label>
                                 <Switch
                                   checked={match.investorAttending !== false}
                                   onCheckedChange={(checked) => 

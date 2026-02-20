@@ -846,7 +846,7 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden page-content">
+    <div className="min-h-screen text-slate-900 relative overflow-hidden page-content">
         <Header
           onImportData={() => setShowCSVUpload(true)}
           onGenerateMatches={handleGenerateMatches}
@@ -859,7 +859,7 @@ const Index = () => {
         <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
                 Matchmaking Dashboard
               </h2>
               <p className="text-slate-400 text-sm mt-1 font-medium">
@@ -868,7 +868,7 @@ const Index = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <Link to="/cis">
-                <Button variant="outline" className="rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 hover:text-white font-semibold transition-all duration-200">
+                <Button variant="outline" className="rounded-lg border-slate-600 bg-slate-800/50 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500 hover:text-slate-900 font-semibold transition-all duration-200">
                   Switch to CIS
                 </Button>
               </Link>

@@ -117,28 +117,28 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
     .sort((a, b) => b.unused - a.unused);
 
   return (
-    <Card className="border-2 border-white bg-transparent">
-      <CardHeader className="border-b-2 border-white">
-        <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Coverage Report</CardTitle>
+    <Card className="border-2 border-slate-200 bg-transparent">
+      <CardHeader className="border-b-2 border-slate-200">
+        <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">Coverage Report</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 text-white">
+      <CardContent className="space-y-4 text-slate-900">
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className="border-white text-white bg-transparent">{matches.length} matches</Badge>
-          <Badge variant={startupsWithZero.length === 0 ? "outline" : "outline"} className={startupsWithZero.length === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
+          <Badge variant="outline" className="border-slate-200 text-slate-900 bg-transparent">{matches.length} matches</Badge>
+          <Badge variant={startupsWithZero.length === 0 ? "outline" : "outline"} className={startupsWithZero.length === 0 ? "border-slate-200 text-slate-900 bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
             {startupsWithZero.length} startups with 0 meetings
           </Badge>
           {hasInvestorsAvailable && (
-            <Badge variant="outline" className={startupsNoInvestor === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoInvestor === 0 ? "border-slate-200 text-slate-900 bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoInvestor} without investor
             </Badge>
           )}
           {hasMentorsAvailable && (
-            <Badge variant="outline" className={startupsNoMentor === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoMentor === 0 ? "border-slate-200 text-slate-900 bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoMentor} without mentor
             </Badge>
           )}
           {hasCorporatesAvailable && (
-            <Badge variant="outline" className={startupsNoCorporate === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoCorporate === 0 ? "border-slate-200 text-slate-900 bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoCorporate} without corporate
             </Badge>
           )}
@@ -146,23 +146,23 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
 
         {/* Per-startup resource breakdown */}
         <div className="space-y-2">
-          <div className="font-mono font-bold text-white flex items-center gap-2">
+          <div className="font-mono font-bold text-slate-900 flex items-center gap-2">
             <AlertCircle className="h-4 w-4 text-[#3b82f6]" />
             Resource Coverage by Startup
           </div>
           <div className="grid gap-2">
             {startupStatuses.map((s) => (
-              <div key={s.name} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
-                <span className="font-mono font-bold text-sm text-white">{s.name}</span>
+              <div key={s.name} className="flex items-center justify-between p-3 border-2 border-slate-200 rounded-lg bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
+                <span className="font-mono font-bold text-sm text-slate-900">{s.name}</span>
                 <div className="flex items-center gap-3">
                   {hasInvestorsAvailable && (
                     <div className="flex items-center gap-1 text-xs">
                       {s.hasInvestor ? (
                         <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-white/50" />
+                        <XCircle className="h-4 w-4 text-slate-400" />
                       )}
-                      <span className={s.hasInvestor ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Investor</span>
+                      <span className={s.hasInvestor ? "text-[#3b82f6] font-mono" : "text-slate-400 font-mono"}>Investor</span>
                     </div>
                   )}
                   {hasMentorsAvailable && (
@@ -170,9 +170,9 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
                       {s.hasMentor ? (
                         <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-white/50" />
+                        <XCircle className="h-4 w-4 text-slate-400" />
                       )}
-                      <span className={s.hasMentor ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Mentor</span>
+                      <span className={s.hasMentor ? "text-[#3b82f6] font-mono" : "text-slate-400 font-mono"}>Mentor</span>
                     </div>
                   )}
                   {hasCorporatesAvailable && (
@@ -180,12 +180,12 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
                       {s.hasCorporate ? (
                         <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-white/50" />
+                        <XCircle className="h-4 w-4 text-slate-400" />
                       )}
-                      <span className={s.hasCorporate ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Corporate</span>
+                      <span className={s.hasCorporate ? "text-[#3b82f6] font-mono" : "text-slate-400 font-mono"}>Corporate</span>
                     </div>
                   )}
-                  <Badge variant="outline" className="ml-2 border-white text-white bg-transparent font-mono">{s.totalMatches} total</Badge>
+                  <Badge variant="outline" className="ml-2 border-slate-200 text-slate-900 bg-transparent font-mono">{s.totalMatches} total</Badge>
                 </div>
               </div>
             ))}
@@ -194,8 +194,8 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
 
         {startupsWithZero.length > 0 && (
           <div className="space-y-1">
-            <div className="font-mono font-bold text-white">Startups with 0 meetings</div>
-            <div className="text-sm text-white/70 font-mono">
+            <div className="font-mono font-bold text-slate-900">Startups with 0 meetings</div>
+            <div className="text-sm text-slate-500 font-mono">
               {startupsWithZero.join(", ")}
             </div>
           </div>
@@ -203,16 +203,16 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
 
         {investorsWithUnusedSlots.length > 0 && (
           <div className="space-y-2">
-            <div className="font-mono font-bold text-white">Unused investor slots</div>
+            <div className="font-mono font-bold text-slate-900">Unused investor slots</div>
             <div className="space-y-1">
               {investorsWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
-                  <span className="text-white/70 font-mono">{x.label}</span>
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-slate-200 p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
+                  <span className="text-slate-500 font-mono">{x.label}</span>
                   <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {investorsWithUnusedSlots.length > 8 && (
-                <div className="text-xs text-white/50 font-mono">
+                <div className="text-xs text-slate-400 font-mono">
                   +{investorsWithUnusedSlots.length - 8} more…
                 </div>
               )}
@@ -222,16 +222,16 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
 
         {mentorsWithUnusedSlots.length > 0 && (
           <div className="space-y-2">
-            <div className="font-mono font-bold text-white">Unused mentor slots</div>
+            <div className="font-mono font-bold text-slate-900">Unused mentor slots</div>
             <div className="space-y-1">
               {mentorsWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
-                  <span className="text-white/70 font-mono">{x.label}</span>
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-slate-200 p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
+                  <span className="text-slate-500 font-mono">{x.label}</span>
                   <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {mentorsWithUnusedSlots.length > 8 && (
-                <div className="text-xs text-white/50 font-mono">
+                <div className="text-xs text-slate-400 font-mono">
                   +{mentorsWithUnusedSlots.length - 8} more…
                 </div>
               )}
@@ -241,16 +241,16 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
 
         {corporatesWithUnusedSlots.length > 0 && (
           <div className="space-y-2">
-            <div className="font-mono font-bold text-white">Unused corporate slots</div>
+            <div className="font-mono font-bold text-slate-900">Unused corporate slots</div>
             <div className="space-y-1">
               {corporatesWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
-                  <span className="text-white/70 font-mono">{x.label}</span>
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-slate-200 p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
+                  <span className="text-slate-500 font-mono">{x.label}</span>
                   <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {corporatesWithUnusedSlots.length > 8 && (
-                <div className="text-xs text-white/50 font-mono">
+                <div className="text-xs text-slate-400 font-mono">
                   +{corporatesWithUnusedSlots.length - 8} more…
                 </div>
               )}
