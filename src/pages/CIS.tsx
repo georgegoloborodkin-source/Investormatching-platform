@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
+﻿import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -210,7 +210,7 @@ type Message = {
   verifiableSources?: VerifiableSource[];
   /** Simple source docs from agent (id + title for Sources strip) */
   sourceDocs?: SourceDoc[];
-  /** Non-document context used (e.g. "Knowledge Graph", "Structured KPIs") — shown under Sources */
+  /** Non-document context used (e.g. "Knowledge Graph", "Structured KPIs") Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ shown under Sources */
   contextLabels?: string[];
   /** Devil's Advocate: red flags / risk critique */
   critic?: string;
@@ -318,7 +318,7 @@ function ThreadTree({ threads, active, onSelect }: { threads: Thread[]; active: 
         onClick={() => onSelect(t.id)}
       >
         <span className="text-xs text-slate-500 font-mono">
-          {level === 0 ? "▸" : "└"}
+          {level === 0 ? "Р В Р вЂ Р Р†Р вЂљРІР‚СљР РЋРІР‚В" : "Р В Р вЂ Р Р†Р вЂљРЎСљР Р†Р вЂљРЎСљ"}
         </span>
         <span className={`text-sm ${active === t.id ? "font-semibold" : ""}`}>{t.title}</span>
       </div>
@@ -1019,10 +1019,10 @@ function DecisionLoggerTab({
           <SelectTrigger className="w-[220px] border border-slate-200 bg-white text-slate-900 hover:bg-blue-500/10 hover:border-blue-500 font-mono font-bold">
             <SelectValue placeholder="Filter by document" className="text-slate-900" />
           </SelectTrigger>
-          <SelectContent className="bg-[#050505] border border-slate-200">
-            <SelectItem value="all" className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100">All documents</SelectItem>
+          <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
+            <SelectItem value="all" className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">All documents</SelectItem>
             {documents.filter((doc) => !!doc.id).map((doc) => (
-              <SelectItem key={doc.id} value={doc.id} className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100">
+              <SelectItem key={doc.id} value={doc.id} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                 {doc.title || doc.id}
               </SelectItem>
             ))}
@@ -1054,7 +1054,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="intro" className="text-slate-900">Intro</SelectItem>
                     <SelectItem value="meeting" className="text-slate-900">Meeting</SelectItem>
                     <SelectItem value="follow_up" className="text-slate-900">Follow Up</SelectItem>
@@ -1082,7 +1082,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="pending" className="text-slate-900">Pending</SelectItem>
                     <SelectItem value="positive" className="text-slate-900">Positive</SelectItem>
                     <SelectItem value="negative" className="text-slate-900">Negative</SelectItem>
@@ -1095,7 +1095,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue placeholder="Select sector" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="none" className="text-slate-900">None</SelectItem>
                     <SelectItem value="FinTech" className="text-slate-900">FinTech</SelectItem>
                     <SelectItem value="HealthTech" className="text-slate-900">HealthTech</SelectItem>
@@ -1125,7 +1125,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="none" className="text-slate-900">None</SelectItem>
                     <SelectItem value="Pre-Seed" className="text-slate-900">Pre-Seed</SelectItem>
                     <SelectItem value="Seed" className="text-slate-900">Seed</SelectItem>
@@ -1147,7 +1147,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="none" className="text-slate-900">None</SelectItem>
                     <SelectItem value="Singapore" className="text-slate-900">Singapore</SelectItem>
                     <SelectItem value="Indonesia" className="text-slate-900">Indonesia</SelectItem>
@@ -1215,7 +1215,7 @@ function DecisionLoggerTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                     <SelectValue placeholder="Choose a document (optional)" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="none" className="text-slate-900">No document</SelectItem>
                     {documents.filter((doc) => !!doc.id).map((doc) => (
                       <SelectItem key={doc.id} value={doc.id} className="text-slate-900">
@@ -1249,7 +1249,7 @@ function DecisionLoggerTab({
         <CardHeader className="border-b border-slate-200">
           <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">Decision History</CardTitle>
           <CardDescription className="text-slate-500 font-mono">
-            {filteredDecisions.length} decisions shown • Click outcome to update
+            {filteredDecisions.length} decisions shown Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Click outcome to update
           </CardDescription>
         </CardHeader>
         <CardContent className="text-slate-900">
@@ -1259,7 +1259,7 @@ function DecisionLoggerTab({
               <SelectTrigger className="mt-1 border border-slate-200 bg-white text-slate-900">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border border-slate-200">
+              <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                 {documentOptions.map((doc) => (
                   <SelectItem key={doc.id} value={doc.id} className="text-slate-900">
                     {doc.label}
@@ -1290,8 +1290,8 @@ function DecisionLoggerTab({
                     <div>
                       <p className="font-mono font-bold text-slate-900">{d.startupName}</p>
                       <p className="text-xs text-slate-500 font-mono">
-                        {d.actor} • {new Date(d.timestamp).toLocaleDateString()}
-                        {d.context.sector && ` • ${d.context.sector}`}
+                        {d.actor} Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє {new Date(d.timestamp).toLocaleDateString()}
+                        {d.context.sector && ` Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє ${d.context.sector}`}
                       </p>
                       {doc && (
                         <p className="text-xs text-slate-500 font-mono">
@@ -1330,7 +1330,7 @@ function DecisionLoggerTab({
                         <SelectValue />
                         {isUpdating === d.id && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                       </SelectTrigger>
-                      <SelectContent className="bg-[#050505] border border-slate-200">
+                      <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                         <SelectItem value="pending" className="text-slate-900">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Pending
@@ -1374,7 +1374,7 @@ function DecisionLoggerTab({
 
       {/* Decision View Dialog */}
       <Dialog open={!!viewingDecision} onOpenChange={(open) => !open && setViewingDecision(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border border-slate-200 text-slate-900">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-white border border-slate-200 text-slate-900">
           <DialogHeader>
             <DialogTitle className="text-slate-900 font-mono font-bold">Decision Details</DialogTitle>
             <DialogDescription className="text-slate-500 font-mono">
@@ -1416,9 +1416,9 @@ function DecisionLoggerTab({
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="text-xs text-slate-500 cursor-help font-mono">ℹ️</span>
+                          <span className="text-xs text-slate-500 cursor-help font-mono">Р В Р вЂ Р Р†Р вЂљРЎвЂєР Р†РІР‚С›РІР‚вЂњР В РЎвЂ”Р РЋРІР‚ВР В Р РЏ</span>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-xs bg-[#050505] border border-slate-200 text-slate-900">
+                        <TooltipContent className="max-w-xs bg-white border border-slate-200 text-slate-900">
                           <p className="text-xs font-mono">
                             <strong>Pending:</strong> Decision is still in progress, no outcome yet<br/>
                             <strong>Positive:</strong> Decision led to a positive result (e.g., investment, partnership)<br/>
@@ -1686,7 +1686,7 @@ function SourcesTab({
   const [folderDialogCategory, setFolderDialogCategory] = useState<string>("Portfolio Companies");
   const [folderDialogNewName, setFolderDialogNewName] = useState("");
 
-  // ── Google Drive Folder Sync state ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Google Drive Folder Sync state Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const [connectedDriveFolderId, setConnectedDriveFolderId] = useState<string | null>(null);
   const [connectedDriveFolderName, setConnectedDriveFolderName] = useState<string | null>(null);
   // Support multiple connected folders (each can have a root-folder type / category)
@@ -1702,7 +1702,7 @@ function SourcesTab({
   const isSyncingDriveRef = useRef(false);
   const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
-  // ── Gmail Sync state ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Gmail Sync state Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const [isGmailConnected, setIsGmailConnected] = useState(false);
   const [isSyncingGmail, setIsSyncingGmail] = useState(false);
   const [gmailSyncProgress, setGmailSyncProgress] = useState<{ current: number; total: number; currentItem: string } | null>(null);
@@ -1730,7 +1730,7 @@ function SourcesTab({
     }
   }, [googleApiKey, googleClientId]);
 
-  // ── Restore Drive folders from parent-loaded config (so folder list survives reload) ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Restore Drive folders from parent-loaded config (so folder list survives reload) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   useEffect(() => {
     if (!initialDriveSyncConfig) return;
     setConnectedDriveFolderId(initialDriveSyncConfig.folderId);
@@ -1748,7 +1748,7 @@ function SourcesTab({
     setLastDriveSyncAt(initialDriveSyncConfig.lastSyncAt);
   }, [initialDriveSyncConfig]);
 
-  // ── Load existing Drive sync configuration when activeEventId changes (fallback / tab switch) ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Load existing Drive sync configuration when activeEventId changes (fallback / tab switch) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   useEffect(() => {
     if (!activeEventId || initialDriveSyncConfig != null) return;
     (async () => {
@@ -1789,7 +1789,7 @@ function SourcesTab({
     })();
   }, [activeEventId, initialDriveSyncConfig]);
 
-  // ── Load existing Gmail sync configuration when activeEventId changes ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Load existing Gmail sync configuration when activeEventId changes Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   useEffect(() => {
     if (!activeEventId) return;
     (async () => {
@@ -1893,7 +1893,7 @@ function SourcesTab({
   // Ref to avoid "Cannot access syncGoogleDriveFolder before initialization" when Sources tab mounts
   const syncGoogleDriveFolderRef = useRef<((foldersOverride?: DriveFolderEntry[]) => Promise<void>) | null>(null);
 
-  // ── Connect a Google Drive root portfolio folder via Picker ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Connect a Google Drive root portfolio folder via Picker Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const connectDrivePortfolioFolder = useCallback(async () => {
     if (!googleApiKey || !googleClientId) {
       toast({
@@ -2005,7 +2005,7 @@ function SourcesTab({
     }
   }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
 
-  // ── Core folder sync logic ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Core folder sync logic Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const syncGoogleDriveFolder = useCallback(async (foldersOverride?: Array<{ id: string; name: string }>) => {
     // Use override when e.g. we just added a folder and state may not have updated yet
     const foldersToSync = (foldersOverride && foldersOverride.length > 0)
@@ -2334,7 +2334,7 @@ function SourcesTab({
                   const cleanFileTitle = (t: string) => {
                     let s = t.replace(/^copy\s+of\s+/i, "").trim();
                     s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet).*$/i, "").trim();
-                    s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s*\(.*\)\s*$/, "").replace(/\.\w+$/, "").trim();
+                    s = s.replace(/\s*[-Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ]\s*.*$/, "").replace(/\s*\(.*\)\s*$/, "").replace(/\.\w+$/, "").trim();
                     return s || t;
                   };
                   const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
@@ -2461,7 +2461,7 @@ function SourcesTab({
                             .from("kg_entities")
                             .update({ name: aiCompanyName, normalized_name: aiNorm })
                             .eq("id", companyEntityId);
-                          console.log(`[DriveSync] Renamed entity "${currentEntityName}" → "${aiCompanyName}"`);
+                          console.log(`[DriveSync] Renamed entity "${currentEntityName}" Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ "${aiCompanyName}"`);
                         }
                       }
                       // Remove company_name from properties (it's stored as entity name, not a card field)
@@ -2481,7 +2481,7 @@ function SourcesTab({
                     console.warn(`[DriveSync] No properties extracted for "${currentEntityName}" from file "${file.name}"`);
                   }
                 } else {
-                  console.warn(`[DriveSync] No entity found/created for file "${file.name}" — skipping property extraction`);
+                  console.warn(`[DriveSync] No entity found/created for file "${file.name}" Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ skipping property extraction`);
                 }
               } catch (extractErr) {
                 console.warn(`[DriveSync] Property extraction for ${file.name} failed (non-fatal):`, extractErr);
@@ -2544,7 +2544,7 @@ function SourcesTab({
       const totalSkipped = results.reduce((s, r) => s + r.skippedFiles, 0);
       toast({
         title: "Drive sync complete",
-        description: `${results.length} companies — ${totalNew} new, ${totalUpdated} updated, ${totalSkipped} unchanged.`,
+        description: `${results.length} companies Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ ${totalNew} new, ${totalUpdated} updated, ${totalSkipped} unchanged.`,
       });
 
       if (onSourceFoldersRefetch) {
@@ -2589,7 +2589,7 @@ function SourcesTab({
   // connectedDriveFolders gets a new array reference with the same contents.
   const hasDriveFolders = connectedDriveFolders.length > 0 || !!connectedDriveFolderId;
 
-  // ── Auto-sync on login: fire once per session when config + token are available ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Auto-sync on login: fire once per session when config + token are available Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const autoSyncFiredRef = useRef(false);
   useEffect(() => {
     if (autoSyncFiredRef.current) return;
@@ -2613,7 +2613,7 @@ function SourcesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDriveFolders, activeEventId, isSyncingDrive, getGoogleAccessToken, lastDriveSyncAt, syncGoogleDriveFolder]);
 
-  // ── Auto-sync interval: sync every 15 minutes while page is open ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Auto-sync interval: sync every 15 minutes while page is open Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   useEffect(() => {
     if (!hasDriveFolders || !activeEventId) {
       // Clear interval if no folders connected
@@ -2644,7 +2644,7 @@ function SourcesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDriveFolders, activeEventId]);
 
-  // ── Connect Gmail: save sync config to Supabase ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Connect Gmail: save sync config to Supabase Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const connectGmail = useCallback(async (query?: string) => {
     const eventId = activeEventId || (await ensureActiveEventId());
     if (!eventId) { toast({ title: "No active event", variant: "destructive" }); return; }
@@ -2655,7 +2655,7 @@ function SourcesTab({
     try {
       await gmailListMessages(token, { maxResults: 1 });
     } catch (err) {
-      toast({ title: "Gmail access denied", description: "Please sign out and sign in again — Gmail read permission is required.", variant: "destructive" });
+      toast({ title: "Gmail access denied", description: "Please sign out and sign in again Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Gmail read permission is required.", variant: "destructive" });
       return;
     }
 
@@ -2687,7 +2687,7 @@ function SourcesTab({
     toast({ title: "Gmail connected", description: "Gmail inbox sync is now configured. Click Sync Now to start." });
   }, [activeEventId, ensureActiveEventId, getGoogleAccessToken, gmailIncludeAttachments, gmailMaxPerSync, gmailQuery, toast]);
 
-  // ── Sync Gmail Inbox: fetch, dedupe, ingest, store ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Sync Gmail Inbox: fetch, dedupe, ingest, store Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const syncGmailInbox = useCallback(async () => {
     const eventId = activeEventId || (await ensureActiveEventId());
     if (!eventId) { toast({ title: "No active event", variant: "destructive" }); return; }
@@ -2696,12 +2696,12 @@ function SourcesTab({
 
     setIsSyncingGmail(true);
     setGmailSyncResults(null);
-    setGmailSyncProgress({ current: 0, total: 0, currentItem: "Fetching message list…" });
+    setGmailSyncProgress({ current: 0, total: 0, currentItem: "Fetching message listР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" });
 
     let synced = 0, skipped = 0, errors = 0;
 
     try {
-      // Build Gmail query — append "after:" for incremental sync
+      // Build Gmail query Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ append "after:" for incremental sync
       let q = gmailQuery || "";
       if (lastGmailSyncAt) {
         const epoch = Math.floor(new Date(lastGmailSyncAt).getTime() / 1000);
@@ -2718,7 +2718,7 @@ function SourcesTab({
         return;
       }
 
-      setGmailSyncProgress({ current: 0, total: messageIds.length, currentItem: "Processing emails…" });
+      setGmailSyncProgress({ current: 0, total: messageIds.length, currentItem: "Processing emailsР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" });
 
       // Fetch existing gmail_message_ids for dedup
       const { data: existingDocs } = await supabase
@@ -2789,7 +2789,7 @@ function SourcesTab({
                   const downloaded = await gmailDownloadAttachment(token, msgSnippet.id, att.id);
                   if (downloaded.data) {
                     const isPdf = att.mimeType === "application/pdf";
-                    const attTitle = `[Attachment] ${att.filename} — from "${docTitle}"`;
+                    const attTitle = `[Attachment] ${att.filename} Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ from "${docTitle}"`;
                     const { data: attDoc } = await supabase.from("documents").insert({
                       event_id: eventId,
                       title: attTitle,
@@ -2813,7 +2813,7 @@ function SourcesTab({
                           const textContent = atob(downloaded.data.replace(/-/g, "+").replace(/_/g, "/"));
                           await supabase.from("documents").update({ raw_content: textContent.slice(0, 50000) }).eq("id", attDoc.id);
                           indexDocumentEmbeddings(attDoc.id, textContent, attTitle);
-                        } catch { /* non-text binary — skip embedding */ }
+                        } catch { /* non-text binary Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ skip embedding */ }
                       }
                       // Mark attachment as processed
                       await supabase.from("email_attachments")
@@ -2876,7 +2876,7 @@ function SourcesTab({
     }
   }, [activeEventId, currentUserId, ensureActiveEventId, getGoogleAccessToken, gmailIncludeAttachments, gmailMaxPerSync, gmailQuery, indexDocumentEmbeddings, lastGmailSyncAt, onDocumentSaved, toast]);
 
-  // ── Gmail auto-sync on login: fire once per session when connected ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Gmail auto-sync on login: fire once per session when connected Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const gmailAutoSyncFiredRef = useRef(false);
   const isSyncingGmailRef = useRef(false);
   useEffect(() => { isSyncingGmailRef.current = isSyncingGmail; }, [isSyncingGmail]);
@@ -2903,7 +2903,7 @@ function SourcesTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGmailConnected, activeEventId, isSyncingGmail, getGoogleAccessToken, lastGmailSyncAt, syncGmailInbox]);
 
-  // ── Gmail auto-sync interval (every 15 min) ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Gmail auto-sync interval (every 15 min) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const gmailAutoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (!isGmailConnected || !activeEventId) {
@@ -3103,18 +3103,18 @@ function SourcesTab({
             // Read text files directly
             try {
               const text = await readFileText(file);
-              rawContent = text.length > MAX_IMPORT_CHARS ? `${text.slice(0, MAX_IMPORT_CHARS)}…` : text;
+              rawContent = text.length > MAX_IMPORT_CHARS ? `${text.slice(0, MAX_IMPORT_CHARS)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦` : text;
             } catch (err) {
               console.error("Error reading text file:", err);
               rawContent = null;
             }
 
             // CSV files: ALSO send through the converter API for structured extraction
-            // (investors, startups, mentors, corporates) — raw text alone doesn't give us that
+            // (investors, startups, mentors, corporates) Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ raw text alone doesn't give us that
             // Use shorter timeout to avoid blocking upload
             if (isCSVFile(file)) {
               try {
-                console.log("[CSV] Sending CSV to converter API for structured extraction…");
+                console.log("[CSV] Sending CSV to converter API for structured extractionР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦");
                 const conversionPromise = convertFileWithAI(file);
                 const timeoutPromise = new Promise<never>((_, reject) => 
                   setTimeout(() => reject(new Error("CSV conversion timeout")), 10000)
@@ -3131,7 +3131,7 @@ function SourcesTab({
                   "| startups:", (conversion.startups || []).length);
               } catch (csvErr) {
                 console.warn("[CSV] Converter API failed or timed out (non-fatal):", csvErr);
-                // Non-fatal — the raw text is already stored
+                // Non-fatal Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ the raw text is already stored
               }
             }
           } else {
@@ -3225,7 +3225,7 @@ function SourcesTab({
             return cleaned;
           };
 
-          // ── Detect folder-based entity type ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Detect folder-based entity type Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           // If document is uploaded to a folder with "portfolio", "company", "investor", or "fund" in name,
           // we'll force-create a company card even if the title doesn't match the pattern
           const currentSelectedFolder = selectedFolderId !== "none" 
@@ -3312,7 +3312,7 @@ function SourcesTab({
             });
           }
 
-          // ── Structured CSV ingestion: extract rows into kg_entities ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Structured CSV ingestion: extract rows into kg_entities Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           // If the conversion result contains structured investors/startups arrays,
           // create real entity records so they appear in Company Cards / are queryable.
           if (extractedJson && docRecord.id) {
@@ -3352,7 +3352,7 @@ function SourcesTab({
             }
           }
 
-          // ── Auto-extract company properties into company card ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Auto-extract company properties into company card Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           // The DB trigger auto-creates a company entity from the document title.
           // If folder-based detection is enabled, force-create entity even if title doesn't match.
           // Run in background - don't block upload completion
@@ -3373,7 +3373,7 @@ function SourcesTab({
                 let companyEntityId = await getDocumentCompanyEntityId(docId);
                 console.log(`[AutoExtract] After DB trigger delay, entity ID: ${companyEntityId || "none"}`);
               
-              // ── Folder-based card creation ──
+              // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Folder-based card creation Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
               // Prefer folder name so card is "TBE" not "Copy of TBE Due Diligence"
               if (!companyEntityId && folderInfo.shouldForceCreateCard && docTitle) {
                 try {
@@ -3381,7 +3381,7 @@ function SourcesTab({
                   const deriveCompanyName = (t: string) => {
                     let s = t.replace(/^copy\s+of\s+/i, "").trim();
                     s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet|one[- ]?pager).*$/i, "").trim();
-                    s = s.replace(/\s*[-–—]\s*.*$/, "").trim();
+                    s = s.replace(/\s*[-Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ]\s*.*$/, "").trim();
                     const first = s.split(/\s+/)[0];
                     return (first && first.length > 1) ? first : s || rawTitle;
                   };
@@ -3461,13 +3461,13 @@ function SourcesTab({
                 }
               }
 
-              // ── Fallback: If no entity exists, create one from cleaned document title ──
+              // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Fallback: If no entity exists, create one from cleaned document title Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
               if (!companyEntityId && docTitle) {
                 try {
                   const deriveCompanyName = (t: string) => {
                     let s = t.replace(/^copy\s+of\s+/i, "").trim();
                     s = s.replace(/\s*(due\s*diligence|dd|diligence|deck|pitch|memo|presentation|report|summary|overview|brochure|tearsheet|one[- ]?pager|factsheet|whitepaper|prospectus|dataroom|data\s*room).*$/i, "").trim();
-                    s = s.replace(/\s*[-–—]\s*.*$/, "").replace(/\s+\d{4,}\s*$/i, "").replace(/\s*\(.*\)\s*$/, "").replace(/\s*\[.*\]\s*$/, "").replace(/\s+v\d+(\.\d+)?$/i, "").trim();
+                    s = s.replace(/\s*[-Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ]\s*.*$/, "").replace(/\s+\d{4,}\s*$/i, "").replace(/\s*\(.*\)\s*$/, "").replace(/\s*\[.*\]\s*$/, "").replace(/\s+v\d+(\.\d+)?$/i, "").trim();
                     const first = s.split(/\s+/)[0];
                     return (first && first.length > 1) ? first : s || t;
                   };
@@ -3585,7 +3585,7 @@ function SourcesTab({
                           .from("kg_entities")
                           .update({ name: aiName, normalized_name: aiNorm })
                           .eq("id", companyEntityId);
-                        console.log(`[AutoExtract] Renamed entity "${curNorm}" → "${aiName}"`);
+                        console.log(`[AutoExtract] Renamed entity "${curNorm}" Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ "${aiName}"`);
                       }
                     }
                     delete extraction.properties.company_name;
@@ -3598,16 +3598,16 @@ function SourcesTab({
                     extraction.confidence,
                     docId,
                   );
-                  console.log(`[AutoExtract] ✅ ${aiName || mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
+                  console.log(`[AutoExtract] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ ${aiName || mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
                   // Refresh company cards if callback available
                   if (onRefreshCompanyCards) {
                     onRefreshCompanyCards().catch(err => console.warn("[AutoExtract] Failed to refresh cards:", err));
                   }
                 } else {
-                  console.warn(`[AutoExtract] ⚠️ No properties extracted for ${file.name} (backend may be down or document type not recognized)`);
+                  console.warn(`[AutoExtract] Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ No properties extracted for ${file.name} (backend may be down or document type not recognized)`);
                 }
               } else {
-                console.warn(`[AutoExtract] ⚠️ No entity found for ${file.name} - cannot extract properties`);
+                console.warn(`[AutoExtract] Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ No entity found for ${file.name} - cannot extract properties`);
               }
               } catch (extractErr) {
                 console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
@@ -3662,7 +3662,7 @@ function SourcesTab({
           }
           // Only show review if meaningful results
           if (reviewItems.length > 0 && files.length > 1) {
-            // The review is informational for batch uploads — toast is enough for single files
+            // The review is informational for batch uploads Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ toast is enough for single files
             setBatchReviewData(reviewItems);
           }
         }
@@ -4044,8 +4044,8 @@ function SourcesTab({
               <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                 <SelectValue placeholder="Select a folder" />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border border-slate-200 max-h-[300px]">
-                <SelectItem value="none" className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100">
+              <SelectContent className="bg-white border border-slate-200 max-h-[300px]">
+                <SelectItem value="none" className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                   <span className="flex items-center gap-2">
                     <Folder className="h-4 w-4" />
                     No Folder (Root)
@@ -4060,7 +4060,7 @@ function SourcesTab({
                       </div>
                       {catFolders.length > 0 ? (
                         catFolders.map((folder) => (
-                          <SelectItem key={folder.id} value={folder.id} className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100 pl-4">
+                          <SelectItem key={folder.id} value={folder.id} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer pl-4">
                             <span className="flex items-center gap-2">
                               <Folder className="h-4 w-4 text-blue-600" />
                               {folder.name}
@@ -4069,7 +4069,7 @@ function SourcesTab({
                         ))
                       ) : (
                         <div className="px-2 py-1.5 text-[10px] font-mono text-slate-400 italic pointer-events-none pl-4">
-                          No folders — create one below
+                          No folders Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ create one below
                         </div>
                       )}
                     </React.Fragment>
@@ -4101,7 +4101,7 @@ function SourcesTab({
                 </SelectTrigger>
                 <SelectContent className="bg-[#1a1a2e] border-slate-200">
                   {FOLDER_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100">
+                    <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                       {cat}
                     </SelectItem>
                   ))}
@@ -4136,7 +4136,7 @@ function SourcesTab({
             </div>
           </div>
           
-          {/* Existing Folders – always show all 5 base categories (Sourcing, Portfolio Companies, Funds, BD, Mentors/Corporates) */}
+          {/* Existing Folders Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™ always show all 5 base categories (Sourcing, Portfolio Companies, Funds, BD, Mentors/Corporates) */}
           {(() => {
             const getRootName = (name: string) => {
               const first = (name || "").split(" / ")[0].trim();
@@ -4149,7 +4149,7 @@ function SourcesTab({
               <div className="pt-2 border-t border-slate-200">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Label className="text-slate-500 font-mono text-xs">
-                    Document Folders ({sourceFolders.length}) — Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
+                    Document Folders ({sourceFolders.length}) Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
                   </Label>
                   {onSyncCategoriesFromDrive && initialDriveSyncConfig?.folders?.length ? (
                     <Button
@@ -4169,12 +4169,12 @@ function SourcesTab({
                         }
                       }}
                     >
-                      {isSyncingCategoriesFromDrive ? "Syncing…" : "Sync categories from Drive"}
+                      {isSyncingCategoriesFromDrive ? "SyncingР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" : "Sync categories from Drive"}
                     </Button>
                   ) : null}
                 </div>
 
-                {/* Category pills row — always show all 5 base categories */}
+                {/* Category pills row Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ always show all 5 base categories */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {FOLDER_CATEGORIES.map((cat) => {
                     const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
@@ -4200,14 +4200,14 @@ function SourcesTab({
                   })}
                 </div>
 
-                {/* Bulk selection bar — Move selected to category */}
+                {/* Bulk selection bar Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Move selected to category */}
                 {selectedFolderIds.size > 0 && (
                   <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-blue-500/30 bg-blue-600/5">
                     <span className="text-[11px] font-mono text-blue-600 tabular-nums">{selectedFolderIds.size} selected</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="border-blue-500/50 text-blue-600 hover:bg-blue-600/10 font-mono text-xs">
-                          Move to…
+                          Move toР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="border-slate-200 bg-white">
@@ -4220,7 +4220,7 @@ function SourcesTab({
                               const updates = Array.from(selectedFolderIds).map((id) => ({ id, category: moveCat }));
                               await onFoldersCategoriesSaved(updates);
                               setSelectedFolderIds(new Set());
-                              toast({ title: "Categories updated", description: `${updates.length} folder(s) → ${moveCat}` });
+                              toast({ title: "Categories updated", description: `${updates.length} folder(s) Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${moveCat}` });
                             }}
                           >
                             {moveCat}
@@ -4234,7 +4234,7 @@ function SourcesTab({
                   </div>
                 )}
 
-                {/* Expanded category → group by root company name (or empty state) */}
+                {/* Expanded category Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ group by root company name (or empty state) */}
                 {expandedRootKey && (() => {
                   const activeCat = expandedRootKey.includes("::") ? expandedRootKey.split("::")[0] : expandedRootKey;
                   const activeRoot = expandedRootKey.includes("::") ? expandedRootKey.split("::").slice(1).join("::") : null;
@@ -4299,7 +4299,7 @@ function SourcesTab({
                               <span className="truncate flex-1">{rootName}</span>
                               {hasSubfolders && <span className="text-slate-300 tabular-nums text-[10px]">{folders.length}</span>}
                             </button>
-                            {/* Expanded root → show subfolders */}
+                            {/* Expanded root Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ show subfolders */}
                             {isRootOpen && (
                               <div className="ml-4 border-l border-slate-200 pl-2 my-0.5">
                                 {folders.map((folder) => {
@@ -4349,7 +4349,7 @@ function SourcesTab({
                                                 e.stopPropagation();
                                                 if ((folder.category || "Portfolio Companies") === moveCat) return;
                                                 await onFolderCategoryUpdated?.(folder.id, moveCat);
-                                                toast({ title: "Category updated", description: `"${folder.name}" → ${moveCat}` });
+                                                toast({ title: "Category updated", description: `"${folder.name}" Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${moveCat}` });
                                               }}
                                             >
                                               {moveCat}
@@ -4419,7 +4419,7 @@ function SourcesTab({
                   }}
                   disabled={isDeletingFolder}
                 >
-                  {isDeletingFolder ? "Deleting…" : "Delete folder and documents"}
+                  {isDeletingFolder ? "DeletingР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" : "Delete folder and documents"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -4434,7 +4434,7 @@ function SourcesTab({
             Upload files from your computer into Sources.
             {selectedFolderId !== "none" && (
               <span className="ml-2 text-blue-600">
-                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+                Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
           </CardDescription>
@@ -4478,7 +4478,7 @@ function SourcesTab({
             </div>
           )}
           <p className="text-xs text-slate-500 font-mono">
-            Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) — all are indexed for AI search.
+            Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ all are indexed for AI search.
           </p>
         </CardContent>
       </Card>
@@ -4490,7 +4490,7 @@ function SourcesTab({
             Paste a Google Docs/Slides/Sheets link or choose from Drive.
             {selectedFolderId !== "none" && (
               <span className="ml-2 text-blue-600">
-                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+                Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
           </CardDescription>
@@ -4529,7 +4529,7 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      {/* ── Google Drive Portfolio Folder Sync ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Google Drive Portfolio Folder Sync Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <Card className="border border-slate-200 bg-white">
         <CardHeader className="border-b border-slate-200">
           <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">
@@ -4598,12 +4598,12 @@ function SourcesTab({
                           }
                         }}
                       >
-                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-slate-200 bg-white text-slate-900 font-mono">
+                        <SelectTrigger className="w-[190px] h-8 text-xs border border-slate-200 bg-white text-slate-900 font-mono rounded-md hover:border-blue-400 transition-colors">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#050505] border border-slate-200">
+                        <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                           {DRIVE_ROOT_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-500/10 focus:bg-slate-100">
+                            <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                               {cat}
                             </SelectItem>
                           ))}
@@ -4765,7 +4765,7 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      {/* ── Gmail Inbox Sync ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Gmail Inbox Sync Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <Card className="border border-slate-200 bg-white">
         <CardHeader className="border-b border-slate-200">
           <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">
@@ -4804,7 +4804,7 @@ function SourcesTab({
                     }}
                     className="border border-slate-200 bg-white text-slate-900 text-xs font-mono"
                   />
-                  <p className="text-[10px] text-slate-400 font-mono mt-1">No limit — enter any number.</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-1">No limit Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ enter any number.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -4858,7 +4858,7 @@ function SourcesTab({
                     className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingGmail ? (
-                      <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Syncing…</>
+                      <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />SyncingР В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦</>
                     ) : (
                       <><RefreshCw className="h-3.5 w-3.5 mr-1" />Sync Now</>
                     )}
@@ -4930,7 +4930,7 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      {/* ── Company cards cleanup ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Company cards cleanup Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <Card className="border border-slate-200 bg-white">
         <CardHeader className="border-b border-slate-200">
           <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">
@@ -5073,7 +5073,7 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border border-slate-200 text-slate-900 max-w-lg">
+        <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-slate-900 font-mono font-black uppercase tracking-tight flex items-center gap-2">
               <FolderPlus className="h-4 w-4 text-blue-600" />
@@ -5091,7 +5091,7 @@ function SourcesTab({
               </div>
               {pendingFolderDocs.map((doc) => (
                 <div key={doc.id} className="text-xs text-slate-900 font-mono truncate">
-                  • {doc.title || "Untitled document"}
+                  Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє {doc.title || "Untitled document"}
                 </div>
               ))}
             </div>
@@ -5099,7 +5099,7 @@ function SourcesTab({
             {/* Step 1: Category selector */}
             <div>
               <Label className="text-[10px] font-mono text-blue-600/80 uppercase tracking-wider mb-1.5 block">
-                Step 1 — Choose Category
+                Step 1 Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Choose Category
               </Label>
               <div className="flex flex-wrap gap-2">
                 {FOLDER_CATEGORIES.map((cat) => {
@@ -5125,7 +5125,7 @@ function SourcesTab({
             {/* Step 2: Folder selection */}
             <div>
               <Label className="text-[10px] font-mono text-blue-600/80 uppercase tracking-wider mb-1.5 block">
-                Step 2 — Select or Create Folder
+                Step 2 Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Select or Create Folder
               </Label>
 
               {/* Quick create inside dialog */}
@@ -5259,7 +5259,7 @@ function SourcesTab({
         </DialogContent>
       </Dialog>
 
-      {/* ── Category Picker Dialog (shown after folder creation / drive sync) ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Category Picker Dialog (shown after folder creation / drive sync) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <Dialog
         open={categoryPickerOpen}
         onOpenChange={(open) => {
@@ -5269,7 +5269,7 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border border-slate-200 text-slate-900 max-w-md">
+        <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-slate-900 font-mono font-black uppercase tracking-tight flex items-center gap-2">
               <Folder className="h-4 w-4 text-blue-600" />
@@ -5295,7 +5295,7 @@ function SourcesTab({
                   </SelectTrigger>
                   <SelectContent className="bg-[#1a1a2e] border-slate-200">
                     {FOLDER_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="text-slate-900 font-mono text-xs hover:bg-blue-500/10 focus:bg-slate-100">
+                      <SelectItem key={cat} value={cat} className="text-slate-900 font-mono text-xs hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                         {cat}
                       </SelectItem>
                     ))}
@@ -5330,14 +5330,14 @@ function SourcesTab({
         </DialogContent>
       </Dialog>
 
-      {/* ── Batch Review Dialog ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Batch Review Dialog Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <Dialog
         open={batchReviewData !== null && batchReviewData.length > 0}
         onOpenChange={(open) => {
           if (!open) setBatchReviewData(null);
         }}
       >
-        <DialogContent className="bg-[#050505] border border-slate-200 text-slate-900 max-w-lg">
+        <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-slate-900 font-mono font-black uppercase tracking-tight flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-blue-600" />
@@ -5517,7 +5517,7 @@ function DashboardTab({
       toast({
         title: isNoTable ? "Tasks table not found" : "Failed to create task",
         description: isNoTable
-          ? "The tasks table is missing. Run the migration in Supabase: Dashboard → SQL Editor, or run supabase db push."
+          ? "The tasks table is missing. Run the migration in Supabase: Dashboard Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ SQL Editor, or run supabase db push."
           : msg,
         variant: "destructive",
       });
@@ -5845,7 +5845,7 @@ function DashboardTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900 mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="all" className="text-slate-900">All</SelectItem>
                     {teamMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id} className="text-slate-900">
@@ -5861,7 +5861,7 @@ function DashboardTab({
                   <SelectTrigger className="border border-slate-200 bg-white text-slate-900 mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="all" className="text-slate-900">All</SelectItem>
                     <SelectItem value="not_started" className="text-slate-900">Not started</SelectItem>
                     <SelectItem value="in_progress" className="text-slate-900">In progress</SelectItem>
@@ -5962,7 +5962,7 @@ function DashboardTab({
                       const barStart = Math.max(taskStartMs, ganttStartMs);
                       const barEnd = Math.min(effectiveEnd, ganttStartMs + totalMs);
                       if (barEnd <= barStart) {
-                        // Task is entirely outside the visible range — show thin marker at left or right edge
+                        // Task is entirely outside the visible range Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ show thin marker at left or right edge
                         const edgeLeft = taskStartMs < ganttStartMs ? 0 : 99.5;
                         const { bg, border: borderColor } = ganttStatusColor(task);
                         return (
@@ -6097,7 +6097,7 @@ function DashboardTab({
 
       {/* Add task dialog (MD only) */}
       <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-        <DialogContent className="border border-slate-200 bg-[#050505] text-slate-900 max-w-lg">
+        <DialogContent className="border border-slate-200 bg-white text-slate-900 max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-mono font-black uppercase tracking-tight flex items-center gap-2">
               <Plus className="h-5 w-5 text-blue-600" />
@@ -6235,7 +6235,7 @@ function DashboardTab({
 
       {/* Delete task confirm (MD only) */}
       <AlertDialog open={!!taskToDelete} onOpenChange={(open) => !open && setTaskToDelete(null)}>
-        <AlertDialogContent className="border border-slate-200 bg-[#050505] text-slate-900">
+        <AlertDialogContent className="border border-slate-200 bg-white text-slate-900">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-mono font-black text-slate-900">Delete task?</AlertDialogTitle>
             <AlertDialogDescription className="text-slate-500 font-mono">
@@ -6255,9 +6255,9 @@ function DashboardTab({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Task detail dialog — opens when clicking a task row */}
+      {/* Task detail dialog Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ opens when clicking a task row */}
       <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
-        <DialogContent className="border border-slate-200 bg-[#050505] text-slate-900 max-w-lg">
+        <DialogContent className="border border-slate-200 bg-white text-slate-900 max-w-lg">
           {selectedTask && (() => {
             const t = selectedTask;
             const isTerminal = t.status === "done" || t.status === "cancelled";
@@ -6418,7 +6418,7 @@ function DashboardTab({
         </DialogContent>
       </Dialog>
 
-      {/* Latest decision / document / source — keep for context */}
+      {/* Latest decision / document / source Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ keep for context */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border border-slate-200 bg-white">
           <CardHeader className="border-b border-slate-200">
@@ -6731,7 +6731,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                   <SelectValue placeholder="All sectors" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border border-slate-200">
+                <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                   <SelectItem value="all" className="text-slate-900">All sectors</SelectItem>
                   {sectors.map((sector) => (
                     <SelectItem key={sector} value={sector} className="text-slate-900">
@@ -6747,7 +6747,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                   <SelectValue placeholder="All stages" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border border-slate-200">
+                <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                   <SelectItem value="all" className="text-slate-900">All stages</SelectItem>
                   {stages.map((stage) => (
                     <SelectItem key={stage} value={stage} className="text-slate-900">
@@ -6763,7 +6763,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                   <SelectValue placeholder="All partners" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border border-slate-200">
+                <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                   <SelectItem value="all" className="text-slate-900">All partners</SelectItem>
                   {partners.map((partner) => (
                     <SelectItem key={partner} value={partner} className="text-slate-900">
@@ -6834,10 +6834,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <TooltipTrigger asChild>
                       <p className="text-xs text-slate-500 font-mono cursor-help">
                         Avg Confidence
-                        <span className="ml-1">ℹ️</span>
+                        <span className="ml-1">Р В Р вЂ Р Р†Р вЂљРЎвЂєР Р†РІР‚С›РІР‚вЂњР В РЎвЂ”Р РЋРІР‚ВР В Р РЏ</span>
                       </p>
                     </TooltipTrigger>
-                    <TooltipContent className="bg-[#050505] border border-slate-200 text-slate-900">
+                    <TooltipContent className="bg-white border border-slate-200 text-slate-900">
                       <p className="max-w-xs font-mono">
                         Average confidence score (0-100) you assigned when logging decisions.
                         <br />
@@ -6976,7 +6976,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Concentration (top 3)</p>
                   <p className="font-mono font-bold text-slate-900">{adv.concentrationTop3Pct ?? 0}%</p>
                   <p className="text-xs font-mono text-slate-500 truncate" title={(adv.concentrationTop3Sectors ?? []).join(", ")}>
-                    {(adv.concentrationTop3Sectors ?? []).join(", ") || "—"}
+                    {(adv.concentrationTop3Sectors ?? []).join(", ") || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}
                   </p>
                 </div>
                 {adv.momDecisionsPct != null && (
@@ -7002,13 +7002,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               {/* Calibration: High vs Low confidence */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-                  <p className="text-xs font-mono uppercase tracking-wider text-slate-500 mb-2">Calibration — High confidence (81–100)</p>
+                  <p className="text-xs font-mono uppercase tracking-wider text-slate-500 mb-2">Calibration Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ High confidence (81Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™100)</p>
                   <p className="font-mono font-bold text-slate-900 text-lg">{(adv.calibrationHighConfidence?.positiveRate ?? 0)}% positive rate</p>
                   <p className="text-xs font-mono text-slate-500">{(adv.calibrationHighConfidence?.total ?? 0)} decisions in this band</p>
                   <p className="text-[10px] font-mono text-slate-400 mt-1">When you were very confident, how often were you right?</p>
                 </div>
                 <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-                  <p className="text-xs font-mono uppercase tracking-wider text-slate-500 mb-2">Calibration — Low confidence (0–40)</p>
+                  <p className="text-xs font-mono uppercase tracking-wider text-slate-500 mb-2">Calibration Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Low confidence (0Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™40)</p>
                   <p className="font-mono font-bold text-slate-900 text-lg">{(adv.calibrationLowConfidence?.positiveRate ?? 0)}% positive rate</p>
                   <p className="text-xs font-mono text-slate-500">{(adv.calibrationLowConfidence?.total ?? 0)} decisions in this band</p>
                   <p className="text-[10px] font-mono text-slate-400 mt-1">When you were uncertain, how often did it still go positive?</p>
@@ -7038,7 +7038,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           </Card>
           )}
 
-          {/* Sector × Stage heatmap */}
+          {/* Sector Р В РІР‚СљР Р†Р вЂљРІР‚Сњ Stage heatmap */}
           {analytics.sectorStageMatrix.length > 0 && (() => {
             const stages = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.stage))).sort();
             const sectors = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.sector))).sort();
@@ -7047,7 +7047,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <CardHeader className="border-b border-slate-200">
                   <CardTitle className="flex items-center gap-2 text-slate-900 font-mono font-black uppercase tracking-tight">
                     <BarChart3 className="h-5 w-5 text-blue-600" />
-                    Sector × Stage Heatmap
+                    Sector Р В РІР‚СљР Р†Р вЂљРІР‚Сњ Stage Heatmap
                   </CardTitle>
                   <CardDescription className="text-slate-500 font-mono">Decision volume and positive rate by sector and stage</CardDescription>
                 </CardHeader>
@@ -7076,7 +7076,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                                   key={`${sector}-${stage}`}
                                   className="p-2 text-center rounded"
                                   style={{ backgroundColor: total > 0 ? `rgba(255, 237, 0, ${0.12 + intensity * 0.5})` : "rgba(255,255,255,0.03)" }}
-                                  title={`${sector} × ${stage}: ${total} decisions, ${rate}% positive`}
+                                  title={`${sector} Р В РІР‚СљР Р†Р вЂљРІР‚Сњ ${stage}: ${total} decisions, ${rate}% positive`}
                                 >
                                   <span className="font-mono font-bold text-slate-900">{total}</span>
                                   {total > 0 && <span className="block text-[10px] text-slate-600">{rate}%</span>}
@@ -7169,12 +7169,12 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                         <TooltipTrigger asChild>
                           <span className="cursor-help">
                             Positive rate by stage
-                            <span className="ml-1">ℹ️</span>
+                            <span className="ml-1">Р В Р вЂ Р Р†Р вЂљРЎвЂєР Р†РІР‚С›РІР‚вЂњР В РЎвЂ”Р РЋРІР‚ВР В Р РЏ</span>
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent className="bg-[#050505] border border-slate-200 text-slate-900">
+                        <TooltipContent className="bg-white border border-slate-200 text-slate-900">
                           <p className="max-w-xs font-mono">
-                            Conversion Rate = (Positive Decisions / Total Decisions) × 100%
+                            Conversion Rate = (Positive Decisions / Total Decisions) Р В РІР‚СљР Р†Р вЂљРІР‚Сњ 100%
                             <br />
                             Shows what % of decisions in each stage resulted in positive outcomes.
                           </p>
@@ -7703,12 +7703,12 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <TooltipTrigger asChild>
                         <span className="cursor-help">
                           Detailed sector performance metrics
-                          <span className="ml-1">ℹ️</span>
+                          <span className="ml-1">Р В Р вЂ Р Р†Р вЂљРЎвЂєР Р†РІР‚С›РІР‚вЂњР В РЎвЂ”Р РЋРІР‚ВР В Р РЏ</span>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent className="bg-[#050505] border border-slate-200 text-slate-900">
+                      <TooltipContent className="bg-white border border-slate-200 text-slate-900">
                         <p className="max-w-xs font-mono">
-                          Conversion Rate = (Positive Decisions / Total Decisions) × 100%
+                          Conversion Rate = (Positive Decisions / Total Decisions) Р В РІР‚СљР Р†Р вЂљРІР‚Сњ 100%
                           <br />
                           Shows what % of decisions in each sector resulted in positive outcomes.
                         </p>
@@ -7829,7 +7829,7 @@ export default function CIS() {
     target_entity: { name: string; entity_type: string } | null;
   }>>([]);
   
-  // Company Cards — unified view of companies with documents, connections, KPIs
+  // Company Cards Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ unified view of companies with documents, connections, KPIs
   const [companyCards, setCompanyCards] = useState<Array<{
     company_id: string;
     company_name: string;
@@ -7949,9 +7949,8 @@ export default function CIS() {
     return normalizeFolderMatch(s).replace(/\s*-\s*.*$/, "").trim();
   }, [normalizeFolderMatch]);
 
-  // Backfill source_folder categories from Drive sync config. Two-pass matching:
-  // Pass 1: exact/prefix matches (high confidence). Pass 2: segment matches (only unassigned).
-  // This prevents ambiguity when roots share a normalized segment (e.g. "Pyxis" vs "Pyxis (Dec 2025)").
+  // Backfill source_folder categories from Drive sync config.
+  // Three-pass matching: exact/prefix -> segment -> contains.
   useEffect(() => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
@@ -7995,19 +7994,44 @@ export default function CIS() {
         }
       }
     }
+
+    // Pass 3: contains вЂ” broadest match for any remaining unassigned
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
+      if (!rootName) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const rootNorm = normalizeFolderMatch(rootName);
+      for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
+        const segments = (sf.name || "").trim().split(/\s*\/\s*/);
+        const matchesAny = segments.some((seg: string) => {
+          const segNorm = normalizeFolderMatch(seg);
+          return segNorm === rootNorm || segNorm.includes(rootNorm) || rootNorm.includes(segNorm);
+        });
+        if (!matchesAny) continue;
+        assigned.add(sf.id);
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          updates.push({ id: sf.id, category: wantCategory });
+        }
+      }
+    }
+
     if (updates.length === 0) return;
     let cancelled = false;
     (async () => {
+      let errors = 0;
       for (let i = 0; i < updates.length; i++) {
         if (cancelled) return;
         const { id, category } = updates[i];
         const { error } = await updateFolderCategory(id, category);
         if (error) {
-          console.warn("[CIS] Folder category update failed:", error.message);
-          return;
+          console.warn("[CIS] Folder category update failed:", id, error.message);
+          errors++;
+          continue;
         }
       }
       if (cancelled) return;
+      console.log(`[CIS] Backfill completed: ${updates.length - errors}/${updates.length} succeeded`);
       const { data } = await getSourceFoldersByEvent(activeEventId);
       setSourceFolders((data || []) as SourceFolder[]);
     })();
@@ -8152,14 +8176,18 @@ export default function CIS() {
     []
   );
 
-  /** Run backfill: two-pass matching (exact/prefix first, then segment) to avoid ambiguity. */
+  /** Run backfill: three-pass matching to sync Drive root categories to source_folders.
+   *  Pass 1: exact/prefix. Pass 2: first-segment. Pass 3: contains (broadest). */
   const handleSyncCategoriesFromDrive = useCallback(async () => {
-    if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
+    if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) {
+      console.warn("[SyncCategories] Skipped: missing event, drive folders, or source folders");
+      return;
+    }
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
     const assigned = new Set<string>();
 
-    // Pass 1: exact/prefix
+    // Pass 1: exact name or path-prefix
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
@@ -8176,7 +8204,7 @@ export default function CIS() {
         }
       }
     }
-    // Pass 2: segment
+    // Pass 2: first path-segment
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
@@ -8192,13 +8220,36 @@ export default function CIS() {
         }
       }
     }
+    // Pass 3: contains вЂ” any path segment of source folder matches drive root
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
+      if (!rootName) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const rootNorm = normalizeFolderMatch(rootName);
+      for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
+        const segments = (sf.name || "").trim().split(/\s*\/\s*/);
+        const matchesAny = segments.some((seg: string) => {
+          const segNorm = normalizeFolderMatch(seg);
+          return segNorm === rootNorm || segNorm.includes(rootNorm) || rootNorm.includes(segNorm);
+        });
+        if (!matchesAny) continue;
+        assigned.add(sf.id);
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          updates.push({ id: sf.id, category: wantCategory });
+        }
+      }
+    }
 
+    console.log(`[SyncCategories] ${updates.length} updates across ${sourceFolders.length} source folders`);
+    let errors = 0;
     for (const { id, category } of updates) {
       const { error } = await updateFolderCategory(id, category);
-      if (error) throw new Error(error.message);
+      if (error) { console.error("[SyncCategories] Failed:", id, error.message); errors++; }
     }
     const { data } = await getSourceFoldersByEvent(activeEventId);
     setSourceFolders((data || []) as SourceFolder[]);
+    if (errors > 0) throw new Error(`${errors} of ${updates.length} updates failed`);
   }, [activeEventId, initialDriveSyncConfig, sourceFolders, normalizeFolderMatch, normRootOrSegment]);
 
   const handleFoldersCategoriesSaved = useCallback(
@@ -8670,7 +8721,7 @@ export default function CIS() {
         if (updateError) {
           console.warn("[DOCUMENTS] Failed to link orphaned documents:", updateError);
         } else {
-          console.log(`[DOCUMENTS] ✅ Linked ${orphanedDocs.length} documents to event`);
+          console.log(`[DOCUMENTS] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Linked ${orphanedDocs.length} documents to event`);
           toast({
             title: "Documents linked",
             description: `Linked ${orphanedDocs.length} orphaned document(s) to current event.`,
@@ -8729,7 +8780,7 @@ export default function CIS() {
           if (updateError) {
             console.warn("[SOURCES] Failed to link orphaned sources:", updateError);
           } else {
-            console.log(`[SOURCES] ✅ Linked ${orphanedSources.length} sources to event`);
+            console.log(`[SOURCES] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Linked ${orphanedSources.length} sources to event`);
             toast({
               title: "Sources linked",
               description: `Linked ${orphanedSources.length} orphaned source(s) to current event.`,
@@ -8988,7 +9039,7 @@ export default function CIS() {
   const buildSnippet = useCallback((text: string | null) => {
     if (!text) return "No preview available.";
     const normalized = text.replace(/\s+/g, " ").trim();
-    return normalized.length > 240 ? `${normalized.slice(0, 240)}…` : normalized;
+    return normalized.length > 240 ? `${normalized.slice(0, 240)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦` : normalized;
   }, []);
 
   const formatTabularContent = useCallback((text: string) => {
@@ -9055,7 +9106,7 @@ export default function CIS() {
       ...rows.slice(1).map(renderRow),
     ];
     if (tableRows.length > maxRows) {
-      tableLines.push("…(table truncated)");
+      tableLines.push("Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦(table truncated)");
     }
     return tableLines.join("\n");
   }, []);
@@ -9089,7 +9140,7 @@ export default function CIS() {
       const start = Math.max(0, idx - 140);
       const end = Math.min(combined.length, idx + match.length + 160);
       const snippet = combined.slice(start, end).trim();
-      return snippet.length > 0 ? `${start > 0 ? "…" : ""}${snippet}${end < combined.length ? "…" : ""}` : buildDocSnippet(doc);
+      return snippet.length > 0 ? `${start > 0 ? "Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" : ""}${snippet}${end < combined.length ? "Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦" : ""}` : buildDocSnippet(doc);
     },
     [buildDocSnippet, buildNormalizedDocText]
   );
@@ -9104,7 +9155,7 @@ export default function CIS() {
       if (snippetOverride?.trim()) {
         const limit = isComprehensive ? 2500 : 1000;
         const trimmed = snippetOverride.trim();
-        return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
+        return trimmed.length > limit ? `${trimmed.slice(0, limit)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦` : trimmed;
       }
 
       const combined = buildNormalizedDocText(doc);
@@ -9120,12 +9171,12 @@ export default function CIS() {
         const slice = lines.slice(startIdx, startIdx + (isComprehensive ? 80 : 40));
         const joined = slice.join("\n");
         const limit = isComprehensive ? 2500 : 1000;
-        return joined.length > limit ? `${joined.slice(0, limit)}…` : joined;
+        return joined.length > limit ? `${joined.slice(0, limit)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦` : joined;
       }
 
       // Fallback: return the first chunk of the document
       const limit = isComprehensive ? 2500 : 1000;
-      return combined.length > limit ? `${combined.slice(0, limit)}…` : combined;
+      return combined.length > limit ? `${combined.slice(0, limit)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦` : combined;
     },
     [buildNormalizedDocText]
   );
@@ -9136,8 +9187,8 @@ export default function CIS() {
       matchedDecisions
         .map(
           (d, index) =>
-            `${index + 1}. ${d.startupName} — ${d.actionType}${d.outcome ? ` (${d.outcome})` : ""}${
-              d.notes ? ` — ${d.notes}` : ""
+            `${index + 1}. ${d.startupName} Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ ${d.actionType}${d.outcome ? ` (${d.outcome})` : ""}${
+              d.notes ? ` Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ ${d.notes}` : ""
             }`
         )
         .join("\n")
@@ -9250,10 +9301,10 @@ export default function CIS() {
               created_by: userId,
             }).select();
             if (!error) {
-              console.log("[DEBUG] ✅ Saved chat message to DB:", { role: payload.role, contentLength: payload.content.length, threadId });
+              console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Saved chat message to DB:", { role: payload.role, contentLength: payload.content.length, threadId });
               return; // Success
             } else {
-              console.error("[DEBUG] ❌ Failed to save chat message:", error);
+              console.error("[DEBUG] Р В Р вЂ Р РЋРЎС™Р В Р вЂ° Failed to save chat message:", error);
             }
             lastError = error;
             // Don't retry on RLS/auth errors
@@ -9293,7 +9344,7 @@ export default function CIS() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Clear legacy permanent disable flag — we now use session-only failure tracking
+    // Clear legacy permanent disable flag Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ we now use session-only failure tracking
     localStorage.removeItem("disable_embeddings");
     embeddingsDisabledRef.current = false;
     const existing = localStorage.getItem("ventureos_cost_log");
@@ -9320,7 +9371,7 @@ export default function CIS() {
     return { estInputTokens, estOutputTokens, estCostUsd };
   }, [lastEvidence]);
 
-  // ── Semantic chunking helpers ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Semantic chunking helpers Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
 
   const chunkTextWithOverlap = useCallback((text: string, size: number, overlap: number) => {
     const chunks: string[] = [];
@@ -9431,7 +9482,7 @@ export default function CIS() {
       const FALLBACK_OVERLAP = 100;
       const MAX_CHILD_PER_PARENT = 4;
 
-      // ── Agentic chunking: ask the LLM to split the document by topic ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Agentic chunking: ask the LLM to split the document by topic Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       try {
         const agenticResult = await agenticChunk({
           document_title: docTitle || "Untitled",
@@ -9471,7 +9522,7 @@ export default function CIS() {
         console.warn("[CHUNK] Agentic chunking failed, falling back to semantic:", err);
       }
 
-      // ── Fallback: semantic chunking (paragraph/sentence boundaries) ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Fallback: semantic chunking (paragraph/sentence boundaries) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       console.log("[CHUNK] Using semantic fallback chunking");
       const semanticPairs = buildSemanticParentChildChunks(text);
       const parentCount = new Set(semanticPairs.map((p) => p.parentIndex)).size;
@@ -9494,14 +9545,14 @@ export default function CIS() {
     if (reason) {
       console.warn(`[EMBED] Failure #${embeddingFailCountRef.current}: ${reason}`);
     }
-    // Only disable for this session after repeated failures — never persist to localStorage
+    // Only disable for this session after repeated failures Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ never persist to localStorage
     if (embeddingFailCountRef.current >= MAX_EMBEDDING_FAILURES) {
       embeddingsDisabledRef.current = true;
       console.error(`[EMBED] Disabled for this session after ${MAX_EMBEDDING_FAILURES} failures. Refresh page to retry.`);
     }
   }, []);
 
-  // ── Entity extraction helper: populate knowledge graph + KPIs from documents ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Entity extraction helper: populate knowledge graph + KPIs from documents Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const extractAndStoreEntities = useCallback(
     async (documentId: string, rawContent: string, docTitle: string, eventId: string, pdfBase64ForExtraction?: string | null) => {
       if ((!rawContent?.trim() && !pdfBase64ForExtraction) || !eventId) return;
@@ -9520,7 +9571,7 @@ export default function CIS() {
           } else if (lowerTitle.includes("report") || lowerTitle.includes("analysis")) {
             detectedDocType = "report";
           }
-          console.log(`[EXTRACT] Extracting entities from doc ${documentId} — type: ${detectedDocType}, PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
+          console.log(`[EXTRACT] Extracting entities from doc ${documentId} Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ type: ${detectedDocType}, PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
           const extraction = await extractEntities({
             document_title: docTitle,
             document_text: rawContent?.slice(0, 12000) || "",
@@ -9529,10 +9580,10 @@ export default function CIS() {
           });
 
           if (extraction.entities.length === 0 && extraction.relationships.length === 0 && extraction.kpis.length === 0) {
-            console.warn("[EXTRACT] No entities/relationships/KPIs found — check backend logs for errors");
+            console.warn("[EXTRACT] No entities/relationships/KPIs found Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ check backend logs for errors");
             return;
           }
-          console.log(`[EXTRACT] ✅ Found ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
+          console.log(`[EXTRACT] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Found ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
 
           const userId = profile?.id || user?.id;
           if (!userId) {
@@ -9540,8 +9591,8 @@ export default function CIS() {
             return;
           }
 
-          // ── Step 1: Insert entities (dedupe by normalized_name) ──
-          const entityMap = new Map<string, string>(); // normalized_name → entity_id
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Step 1: Insert entities (dedupe by normalized_name) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
+          const entityMap = new Map<string, string>(); // normalized_name Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ entity_id
           
           for (const entity of extraction.entities) {
             const normalized = (entity.type === "company" || entity.type === "fund")
@@ -9584,7 +9635,7 @@ export default function CIS() {
             entityMap.set(normalized, entityId);
           }
 
-          // ── Step 2: Insert relationships ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Step 2: Insert relationships Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           // Allowed relation types per DB CHECK constraint on kg_edges
           const ALLOWED_RELATION_TYPES = new Set([
             'founded', 'works_at', 'invested_in', 'raised', 'led_round',
@@ -9619,7 +9670,7 @@ export default function CIS() {
             const targetId = entityMap.get(targetKey) ?? entityMap.get(targetCanon);
 
             if (!sourceId || !targetId) {
-              console.warn(`[EXTRACT] Missing entity for relationship ${rel.source_name} → ${rel.target_name}`);
+              console.warn(`[EXTRACT] Missing entity for relationship ${rel.source_name} Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${rel.target_name}`);
               continue;
             }
 
@@ -9628,7 +9679,7 @@ export default function CIS() {
             if (!ALLOWED_RELATION_TYPES.has(relationType)) {
               const mapped = RELATION_TYPE_MAP[relationType];
               if (mapped) {
-                console.log(`[EXTRACT] Mapped relation_type "${rel.relation_type}" → "${mapped}"`);
+                console.log(`[EXTRACT] Mapped relation_type "${rel.relation_type}" Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ "${mapped}"`);
                 relationType = mapped;
               } else {
                 // Default to partner_of for unknown types rather than failing
@@ -9647,7 +9698,7 @@ export default function CIS() {
               .limit(1);
 
             if (!existingEdge || existingEdge.length === 0) {
-              // Auto-approve high-confidence extractions (≥85%) so fewer items need manual review
+              // Auto-approve high-confidence extractions (Р В Р вЂ Р Р†Р вЂљР’В°Р СћРЎвЂ™85%) so fewer items need manual review
               const reviewStatus = rel.confidence >= 0.85 ? 'approved' : 'pending';
               
               const { error: edgeErr } = await supabase.from("kg_edges").insert({
@@ -9666,12 +9717,12 @@ export default function CIS() {
               if (edgeErr) {
                 console.warn(`[EXTRACT] Failed to insert edge:`, edgeErr);
               } else if (reviewStatus === 'pending') {
-                console.log(`[EXTRACT] ⚠️ Relationship ${rel.source_name} → ${rel.target_name} requires review (confidence: ${rel.confidence})`);
+                console.log(`[EXTRACT] Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ Relationship ${rel.source_name} Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${rel.target_name} requires review (confidence: ${rel.confidence})`);
               }
             }
           }
 
-          // ── Step 3: Insert KPIs ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Step 3: Insert KPIs Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           for (const kpi of extraction.kpis) {
             // Check if KPI already exists (same company + metric + period)
             const { data: existingKpi } = await supabase
@@ -9703,10 +9754,10 @@ export default function CIS() {
             }
           }
 
-          console.log(`[EXTRACT] ✅ Stored ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
+          console.log(`[EXTRACT] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Stored ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
         } catch (err) {
           console.error("[EXTRACT] Entity extraction failed:", err);
-          // Non-fatal — document is saved, embeddings work
+          // Non-fatal Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ document is saved, embeddings work
         }
       })();
     },
@@ -9748,7 +9799,7 @@ export default function CIS() {
             const pair = pairs[i];
             chunksAttempted++;
             try {
-              // ── Contextual Retrieval: enrich chunk with a Claude-generated header ──
+              // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Contextual Retrieval: enrich chunk with a Claude-generated header Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
               // This dramatically improves embedding quality (per Anthropic's paper)
               // BUT: Use fast timeout (3s) and skip if backend is slow to prevent blocking
               let textToEmbed = pair.childText;
@@ -9771,7 +9822,7 @@ export default function CIS() {
                   contextualHeader = ctx.contextual_header || "";
                 }
               } catch {
-                // Contextual enrichment failed or timed out — embed raw chunk (still works, just less precise)
+                // Contextual enrichment failed or timed out Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ embed raw chunk (still works, just less precise)
                 // This is non-fatal and shouldn't block the upload
                 console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length} (timeout or error)`);
                 contextualSkipped++;
@@ -9839,13 +9890,13 @@ export default function CIS() {
             }
           }
           const failedTotal = chunksEmbeddingFailed + chunksInsertFailed;
-          const statusEmoji = chunksEmbedded > 0 ? "✅" : "⚠️";
+          const statusEmoji = chunksEmbedded > 0 ? "Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦" : "Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ";
           console.log(
             `[EMBED] ${statusEmoji} Indexed ${chunksEmbedded}/${chunksAttempted} chunks for doc ${documentId} ` +
             `(mode=${chunkBuild.mode}, contextual_skipped=${contextualSkipped}, embed_failed=${chunksEmbeddingFailed}, insert_failed=${chunksInsertFailed}, total_failed=${failedTotal})`
           );
           
-          // ── Trigger entity extraction after embeddings are done ──
+          // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Trigger entity extraction after embeddings are done Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
           const eventId = activeEventId || (await ensureActiveEventId());
           if (eventId && (rawContent || pdfBase64ForExtraction) && docTitle) {
             void extractAndStoreEntities(documentId, rawContent || "", docTitle, eventId, pdfBase64ForExtraction);
@@ -9900,7 +9951,7 @@ export default function CIS() {
       // Helper: find the streaming message by its stable id (never stale)
       const patchById = (prev: Message[], patch: Partial<Message>): Message[] => {
         const idx = prev.findIndex((m) => m.id === id);
-        if (idx === -1) return prev; // message was removed — no-op
+        if (idx === -1) return prev; // message was removed Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ no-op
         const updated = [...prev];
         updated[idx] = { ...updated[idx], ...patch };
         return updated;
@@ -10027,14 +10078,14 @@ export default function CIS() {
               role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
               content: m.content || "",
             }));
-            console.log("[DEBUG] ✅ Fetched chat history from DB:", threadMessages.length, "messages");
+            console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Fetched chat history from DB:", threadMessages.length, "messages");
             console.log("[DEBUG] Sample messages:", threadMessages.slice(0, 3).map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." })));
           } else {
-            console.log("[DEBUG] ⚠️ No messages found in DB for thread:", threadId);
+            console.log("[DEBUG] Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ No messages found in DB for thread:", threadId);
           }
         }
       } catch (fetchError) {
-        console.error("[DEBUG] ❌ Failed to fetch chat history from DB:", fetchError);
+        console.error("[DEBUG] Р В Р вЂ Р РЋРЎС™Р В Р вЂ° Failed to fetch chat history from DB:", fetchError);
         // Fallback to state messages if DB fetch fails
         threadMessages = messages
           .filter((m) => m.threadId === threadId)
@@ -10062,7 +10113,7 @@ export default function CIS() {
     return threadMessages;
   }, [messages, activeEventId, ensureActiveEventId]);
 
-  // ── Convert companyConnections state to the format expected by askClaudeAnswerStream ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Convert companyConnections state to the format expected by askClaudeAnswerStream Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const connectionsForChat: AskFundConnection[] = useMemo(() => {
     return companyConnections.map((c) => ({
       source_company_name: c.source_company_name,
@@ -10074,7 +10125,7 @@ export default function CIS() {
     }));
   }, [companyConnections]);
 
-  // ── Build a single card snippet (reusable) ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Build a single card snippet (reusable) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const buildCardSnippet = useCallback(
     (card: { company_name: string; company_properties: Record<string, any> }, slim = false): string => {
       const p = card.company_properties || {};
@@ -10104,7 +10155,7 @@ export default function CIS() {
     []
   );
 
-  // ── Extract country/sector from question for filtering (e.g. "how many in Bangladesh") ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Extract country/sector from question for filtering (e.g. "how many in Bangladesh") Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const extractFilterFromQuestion = useCallback((question: string): { country?: string; sector?: string; stage?: string } => {
     const q = question.toLowerCase();
     const result: { country?: string; sector?: string; stage?: string } = {};
@@ -10152,12 +10203,12 @@ export default function CIS() {
     return result;
   }, []);
 
-  // ── Smart company card sources: filter by country/sector, cap, put matches first ──
+  // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Smart company card sources: filter by country/sector, cap, put matches first Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
   const buildCompanyCardSources = useCallback(
     (question: string, cards: Array<{ company_name: string; company_properties: Record<string, any> }>, detectedNames: string[]): Array<{ title: string | null; file_name: string | null; snippet: string | null }> => {
       if (!cards.length) return [];
 
-      // Deduplicate by core company name — "Chhaya Technologies PTE. LTD." and "Chhaya" merge
+      // Deduplicate by core company name Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ "Chhaya Technologies PTE. LTD." and "Chhaya" merge
       const deduped = new Map<string, typeof cards[0]>();
       for (const card of cards) {
         const core = extractCoreCompanyName(card.company_name);
@@ -10251,7 +10302,7 @@ export default function CIS() {
       }
       // For portfolio-wide or filter questions, send matching cards + slim list of others (capped)
       if (isPortfolioWide || isFilterQuestion) {
-        // Cap non-matching cards to avoid token waste — 20 slim cards is enough for context
+        // Cap non-matching cards to avoid token waste Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ 20 slim cards is enough for context
         for (const card of otherCards.slice(0, 20)) {
           result.push({ title: `Company card: ${card.company_name}`, file_name: null, snippet: buildCardSnippet(card, true) });
         }
@@ -10285,11 +10336,11 @@ export default function CIS() {
         return;
       }
 
-      // ════════════════════════════════════════════════════════════════════
-      // AGENTIC RAG — Backend-driven retrieval with Claude tool use
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
+      // AGENTIC RAG Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Backend-driven retrieval with Claude tool use
       // When enabled, the backend handles ALL retrieval (SQL, vector search,
       // knowledge graph) via Claude's tool_use loop. The frontend just streams.
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       // When multi-agent is ON, use the legacy pipeline which has orchestrator + graph + KPI agents.
       // When OFF, use the faster backend-driven agent RAG.
       const USE_AGENT_RAG = !multiAgentEnabled;
@@ -10370,9 +10421,9 @@ export default function CIS() {
         return; // Skip entire old retrieval pipeline
       }
 
-      // ════════════════════════════════════════════════════════════════════
-      // LEGACY PIPELINE (below) — only runs when USE_AGENT_RAG = false
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
+      // LEGACY PIPELINE (below) Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ only runs when USE_AGENT_RAG = false
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
 
       const previousEvidence = lastEvidence;
       const previousEvidenceThreadId = lastEvidenceThreadId;
@@ -10433,7 +10484,7 @@ export default function CIS() {
           // This prevents the case where a document IS in the folder but the link table
           // is out of sync. Better to show too many results than none.
           if (filtered.length === 0 && docList.length > 0) {
-            console.warn("[DEBUG] Folder scope filter removed ALL docs — returning unfiltered to avoid empty results");
+            console.warn("[DEBUG] Folder scope filter removed ALL docs Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ returning unfiltered to avoid empty results");
             return docList;
           }
           
@@ -10464,13 +10515,13 @@ export default function CIS() {
       const hasVaguePattern = /\b(tell me more|tell me all|what about|and what|how about|what else|tell more|more about|more details|more info|more complete|more comprehensive|more profound|give more|give more info|expand|elaborate|all you know|everything|full|complete|comprehensive|detailed|another|other|different|alternative|someone else|something else|any other|next one|one more)\b/i.test(qLower);
       const followUpCueInQuestion = /\b(what about|and what|tell me|more about|more info|more complete|more comprehensive|more profound|give more|give more info|elaborate|explain|requirements|responsibilities|limitations|cannot|can't|couldn't|allowed|forbidden|answer|profound|comprehensive|detail|full|complete|detailed|another|other|different|alternative|someone else|something else|any other|next one|one more)\b/i.test(qLower);
       
-      // CRITICAL: Detect "another/different/other" queries — user wants NEW results, not repeats
+      // CRITICAL: Detect "another/different/other" queries Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ user wants NEW results, not repeats
       const wantsAlternative = /\b(another|other|different|alternative|someone else|something else|any other|next one|one more|what else|who else|which else)\b/i.test(qLower);
       const isShort = question.split(/\s+/).length <= 15;
       
       // CRITICAL: Extract names from chat history for fallback pronoun replacement
       const extractNamesFromHistory = (msgs: Array<{ role: string; content: string }>): string[] => {
-        // ONLY look at USER messages — assistant responses have tons of capitalized
+        // ONLY look at USER messages Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ assistant responses have tons of capitalized
         // section headers ("Due Diligence", "Information Accuracy", "Burn Rate") that
         // are NOT company/person names and pollute pronoun resolution
         const userText = msgs.filter(m => m.role === "user").map(m => m.content).join(" ");
@@ -10555,7 +10606,7 @@ export default function CIS() {
               const knownCompanyLower = new Set((companyCards || []).map(c => (c.company_name || "").toLowerCase()));
               const verifiedName = namesInHistory.reverse().find(n => knownCompanyLower.has(n.toLowerCase()));
               if (verifiedName) {
-                console.log("[DEBUG] ⚠️ LLM rewrite missing company name, injecting verified:", verifiedName);
+                console.log("[DEBUG] Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ LLM rewrite missing company name, injecting verified:", verifiedName);
                 searchQuestion = question;
                 for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
                   const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
@@ -10563,7 +10614,7 @@ export default function CIS() {
                 }
                 console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
               } else {
-                console.log("[DEBUG] LLM rewrite didn't include names, but no verified company found — trusting LLM");
+                console.log("[DEBUG] LLM rewrite didn't include names, but no verified company found Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ trusting LLM");
               }
             }
           }
@@ -10580,12 +10631,12 @@ export default function CIS() {
           })();
           
           if (companyNameFromLastQ) {
-            console.log("[DEBUG] 🎯 Company from last user question:", companyNameFromLastQ);
+            console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР В РІР‚в„–Р В РІР‚РЋ Company from last user question:", companyNameFromLastQ);
             // Ensure the rewritten query includes this company name
             const searchLower = searchQuestion.toLowerCase();
             if (!searchLower.includes(companyNameFromLastQ.toLowerCase())) {
               searchQuestion = `${companyNameFromLastQ} ${searchQuestion}`.replace(/\s+/g, " ").trim();
-              console.log("[DEBUG] ✅ Injected company name into search query:", searchQuestion);
+              console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Injected company name into search query:", searchQuestion);
             }
           }
         } catch (rewriteError) {
@@ -10772,7 +10823,7 @@ export default function CIS() {
 
       const canSemantic = tokens.length >= 1;
 
-      // ── STEP 1: Query Router — analyze intent, entities, complexity, routing strategy ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ STEP 1: Query Router Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ analyze intent, entities, complexity, routing strategy Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       let queryAnalysis: QueryAnalysis | null = null;
       try {
         queryAnalysis = await analyzeQuery(question, threadMessages);
@@ -10797,7 +10848,7 @@ export default function CIS() {
             if (!rewrittenLower.includes(companyNameFromLastQ.toLowerCase())) {
               // Inject company name into router's rewritten query
               finalSearchQuery = `${companyNameFromLastQ} ${queryAnalysis.rewritten_query}`.replace(/\s+/g, " ").trim();
-              console.log("[DEBUG] ✅ Injected company name into router query:", finalSearchQuery);
+              console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Injected company name into router query:", finalSearchQuery);
             } else {
               finalSearchQuery = queryAnalysis.rewritten_query;
             }
@@ -10816,11 +10867,11 @@ export default function CIS() {
         searchTimeoutId = null;
       }
       
-      // ════════════════════════════════════════════════════════════════════
-      // FAST PATH: Portfolio / company-index questions → skip heavy RAG
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
+      // FAST PATH: Portfolio / company-index questions Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ skip heavy RAG
       // Questions like "how many companies in Morocco?", "list my fintech companies",
       // "which companies could connect with X?" can be answered from cards alone.
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       const isPortfolioIndexQuestion = (() => {
         const q = normalizedQuestion;
         return (
@@ -10831,7 +10882,7 @@ export default function CIS() {
       })();
 
       if (isPortfolioIndexQuestion && companyCards.length > 0) {
-        console.log("[FAST-PATH] Portfolio index question detected — answering from company cards only");
+        console.log("[FAST-PATH] Portfolio index question detected Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ answering from company cards only");
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
         }
@@ -10882,17 +10933,17 @@ export default function CIS() {
         return;
       }
 
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       // MULTI-AGENT RAG (only when toggle is ON)
-      // When OFF → classic single-path RAG (vector + optional web search)
-      // When ON  → Orchestrator → parallel Graph/KPI/Vector → Critic
-      // ════════════════════════════════════════════════════════════════════
+      // When OFF Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ classic single-path RAG (vector + optional web search)
+      // When ON  Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Orchestrator Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ parallel Graph/KPI/Vector Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Critic
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       let routingPlan = { use_vector: true, use_graph: false, use_kpis: false, use_web: false, reasoning: "", sub_queries: {} as Record<string, string> };
       let graphContext = "";
       let kpiContext = "";
 
       if (multiAgentEnabled) {
-        // ── Step 1: Orchestrator (Router Agent) ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Step 1: Orchestrator (Router Agent) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         try {
           const threadMsgsForRouter = await getThreadMessages(threadId, 5);
           routingPlan = await orchestrateQuery({
@@ -10902,7 +10953,7 @@ export default function CIS() {
           console.log("[MULTI-AGENT] Orchestrator plan:", routingPlan);
 
           if (routingPlan.use_web && !webSearchEnabled) {
-            console.log("[MULTI-AGENT] Orchestrator recommends web search — enabling");
+            console.log("[MULTI-AGENT] Orchestrator recommends web search Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ enabling");
           }
         } catch (routerErr) {
           console.warn("[MULTI-AGENT] Orchestrator failed, falling back to vector-only:", routerErr);
@@ -10936,7 +10987,7 @@ export default function CIS() {
         console.log("[RAG] Standard single-path RAG (multi-agent OFF)");
       }
 
-      // ── Step 2: Parallel Graph/KPI Retrieval (multi-agent only) ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Step 2: Parallel Graph/KPI Retrieval (multi-agent only) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       const graphPromise = (multiAgentEnabled && routingPlan.use_graph && eventId) ? (async () => {
         try {
           const entityNames = queryAnalysis?.entities?.map((e: any) => e.name) || [];
@@ -10961,16 +11012,16 @@ export default function CIS() {
         } catch { return ""; }
       })() : Promise.resolve("");
 
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       // PARALLEL RETRIEVAL with global time budget (8s)
       // Fire semantic + keyword search simultaneously, merge with RRF.
       // Only run heavier fallbacks if both came back empty.
-      // ════════════════════════════════════════════════════════════════════
+      // Р В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ўР В Р вЂ Р Р†Р вЂљРЎС›Р РЋРІР‚в„ў
       const RETRIEVAL_BUDGET_MS = 8000;
       const retrievalDeadline = Date.now() + RETRIEVAL_BUDGET_MS;
       const isRetrievalBudgetExhausted = () => Date.now() >= retrievalDeadline;
 
-      // ── Multi-Query + Semantic search promise ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Multi-Query + Semantic search promise Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       const semanticSearchPromise = (async (): Promise<typeof semanticMatches> => {
         if (!canSemantic) return [];
         try {
@@ -10988,7 +11039,7 @@ export default function CIS() {
               console.log("[MULTI-QUERY] Variants:", queryVariants);
             }
           } catch {
-            console.log("[MULTI-QUERY] Generation skipped — using original query only");
+            console.log("[MULTI-QUERY] Generation skipped Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ using original query only");
           }
 
           // Step 2: Embed all variants in parallel
@@ -11020,7 +11071,7 @@ export default function CIS() {
           });
           const allResults = await Promise.all(searchPromises);
 
-          // Step 4: Merge and dedupe — keep best similarity per document_id
+          // Step 4: Merge and dedupe Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ keep best similarity per document_id
           const bestByDoc = new Map<string, any>();
           for (const results of allResults) {
             for (const m of results) {
@@ -11092,7 +11143,7 @@ export default function CIS() {
         }
       })();
 
-      // ── Keyword search promise (runs in PARALLEL with semantic) ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Keyword search promise (runs in PARALLEL with semantic) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       const keywordSearchPromise = (async (): Promise<typeof keywordMatches> => {
         try {
           const keywordQueryText = finalSearchQuery.replace(/[^\w\s-]/g, " ").trim();
@@ -11110,7 +11161,7 @@ export default function CIS() {
         }
       })();
 
-      // ── Direct title search promise (for name queries, also in parallel) ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Direct title search promise (for name queries, also in parallel) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       const directTitleSearchPromise = (async (): Promise<typeof keywordMatches> => {
         if (!hasName) return [];
         try {
@@ -11139,7 +11190,7 @@ export default function CIS() {
         } catch { return []; }
       })();
 
-      // ── AWAIT ALL IN PARALLEL with global budget ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ AWAIT ALL IN PARALLEL with global budget Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       const allSearches = Promise.all([semanticSearchPromise, keywordSearchPromise, directTitleSearchPromise]);
       const budgetTimeout = new Promise<[typeof semanticMatches, typeof keywordMatches, typeof keywordMatches]>((resolve) =>
         setTimeout(() => resolve([[], [], []]), RETRIEVAL_BUDGET_MS)
@@ -11173,7 +11224,7 @@ export default function CIS() {
       });
 
       if (!docs.length && !error) {
-        // ── RRF merge ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ RRF merge Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         const RRF_K = 60;
         const scoreMap = new Map<string, number>();
         semanticMatches.forEach((m, idx) => {
@@ -11196,7 +11247,7 @@ export default function CIS() {
 
         // CRITICAL FALLBACK: If all searches fail but it's a name query, try direct document query
         if (rankedIds.length === 0 && hasName) {
-          console.log("[DEBUG] 🆘 All searches failed for name query - trying DIRECT document query");
+          console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР Р†Р вЂљР’В Р вЂ™Р’В All searches failed for name query - trying DIRECT document query");
           try {
             // Query ALL documents for this event and filter manually
             let fallbackQuery = supabase
@@ -11691,7 +11742,7 @@ export default function CIS() {
         return metaPatterns.some(pattern => q.includes(pattern));
       })();
       
-      // ── CONNECTION-INTENT DETECTION ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ CONNECTION-INTENT DETECTION Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       // When user asks about connections, partnerships, or "who to connect with",
       // we need to send ALL portfolio context so Claude knows what companies exist.
       const isConnectionIntent = (() => {
@@ -11754,7 +11805,7 @@ export default function CIS() {
 
       // CRITICAL: If this is a pronoun-based follow-up, reuse previous evidence directly.
       // This avoids searching for "him" and failing to find new docs.
-      // BUT: If user asks for "another/different/other", do NOT reuse — they want NEW results.
+      // BUT: If user asks for "another/different/other", do NOT reuse Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ they want NEW results.
       if (
         isFollowUpQuery &&
         followUpHasPronoun &&
@@ -11763,7 +11814,7 @@ export default function CIS() {
         previousEvidence.docs.length > 0 &&
         previousEvidenceThreadId === threadId
       ) {
-        console.log("[DEBUG] ✅ Using previous evidence for pronoun follow-up (skip new search)");
+        console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Using previous evidence for pronoun follow-up (skip new search)");
         const maxDocs = isComprehensiveQuestion ? 5 : 3;
         const answerDocs = previousEvidence.docs.slice(0, maxDocs);
         setLastEvidence({ question: searchQuestion, docs: answerDocs, decisions: decisionMatches });
@@ -11881,7 +11932,7 @@ export default function CIS() {
         });
         
         if (shouldUsePreviousEvidence) {
-          console.log("[DEBUG] ✅ Using previous evidence for follow-up query");
+          console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Using previous evidence for follow-up query");
           const answerDocs = previousEvidence.docs.slice(0, 3);
           setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
           setLastEvidenceThreadId(threadId);
@@ -11968,7 +12019,7 @@ export default function CIS() {
         const threadMessagesForFallback = await getThreadMessages(threadId, 10);
         
         if (hasPronounInOriginal && threadMessagesForFallback.length > 0) {
-          console.log("[DEBUG] ✅ Fallback: Calling Claude with chat history only (no new sources)");
+          console.log("[DEBUG] Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљР’В¦ Fallback: Calling Claude with chat history only (no new sources)");
           if (searchTimeoutId !== null) {
             window.clearTimeout(searchTimeoutId);
           }
@@ -12036,7 +12087,7 @@ export default function CIS() {
           return;
         }
 
-        // NO DOCUMENTS FOUND — but instead of showing an error, forward to Claude
+        // NO DOCUMENTS FOUND Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ but instead of showing an error, forward to Claude
         // so it can still answer general questions, greetings, or use conversation context.
         // This fixes the problem where "hello" or document-specific questions get blocked.
         console.log("[DEBUG] No docs found, forwarding to Claude for general answer");
@@ -12046,13 +12097,13 @@ export default function CIS() {
           window.clearTimeout(searchTimeoutId);
         }
         
-        // ── CONNECTION-INTENT: Build portfolio context from ALL documents ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ CONNECTION-INTENT: Build portfolio context from ALL documents Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         // When user asks about connections/partnerships, send all doc titles
         // so Claude knows what companies are in the portfolio even though
         // the search didn't match the specific company name.
         let portfolioSources: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
         if (isConnectionIntent && documents.length > 0) {
-          console.log("[DEBUG] 🔗 Connection-intent detected — injecting full portfolio context");
+          console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР Р†Р вЂљРЎСљР Р†Р вЂљРІР‚Сњ Connection-intent detected Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ injecting full portfolio context");
           portfolioSources = documents.slice(0, 15).map((doc) => ({
             title: doc.title || "Untitled",
             file_name: null,
@@ -12090,7 +12141,7 @@ export default function CIS() {
             if (alreadyMentioned.length > 0) {
               const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
               questionForClaudeFallback = question + exclusionNote;
-              console.log("[DEBUG] 🚫 Fallback exclusion context added. Already mentioned:", alreadyMentioned);
+              console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР РЋРІвЂћСћР вЂ™Р’В« Fallback exclusion context added. Already mentioned:", alreadyMentioned);
             }
           }
           
@@ -12168,19 +12219,19 @@ export default function CIS() {
         ? `\n\nRelated decisions:\n${decisionMatches
             .map(
               (d, index) =>
-                `${index + 1}. ${d.startupName} — ${d.actionType}${
+                `${index + 1}. ${d.startupName} Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ ${d.actionType}${
                   d.outcome ? ` (${d.outcome})` : ""
-                }${d.notes ? ` — ${d.notes}` : ""}`
+                }${d.notes ? ` Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ ${d.notes}` : ""}`
             )
             .join("\n")}`
         : "";
 
-      // Semantic note completely removed — never show this to users
+      // Semantic note completely removed Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ never show this to users
       const semanticNote = "";
 
       // For comprehensive questions, use more sources (up to 5)
       const maxDocs = isComprehensiveQuestion ? 5 : 3;
-      // ── SOURCE DIVERSITY: Don't let one company dominate all results ──
+      // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ SOURCE DIVERSITY: Don't let one company dominate all results Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
       // If multiple docs share the same title prefix (e.g. all about Chari), cap per-company to 2
       const diversifyDocs = (allDocs: typeof rankedDocs, cap: number): typeof rankedDocs => {
         const result: typeof rankedDocs = [];
@@ -12251,7 +12302,7 @@ export default function CIS() {
           })),
         ];
         
-        // ── CONNECTION-INTENT: Inject additional portfolio context ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ CONNECTION-INTENT: Inject additional portfolio context Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         // When user asks about connections, also include titles of OTHER docs
         // not already in sources so Claude knows the full portfolio.
         if (isConnectionIntent) {
@@ -12266,7 +12317,7 @@ export default function CIS() {
             }));
           if (extraPortfolio.length > 0) {
             sources = [...sources, ...extraPortfolio];
-            console.log("[DEBUG] 🔗 Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
+            console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР Р†Р вЂљРЎСљР Р†Р вЂљРІР‚Сњ Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
           }
         }
         // Web search is now handled natively by Anthropic's web_search tool (no manual DuckDuckGo needed)
@@ -12275,7 +12326,7 @@ export default function CIS() {
           ? (webSearchEnabled || routingPlan.use_web)
           : webSearchEnabled;
 
-        // ── MULTI-AGENT RAG — Await graph & KPI agents (only when enabled) ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ MULTI-AGENT RAG Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Await graph & KPI agents (only when enabled) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         if (multiAgentEnabled) {
           try {
             const [graphResult, kpiResult] = await Promise.all([graphPromise, kpiPromise]);
@@ -12284,7 +12335,7 @@ export default function CIS() {
 
             if (graphContext && !graphContext.startsWith("No entities found")) {
               sources.push({
-                title: "[GRAPH] Knowledge Graph — Entities & Relationships",
+                title: "[GRAPH] Knowledge Graph Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Entities & Relationships",
                 file_name: null as string | null,
                 snippet: graphContext,
               });
@@ -12329,7 +12380,7 @@ export default function CIS() {
           if (alreadyMentioned.length > 0) {
             const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
             questionForClaude = question + exclusionNote;
-            console.log("[DEBUG] 🚫 Exclusion context added. Already mentioned:", alreadyMentioned);
+            console.log("[DEBUG] Р РЋР вЂљР РЋРЎСџР РЋРІвЂћСћР вЂ™Р’В« Exclusion context added. Already mentioned:", alreadyMentioned);
           }
         }
         
@@ -12389,7 +12440,7 @@ export default function CIS() {
           estCostUsd: estimate.estCostUsd,
         });
 
-        // ── MULTI-AGENT RAG — Step 4: Critic (only when multi-agent is ON) ──
+        // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ MULTI-AGENT RAG Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Step 4: Critic (only when multi-agent is ON) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
         if (multiAgentEnabled && fullAnswer.length > 50) {
           criticCheck({
             question: questionForClaude,
@@ -12413,21 +12464,21 @@ export default function CIS() {
         let userMessage = `Claude answer failed: ${errorMsg}`;
         if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
           userMessage = `The request timed out after 70 seconds. This can happen with:\n\n` +
-            `• Complex questions requiring deep analysis\n` +
-            `• Large documents with lots of context\n` +
-            `• Slow API responses\n\n` +
-            `💡 **Try:**\n` +
-            `• Rephrasing your question to be more specific\n` +
-            `• Breaking complex questions into smaller parts\n` +
-            `• Asking about specific companies/topics (e.g., "Giga Energy intern responsibilities")\n` +
-            `• Checking if your documents contain the information\n` +
-            `• Trying again in a moment`;
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Complex questions requiring deep analysis\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Large documents with lots of context\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Slow API responses\n\n` +
+            `Р РЋР вЂљР РЋРЎСџР Р†Р вЂљРІвЂћСћР В Р вЂ№ **Try:**\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Rephrasing your question to be more specific\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Breaking complex questions into smaller parts\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Asking about specific companies/topics (e.g., "Giga Energy intern responsibilities")\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Checking if your documents contain the information\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Trying again in a moment`;
         } else if (errorMsg.includes("HTTP error") || errorMsg.includes("Failed to fetch")) {
           userMessage = `Network error: ${errorMsg}\n\n` +
-            `💡 **Check:**\n` +
-            `• Your internet connection\n` +
-            `• If the API service is available\n` +
-            `• Try again in a moment`;
+            `Р РЋР вЂљР РЋРЎСџР Р†Р вЂљРІвЂћСћР В Р вЂ№ **Check:**\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Your internet connection\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє If the API service is available\n` +
+            `Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє Try again in a moment`;
         } else if (errorMsg.includes("AbortError") || errorMsg.includes("aborted")) {
           userMessage = `Request was cancelled. Please try again.`;
         }
@@ -12506,13 +12557,13 @@ export default function CIS() {
       await askFund(question, threadId);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        // User cancelled — don't show error
+        // User cancelled Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ don't show error
         return;
       }
       console.error("Chat error:", err);
       const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
       createAssistantMessage(
-        `❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
+        `Р В Р вЂ Р РЋРЎС™Р В Р вЂ° Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
         threadId
       );
     } finally {
@@ -12570,7 +12621,7 @@ export default function CIS() {
 
       toast({
         title: "Connection logged",
-        description: `Created ${connectionData.connection_type} connection: ${connectionData.source_company_name} → ${connectionData.target_company_name}`,
+        description: `Created ${connectionData.connection_type} connection: ${connectionData.source_company_name} Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${connectionData.target_company_name}`,
       });
 
       setLogDecisionDialogOpen(false);
@@ -12774,7 +12825,7 @@ export default function CIS() {
           created_by: userId,
         });
         if (error) {
-          errors.push(`${source} → ${target}: ${error.message}`);
+          errors.push(`${source} Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ ${target}: ${error.message}`);
         } else {
           added++;
         }
@@ -12837,7 +12888,7 @@ export default function CIS() {
   }, []);
 
   const renderAssistantContent = useCallback((text: string) => {
-    // ── Inline markdown renderer ──
+    // Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Inline markdown renderer Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
     // Converts **bold**, *italic*, `code`, [n] references into React elements
     const renderInline = (raw: string, keyPrefix: string = ""): React.ReactNode[] => {
       const parts: React.ReactNode[] = [];
@@ -13031,7 +13082,7 @@ export default function CIS() {
         continue;
       }
 
-      // Lines ending with ":" that are short → treat as sub-heading
+      // Lines ending with ":" that are short Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ treat as sub-heading
       if (trimmed.endsWith(":") && trimmed.length < 80 && !trimmed.startsWith("http")) {
         flushAll();
         blocks.push({ type: "h3", content: trimmed.replace(/:$/, "") });
@@ -13249,7 +13300,7 @@ export default function CIS() {
           </DropdownMenu>
         </header>
 
-        {/* Main Layout — sidebar only when on Chat tab */}
+        {/* Main Layout Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ sidebar only when on Chat tab */}
         <div className="flex gap-4">
           {activeTab === "chat" && (
           <div className="w-64 flex-shrink-0 flex flex-col gap-4">
@@ -13308,7 +13359,7 @@ export default function CIS() {
                 </div>
               </div>
 
-            {/* Knowledge Scope — compact, scrollable, with grouped Drive folders */}
+            {/* Knowledge Scope Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ compact, scrollable, with grouped Drive folders */}
             <div className="cis-surface p-2 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards] max-h-[min(340px,45vh)] flex flex-col min-w-0">
                 <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
                   <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider truncate">
@@ -13346,7 +13397,7 @@ export default function CIS() {
                       </label>
                     ))}
                   </div>
-                  {/* Folder scopes — grouped by category (show all: Portfolio Companies, Funds, BD, Mentors/Corporates, etc.) */}
+                  {/* Folder scopes Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ grouped by category (show all: Portfolio Companies, Funds, BD, Mentors/Corporates, etc.) */}
                   {(() => {
                     const folderScopes = scopes.filter((s) => s.type === "folder");
 
@@ -13415,7 +13466,7 @@ export default function CIS() {
                           {isCatExpanded && (
                             <div className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l border-slate-200 pl-1.5">
                               {catItems.length === 0 ? (
-                                <span className="text-[9px] font-mono text-slate-400">No folders in this category. Add folders in Sources → Document Folders.</span>
+                                <span className="text-[9px] font-mono text-slate-400">No folders in this category. Add folders in Sources Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Document Folders.</span>
                               ) : null}
                               {Array.from(companyGroups.entries()).map(([groupName, items]) => {
                                 const allChecked = items.every((i) => i.checked);
@@ -13548,7 +13599,7 @@ export default function CIS() {
                   ) : (
                     costLog.slice(0, 5).map((entry) => (
                       <div key={entry.ts} className="border rounded-md p-2">
-                        <div className="font-medium">${entry.estCostUsd} • {entry.ts}</div>
+                        <div className="font-medium">${entry.estCostUsd} Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє {entry.ts}</div>
                         <div className="text-slate-500 font-mono">Q: {entry.question}</div>
                         <div className="text-slate-500 font-mono">
                           Tokens: {entry.estInputTokens} in / {entry.estOutputTokens} out
@@ -13559,7 +13610,7 @@ export default function CIS() {
                 </CardContent>
               </Card>
             )}
-            {/* Chat Container — fills viewport, input at bottom of card */}
+            {/* Chat Container Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ fills viewport, input at bottom of card */}
             <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)", minHeight: "600px" }}>
               <Card className="flex-1 flex flex-col border border-slate-200/20 bg-white/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
                 {/* Chat header */}
@@ -13591,7 +13642,7 @@ export default function CIS() {
                   )}
                 </div>
 
-                {/* Messages area — scrollable, content aligned to bottom */}
+                {/* Messages area Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ scrollable, content aligned to bottom */}
                 <div 
                   ref={chatContainerRef}
                   className="flex-1 overflow-y-auto px-5 py-5 bg-white scroll-smooth flex flex-col"
@@ -13761,7 +13812,7 @@ export default function CIS() {
                         </div>
                       ))}
 
-                      {/* Animated thinking indicator — shows while loading */}
+                      {/* Animated thinking indicator Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ shows while loading */}
                       {chatIsLoading && (
                         <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mt-1">
@@ -13787,7 +13838,7 @@ export default function CIS() {
                   )}
                 </div>
 
-                {/* Sources Used — collapsible strip */}
+                {/* Sources Used Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ collapsible strip */}
                 {lastEvidence && lastEvidence.docs.length > 0 && (
                   <div className="border-t border-slate-200 bg-white/30 px-5 py-2.5 flex-shrink-0">
                     <div className="flex items-center gap-2 mb-1.5">
@@ -13810,7 +13861,7 @@ export default function CIS() {
                   </div>
                 )}
 
-                {/* Input bar — at bottom of card */}
+                {/* Input bar Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ at bottom of card */}
                 <div className="border-t-2 border-slate-200/15 bg-white/50 backdrop-blur-md p-4 flex-shrink-0">
                   {editingMessageId && (
                     <div className="flex items-center gap-2 mb-2 px-1">
@@ -13895,7 +13946,7 @@ export default function CIS() {
                           {chatLoadingStage}
                         </span>
                       ) : (
-                        "Press Enter to send  •  Shift+Enter for new line"
+                        "Press Enter to send  Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє  Shift+Enter for new line"
                       )}
                     </span>
                   </div>
@@ -14134,7 +14185,7 @@ export default function CIS() {
                           <div>
                             <div className="flex items-center gap-2 text-slate-900 font-mono font-bold">
                               <span>{s.source_company}</span>
-                              <span className="text-slate-400">→</span>
+                              <span className="text-slate-400">Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ</span>
                               <span>{s.target_company}</span>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
@@ -14181,11 +14232,11 @@ export default function CIS() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between py-3 border-b border-slate-200">
                         <span className="text-sm text-slate-400 font-mono uppercase tracking-wider">Name</span>
-                        <span className="text-sm text-slate-900 font-medium">{profile?.full_name || "—"}</span>
+                        <span className="text-sm text-slate-900 font-medium">{profile?.full_name || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</span>
                       </div>
                       <div className="flex items-center justify-between py-3 border-b border-slate-200">
                         <span className="text-sm text-slate-400 font-mono uppercase tracking-wider">Email</span>
-                        <span className="text-sm text-slate-900 font-medium">{profile?.email || "—"}</span>
+                        <span className="text-sm text-slate-900 font-medium">{profile?.email || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</span>
                       </div>
                       <div className="flex items-center justify-between py-3 border-b border-slate-200">
                         <span className="text-sm text-slate-400 font-mono uppercase tracking-wider">Role</span>
@@ -14196,7 +14247,7 @@ export default function CIS() {
                       {profile?.organization_id && (
                         <div className="flex items-center justify-between py-3 border-b border-slate-200">
                           <span className="text-sm text-slate-400 font-mono uppercase tracking-wider">Organization</span>
-                          <span className="text-xs text-slate-500 font-mono">{profile.organization_id.slice(0, 8)}…</span>
+                          <span className="text-xs text-slate-500 font-mono">{profile.organization_id.slice(0, 8)}Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В¦</span>
                         </div>
                       )}
                     </div>
@@ -14205,7 +14256,7 @@ export default function CIS() {
                         href="/"
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-500 hover:text-slate-900 hover:border-slate-300 transition-all font-medium"
                       >
-                        ← Back to Matchmaking
+                        Р В Р вЂ Р Р†Р вЂљР’В Р РЋРІР‚в„ў Back to Matchmaking
                       </a>
                       <Button
                         onClick={signOut}
@@ -14285,7 +14336,7 @@ export default function CIS() {
                     <div className="text-sm text-slate-400 mb-2">
                       Original text content ({viewingDocument.raw_content.length} characters)
                     </div>
-                    <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs whitespace-pre-wrap">
+                    <pre className="p-4 bg-slate-100 rounded-lg overflow-auto max-h-[500px] text-xs whitespace-pre-wrap">
                       {viewingDocument.raw_content}
                     </pre>
                     <Button
@@ -14344,7 +14395,7 @@ export default function CIS() {
 
       {/* Log Decision Dialog - Create company connections from chat */}
       <Dialog open={logDecisionDialogOpen} onOpenChange={setLogDecisionDialogOpen}>
-        <DialogContent className="sm:max-w-lg bg-[#050505] border border-slate-200">
+        <DialogContent className="sm:max-w-lg bg-white border border-slate-200">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900 font-mono font-black uppercase">
               <Link2 className="h-5 w-5 text-blue-600" />
@@ -14446,8 +14497,8 @@ function LogDecisionForm({
       return;
     }
 
-    // Strategy 3: Look for "X → Y" or "X and Y" connection patterns
-    const arrowMatch = text.match(/([A-Z][a-zA-Z0-9 ]+?)\s*[→→>]\s*([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\()/);
+    // Strategy 3: Look for "X Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ Y" or "X and Y" connection patterns
+    const arrowMatch = text.match(/([A-Z][a-zA-Z0-9 ]+?)\s*[Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћР В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ>]\s*([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\()/);
     if (arrowMatch) {
       setSourceCompany(arrowMatch[1].trim());
       setTargetCompany(arrowMatch[2].trim());
@@ -14531,7 +14582,7 @@ function LogDecisionForm({
             <SelectTrigger className="border border-slate-200 bg-white text-slate-900 font-mono">
               <SelectValue placeholder="Link to document..." />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border border-slate-200">
+            <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
               <SelectItem value="none" className="text-slate-900 font-mono">None</SelectItem>
               {documents.map((doc) => (
                 <SelectItem key={doc.id} value={doc.id} className="text-slate-900 font-mono">
@@ -14547,7 +14598,7 @@ function LogDecisionForm({
             <SelectTrigger className="border border-slate-200 bg-white text-slate-900 font-mono">
               <SelectValue placeholder="Link to document..." />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border border-slate-200">
+            <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
               <SelectItem value="none" className="text-slate-900 font-mono">None</SelectItem>
               {documents.filter((d) => d.id !== sourceDocId || sourceDocId === "none").map((doc) => (
                 <SelectItem key={doc.id} value={doc.id} className="text-slate-900 font-mono">
@@ -14566,7 +14617,7 @@ function LogDecisionForm({
             <SelectTrigger className="border border-slate-200 bg-white text-slate-900 font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border border-slate-200">
+            <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
               <SelectItem value="BD" className="text-slate-900 font-mono">
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -14606,7 +14657,7 @@ function LogDecisionForm({
             <SelectTrigger className="border border-slate-200 bg-white text-slate-900 font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border border-slate-200">
+            <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
               <SelectItem value="To Connect" className="text-slate-900 font-mono">
                 <span className="flex items-center gap-2">
                   <Clock className="h-3 w-3 text-yellow-500" />
@@ -14654,7 +14705,7 @@ function LogDecisionForm({
 
       {pendingContext?.aiReasoning && (
         <div className="space-y-2">
-          <Label className="text-slate-900 font-mono font-bold text-xs">AI Rationale (editable — this is your decision record)</Label>
+          <Label className="text-slate-900 font-mono font-bold text-xs">AI Rationale (editable Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ this is your decision record)</Label>
           <Textarea
             value={editableRationale}
             onChange={(e) => setEditableRationale(e.target.value)}
@@ -14697,7 +14748,7 @@ function LogDecisionForm({
   );
 }
 
-// Kanban Card Component — used inside the Kanban board columns
+// Kanban Card Component Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ used inside the Kanban board columns
 function KanbanCard({
   conn,
   onUpdateStatus,
@@ -14727,7 +14778,7 @@ function KanbanCard({
 
   return (
     <div
-      className="rounded-md border border-slate-200 bg-[#050505] p-2.5 cursor-pointer hover:border-blue-500 transition-all group"
+      className="rounded-md border border-slate-200 bg-white p-2.5 cursor-pointer hover:border-blue-500 transition-all group"
       onClick={() => setIsExpanded(!isExpanded)}
     >
       {/* Card Header */}
@@ -14736,7 +14787,7 @@ function KanbanCard({
           <div className="text-xs font-mono font-bold text-slate-900 leading-tight truncate" title={conn.source_company_name}>
             {conn.source_company_name}
           </div>
-          <div className="text-[10px] text-slate-400 font-mono">→</div>
+          <div className="text-[10px] text-slate-400 font-mono">Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ</div>
           <div className="text-xs font-mono font-bold text-slate-900 leading-tight truncate" title={conn.target_company_name}>
             {conn.target_company_name}
           </div>
@@ -14780,7 +14831,7 @@ function KanbanCard({
                   style={{ color: CONNECTION_STATUS_COLORS[s], borderColor: CONNECTION_STATUS_COLORS[s] + "60" }}
                   onClick={() => onUpdateStatus(conn.id, s)}
                 >
-                  → {s}
+                  Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ {s}
                 </button>
               ))}
           </div>
@@ -14801,7 +14852,7 @@ function KanbanCard({
               onUpdateStatus(conn.id, nextStatus);
             }}
           >
-            → {nextStatus}
+            Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ {nextStatus}
           </button>
         </div>
       )}
@@ -14810,7 +14861,7 @@ function KanbanCard({
 }
 
 // ============================================================================
-// COMPANIES TAB — Auto-Created Company Cards
+// COMPANIES TAB Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Auto-Created Company Cards
 // ============================================================================
 
 function CompaniesTab({
@@ -14908,7 +14959,7 @@ function CompaniesTab({
             Entity Cards
           </h2>
           <p className="text-sm text-slate-500 font-mono mt-1">
-            Auto-created from documents & CSV imports • {companyCounts.companies} companies • {companyCounts.funds} investors/funds
+            Auto-created from documents & CSV imports Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє {companyCounts.companies} companies Р В Р вЂ Р В РІР‚С™Р РЋРЎвЂє {companyCounts.funds} investors/funds
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -14997,7 +15048,7 @@ function CompaniesTab({
           </CardContent>
         </Card>
       ) : viewMode === "table" ? (
-        /* ── TABLE VIEW ── */
+        /* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ TABLE VIEW Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */
         <Card className="border border-slate-200 bg-white overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm font-mono">
@@ -15041,14 +15092,14 @@ function CompaniesTab({
                         </Badge>
                       </td>
                       <td className="p-3 text-slate-500 max-w-[120px] truncate">
-                        {props.industry || "—"}
+                        {props.industry || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}
                       </td>
-                      <td className="p-3 text-slate-500">{chequeOrStage || "—"}</td>
-                      <td className="p-3 text-slate-500">{props.arr || props.mrr || "—"}</td>
+                      <td className="p-3 text-slate-500">{chequeOrStage || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</td>
+                      <td className="p-3 text-slate-500">{props.arr || props.mrr || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</td>
                       <td className="p-3 text-slate-500 max-w-[150px] truncate">
-                        {geos.slice(0, 3).join(", ") || "—"}
+                        {geos.slice(0, 3).join(", ") || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}
                       </td>
-                      <td className="p-3 text-slate-500 max-w-[120px] truncate">{props.headquarters || "—"}</td>
+                      <td className="p-3 text-slate-500 max-w-[120px] truncate">{props.headquarters || "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</td>
                       <td className="p-3 text-right text-slate-500">{card.document_count || 0}</td>
                     </tr>
                   );
@@ -15058,7 +15109,7 @@ function CompaniesTab({
           </div>
         </Card>
       ) : (
-        /* ── CARD VIEW ── */
+        /* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ CARD VIEW Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredCards.map((card) => (
             <CompanyCard
@@ -15082,7 +15133,7 @@ function CompaniesTab({
   );
 }
 
-// ── Editable field component ──
+// Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Editable field component Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
 function EditableField({
   label,
   value,
@@ -15156,7 +15207,7 @@ function EditableField({
   );
 }
 
-// ── Individual Company Card Component (Rich & Editable) ──
+// Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Individual Company Card Component (Rich & Editable) Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™
 function CompanyCard({
   card,
   documents,
@@ -15271,7 +15322,7 @@ function CompanyCard({
     <Card className={`border-2 bg-white transition-all cursor-pointer ${
       isExpanded ? "border-blue-500 col-span-1 md:col-span-2 xl:col-span-2" : "border-slate-200/60 hover:border-blue-500"
     }`}>
-      {/* ── A. Header: Identity ── */}
+      {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ A. Header: Identity Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
       <CardHeader className="pb-2 border-b border-slate-200" onClick={onToggleExpand}>
         <div className="flex items-start gap-3">
           {/* Logo / type icon */}
@@ -15401,7 +15452,7 @@ function CompanyCard({
           </div>
         )}
 
-        {/* ── Expanded view ── */}
+        {/* Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ Expanded view Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™Р В Р вЂ Р Р†Р вЂљРЎСљР В РІР‚С™ */}
         {isExpanded && (
           <div className="space-y-4 pt-2 border-t border-slate-200">
             {/* B. Fund Details OR Investment Snapshot (company) */}
@@ -15463,7 +15514,7 @@ function CompanyCard({
                   <EditableField label="SOM" value={props.som || ""} placeholder="e.g. $200M" icon={PieChart} onSave={(v) => saveField("som", v)} />
                   <EditableField label="Market Growth Rate" value={props.market_growth_rate || ""} placeholder="e.g. 25% CAGR" icon={TrendingUp} onSave={(v) => saveField("market_growth_rate", v)} />
                 </div>
-                <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win — unfair advantage" icon={Award} onSave={(v) => saveField("competitive_edge", v)} multiline />
+                <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ unfair advantage" icon={Award} onSave={(v) => saveField("competitive_edge", v)} multiline />
               </div>
             </div>
 
@@ -15542,13 +15593,13 @@ function CompanyCard({
                     <div key={i} className="text-xs font-mono bg-slate-50 rounded-md px-2 py-1.5">
                       <span className="text-slate-900 font-bold">{c.name}</span>
                       {c.differentiator && (
-                        <span className="text-slate-400"> — {c.differentiator}</span>
+                        <span className="text-slate-400"> Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ {c.differentiator}</span>
                       )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-slate-300 italic font-mono pl-1">No competitors extracted — enrich from deck or add manually</p>
+                <p className="text-xs text-slate-300 italic font-mono pl-1">No competitors extracted Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ enrich from deck or add manually</p>
               )}
             </div>
 
@@ -15567,7 +15618,7 @@ function CompanyCard({
                       <div className="flex-1">
                         <div>
                           <span className="text-slate-900 font-bold">{f.name}</span>
-                          {f.role && <span className="text-slate-400"> — {f.role}</span>}
+                          {f.role && <span className="text-slate-400"> Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ {f.role}</span>}
                           {(f.pedigree || f.background) && (
                             <Badge className="ml-1.5 text-[9px] bg-slate-100 text-slate-500 border-0 py-0">{f.pedigree || f.background}</Badge>
                           )}
@@ -15583,7 +15634,7 @@ function CompanyCard({
                 </div>
               ) : (
                 <p className="text-xs text-slate-300 italic font-mono pl-1">
-                  No founders extracted yet — enrich from pitch deck or add manually
+                  No founders extracted yet Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ enrich from pitch deck or add manually
                 </p>
               )}
             </div>
@@ -15630,7 +15681,7 @@ function CompanyCard({
             )}
 
             {/* E. AI Rationale */}
-            <EditableField label="AI Rationale — Why this deal?" value={props.ai_rationale || ""} placeholder="Auto-filled when AI analyzes this company's documents" icon={Sparkles} onSave={(v) => saveField("ai_rationale", v)} multiline />
+            <EditableField label="AI Rationale Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Why this deal?" value={props.ai_rationale || ""} placeholder="Auto-filled when AI analyzes this company's documents" icon={Sparkles} onSave={(v) => saveField("ai_rationale", v)} multiline />
 
             {/* Contact & Social */}
             <div>
@@ -15778,7 +15829,7 @@ function CompanyCard({
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status] }} />
                         <span className="truncate flex-1">{other}</span>
                         <Badge variant="outline" className="text-[9px] border-slate-200 text-slate-400 bg-white py-0">
-                          {conn.connection_type} · {conn.connection_status}
+                          {conn.connection_type} Р В РІР‚в„ўР вЂ™Р’В· {conn.connection_status}
                         </Badge>
                       </div>
                     );
@@ -16110,17 +16161,17 @@ function ConnectionsGraphTab({
         </CardContent>
       </Card>
 
-      {/* Pending Reviews Section — disabled for now (auto-extraction was wrong); re-enable when fixed */}
+      {/* Pending Reviews Section Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ disabled for now (auto-extraction was wrong); re-enable when fixed */}
       {false && pendingReviews.length > 0 && (
         <Card className="border-2 border-[#eab308] bg-white">
           <CardHeader className="pb-2 border-b-2 border-[#eab308]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#eab308]">
-                  ⚠️ Pending Reviews ({pendingReviews.length})
+                  Р В Р вЂ Р РЋРІвЂћСћР вЂ™Р’В Р В РЎвЂ”Р РЋРІР‚ВР В Р РЏ Pending Reviews ({pendingReviews.length})
                 </CardTitle>
                 <CardDescription className="text-slate-500 font-mono text-xs">
-                  Auto-extracted relationships — approve in bulk or one-by-one
+                  Auto-extracted relationships Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ approve in bulk or one-by-one
                 </CardDescription>
               </div>
               {onBatchReviewPending && (
@@ -16174,7 +16225,7 @@ function ConnectionsGraphTab({
                     <div className="flex-1">
                       <div className="flex items-center gap-2 text-slate-900 font-mono font-bold">
                         <span>{sourceName}</span>
-                        <span className="text-slate-400">→</span>
+                        <span className="text-slate-400">Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ</span>
                         <span>{targetName}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
@@ -16225,7 +16276,7 @@ function ConnectionsGraphTab({
         </Card>
       )}
 
-      {/* Kanban Board — Drag connections between columns by clicking status */}
+      {/* Kanban Board Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Drag connections between columns by clicking status */}
       <Card className="border border-slate-200 bg-white">
         <CardHeader className="pb-2 border-b border-slate-200">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-slate-900">
@@ -16318,7 +16369,7 @@ function ConnectionsGraphTab({
                   <div className="flex-1">
                     <div className="flex items-center gap-2 text-slate-900 font-mono font-bold">
                       <span>{conn.source_company_name}</span>
-                      <span className="text-slate-400">→</span>
+                      <span className="text-slate-400">Р В Р вЂ Р Р†Р вЂљР’В Р Р†Р вЂљРІвЂћСћ</span>
                       <span>{conn.target_company_name}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
@@ -16346,7 +16397,7 @@ function ConnectionsGraphTab({
                     <SelectTrigger className="w-[140px] border border-slate-200 bg-white text-slate-900 font-mono text-xs h-8">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#050505] border border-slate-200">
+                    <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                       {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
                         <SelectItem key={status} value={status} className="text-slate-900 font-mono text-xs">
                           <span className="flex items-center gap-2">
