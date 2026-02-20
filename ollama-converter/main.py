@@ -179,11 +179,17 @@ async def _call_claude_with_fallback(
     tools: list | None = None,
     tool_choice: dict | None = None,
     preferred_model: str | None = None,
+    # Cost tracking params (optional)
+    endpoint: str = "unknown",
+    organization_id: str | None = None,
+    event_id: str | None = None,
+    user_id: str | None = None,
     **extra_kwargs,
 ):
     """
     Call Claude with automatic model fallback on 404 (retired model).
     Tries preferred_model → ANTHROPIC_MODEL → each fallback in ANTHROPIC_MODEL_FALLBACKS.
+    Automatically logs API usage for cost tracking.
     """
     models_to_try = list(dict.fromkeys(filter(None, [
         preferred_model,
@@ -208,6 +214,26 @@ async def _call_claude_with_fallback(
             if tool_choice:
                 kwargs["tool_choice"] = tool_choice
             result = await client.messages.create(**kwargs)
+            
+            # Log usage for cost tracking (non-blocking)
+            if hasattr(result, 'usage') and result.usage:
+                usage = result.usage
+                input_tokens = getattr(usage, 'input_tokens', 0)
+                output_tokens = getattr(usage, 'output_tokens', 0)
+                # Fire-and-forget logging (don't await to avoid blocking)
+                import asyncio
+                asyncio.create_task(log_api_usage(
+                    provider="anthropic",
+                    model=model_name,
+                    endpoint=endpoint,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    organization_id=organization_id,
+                    event_id=event_id,
+                    user_id=user_id,
+                    request_id=getattr(result, 'id', None),
+                ))
+            
             return result
         except Exception as e:
             err_str = str(e)
@@ -215,6 +241,19 @@ async def _call_claude_with_fallback(
                 print(f"⚠️  Model '{model_name}' returned 404 (retired). Trying next fallback...")
                 last_error = e
                 continue
+            # Log error for failed requests too
+            import asyncio
+            asyncio.create_task(log_api_usage(
+                provider="anthropic",
+                model=model_name,
+                endpoint=endpoint,
+                input_tokens=0,
+                output_tokens=0,
+                organization_id=organization_id,
+                event_id=event_id,
+                user_id=user_id,
+                error_message=str(e)[:500],
+            ))
             raise  # Non-404 error → don't retry
 
     raise last_error or RuntimeError(f"All models failed: {models_to_try}")
@@ -398,6 +437,73 @@ def get_supabase():
     _sb_client = _supabase_create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     print(f"✅ Supabase client initialised for Agentic RAG ({SUPABASE_URL[:40]}...)")
     return _sb_client
+
+# ---------------------------------------------------------------------------
+#  API Cost Tracking — log Anthropic usage for unit economics
+# ---------------------------------------------------------------------------
+
+# Anthropic pricing (per 1M tokens, as of 2025)
+ANTHROPIC_PRICING = {
+    "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
+    "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
+    "claude-haiku-4-20250514": {"input": 0.25, "output": 1.25},
+    "claude-3-7-sonnet-latest": {"input": 3.0, "output": 15.0},
+    # Fallback for unknown models
+    "default": {"input": 3.0, "output": 15.0},
+}
+
+def estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calculate estimated cost in USD for an Anthropic API call."""
+    pricing = ANTHROPIC_PRICING.get(model, ANTHROPIC_PRICING["default"])
+    input_cost = (input_tokens / 1_000_000) * pricing["input"]
+    output_cost = (output_tokens / 1_000_000) * pricing["output"]
+    return round(input_cost + output_cost, 6)
+
+async def log_api_usage(
+    provider: str,
+    model: str,
+    endpoint: str,
+    input_tokens: int,
+    output_tokens: int,
+    organization_id: str | None = None,
+    event_id: str | None = None,
+    user_id: str | None = None,
+    request_id: str | None = None,
+    error_message: str | None = None,
+):
+    """Log API usage to database for cost tracking. Non-blocking (fire-and-forget)."""
+    if not _supabase_available or not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return  # Skip logging if Supabase not configured
+    
+    try:
+        total_tokens = input_tokens + output_tokens
+        estimated_cost = 0.0
+        
+        if provider == "anthropic":
+            estimated_cost = estimate_anthropic_cost(model, input_tokens, output_tokens)
+        
+        sb = get_supabase()
+        # Insert usage log (Supabase client is sync, but we're in async context)
+        import asyncio
+        await asyncio.to_thread(
+            lambda: sb.table("api_usage_logs").insert({
+                "provider": provider,
+                "model": model,
+                "endpoint": endpoint,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "estimated_cost_usd": estimated_cost,
+                "organization_id": organization_id,
+                "event_id": event_id,
+                "user_id": user_id,
+                "request_id": request_id,
+                "error_message": error_message,
+            }).execute()
+        )
+    except Exception as e:
+        # Don't break API calls if logging fails
+        print(f"[API_COST] Failed to log usage: {e}")
 
 # Ask-the-fund settings (generous tokens for comprehensive answers)
 ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "4000"))  # Increased from 1000 for more detailed responses
@@ -2245,7 +2351,15 @@ async def execute_tool_call(tool_name: str, tool_input: Dict[str, Any], event_id
     return json.dumps({"status": "error", "message": f"Unknown tool: {tool_name}"})
 
 
-async def call_anthropic_answer(prompt: str, question: str = "", sources: List[AskSource] = None, event_id: Optional[str] = None, web_search_enabled: bool = False) -> str:
+async def call_anthropic_answer(
+    prompt: str, 
+    question: str = "", 
+    sources: List[AskSource] = None, 
+    event_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    web_search_enabled: bool = False
+) -> str:
     """
     Call Claude to answer a user question with tool-augmented RAG.
     Uses the Anthropic SDK when available (faster, automatic retries, prompt caching) with httpx fallback.
@@ -2300,6 +2414,24 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                     tools=tools,
                 )
                 
+                # Log usage for first call
+                if hasattr(message, 'usage') and message.usage:
+                    usage = message.usage
+                    input_tokens = getattr(usage, 'input_tokens', 0)
+                    output_tokens = getattr(usage, 'output_tokens', 0)
+                    import asyncio
+                    asyncio.create_task(log_api_usage(
+                        provider="anthropic",
+                        model=model_name,
+                        endpoint="/ask",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        organization_id=organization_id,
+                        event_id=event_id,
+                        user_id=user_id,
+                        request_id=getattr(message, 'id', None),
+                    ))
+                
                 # Handle tool use if present (skip server_tool_use — web search is handled by Anthropic)
                 tool_results = []
                 for content_block in message.content:
@@ -2330,6 +2462,23 @@ async def call_anthropic_answer(prompt: str, question: str = "", sources: List[A
                             {"role": "user", "content": tool_results},
                         ],
                     )
+                    # Log usage for follow-up call
+                    if hasattr(follow_up, 'usage') and follow_up.usage:
+                        usage = follow_up.usage
+                        input_tokens = getattr(usage, 'input_tokens', 0)
+                        output_tokens = getattr(usage, 'output_tokens', 0)
+                        import asyncio
+                        asyncio.create_task(log_api_usage(
+                            provider="anthropic",
+                            model=model_name,
+                            endpoint="/ask",
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            organization_id=organization_id,
+                            event_id=event_id,
+                            user_id=user_id,
+                            request_id=getattr(follow_up, 'id', None),
+                        ))
                     text_parts = [b.text for b in follow_up.content if hasattr(b, "text")]
                     text = "\n".join(text_parts).strip()
                     if text:
@@ -4508,7 +4657,18 @@ async def ask_fund(request: AskRequest, auth: AuthContext = Depends(get_auth_con
         first_source = request.sources[0]
         if hasattr(first_source, "metadata") and isinstance(first_source.metadata, dict):
             event_id = first_source.metadata.get("event_id")
-    answer = await call_anthropic_answer(prompt, question=resolved_question, sources=request.sources, event_id=event_id, web_search_enabled=request.web_search_enabled)
+    # Extract auth context for cost tracking
+    organization_id = auth.org_id if auth.org_id else None
+    user_id = auth.user_id if auth.user_id != "anonymous" else None
+    answer = await call_anthropic_answer(
+        prompt, 
+        question=resolved_question, 
+        sources=request.sources, 
+        event_id=event_id,
+        organization_id=organization_id,
+        user_id=user_id,
+        web_search_enabled=request.web_search_enabled
+    )
     return AskResponse(answer=answer)
 
 

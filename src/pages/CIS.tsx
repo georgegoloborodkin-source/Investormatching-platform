@@ -311,13 +311,13 @@ function ThreadTree({ threads, active, onSelect }: { threads: Thread[]; active: 
     return (
       <div
         key={t.id}
-        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer border-2 border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-colors bg-transparent ${
-          active === t.id ? "border-[#FFED00] bg-[#FFED00]/10" : ""
+        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer border border-border hover:border-blue-600 hover:bg-blue-50 dark:bg-blue-950 transition-colors bg-transparent ${
+          active === t.id ? "border-blue-600 bg-[#3b82f6]/10" : ""
         }`}
         style={{ paddingLeft: `${12 + level * 16}px` }}
         onClick={() => onSelect(t.id)}
       >
-        <span className="text-xs text-white/70 font-mono">
+        <span className="text-xs text-muted-foreground font-mono">
           {level === 0 ? "▸" : "└"}
         </span>
         <span className={`text-sm ${active === t.id ? "font-semibold" : ""}`}>{t.title}</span>
@@ -503,37 +503,37 @@ function DocumentConverterTab({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left: Input */}
       <div className="space-y-4">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <Upload className="h-5 w-5 text-[#FFED00]" />
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+              <Upload className="h-5 w-5 text-blue-600" />
               Document Input
             </CardTitle>
-            <CardDescription className="text-white/70 font-mono">
+            <CardDescription className="text-muted-foreground font-mono">
               Paste pitch deck text or upload a document for AI extraction
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-white">
+          <CardContent className="space-y-4 text-foreground">
             <div>
-              <Label className="text-white font-mono font-bold">Upload File</Label>
+              <Label className="text-foreground font-mono font-bold">Upload File</Label>
               <Input
                 type="file"
                 accept=".txt,.md,.pdf,.docx,.xlsx,.xls,.csv,.json"
                 onChange={handleFileUpload}
-                className="cursor-pointer border-2 border-white bg-transparent text-white file:border-white file:bg-transparent file:text-white"
+                className="cursor-pointer border border-border bg-card text-white file:border-border file:bg-transparent file:text-foreground"
               />
             </div>
 
             <div>
-              <Label htmlFor="doc-text" className="text-white font-mono font-bold">Document Text</Label>
+              <Label htmlFor="doc-text" className="text-foreground font-mono font-bold">Document Text</Label>
               <Textarea
                 id="doc-text"
                 placeholder="Paste pitch deck content, investment memo, or any company document here..."
                 value={documentText}
                 onChange={(e) => setDocumentText(e.target.value)}
-                className="min-h-[300px] font-mono text-sm border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="min-h-[300px] font-mono text-sm border border-border bg-card text-white placeholder:text-muted-foreground/70"
               />
-              <p className="text-xs text-white/70 font-mono mt-1">
+              <p className="text-xs text-muted-foreground font-mono mt-1">
                 {documentText.length} characters (~{Math.ceil(documentText.length / 4)} tokens)
               </p>
             </div>
@@ -541,7 +541,7 @@ function DocumentConverterTab({
             <Button
               onClick={handleExtract}
               disabled={isLoading || !documentText.trim()}
-              className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -559,13 +559,13 @@ function DocumentConverterTab({
         </Card>
 
         {/* Cost Info */}
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-start gap-3">
-              <DollarSign className="h-5 w-5 text-[#FFED00] mt-0.5" />
+              <DollarSign className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="text-sm font-mono">
-                <p className="font-bold text-white">Cost Transparency</p>
-                <p className="text-white/70">
+                <p className="font-bold text-foreground">Cost Transparency</p>
+                <p className="text-foreground/70">
                   Claude 3.5 Sonnet: ~$0.009 per 15-page deck<br/>
                   500 decks/month = ~$4.50 total
                 </p>
@@ -579,49 +579,49 @@ function DocumentConverterTab({
       <div className="space-y-4">
         {result ? (
           <>
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
                 <CardTitle className="flex items-center justify-between text-white">
                   <span className="flex items-center gap-2 font-mono font-black uppercase tracking-tight">
-                    <CheckCircle className="h-5 w-5 text-[#FFED00]" />
+                    <CheckCircle className="h-5 w-5 text-blue-600" />
                     Conversion Result
                   </span>
                   {result && (
-                    <Button size="sm" variant="outline" onClick={downloadJSON} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                    <Button size="sm" variant="outline" onClick={downloadJSON} className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                       <Download className="h-4 w-4 mr-1" />
                       JSON
                     </Button>
                   )}
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Detected: {result.detectedType || "unknown"}</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Detected: {result.detectedType || "unknown"}</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <div className="space-y-4">
                   {primaryStartup ? (
-                    <div className="p-3 border-2 border-white rounded-lg space-y-2 bg-transparent hover:border-[#FFED00] transition-all">
+                    <div className="p-3 border border-border rounded-lg space-y-2 bg-transparent hover:border-blue-600 transition-all">
                       <div className="flex items-center justify-between">
                         <h3 className="font-mono font-black text-lg text-white">{primaryStartup.companyName}</h3>
                         {primaryStartup.fundingStage && <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.fundingStage}</Badge>}
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        {primaryStartup.industry && <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{primaryStartup.industry}</Badge>}
+                        {primaryStartup.industry && <Badge variant="outline" className="border-blue-600 text-blue-600 bg-transparent font-mono">{primaryStartup.industry}</Badge>}
                         {primaryStartup.geoMarkets?.length > 0 && (
                           <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.geoMarkets.join(", ")}</Badge>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-sm text-white/70 font-mono">
+                    <div className="text-sm text-muted-foreground font-mono">
                       No startup detected yet. Upload a pitch deck or paste content.
                     </div>
                   )}
 
                   {(result.errors?.length || result.warnings?.length) && (
-                    <div className="border-2 border-white rounded-md p-3 text-xs space-y-2 bg-transparent">
+                    <div className="border border-border rounded-md p-3 text-xs space-y-2 bg-transparent">
                       {result.errors?.length ? (
                         <div>
                           <div className="font-mono font-bold text-white">Errors</div>
-                          <ul className="list-disc list-inside text-white/70 font-mono">
+                          <ul className="list-disc list-inside text-muted-foreground font-mono">
                             {result.errors.slice(0, 3).map((err) => (
                               <li key={err}>{err}</li>
                             ))}
@@ -631,7 +631,7 @@ function DocumentConverterTab({
                       {result.warnings?.length ? (
                         <div>
                           <div className="font-mono font-bold text-white">Warnings</div>
-                          <ul className="list-disc list-inside text-white/70 font-mono">
+                          <ul className="list-disc list-inside text-muted-foreground font-mono">
                             {result.warnings.slice(0, 3).map((warn) => (
                               <li key={warn}>{warn}</li>
                             ))}
@@ -642,7 +642,7 @@ function DocumentConverterTab({
                   )}
 
                   {quickLogEnabled && (
-                    <Button onClick={handleQuickLog} className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold" variant="outline">
+                    <Button onClick={handleQuickLog} className="w-full border border-border bg-card text-white hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold" variant="outline">
                       <ClipboardList className="h-4 w-4 mr-2" />
                       Open in Decision Log
                     </Button>
@@ -652,7 +652,7 @@ function DocumentConverterTab({
                     <summary className="cursor-pointer text-white/70 hover:text-white">
                       View full JSON
                     </summary>
-                    <pre className="mt-2 p-3 border-2 border-white rounded-lg overflow-auto max-h-[300px] text-xs bg-transparent text-white">
+                    <pre className="mt-2 p-3 border border-border rounded-lg overflow-auto max-h-[300px] text-xs bg-transparent text-white">
                       {JSON.stringify(result, null, 2)}
                     </pre>
                   </details>
@@ -661,9 +661,9 @@ function DocumentConverterTab({
             </Card>
           </>
         ) : (
-          <Card className="h-full min-h-[400px] flex items-center justify-center border-2 border-white bg-transparent">
-            <CardContent className="text-center text-white/70 font-mono">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50 text-white/50" />
+          <Card className="h-full min-h-[400px] flex items-center justify-center border border-border bg-card">
+            <CardContent className="text-center text-muted-foreground font-mono">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50 text-muted-foreground/70" />
               <p className="font-bold">Paste document text and click Extract</p>
               <p className="text-sm mt-2">Results will appear here</p>
             </CardContent>
@@ -947,57 +947,57 @@ function DecisionLoggerTab({
     <div className="space-y-6">
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <ClipboardList className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Total Decisions</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Decisions</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-blue-600 dark:border-blue-700 rounded-lg bg-transparent">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.averageConfidence}%</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Avg Confidence</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Avg Confidence</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Target className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Target className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.byOutcome.positive || 0}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive Outcomes</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Positive Outcomes</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Users className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Users className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.topActors.length}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Active Actors</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Active Actors</p>
               </div>
             </div>
           </CardContent>
@@ -1006,23 +1006,23 @@ function DecisionLoggerTab({
 
       {/* Action Buttons */}
       <div className="flex gap-2 items-center">
-        <Button onClick={() => setShowForm(!showForm)} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
+        <Button onClick={() => setShowForm(!showForm)} className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
           {showForm ? "Cancel" : "Log New Decision"}
         </Button>
         {decisions.length > 0 && (
-          <Button variant="outline" onClick={handleExport} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+          <Button variant="outline" onClick={handleExport} className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
             <Download className="h-4 w-4 mr-1" />
             Export CSV
           </Button>
         )}
         <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-          <SelectTrigger className="w-[220px] border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] font-mono font-bold">
-            <SelectValue placeholder="Filter by document" className="text-white" />
+          <SelectTrigger className="w-[220px] border border-border bg-card text-white hover:bg-muted/50 hover:border-blue-600 font-mono font-bold">
+            <SelectValue placeholder="Filter by document" className="text-foreground" />
           </SelectTrigger>
-          <SelectContent className="bg-[#050505] border-2 border-white">
-            <SelectItem value="all" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">All documents</SelectItem>
+          <SelectContent className="bg-[#050505] border border-border">
+            <SelectItem value="all" className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50">All documents</SelectItem>
             {documents.filter((doc) => !!doc.id).map((doc) => (
-              <SelectItem key={doc.id} value={doc.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+              <SelectItem key={doc.id} value={doc.id} className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50">
                 {doc.title || doc.id}
               </SelectItem>
             ))}
@@ -1032,145 +1032,145 @@ function DecisionLoggerTab({
 
       {/* New Decision Form */}
       {showForm && (
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Log New Decision</CardTitle>
-            <CardDescription className="text-white/70 font-mono">Record a decision for pattern analysis</CardDescription>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Log New Decision</CardTitle>
+            <CardDescription className="text-muted-foreground font-mono">Record a decision for pattern analysis</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="text-white font-mono font-bold">Actor (Who made the decision) *</Label>
+                <Label className="text-foreground font-mono font-bold">Actor (Who made the decision) *</Label>
                 <Input
                   placeholder="e.g., Partner A, John Smith"
                   value={actor}
                   onChange={(e) => setActor(e.target.value)}
-                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                  className="border border-border bg-card text-foreground placeholder:text-muted-foreground/70"
                 />
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Action Type *</Label>
+                <Label className="text-foreground font-mono font-bold">Action Type *</Label>
                 <Select value={actionType} onValueChange={(v) => setActionType(v as Decision["actionType"])}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="intro" className="text-white">Intro</SelectItem>
-                    <SelectItem value="meeting" className="text-white">Meeting</SelectItem>
-                    <SelectItem value="follow_up" className="text-white">Follow Up</SelectItem>
-                    <SelectItem value="due_diligence" className="text-white">Due Diligence</SelectItem>
-                    <SelectItem value="pass" className="text-white">Pass</SelectItem>
-                    <SelectItem value="invest" className="text-white">Invest</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="intro" className="text-foreground">Intro</SelectItem>
+                    <SelectItem value="meeting" className="text-foreground">Meeting</SelectItem>
+                    <SelectItem value="follow_up" className="text-foreground">Follow Up</SelectItem>
+                    <SelectItem value="due_diligence" className="text-foreground">Due Diligence</SelectItem>
+                    <SelectItem value="pass" className="text-foreground">Pass</SelectItem>
+                    <SelectItem value="invest" className="text-foreground">Invest</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Startup Name *</Label>
+                <Label className="text-foreground font-mono font-bold">Startup Name *</Label>
                 <Input
                   placeholder="e.g., Company X"
                   value={startupName}
                   onChange={(e) => setStartupName(e.target.value)}
-                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                  className="border border-border bg-card text-foreground placeholder:text-muted-foreground/70"
                 />
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Outcome</Label>
+                <Label className="text-foreground font-mono font-bold">Outcome</Label>
                 <Select
                   value={decisionOutcome || "pending"}
                   onValueChange={(v) => setDecisionOutcome(v as Decision["outcome"])}
                 >
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="pending" className="text-white">Pending</SelectItem>
-                    <SelectItem value="positive" className="text-white">Positive</SelectItem>
-                    <SelectItem value="negative" className="text-white">Negative</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="pending" className="text-foreground">Pending</SelectItem>
+                    <SelectItem value="positive" className="text-foreground">Positive</SelectItem>
+                    <SelectItem value="negative" className="text-foreground">Negative</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Sector</Label>
+                <Label className="text-foreground font-mono font-bold">Sector</Label>
                 <Select value={sector} onValueChange={setSector}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue placeholder="Select sector" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="none" className="text-white">None</SelectItem>
-                    <SelectItem value="FinTech" className="text-white">FinTech</SelectItem>
-                    <SelectItem value="HealthTech" className="text-white">HealthTech</SelectItem>
-                    <SelectItem value="SaaS" className="text-white">SaaS</SelectItem>
-                    <SelectItem value="AI / ML" className="text-white">AI / ML</SelectItem>
-                    <SelectItem value="E-commerce" className="text-white">E-commerce</SelectItem>
-                    <SelectItem value="EdTech" className="text-white">EdTech</SelectItem>
-                    <SelectItem value="PropTech" className="text-white">PropTech</SelectItem>
-                    <SelectItem value="AgriTech" className="text-white">AgriTech</SelectItem>
-                    <SelectItem value="CleanTech" className="text-white">CleanTech</SelectItem>
-                    <SelectItem value="Gaming" className="text-white">Gaming</SelectItem>
-                    <SelectItem value="Media / Content" className="text-white">Media / Content</SelectItem>
-                    <SelectItem value="Logistics" className="text-white">Logistics</SelectItem>
-                    <SelectItem value="Food & Beverage" className="text-white">Food & Beverage</SelectItem>
-                    <SelectItem value="Travel & Tourism" className="text-white">Travel & Tourism</SelectItem>
-                    <SelectItem value="HRTech" className="text-white">HRTech</SelectItem>
-                    <SelectItem value="LegalTech" className="text-white">LegalTech</SelectItem>
-                    <SelectItem value="InsurTech" className="text-white">InsurTech</SelectItem>
-                    <SelectItem value="Space Infrastructure" className="text-white">Space Infrastructure</SelectItem>
-                    <SelectItem value="Other" className="text-white">Other</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="none" className="text-foreground">None</SelectItem>
+                    <SelectItem value="FinTech" className="text-foreground">FinTech</SelectItem>
+                    <SelectItem value="HealthTech" className="text-foreground">HealthTech</SelectItem>
+                    <SelectItem value="SaaS" className="text-foreground">SaaS</SelectItem>
+                    <SelectItem value="AI / ML" className="text-foreground">AI / ML</SelectItem>
+                    <SelectItem value="E-commerce" className="text-foreground">E-commerce</SelectItem>
+                    <SelectItem value="EdTech" className="text-foreground">EdTech</SelectItem>
+                    <SelectItem value="PropTech" className="text-foreground">PropTech</SelectItem>
+                    <SelectItem value="AgriTech" className="text-foreground">AgriTech</SelectItem>
+                    <SelectItem value="CleanTech" className="text-foreground">CleanTech</SelectItem>
+                    <SelectItem value="Gaming" className="text-foreground">Gaming</SelectItem>
+                    <SelectItem value="Media / Content" className="text-foreground">Media / Content</SelectItem>
+                    <SelectItem value="Logistics" className="text-foreground">Logistics</SelectItem>
+                    <SelectItem value="Food & Beverage" className="text-foreground">Food & Beverage</SelectItem>
+                    <SelectItem value="Travel & Tourism" className="text-foreground">Travel & Tourism</SelectItem>
+                    <SelectItem value="HRTech" className="text-foreground">HRTech</SelectItem>
+                    <SelectItem value="LegalTech" className="text-foreground">LegalTech</SelectItem>
+                    <SelectItem value="InsurTech" className="text-foreground">InsurTech</SelectItem>
+                    <SelectItem value="Space Infrastructure" className="text-foreground">Space Infrastructure</SelectItem>
+                    <SelectItem value="Other" className="text-foreground">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Stage</Label>
+                <Label className="text-foreground font-mono font-bold">Stage</Label>
                 <Select value={stage} onValueChange={setStage}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="none" className="text-white">None</SelectItem>
-                    <SelectItem value="Pre-Seed" className="text-white">Pre-Seed</SelectItem>
-                    <SelectItem value="Seed" className="text-white">Seed</SelectItem>
-                    <SelectItem value="Series A" className="text-white">Series A</SelectItem>
-                    <SelectItem value="Series B" className="text-white">Series B</SelectItem>
-                    <SelectItem value="Series C" className="text-white">Series C</SelectItem>
-                    <SelectItem value="Series D+" className="text-white">Series D+</SelectItem>
-                    <SelectItem value="Growth" className="text-white">Growth</SelectItem>
-                    <SelectItem value="Bridge" className="text-white">Bridge</SelectItem>
-                    <SelectItem value="Convertible Note" className="text-white">Convertible Note</SelectItem>
-                    <SelectItem value="SAFE" className="text-white">SAFE</SelectItem>
-                    <SelectItem value="Other" className="text-white">Other</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="none" className="text-foreground">None</SelectItem>
+                    <SelectItem value="Pre-Seed" className="text-foreground">Pre-Seed</SelectItem>
+                    <SelectItem value="Seed" className="text-foreground">Seed</SelectItem>
+                    <SelectItem value="Series A" className="text-foreground">Series A</SelectItem>
+                    <SelectItem value="Series B" className="text-foreground">Series B</SelectItem>
+                    <SelectItem value="Series C" className="text-foreground">Series C</SelectItem>
+                    <SelectItem value="Series D+" className="text-foreground">Series D+</SelectItem>
+                    <SelectItem value="Growth" className="text-foreground">Growth</SelectItem>
+                    <SelectItem value="Bridge" className="text-foreground">Bridge</SelectItem>
+                    <SelectItem value="Convertible Note" className="text-foreground">Convertible Note</SelectItem>
+                    <SelectItem value="SAFE" className="text-foreground">SAFE</SelectItem>
+                    <SelectItem value="Other" className="text-foreground">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-white font-mono font-bold">Geography</Label>
+                <Label className="text-foreground font-mono font-bold">Geography</Label>
                 <Select value={geo} onValueChange={setGeo}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="none" className="text-white">None</SelectItem>
-                    <SelectItem value="Singapore" className="text-white">Singapore</SelectItem>
-                    <SelectItem value="Indonesia" className="text-white">Indonesia</SelectItem>
-                    <SelectItem value="Malaysia" className="text-white">Malaysia</SelectItem>
-                    <SelectItem value="Thailand" className="text-white">Thailand</SelectItem>
-                    <SelectItem value="Vietnam" className="text-white">Vietnam</SelectItem>
-                    <SelectItem value="Philippines" className="text-white">Philippines</SelectItem>
-                    <SelectItem value="India" className="text-white">India</SelectItem>
-                    <SelectItem value="China" className="text-white">China</SelectItem>
-                    <SelectItem value="Hong Kong" className="text-white">Hong Kong</SelectItem>
-                    <SelectItem value="Taiwan" className="text-white">Taiwan</SelectItem>
-                    <SelectItem value="South Korea" className="text-white">South Korea</SelectItem>
-                    <SelectItem value="Japan" className="text-white">Japan</SelectItem>
-                    <SelectItem value="Australia" className="text-white">Australia</SelectItem>
-                    <SelectItem value="New Zealand" className="text-white">New Zealand</SelectItem>
-                    <SelectItem value="United States" className="text-white">United States</SelectItem>
-                    <SelectItem value="United Kingdom" className="text-white">United Kingdom</SelectItem>
-                    <SelectItem value="Europe" className="text-white">Europe</SelectItem>
-                    <SelectItem value="Middle East" className="text-white">Middle East</SelectItem>
-                    <SelectItem value="Africa" className="text-white">Africa</SelectItem>
-                    <SelectItem value="Latin America" className="text-white">Latin America</SelectItem>
-                    <SelectItem value="Other" className="text-white">Other</SelectItem>
-                    <SelectItem value="custom" className="text-white">Add new...</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="none" className="text-foreground">None</SelectItem>
+                    <SelectItem value="Singapore" className="text-foreground">Singapore</SelectItem>
+                    <SelectItem value="Indonesia" className="text-foreground">Indonesia</SelectItem>
+                    <SelectItem value="Malaysia" className="text-foreground">Malaysia</SelectItem>
+                    <SelectItem value="Thailand" className="text-foreground">Thailand</SelectItem>
+                    <SelectItem value="Vietnam" className="text-foreground">Vietnam</SelectItem>
+                    <SelectItem value="Philippines" className="text-foreground">Philippines</SelectItem>
+                    <SelectItem value="India" className="text-foreground">India</SelectItem>
+                    <SelectItem value="China" className="text-foreground">China</SelectItem>
+                    <SelectItem value="Hong Kong" className="text-foreground">Hong Kong</SelectItem>
+                    <SelectItem value="Taiwan" className="text-foreground">Taiwan</SelectItem>
+                    <SelectItem value="South Korea" className="text-foreground">South Korea</SelectItem>
+                    <SelectItem value="Japan" className="text-foreground">Japan</SelectItem>
+                    <SelectItem value="Australia" className="text-foreground">Australia</SelectItem>
+                    <SelectItem value="New Zealand" className="text-foreground">New Zealand</SelectItem>
+                    <SelectItem value="United States" className="text-foreground">United States</SelectItem>
+                    <SelectItem value="United Kingdom" className="text-foreground">United Kingdom</SelectItem>
+                    <SelectItem value="Europe" className="text-foreground">Europe</SelectItem>
+                    <SelectItem value="Middle East" className="text-foreground">Middle East</SelectItem>
+                    <SelectItem value="Africa" className="text-foreground">Africa</SelectItem>
+                    <SelectItem value="Latin America" className="text-foreground">Latin America</SelectItem>
+                    <SelectItem value="Other" className="text-foreground">Other</SelectItem>
+                    <SelectItem value="custom" className="text-foreground">Add new...</SelectItem>
                   </SelectContent>
                 </Select>
                 {geo === "custom" && (
@@ -1194,7 +1194,7 @@ function DecisionLoggerTab({
                 step={5}
                 className="mt-2"
               />
-              <p className="text-xs text-white/70 font-mono mt-1">
+              <p className="text-xs text-muted-foreground font-mono mt-1">
                 How confident are you in this decision?
               </p>
             </div>
@@ -1210,27 +1210,27 @@ function DecisionLoggerTab({
 
             <div className="grid gap-3 md:grid-cols-[1fr_auto] items-end">
               <div>
-                <Label className="text-white font-mono font-bold">Attach Source Document</Label>
+                <Label className="text-foreground font-mono font-bold">Attach Source Document</Label>
                 <Select value={attachedDocumentId} onValueChange={setAttachedDocumentId}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-border bg-card text-foreground">
                     <SelectValue placeholder="Choose a document (optional)" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="none" className="text-white">No document</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="none" className="text-foreground">No document</SelectItem>
                     {documents.filter((doc) => !!doc.id).map((doc) => (
-                      <SelectItem key={doc.id} value={doc.id} className="text-white">
+                      <SelectItem key={doc.id} value={doc.id} className="text-foreground">
                         {doc.title || "Untitled document"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" onClick={onOpenConverter} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+              <Button variant="outline" onClick={onOpenConverter} className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                 Upload new
               </Button>
             </div>
 
-            <Button onClick={handleSaveDecision} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50" disabled={isSaving}>
+            <Button onClick={handleSaveDecision} className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50" disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1245,23 +1245,23 @@ function DecisionLoggerTab({
       )}
 
       {/* Decision History */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Decision History</CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Decision History</CardTitle>
+          <CardDescription className="text-muted-foreground font-mono">
             {filteredDecisions.length} decisions shown • Click outcome to update
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-white">
+        <CardContent className="text-foreground">
           <div className="mb-4">
-            <Label className="text-xs text-white/70 font-mono font-bold">Filter by document</Label>
+            <Label className="text-xs text-muted-foreground font-mono font-bold">Filter by document</Label>
             <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-              <SelectTrigger className="mt-1 border-2 border-white bg-transparent text-white">
+              <SelectTrigger className="mt-1 border border-border bg-card text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectContent className="bg-[#050505] border border-border">
                 {documentOptions.map((doc) => (
-                  <SelectItem key={doc.id} value={doc.id} className="text-white">
+                  <SelectItem key={doc.id} value={doc.id} className="text-foreground">
                     {doc.label}
                   </SelectItem>
                 ))}
@@ -1269,8 +1269,8 @@ function DecisionLoggerTab({
             </Select>
           </div>
           {filteredDecisions.length === 0 ? (
-            <div className="text-center py-8 text-white/70 font-mono">
-              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50 text-white/50" />
+            <div className="text-center py-8 text-muted-foreground font-mono">
+              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50 text-muted-foreground/70" />
               <p className="font-bold">No decisions logged yet</p>
               <p className="text-sm">Start logging decisions to build your pattern database</p>
             </div>
@@ -1281,7 +1281,7 @@ function DecisionLoggerTab({
                 return (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between p-3 border-2 border-white rounded-lg hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors bg-transparent"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-blue-50 dark:bg-blue-950 hover:border-blue-600 transition-colors bg-transparent"
                 >
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
@@ -1289,24 +1289,24 @@ function DecisionLoggerTab({
                     </Badge>
                     <div>
                       <p className="font-mono font-bold text-white">{d.startupName}</p>
-                      <p className="text-xs text-white/70 font-mono">
+                      <p className="text-xs text-muted-foreground font-mono">
                         {d.actor} • {new Date(d.timestamp).toLocaleDateString()}
                         {d.context.sector && ` • ${d.context.sector}`}
                       </p>
                       {doc && (
-                        <p className="text-xs text-white/70 font-mono">
+                        <p className="text-xs text-muted-foreground font-mono">
                           Source: {doc.title || "Document"}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white/70 font-mono">{d.confidenceScore}%</span>
+                    <span className="text-sm text-muted-foreground font-mono">{d.confidenceScore}%</span>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => setViewingDecision(d)}
-                      className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                      className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold"
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       View
@@ -1316,7 +1316,7 @@ function DecisionLoggerTab({
                         size="sm"
                         variant="outline"
                         onClick={() => onOpenDocument(doc.id)}
-                        className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                        className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold"
                       >
                         View source
                       </Button>
@@ -1326,27 +1326,27 @@ function DecisionLoggerTab({
                       onValueChange={(v) => handleUpdateOutcome(d.id, v as Decision["outcome"])}
                       disabled={isUpdating === d.id}
                     >
-                      <SelectTrigger className="w-[100px] h-8 border-2 border-white bg-transparent text-white" disabled={isUpdating === d.id}>
+                      <SelectTrigger className="w-[100px] h-8 border border-border bg-card text-white" disabled={isUpdating === d.id}>
                         <SelectValue />
                         {isUpdating === d.id && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                       </SelectTrigger>
-                      <SelectContent className="bg-[#050505] border-2 border-white">
-                        <SelectItem value="pending" className="text-white">
+                      <SelectContent className="bg-[#050505] border border-border">
+                        <SelectItem value="pending" className="text-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Pending
-                            <span className="text-xs text-white/50 ml-1 font-mono">(No outcome yet)</span>
+                            <span className="text-xs text-muted-foreground/70 ml-1 font-mono">(No outcome yet)</span>
                           </span>
                         </SelectItem>
-                        <SelectItem value="positive" className="text-white">
-                          <span className="flex items-center gap-1 text-[#FFED00]">
+                        <SelectItem value="positive" className="text-foreground">
+                          <span className="flex items-center gap-1 text-blue-600">
                             <CheckCircle className="h-3 w-3" /> Positive
-                            <span className="text-xs text-white/50 ml-1 font-mono">(Success)</span>
+                            <span className="text-xs text-muted-foreground/70 ml-1 font-mono">(Success)</span>
                           </span>
                         </SelectItem>
-                        <SelectItem value="negative" className="text-white">
+                        <SelectItem value="negative" className="text-foreground">
                           <span className="flex items-center gap-1 text-white/70">
                             <AlertTriangle className="h-3 w-3" /> Negative
-                            <span className="text-xs text-white/50 ml-1 font-mono">(Passed/Declined)</span>
+                            <span className="text-xs text-muted-foreground/70 ml-1 font-mono">(Passed/Declined)</span>
                           </span>
                         </SelectItem>
                       </SelectContent>
@@ -1354,7 +1354,7 @@ function DecisionLoggerTab({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+                      className="h-8 w-8 text-white/70 hover:text-white hover:bg-muted/50"
                       onClick={() => setDeleteConfirmId(d.id)}
                       disabled={isDeleting === d.id}
                     >
@@ -1374,10 +1374,10 @@ function DecisionLoggerTab({
 
       {/* Decision View Dialog */}
       <Dialog open={!!viewingDecision} onOpenChange={(open) => !open && setViewingDecision(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border-2 border-white text-white">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border border-border text-white">
           <DialogHeader>
-            <DialogTitle className="text-white font-mono font-bold">Decision Details</DialogTitle>
-            <DialogDescription className="text-white/70 font-mono">
+            <DialogTitle className="text-foreground font-mono font-bold">Decision Details</DialogTitle>
+            <DialogDescription className="text-muted-foreground font-mono">
               Full information about this decision
             </DialogDescription>
           </DialogHeader>
@@ -1385,29 +1385,29 @@ function DecisionLoggerTab({
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Startup Name</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Startup Name</Label>
                   <p className="font-mono font-bold text-white">{viewingDecision.startupName}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Actor</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Actor</Label>
                   <p className="font-mono font-bold text-white">{viewingDecision.actor}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Action Type</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Action Type</Label>
                   <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{viewingDecision.actionType}</Badge>
                 </div>
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Confidence Score</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Confidence Score</Label>
                   <p className="font-mono font-bold text-white">{viewingDecision.confidenceScore}%</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Outcome</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Outcome</Label>
                   <div className="flex items-center gap-2">
                     <Badge 
                       variant="outline"
                       className={
-                        viewingDecision.outcome === "positive" ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" :
-                        viewingDecision.outcome === "negative" ? "border-white/50 text-white/50 bg-transparent font-mono" :
+                        viewingDecision.outcome === "positive" ? "border-blue-600 text-blue-600 bg-transparent font-mono" :
+                        viewingDecision.outcome === "negative" ? "border-white/50 text-muted-foreground/70 bg-transparent font-mono" :
                         "border-white text-white bg-transparent font-mono"
                       }
                     >
@@ -1418,7 +1418,7 @@ function DecisionLoggerTab({
                         <TooltipTrigger asChild>
                           <span className="text-xs text-white/70 cursor-help font-mono">ℹ️</span>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-xs bg-[#050505] border-2 border-white text-white">
+                        <TooltipContent className="max-w-xs bg-[#050505] border border-border text-white">
                           <p className="text-xs font-mono">
                             <strong>Pending:</strong> Decision is still in progress, no outcome yet<br/>
                             <strong>Positive:</strong> Decision led to a positive result (e.g., investment, partnership)<br/>
@@ -1430,30 +1430,30 @@ function DecisionLoggerTab({
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Date</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Date</Label>
                   <p className="font-mono font-bold text-white">{new Date(viewingDecision.timestamp).toLocaleString()}</p>
                 </div>
               </div>
 
               {viewingDecision.context && (
                 <div className="space-y-2">
-                  <Label className="text-xs text-white/70 font-mono font-bold">Context</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Context</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {viewingDecision.context.sector && viewingDecision.context.sector !== "none" && (
                       <div>
-                        <span className="text-xs text-white/70 font-mono">Sector:</span>
+                        <span className="text-xs text-muted-foreground font-mono">Sector:</span>
                         <p className="font-mono font-bold text-white">{viewingDecision.context.sector}</p>
                       </div>
                     )}
                     {viewingDecision.context.stage && viewingDecision.context.stage !== "none" && (
                       <div>
-                        <span className="text-xs text-white/70 font-mono">Stage:</span>
+                        <span className="text-xs text-muted-foreground font-mono">Stage:</span>
                         <p className="font-mono font-bold text-white">{viewingDecision.context.stage}</p>
                       </div>
                     )}
                     {viewingDecision.context.geo && viewingDecision.context.geo !== "none" && (
                       <div>
-                        <span className="text-xs text-white/70 font-mono">Geography:</span>
+                        <span className="text-xs text-muted-foreground font-mono">Geography:</span>
                         <p className="font-mono font-bold text-white">{viewingDecision.context.geo}</p>
                       </div>
                     )}
@@ -1462,17 +1462,17 @@ function DecisionLoggerTab({
               )}
 
               <div>
-                <Label className="text-xs text-white/70 font-mono font-bold">Reason / Notes</Label>
+                <Label className="text-xs text-muted-foreground font-mono font-bold">Reason / Notes</Label>
                 {viewingDecision.notes ? (
-                  <p className="mt-1 text-sm whitespace-pre-wrap text-white font-mono">{viewingDecision.notes}</p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap text-foreground font-mono">{viewingDecision.notes}</p>
                 ) : (
-                  <p className="mt-1 text-sm text-white/50 italic font-mono">No reason or notes provided</p>
+                  <p className="mt-1 text-sm text-muted-foreground/70 italic font-mono">No reason or notes provided</p>
                 )}
               </div>
 
               {viewingDecision.documentId && (
                 <div>
-                  <Label className="text-xs text-white/70 font-mono font-bold">Attached Document</Label>
+                  <Label className="text-xs text-muted-foreground font-mono font-bold">Attached Document</Label>
                   {(() => {
                     const attachedDoc = documents.find((doc) => doc.id === viewingDecision.documentId);
                     return attachedDoc ? (
@@ -1492,14 +1492,14 @@ function DecisionLoggerTab({
                         )}
                       </div>
                     ) : (
-                      <p className="text-sm text-white/70 font-mono">Document not found</p>
+                      <p className="text-sm text-muted-foreground font-mono">Document not found</p>
                     );
                   })()}
                 </div>
               )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-white/30">
-                <Button variant="outline" onClick={() => setViewingDecision(null)} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                <Button variant="outline" onClick={() => setViewingDecision(null)} className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                   Close
                 </Button>
               </div>
@@ -1510,21 +1510,21 @@ function DecisionLoggerTab({
 
       {/* Top Actors */}
       {stats.topActors.length > 0 && (
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Decision Makers</CardTitle>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Top Decision Makers</CardTitle>
           </CardHeader>
-          <CardContent className="text-white">
+          <CardContent className="text-foreground">
             <div className="space-y-2">
               {stats.topActors.map((a, i) => (
-                <div key={a.actor} className="flex items-center justify-between p-2 border-2 border-white rounded hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
+                <div key={a.actor} className="flex items-center justify-between p-2 border border-border rounded hover:border-blue-600 hover:bg-blue-50 dark:bg-blue-950 transition-all bg-transparent">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono font-bold text-white/70">#{i + 1}</span>
                     <span className="font-mono font-bold text-white">{a.actor}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm font-mono">
-                    <span className="text-white/70">{a.count} decisions</span>
-                    <Badge variant="outline" className={a.winRate > 50 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white text-white bg-transparent font-mono"}>
+                    <span className="text-foreground/70">{a.count} decisions</span>
+                    <Badge variant="outline" className={a.winRate > 50 ? "border-blue-600 text-blue-600 bg-transparent font-mono" : "border-white text-white bg-transparent font-mono"}>
                       {a.winRate}% win rate
                     </Badge>
                   </div>
@@ -4019,8 +4019,8 @@ function SourcesTab({
   return (
     <div className="space-y-6">
       {!canImport && (
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-sm text-white/70 font-mono">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-sm text-muted-foreground font-mono">
             Loading your active event... Imports will be available in a moment.
           </CardContent>
         </Card>
@@ -4028,24 +4028,24 @@ function SourcesTab({
       {/* ClickUp import temporarily disabled */}
 
       {/* Folder Management Section */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Folder className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">
+            <Folder className="h-5 w-5 inline mr-2 text-blue-600" />
             Document Folders
           </CardTitle>
-          <CardDescription className="text-white/70 font-mono">Organize your documents into folders for better context filtering.</CardDescription>
+          <CardDescription className="text-muted-foreground font-mono">Organize your documents into folders for better context filtering.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Folder Selector */}
           <div>
-            <Label className="text-white font-mono font-bold">Select Folder for Uploads</Label>
+            <Label className="text-foreground font-mono font-bold">Select Folder for Uploads</Label>
             <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-              <SelectTrigger className="border-2 border-white bg-transparent text-white">
+              <SelectTrigger className="border border-border bg-card text-foreground">
                 <SelectValue placeholder="Select a folder" />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border-2 border-white max-h-[300px]">
-                <SelectItem value="none" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+              <SelectContent className="bg-[#050505] border border-border max-h-[300px]">
+                <SelectItem value="none" className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50">
                   <span className="flex items-center gap-2">
                     <Folder className="h-4 w-4" />
                     No Folder (Root)
@@ -4055,20 +4055,20 @@ function SourcesTab({
                   const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
                   return (
                     <React.Fragment key={cat}>
-                      <div className="px-2 py-1 text-[10px] font-mono text-[#FFED00]/60 uppercase tracking-wider pointer-events-none">
+                      <div className="px-2 py-1 text-[10px] font-mono text-blue-600/60 uppercase tracking-wider pointer-events-none">
                         {cat} {catFolders.length > 0 ? `(${catFolders.length})` : "(0)"}
                       </div>
                       {catFolders.length > 0 ? (
                         catFolders.map((folder) => (
-                          <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10 pl-4">
+                          <SelectItem key={folder.id} value={folder.id} className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50 pl-4">
                             <span className="flex items-center gap-2">
-                              <Folder className="h-4 w-4 text-[#FFED00]" />
+                              <Folder className="h-4 w-4 text-blue-600" />
                               {folder.name}
                             </span>
                           </SelectItem>
                         ))
                       ) : (
-                        <div className="px-2 py-1.5 text-[10px] font-mono text-white/40 italic pointer-events-none pl-4">
+                        <div className="px-2 py-1.5 text-[10px] font-mono text-muted-foreground/60 italic pointer-events-none pl-4">
                           No folders — create one below
                         </div>
                       )}
@@ -4077,7 +4077,7 @@ function SourcesTab({
                 })}
               </SelectContent>
             </Select>
-            <p className="text-xs text-white/50 font-mono mt-1">
+            <p className="text-xs text-muted-foreground/70 font-mono mt-1">
               This folder will be preselected in the post-upload folder picker.
             </p>
           </div>
@@ -4085,23 +4085,23 @@ function SourcesTab({
           {/* Create New Folder */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
-              <Label className="text-white font-mono font-bold">Create New Folder</Label>
+              <Label className="text-foreground font-mono font-bold">Create New Folder</Label>
               <Input
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="e.g., Q1 2026 Deals, Due Diligence, Market Research"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="border border-border bg-card text-foreground placeholder:text-muted-foreground/70"
               />
             </div>
             <div>
-              <Label className="text-white font-mono font-bold">Category</Label>
+              <Label className="text-foreground font-mono font-bold">Category</Label>
               <Select value={newFolderCategory} onValueChange={setNewFolderCategory}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-border bg-card text-foreground">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a2e] border-white/20">
+                <SelectContent className="bg-[#1a1a2e] border-border">
                   {FOLDER_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                    <SelectItem key={cat} value={cat} className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50">
                       {cat}
                     </SelectItem>
                   ))}
@@ -4127,7 +4127,7 @@ function SourcesTab({
                   }
                 }}
                 disabled={isCreatingFolder || !newFolderName.trim()}
-                className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50"
+                className="w-full border border-border bg-card text-white hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold disabled:opacity-50"
                 variant="outline"
               >
                 {isCreatingFolder ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
@@ -4146,16 +4146,16 @@ function SourcesTab({
             const setExpandedRoot = setExpandedFolderCategory;
 
             return (
-              <div className="pt-2 border-t border-white/20">
+              <div className="pt-2 border-t border-border">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <Label className="text-white/70 font-mono text-xs">
+                  <Label className="text-muted-foreground font-mono text-xs">
                     Document Folders ({sourceFolders.length}) — Sourcing, Portfolio Companies, Funds, BD, Mentors / Corporates
                   </Label>
                   {onSyncCategoriesFromDrive && initialDriveSyncConfig?.folders?.length ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs"
+                      className="border-blue-600/50 text-blue-600 hover:bg-[#3b82f6]/10 font-mono text-xs"
                       disabled={isSyncingCategoriesFromDrive}
                       onClick={async () => {
                         setIsSyncingCategoriesFromDrive(true);
@@ -4186,15 +4186,15 @@ function SourcesTab({
                         onClick={() => setExpandedRoot(isCatOpen ? null : cat)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-mono transition-all ${
                           isCatOpen
-                            ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00]"
+                            ? "border-blue-600 bg-[#3b82f6]/15 text-blue-600"
                             : catFolders.length === 0
-                              ? "border-white/15 text-white/50 hover:border-white/30 hover:text-white/70"
-                              : "border-white/25 text-white/70 hover:border-[#FFED00]/50 hover:text-[#FFED00]"
+                              ? "border-border/50 text-muted-foreground/70 hover:border-white/30 hover:text-white/70"
+                              : "border-white/25 text-white/70 hover:border-blue-600/50 hover:text-blue-600"
                         }`}
                       >
                         <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isCatOpen ? "rotate-90" : ""}`} />
                         {cat}
-                        <span className={`tabular-nums ${catFolders.length === 0 ? "text-white/30" : "text-white/40"}`}>({catFolders.length})</span>
+                        <span className={`tabular-nums ${catFolders.length === 0 ? "text-muted-foreground/40" : "text-muted-foreground/60"}`}>({catFolders.length})</span>
                       </button>
                     );
                   })}
@@ -4202,19 +4202,19 @@ function SourcesTab({
 
                 {/* Bulk selection bar — Move selected to category */}
                 {selectedFolderIds.size > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-[#FFED00]/30 bg-[#FFED00]/5">
-                    <span className="text-[11px] font-mono text-[#FFED00] tabular-nums">{selectedFolderIds.size} selected</span>
+                  <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-blue-600/30 bg-blue-50 dark:bg-blue-950">
+                    <span className="text-[11px] font-mono text-blue-600 tabular-nums">{selectedFolderIds.size} selected</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs">
+                        <Button variant="outline" size="sm" className="border-blue-600/50 text-blue-600 hover:bg-[#3b82f6]/10 font-mono text-xs">
                           Move to…
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="border-white/20 bg-slate-900">
+                      <DropdownMenuContent align="start" className="border-border bg-slate-900">
                         {FOLDER_CATEGORIES.map((moveCat) => (
                           <DropdownMenuItem
                             key={moveCat}
-                            className="font-mono text-xs text-white/80 focus:bg-white/10"
+                            className="font-mono text-xs text-white/80 focus:bg-muted/50"
                             onClick={async () => {
                               if (!onFoldersCategoriesSaved) return;
                               const updates = Array.from(selectedFolderIds).map((id) => ({ id, category: moveCat }));
@@ -4228,7 +4228,7 @@ function SourcesTab({
                         ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button variant="ghost" size="sm" className="text-white/60 hover:text-white font-mono text-xs" onClick={() => setSelectedFolderIds(new Set())}>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-mono text-xs" onClick={() => setSelectedFolderIds(new Set())}>
                       Clear selection
                     </Button>
                   </div>
@@ -4249,12 +4249,12 @@ function SourcesTab({
                   const sortedRoots = Object.keys(rootGroups).sort((a, b) => a.localeCompare(b));
 
                   return (
-                    <div className="mt-1 p-2 rounded border border-white/15 bg-white/[0.02] max-h-[300px] overflow-y-auto">
+                    <div className="mt-1 p-2 rounded border border-border/50 bg-white/[0.02] max-h-[300px] overflow-y-auto">
                       {sortedRoots.length > 0 ? (
-                        <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
+                        <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-border/30">
                           <button
                             type="button"
-                            className="text-[10px] font-mono text-[#FFED00]/80 hover:text-[#FFED00]"
+                            className="text-[10px] font-mono text-blue-600/80 hover:text-blue-600"
                             onClick={() => setSelectedFolderIds((prev) => {
                               const next = new Set(prev);
                               for (const f of catFolders) next.add(f.id);
@@ -4266,7 +4266,7 @@ function SourcesTab({
                         </div>
                       ) : null}
                       {sortedRoots.length === 0 ? (
-                        <p className="text-[11px] font-mono text-white/50 py-2">No folders in this category. Create one above and choose category &quot;{activeCat}&quot;.</p>
+                        <p className="text-[11px] font-mono text-muted-foreground/70 py-2">No folders in this category. Create one above and choose category &quot;{activeCat}&quot;.</p>
                       ) : null}
                       {sortedRoots.map((rootName) => {
                         const folders = rootGroups[rootName];
@@ -4285,23 +4285,23 @@ function SourcesTab({
                               }}
                               className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-[11px] font-mono transition-all ${
                                 isRootOpen
-                                  ? "bg-[#FFED00]/10 text-[#FFED00]"
+                                  ? "bg-[#3b82f6]/10 text-blue-600"
                                   : selectedFolderId && folders.some((f) => f.id === selectedFolderId)
-                                    ? "bg-[#FFED00]/5 text-[#FFED00]/80"
-                                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                                    ? "bg-blue-50 dark:bg-blue-950 text-blue-600/80"
+                                    : "text-white/80 hover:bg-muted/30 hover:text-white"
                               }`}
                             >
                               {hasSubfolders ? (
                                 <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isRootOpen ? "rotate-90" : ""}`} />
                               ) : (
-                                <Folder className="h-3 w-3 shrink-0 text-white/40" />
+                                <Folder className="h-3 w-3 shrink-0 text-muted-foreground/60" />
                               )}
                               <span className="truncate flex-1">{rootName}</span>
-                              {hasSubfolders && <span className="text-white/30 tabular-nums text-[10px]">{folders.length}</span>}
+                              {hasSubfolders && <span className="text-foreground/30 tabular-nums text-[10px]">{folders.length}</span>}
                             </button>
                             {/* Expanded root → show subfolders */}
                             {isRootOpen && (
-                              <div className="ml-4 border-l border-white/10 pl-2 my-0.5">
+                              <div className="ml-4 border-l border-border/30 pl-2 my-0.5">
                                 {folders.map((folder) => {
                                   const subPath = (folder.name || "").replace(new RegExp(`^${rootName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*/\\s*`), "");
                                   const displayName = subPath || rootName;
@@ -4318,7 +4318,7 @@ function SourcesTab({
                                               return next;
                                             });
                                           }}
-                                          className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] h-3.5 w-3.5"
+                                          className="border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5"
                                         />
                                       </div>
                                       <button
@@ -4326,8 +4326,8 @@ function SourcesTab({
                                         onClick={() => setSelectedFolderId(folder.id)}
                                         className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-all truncate max-w-[280px] ${
                                           selectedFolderId === folder.id
-                                            ? "bg-[#FFED00]/15 text-[#FFED00] border border-[#FFED00]/40"
-                                            : "text-white/60 hover:text-white hover:bg-white/5"
+                                            ? "bg-[#3b82f6]/15 text-blue-600 border border-blue-600/40"
+                                            : "text-muted-foreground hover:text-white hover:bg-muted/30"
                                         }`}
                                         title={folder.name}
                                       >
@@ -4336,15 +4336,15 @@ function SourcesTab({
                                       </button>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                          <Button variant="ghost" size="icon" className="h-5 w-5 text-white/30 hover:text-white/60 hover:bg-white/10">
+                                          <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50">
                                             <ChevronDown className="h-2.5 w-2.5" />
                                           </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="border-white/20 bg-slate-900">
+                                        <DropdownMenuContent align="end" className="border-border bg-slate-900">
                                           {FOLDER_CATEGORIES.map((moveCat) => (
                                             <DropdownMenuItem
                                               key={moveCat}
-                                              className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-[#FFED00] font-bold" : "text-white/80"} focus:bg-white/10`}
+                                              className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-blue-600 font-bold" : "text-white/80"} focus:bg-muted/50`}
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 if ((folder.category || "Portfolio Companies") === moveCat) return;
@@ -4388,15 +4388,15 @@ function SourcesTab({
           })()}
           {/* Confirm delete folder and contents */}
           <AlertDialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
-            <AlertDialogContent className="border-2 border-white/20 bg-slate-900 text-white">
+            <AlertDialogContent className="border border-border/20 bg-slate-900 text-white">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-white font-mono">Delete folder and all its documents?</AlertDialogTitle>
-                <AlertDialogDescription className="text-white/80 font-mono text-sm">
+                <AlertDialogTitle className="text-foreground font-mono">Delete folder and all its documents?</AlertDialogTitle>
+                <AlertDialogDescription className="text-foreground/80 font-mono text-sm">
                   This will permanently delete the folder &quot;{folderToDelete?.name}&quot; and all documents in it. Embeddings and links will be removed. This cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="bg-slate-800 text-white border-white/20 hover:bg-slate-700">Cancel</AlertDialogCancel>
+                <AlertDialogCancel className="bg-slate-800 text-white border-border hover:bg-slate-700">Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-red-600 text-white hover:bg-red-700"
                   onClick={async () => {
@@ -4427,13 +4427,13 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Local Upload</CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Local Upload</CardTitle>
+          <CardDescription className="text-muted-foreground font-mono">
             Upload files from your computer into Sources.
             {selectedFolderId !== "none" && (
-              <span className="ml-2 text-[#FFED00]">
+              <span className="ml-2 text-blue-600">
                 → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
@@ -4448,48 +4448,48 @@ function SourcesTab({
             accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
           />
           {uploadProgress && (
-            <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+            <div className="space-y-2 p-3 rounded-lg border border-blue-600/30 bg-blue-50 dark:bg-blue-950">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-white/80">
-                  Processing {uploadProgress.current}/{uploadProgress.total}: <span className="text-[#FFED00]">{uploadProgress.currentFile}</span>
+                  Processing {uploadProgress.current}/{uploadProgress.total}: <span className="text-blue-600">{uploadProgress.currentFile}</span>
                 </span>
-                <span className="text-xs font-mono text-white/50">
+                <span className="text-xs font-mono text-muted-foreground/70">
                   {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
                 </span>
               </div>
-              <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-muted/50 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                  className="bg-[#3b82f6] h-2 rounded-full transition-all duration-500"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 />
               </div>
               {uploadProgress.results.length > 0 && (
-                <div className="text-[10px] font-mono text-white/50 space-y-0.5 max-h-20 overflow-auto">
+                <div className="text-[10px] font-mono text-muted-foreground/70 space-y-0.5 max-h-20 overflow-auto">
                   {uploadProgress.results.map((r, i) => (
                     <div key={i} className="flex items-center gap-1">
-                      <span className="text-white/70">{r.name}:</span>
+                      <span className="text-foreground/70">{r.name}:</span>
                       {r.updated > 0 && <span className="text-emerald-400">{r.updated} updated</span>}
                       {r.conflicts > 0 && <span className="text-orange-400">{r.conflicts} conflicts</span>}
-                      {r.updated === 0 && r.conflicts === 0 && <span className="text-white/40">no changes</span>}
+                      {r.updated === 0 && r.conflicts === 0 && <span className="text-muted-foreground/60">no changes</span>}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           )}
-          <p className="text-xs text-white/70 font-mono">
+          <p className="text-xs text-muted-foreground font-mono">
             Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) — all are indexed for AI search.
           </p>
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Google Drive Import</CardTitle>
+          <CardDescription className="text-muted-foreground font-mono">
             Paste a Google Docs/Slides/Sheets link or choose from Drive.
             {selectedFolderId !== "none" && (
-              <span className="ml-2 text-[#FFED00]">
+              <span className="ml-2 text-blue-600">
                 → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
@@ -4498,45 +4498,45 @@ function SourcesTab({
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <Label className="text-white font-mono font-bold">Drive URL</Label>
+              <Label className="text-foreground font-mono font-bold">Drive URL</Label>
               <Input
                 value={driveUrl}
                 onChange={(e) => setDriveUrl(e.target.value)}
                 placeholder="https://docs.google.com/document/d/..."
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="border border-border bg-card text-foreground placeholder:text-muted-foreground/70"
               />
             </div>
             <div className="flex items-end">
               <div className="flex w-full flex-col gap-2">
-                <Button onClick={openDrivePicker} variant="outline" className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                <Button onClick={openDrivePicker} variant="outline" className="w-full border border-border bg-card text-white hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                   <Folder className="h-4 w-4 mr-2" />
                   Choose from Drive
                 </Button>
-                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
+                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
                   {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                   Import Drive
                 </Button>
               </div>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-xs text-white/70 font-mono">
-            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
+          <label className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
             Auto-extract and log decision after import
           </label>
-          <p className="text-xs text-white/70 font-mono">
+          <p className="text-xs text-muted-foreground font-mono">
             Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
           </p>
         </CardContent>
       </Card>
 
       {/* ── Google Drive Portfolio Folder Sync ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Cloud className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">
+            <Cloud className="h-5 w-5 inline mr-2 text-blue-600" />
             Google Drive Folder Sync
           </CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+          <CardDescription className="text-muted-foreground font-mono">
             Connect a root portfolio folder from Google Drive. Each sub-folder = one portfolio company.
             All documents are automatically fetched, embedded, and extracted.
           </CardDescription>
@@ -4547,16 +4547,16 @@ function SourcesTab({
               {/* Connected folders list */}
               <div className="space-y-2">
                 {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder", category: "Portfolio Companies" as const }]).map((folder) => (
-                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5 flex-wrap">
+                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-muted/30 flex-wrap">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <Folder className="h-5 w-5 text-[#FFED00] shrink-0" />
+                      <Folder className="h-5 w-5 text-blue-600 shrink-0" />
                       <div className="min-w-0">
-                        <div className="font-mono font-bold text-white text-sm">{folder.name}</div>
-                        <div className="text-[10px] text-white/40 font-mono truncate max-w-[200px]">{folder.id}</div>
+                        <div className="font-mono font-bold text-foreground text-sm">{folder.name}</div>
+                        <div className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[200px]">{folder.id}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Label className="text-[10px] text-white/50 font-mono whitespace-nowrap">Root folder type:</Label>
+                      <Label className="text-[10px] text-muted-foreground/70 font-mono whitespace-nowrap">Root folder type:</Label>
                       <Select
                         value={folder.category ?? "Portfolio Companies"}
                         onValueChange={async (value) => {
@@ -4598,12 +4598,12 @@ function SourcesTab({
                           }
                         }}
                       >
-                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-white/20 bg-transparent text-white font-mono">
+                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-border bg-transparent text-foreground font-mono">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#050505] border-2 border-white">
+                        <SelectContent className="bg-[#050505] border border-border">
                           {DRIVE_ROOT_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                            <SelectItem key={cat} value={cat} className="text-foreground font-mono hover:bg-muted/50 focus:bg-muted/50">
                               {cat}
                             </SelectItem>
                           ))}
@@ -4640,7 +4640,7 @@ function SourcesTab({
                           }
                           toast({ title: "Folder removed", description: `Removed "${folder.name}" from sync.` });
                         }}
-                        className="text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                        className="text-muted-foreground/60 hover:text-red-400 hover:bg-red-500/10"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -4650,7 +4650,7 @@ function SourcesTab({
               </div>
 
               {/* Sync status bar */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-white/15 bg-white/[0.03]">
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/50 bg-white/[0.03]">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
@@ -4659,9 +4659,9 @@ function SourcesTab({
                     </span>
                     <span className="text-[10px] text-emerald-400 font-mono font-semibold">AUTO-SYNC ACTIVE</span>
                   </div>
-                  <span className="text-[10px] text-white/40 font-mono">Every 15 min</span>
+                  <span className="text-[10px] text-muted-foreground/60 font-mono">Every 15 min</span>
                   {lastDriveSyncAt && (
-                    <span className="text-[10px] text-white/40 font-mono">
+                    <span className="text-[10px] text-muted-foreground/60 font-mono">
                       | Last: {new Date(lastDriveSyncAt).toLocaleString()}
                     </span>
                   )}
@@ -4671,7 +4671,7 @@ function SourcesTab({
                     variant="outline"
                     size="sm"
                     onClick={connectDrivePortfolioFolder}
-                    className="border border-white/20 bg-transparent text-white/70 hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold text-[10px] h-7 px-2"
+                    className="border border-border bg-transparent text-white/70 hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold text-[10px] h-7 px-2"
                   >
                     <FolderPlus className="h-3.5 w-3.5 mr-1" />
                     Add Folder
@@ -4680,7 +4680,7 @@ function SourcesTab({
                     size="sm"
                     onClick={() => syncGoogleDriveFolder()}
                     disabled={isSyncingDrive || !canImport}
-                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
+                    className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingDrive ? (
                       <>
@@ -4699,27 +4699,27 @@ function SourcesTab({
 
               {/* Sync progress */}
               {driveSyncProgress && (
-                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                <div className="space-y-2 p-3 rounded-lg border border-blue-600/30 bg-blue-50 dark:bg-blue-950">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-white/80">
                       {driveSyncProgress.phase}{" "}
                       {driveSyncProgress.total > 0 && (
                         <>
                           {driveSyncProgress.current}/{driveSyncProgress.total}:{" "}
-                          <span className="text-[#FFED00]">{driveSyncProgress.currentItem}</span>
+                          <span className="text-blue-600">{driveSyncProgress.currentItem}</span>
                         </>
                       )}
                     </span>
                     {driveSyncProgress.total > 0 && (
-                      <span className="text-xs font-mono text-white/50">
+                      <span className="text-xs font-mono text-muted-foreground/70">
                         {Math.round((driveSyncProgress.current / driveSyncProgress.total) * 100)}%
                       </span>
                     )}
                   </div>
                   {driveSyncProgress.total > 0 && (
-                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div className="w-full bg-muted/50 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        className="bg-[#3b82f6] h-2 rounded-full transition-all duration-500"
                         style={{ width: `${(driveSyncProgress.current / driveSyncProgress.total) * 100}%` }}
                       />
                     </div>
@@ -4731,14 +4731,14 @@ function SourcesTab({
               {driveSyncResults.length > 0 && !driveSyncProgress && (
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {driveSyncResults.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/70 px-2 py-1 rounded bg-white/5">
-                      <Building2 className="h-3 w-3 text-[#FFED00] flex-shrink-0" />
+                    <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/70 px-2 py-1 rounded bg-muted/30">
+                      <Building2 className="h-3 w-3 text-blue-600 flex-shrink-0" />
                       <span className="font-bold text-white/90">{r.companyName}</span>
                       {r.newFiles > 0 && <span className="text-emerald-400">+{r.newFiles} new</span>}
                       {r.updatedFiles > 0 && <span className="text-blue-400">{r.updatedFiles} updated</span>}
-                      {r.skippedFiles > 0 && <span className="text-white/40">{r.skippedFiles} unchanged</span>}
+                      {r.skippedFiles > 0 && <span className="text-muted-foreground/60">{r.skippedFiles} unchanged</span>}
                       {r.newFiles === 0 && r.updatedFiles === 0 && r.skippedFiles === 0 && (
-                        <span className="text-white/40">empty folder</span>
+                        <span className="text-muted-foreground/60">empty folder</span>
                       )}
                     </div>
                   ))}
@@ -4747,17 +4747,17 @@ function SourcesTab({
             </>
           ) : (
             <div className="text-center py-6 space-y-3">
-              <Cloud className="h-10 w-10 text-white/30 mx-auto" />
-              <p className="text-sm text-white/50 font-mono">No portfolio folder connected yet.</p>
+              <Cloud className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+              <p className="text-sm text-muted-foreground/70 font-mono">No portfolio folder connected yet.</p>
               <Button
                 onClick={connectDrivePortfolioFolder}
                 disabled={!canImport}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
               >
                 <Folder className="h-4 w-4 mr-2" />
                 Connect Portfolio Folder
               </Button>
-              <p className="text-[10px] text-white/40 font-mono">
+              <p className="text-[10px] text-muted-foreground/60 font-mono">
                 Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
               </p>
             </div>
@@ -4766,13 +4766,13 @@ function SourcesTab({
       </Card>
 
       {/* ── Gmail Inbox Sync ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Mail className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">
+            <Mail className="h-5 w-5 inline mr-2 text-blue-600" />
             Gmail Inbox Sync
           </CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+          <CardDescription className="text-muted-foreground font-mono">
             Read emails from your Gmail inbox. Emails are embedded and available for RAG queries.
           </CardDescription>
         </CardHeader>
@@ -4782,17 +4782,17 @@ function SourcesTab({
               {/* Config panel */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <Label className="text-white font-mono font-bold text-xs">Gmail Search Filter</Label>
+                  <Label className="text-foreground font-mono font-bold text-xs">Gmail Search Filter</Label>
                   <Input
                     value={gmailQuery}
                     onChange={(e) => setGmailQuery(e.target.value)}
                     placeholder='e.g. from:founder@startup.com, subject:"pitch deck", has:attachment'
-                    className="border-2 border-white bg-transparent text-white placeholder:text-white/40 text-xs font-mono"
+                    className="border border-border bg-card text-foreground placeholder:text-muted-foreground/60 text-xs font-mono"
                   />
-                  <p className="text-[10px] text-white/40 font-mono mt-1">Standard Gmail search operators. Leave blank to sync all inbox mail.</p>
+                  <p className="text-[10px] text-muted-foreground/60 font-mono mt-1">Standard Gmail search operators. Leave blank to sync all inbox mail.</p>
                 </div>
                 <div>
-                  <Label className="text-white font-mono font-bold text-xs">Max emails per sync</Label>
+                  <Label className="text-foreground font-mono font-bold text-xs">Max emails per sync</Label>
                   <Input
                     type="number"
                     min={1}
@@ -4802,9 +4802,9 @@ function SourcesTab({
                       if (!isNaN(v) && v >= 1) setGmailMaxPerSync(v);
                       else if (e.target.value === "") setGmailMaxPerSync(50);
                     }}
-                    className="border-2 border-white bg-transparent text-white text-xs font-mono"
+                    className="border border-border bg-card text-foreground text-xs font-mono"
                   />
-                  <p className="text-[10px] text-white/40 font-mono mt-1">No limit — enter any number.</p>
+                  <p className="text-[10px] text-muted-foreground/60 font-mono mt-1">No limit — enter any number.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -4812,16 +4812,16 @@ function SourcesTab({
                   id="gmail-attachments"
                   checked={gmailIncludeAttachments}
                   onCheckedChange={(v) => setGmailIncludeAttachments(!!v)}
-                  className="border-white/50 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                  className="border-border data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 dark:data-[state=checked]:bg-blue-700 dark:data-[state=checked]:border-blue-700"
                 />
-                <Label htmlFor="gmail-attachments" className="text-white/70 font-mono text-xs cursor-pointer">
+                <Label htmlFor="gmail-attachments" className="text-muted-foreground font-mono text-xs cursor-pointer">
                   Process email attachments (PDFs, docs)
                 </Label>
               </div>
               {/* Save config changes */}
               <Button
                 size="sm"
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold font-mono text-xs h-9 px-5 border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.4)] uppercase tracking-wider"
+                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold font-mono text-xs h-9 px-5 border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.4)] uppercase tracking-wider"
                 onClick={async () => {
                   if (!activeEventId) return;
                   await supabase.from("sync_configurations")
@@ -4835,7 +4835,7 @@ function SourcesTab({
               </Button>
 
               {/* Sync status bar */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-white/15 bg-white/[0.03]">
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/50 bg-white/[0.03]">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
@@ -4845,7 +4845,7 @@ function SourcesTab({
                     <span className="text-[10px] text-emerald-400 font-mono font-semibold">GMAIL CONNECTED</span>
                   </div>
                   {lastGmailSyncAt && (
-                    <span className="text-[10px] text-white/40 font-mono">
+                    <span className="text-[10px] text-muted-foreground/60 font-mono">
                       Last sync: {new Date(lastGmailSyncAt).toLocaleString()}
                     </span>
                   )}
@@ -4855,7 +4855,7 @@ function SourcesTab({
                     size="sm"
                     onClick={syncGmailInbox}
                     disabled={isSyncingGmail || !canImport}
-                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
+                    className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingGmail ? (
                       <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Syncing…</>
@@ -4868,21 +4868,21 @@ function SourcesTab({
 
               {/* Sync progress */}
               {gmailSyncProgress && (
-                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                <div className="space-y-2 p-3 rounded-lg border border-blue-600/30 bg-blue-50 dark:bg-blue-950">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-white/80">
                       {gmailSyncProgress.currentItem}
                     </span>
                     {gmailSyncProgress.total > 0 && (
-                      <span className="text-xs font-mono text-white/50">
+                      <span className="text-xs font-mono text-muted-foreground/70">
                         {Math.round((gmailSyncProgress.current / gmailSyncProgress.total) * 100)}%
                       </span>
                     )}
                   </div>
                   {gmailSyncProgress.total > 0 && (
-                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div className="w-full bg-muted/50 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        className="bg-[#3b82f6] h-2 rounded-full transition-all duration-500"
                         style={{ width: `${(gmailSyncProgress.current / gmailSyncProgress.total) * 100}%` }}
                       />
                     </div>
@@ -4892,14 +4892,14 @@ function SourcesTab({
 
               {/* Sync results */}
               {gmailSyncResults && !gmailSyncProgress && (
-                <div className="flex items-center gap-4 p-3 rounded-lg border border-white/15 bg-white/[0.03]">
+                <div className="flex items-center gap-4 p-3 rounded-lg border border-border/50 bg-white/[0.03]">
                   <div className="flex items-center gap-1.5 text-[10px] font-mono">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
                     <span className="text-emerald-400">{gmailSyncResults.synced} synced</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                    <Clock className="h-3.5 w-3.5 text-white/40" />
-                    <span className="text-white/40">{gmailSyncResults.skipped} skipped</span>
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    <span className="text-muted-foreground/60">{gmailSyncResults.skipped} skipped</span>
                   </div>
                   {gmailSyncResults.errors > 0 && (
                     <div className="flex items-center gap-1.5 text-[10px] font-mono">
@@ -4912,17 +4912,17 @@ function SourcesTab({
             </>
           ) : (
             <div className="text-center py-6 space-y-3">
-              <Mail className="h-10 w-10 text-white/30 mx-auto" />
-              <p className="text-sm text-white/50 font-mono">Gmail inbox not connected yet.</p>
+              <Mail className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+              <p className="text-sm text-muted-foreground/70 font-mono">Gmail inbox not connected yet.</p>
               <Button
                 onClick={() => connectGmail()}
                 disabled={!canImport}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
               >
                 <Mail className="h-4 w-4 mr-2" />
                 Connect Gmail
               </Button>
-              <p className="text-[10px] text-white/40 font-mono">
+              <p className="text-[10px] text-muted-foreground/60 font-mono">
                 Emails will be read (read-only), extracted, embedded and available in the RAG knowledge base.
               </p>
             </div>
@@ -4931,13 +4931,13 @@ function SourcesTab({
       </Card>
 
       {/* ── Company cards cleanup ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Building2 className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">
+            <Building2 className="h-5 w-5 inline mr-2 text-blue-600" />
             Company cards
           </CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+          <CardDescription className="text-muted-foreground font-mono">
             Remove redundant or all entity cards. After sync, redundant cards (same company, little info) are cleaned automatically.
           </CardDescription>
         </CardHeader>
@@ -4960,7 +4960,7 @@ function SourcesTab({
                 setIsDeletingCards(false);
               }
             }}
-            className="border border-white/20 bg-transparent text-white/70 hover:bg-white/10 font-mono text-[10px] h-8"
+            className="border border-border bg-transparent text-white/70 hover:bg-muted/50 font-mono text-[10px] h-8"
           >
             {isDeletingCards ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
             Delete redundant cards
@@ -4992,14 +4992,14 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Tracked Sources</CardTitle>
-          <CardDescription className="text-white/70 font-mono">{sources.length} items</CardDescription>
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Tracked Sources</CardTitle>
+          <CardDescription className="text-muted-foreground font-mono">{sources.length} items</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-white">
           {sources.length === 0 ? (
-            <div className="text-sm text-white/70 font-mono">No sources yet. Upload documents or import from Google Drive to create sources.</div>
+            <div className="text-sm text-muted-foreground font-mono">No sources yet. Upload documents or import from Google Drive to create sources.</div>
           ) : (
             sources.map((source) => {
               const relatedDoc = documents.find(
@@ -5010,28 +5010,28 @@ function SourcesTab({
                 : null;
 
               return (
-                <div key={source.id} className="flex items-center justify-between gap-3 border-2 border-white rounded-md p-3 hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
+                <div key={source.id} className="flex items-center justify-between gap-3 border border-border rounded-md p-3 hover:border-blue-600 hover:bg-blue-50 dark:bg-blue-950 transition-all bg-transparent">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{source.source_type}</Badge>
-                      {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-transparent font-mono">{source.status}</Badge>}
+                      {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-muted-foreground/70 bg-transparent font-mono">{source.status}</Badge>}
                     </div>
                     <div className="font-mono font-bold text-white">{source.title || "Untitled source"}</div>
                     {source.external_url && (
-                      <div className="text-xs text-white/70 font-mono truncate max-w-[420px]">{source.external_url}</div>
+                      <div className="text-xs text-muted-foreground font-mono truncate max-w-[420px]">{source.external_url}</div>
                     )}
                     {relatedDoc && (relatedDoc.uploader_email || relatedDoc.uploader_name) && (
-                      <div className="text-xs text-white/70 font-mono">
+                      <div className="text-xs text-muted-foreground font-mono">
                         Uploaded by: {relatedDoc.uploader_name || relatedDoc.uploader_email}
                       </div>
                     )}
                     {relatedFolderName && (
-                      <div className="text-xs text-white/70 font-mono">
-                        Folder: <span className="text-[#FFED00]">{relatedFolderName}</span>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        Folder: <span className="text-blue-600">{relatedFolderName}</span>
                       </div>
                     )}
                     {source.notes && (
-                      <div className="text-sm text-white/70 font-mono whitespace-pre-wrap">{source.notes}</div>
+                      <div className="text-sm text-muted-foreground font-mono whitespace-pre-wrap">{source.notes}</div>
                     )}
                     {source.tags && source.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -5045,14 +5045,14 @@ function SourcesTab({
                   </div>
                   <div className="flex items-center gap-2">
                     {source.external_url && (
-                      <Button variant="outline" size="sm" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                      <Button variant="outline" size="sm" asChild className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                         <a href={source.external_url} target="_blank" rel="noreferrer">
                           <Link2 className="h-4 w-4 mr-1" />
                           Open
                         </a>
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-foreground/70 hover:text-white hover:bg-muted/50">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -5073,24 +5073,24 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
+        <DialogContent className="bg-[#050505] border border-border text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <FolderPlus className="h-4 w-4 text-[#FFED00]" />
+            <DialogTitle className="text-foreground font-mono font-bold uppercase tracking-tight flex items-center gap-2">
+              <FolderPlus className="h-4 w-4 text-blue-600" />
               Categorize &amp; Assign Folder
             </DialogTitle>
-            <DialogDescription className="text-white/70 font-mono text-xs">
+            <DialogDescription className="text-muted-foreground font-mono text-xs">
               Pick a category, then select or create a folder for your uploaded documents.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Documents summary */}
-            <div className="space-y-1 max-h-[100px] overflow-y-auto border border-white/20 rounded-md p-2">
-              <div className="text-[10px] text-white/50 font-mono mb-1">
+            <div className="space-y-1 max-h-[100px] overflow-y-auto border border-border rounded-md p-2">
+              <div className="text-[10px] text-muted-foreground/70 font-mono mb-1">
                 {pendingFolderDocs.length} document{pendingFolderDocs.length > 1 ? "s" : ""}:
               </div>
               {pendingFolderDocs.map((doc) => (
-                <div key={doc.id} className="text-xs text-white font-mono truncate">
+                <div key={doc.id} className="text-xs text-foreground font-mono truncate">
                   • {doc.title || "Untitled document"}
                 </div>
               ))}
@@ -5098,7 +5098,7 @@ function SourcesTab({
 
             {/* Step 1: Category selector */}
             <div>
-              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+              <Label className="text-[10px] font-mono text-blue-600/80 uppercase tracking-wider mb-1.5 block">
                 Step 1 — Choose Category
               </Label>
               <div className="flex flex-wrap gap-2">
@@ -5111,7 +5111,7 @@ function SourcesTab({
                       onClick={() => setFolderDialogCategory(cat)}
                       className={`px-3 py-1.5 rounded-full text-xs font-mono border-2 transition-all ${
                         isActive
-                          ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00] font-bold shadow-[0_0_8px_rgba(255,237,0,0.25)]"
+                          ? "border-blue-600 bg-blue-600/15 text-blue-600 font-bold shadow-lg shadow-blue-500/20"
                           : "border-white/30 text-white/70 hover:border-white/60 hover:text-white"
                       }`}
                     >
@@ -5124,7 +5124,7 @@ function SourcesTab({
 
             {/* Step 2: Folder selection */}
             <div>
-              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+              <Label className="text-[10px] font-mono text-blue-600/80 uppercase tracking-wider mb-1.5 block">
                 Step 2 — Select or Create Folder
               </Label>
 
@@ -5134,7 +5134,7 @@ function SourcesTab({
                   value={folderDialogNewName}
                   onChange={(e) => setFolderDialogNewName(e.target.value)}
                   placeholder={`New folder name (${folderDialogCategory})`}
-                  className="flex-1 border border-white/30 bg-transparent text-white text-xs placeholder:text-white/40 h-8"
+                  className="flex-1 border border-white/30 bg-transparent text-white text-xs placeholder:text-muted-foreground/60 h-8"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && folderDialogNewName.trim()) {
                       e.preventDefault();
@@ -5152,7 +5152,7 @@ function SourcesTab({
                 <Button
                   size="sm"
                   disabled={!folderDialogNewName.trim()}
-                  className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold h-8 text-xs px-3"
+                  className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold h-8 text-xs px-3"
                   onClick={async () => {
                     if (!folderDialogNewName.trim()) return;
                     const folder = await onCreateFolder(folderDialogNewName.trim(), folderDialogCategory);
@@ -5173,7 +5173,7 @@ function SourcesTab({
                 const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === folderDialogCategory);
                 if (catFolders.length === 0) {
                   return (
-                    <div className="text-xs text-white/50 font-mono border border-white/15 rounded-md p-3 text-center">
+                    <div className="text-xs text-muted-foreground/70 font-mono border border-border/50 rounded-md p-3 text-center">
                       No folders in &ldquo;{folderDialogCategory}&rdquo; yet. Create one above.
                     </div>
                   );
@@ -5183,12 +5183,12 @@ function SourcesTab({
                     {catFolders.map((folder) => (
                       <label
                         key={folder.id}
-                        className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono"
+                        className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-blue-50 dark:bg-blue-950 hover:border-blue-600 transition-colors text-foreground font-mono"
                       >
                         <Checkbox
                           checked={folderAssignmentIds.includes(folder.id)}
                           onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
-                          className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                          className="border-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                         />
                         <Folder className="h-3 w-3 text-white/70" />
                         <span className="flex-1">{folder.name}</span>
@@ -5201,7 +5201,7 @@ function SourcesTab({
               {/* Show other categories' folders collapsed */}
               {sourceFolders.filter((f) => (f.category || "Portfolio Companies") !== folderDialogCategory).length > 0 && (
                 <details className="mt-2">
-                  <summary className="text-[10px] font-mono text-white/40 cursor-pointer hover:text-white/60">
+                  <summary className="text-[10px] font-mono text-muted-foreground/60 cursor-pointer hover:text-muted-foreground">
                     Show other categories
                   </summary>
                   <div className="space-y-2 mt-2">
@@ -5210,19 +5210,19 @@ function SourcesTab({
                       if (catFolders.length === 0) return null;
                       return (
                         <div key={cat}>
-                          <p className="text-[10px] font-mono text-white/40 uppercase tracking-wider mb-1">{cat}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider mb-1">{cat}</p>
                           <div className="space-y-1">
                             {catFolders.map((folder) => (
                               <label
                                 key={folder.id}
-                                className="flex items-center gap-2 text-xs border border-white/20 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white/60 font-mono"
+                                className="flex items-center gap-2 text-xs border border-border px-2 py-1.5 rounded-md cursor-pointer hover:bg-blue-50 dark:bg-blue-950 hover:border-blue-600 transition-colors text-muted-foreground font-mono"
                               >
                                 <Checkbox
                                   checked={folderAssignmentIds.includes(folder.id)}
                                   onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
-                                  className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                                  className="border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                                 />
-                                <Folder className="h-3 w-3 text-white/40" />
+                                <Folder className="h-3 w-3 text-muted-foreground/60" />
                                 <span className="flex-1">{folder.name}</span>
                               </label>
                             ))}
@@ -5238,7 +5238,7 @@ function SourcesTab({
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+              className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold"
               onClick={() => {
                 setIsFolderDialogOpen(false);
                 setPendingFolderDocs([]);
@@ -5248,7 +5248,7 @@ function SourcesTab({
               Skip for now
             </Button>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
               disabled={isAssigningFolders || folderAssignmentIds.length === 0}
               onClick={assignFoldersToDocuments}
             >
@@ -5269,20 +5269,20 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-md">
+        <DialogContent className="bg-[#050505] border border-border text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Folder className="h-4 w-4 text-[#FFED00]" />
+            <DialogTitle className="text-foreground font-mono font-bold uppercase tracking-tight flex items-center gap-2">
+              <Folder className="h-4 w-4 text-blue-600" />
               Categorize Folders
             </DialogTitle>
-            <DialogDescription className="text-white/70 font-mono text-xs">
+            <DialogDescription className="text-muted-foreground font-mono text-xs">
               Assign each folder to a category: Sourcing, Portfolio Companies, Funds, BD, or Mentors/Corporates.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {categoryPickerFolders.map((pf, idx) => (
-              <div key={pf.id} className="flex items-center gap-3 border border-white/20 rounded-md px-3 py-2">
-                <Folder className="h-4 w-4 text-[#FFED00] shrink-0" />
+              <div key={pf.id} className="flex items-center gap-3 border border-border rounded-md px-3 py-2">
+                <Folder className="h-4 w-4 text-blue-600 shrink-0" />
                 <span className="text-xs font-mono text-white flex-1 truncate">{pf.name}</span>
                 <Select
                   value={pf.category}
@@ -5293,9 +5293,9 @@ function SourcesTab({
                   <SelectTrigger className="w-[180px] h-7 text-[10px] border-white/30 bg-transparent text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a2e] border-white/20">
+                  <SelectContent className="bg-[#1a1a2e] border-border">
                     {FOLDER_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="text-white font-mono text-xs hover:bg-white/10 focus:bg-white/10">
+                      <SelectItem key={cat} value={cat} className="text-foreground font-mono text-xs hover:bg-muted/50 focus:bg-muted/50">
                         {cat}
                       </SelectItem>
                     ))}
@@ -5307,7 +5307,7 @@ function SourcesTab({
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+              className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold"
               onClick={() => {
                 setCategoryPickerOpen(false);
                 setCategoryPickerFolders([]);
@@ -5316,7 +5316,7 @@ function SourcesTab({
               Skip
             </Button>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
               onClick={async () => {
                 await onFoldersCategoriesSaved?.(categoryPickerFolders.map((pf) => ({ id: pf.id, category: pf.category })));
                 toast({ title: "Categories saved", description: `Updated ${categoryPickerFolders.length} folder(s).` });
@@ -5337,21 +5337,21 @@ function SourcesTab({
           if (!open) setBatchReviewData(null);
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
+        <DialogContent className="bg-[#050505] border border-border text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[#FFED00]" />
+            <DialogTitle className="text-foreground font-mono font-bold uppercase tracking-tight flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-600" />
               Batch Extraction Summary
             </DialogTitle>
-            <DialogDescription className="text-white/70 font-mono">
+            <DialogDescription className="text-muted-foreground font-mono">
               Properties auto-extracted from uploaded documents.
               Review in the Companies tab for details.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {batchReviewData?.map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 rounded-md border border-white/10 bg-white/5">
-                <Building2 className="h-4 w-4 text-[#FFED00] flex-shrink-0" />
+              <div key={i} className="flex items-center gap-3 p-2 rounded-md border border-border/30 bg-muted/30">
+                <Building2 className="h-4 w-4 text-blue-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-mono font-bold text-white truncate">{item.companyName}</div>
                 </div>
@@ -5365,11 +5365,11 @@ function SourcesTab({
             ))}
           </div>
           <div className="flex items-center justify-between pt-2">
-            <p className="text-[10px] font-mono text-white/50">
+            <p className="text-[10px] font-mono text-muted-foreground/70">
               Switch to the Companies tab to review details and resolve conflicts.
             </p>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-bold border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
               onClick={() => setBatchReviewData(null)}
             >
               Got it
@@ -5584,82 +5584,82 @@ function DashboardTab({
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-            <Building2 className="h-5 w-5 text-[#FFED00]" />
+          <div className="p-2 border border-blue-600 dark:border-blue-700 rounded-lg bg-transparent">
+            <Building2 className="h-5 w-5 text-blue-600" />
           </div>
           <div>
             <h2 className="text-lg font-mono font-black text-white uppercase tracking-tight">LP Dashboard</h2>
-            <p className="text-xs text-white/60 font-mono">Portfolio overview for limited partners</p>
+            <p className="text-xs text-muted-foreground font-mono">Portfolio overview for limited partners</p>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Building2 className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <Building2 className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{portfolioCount}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Portfolio Companies</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Portfolio Companies</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Briefcase className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <Briefcase className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{fundCount}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Funds</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Funds</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <FileText className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <FileText className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{documents.length}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Documents</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Documents</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-blue-600 dark:border-blue-700 rounded-lg bg-transparent">
+                  <Clock className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{lastUpdated}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Last Updated</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Last Updated</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-[#FFED00]" />
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-blue-600" />
               Portfolio Companies
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
             {companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).length === 0 ? (
-              <p className="text-white/60 font-mono text-sm py-4">No portfolio companies yet.</p>
+              <p className="text-muted-foreground font-mono text-sm py-4">No portfolio companies yet.</p>
             ) : (
               <div className="grid gap-3">
                 {companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).map((card) => (
-                  <div key={card.company_id} className="flex items-center justify-between p-3 border border-white/20 rounded-lg bg-white/5">
+                  <div key={card.company_id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/30">
                     <div>
                       <div className="font-mono font-bold text-white">{card.company_name}</div>
                       <div className="flex items-center gap-2 mt-1">
@@ -5667,15 +5667,15 @@ function DashboardTab({
                           <Badge variant="outline" className="text-xs border-white/40 text-white/70">{card.company_properties.industry}</Badge>
                         )}
                         {card.company_properties?.funding_stage && (
-                          <Badge variant="outline" className="text-xs border-[#FFED00]/40 text-[#FFED00]">{card.company_properties.funding_stage}</Badge>
+                          <Badge variant="outline" className="text-xs border-blue-600/40 text-blue-600">{card.company_properties.funding_stage}</Badge>
                         )}
                       </div>
                     </div>
                     <div className="text-right">
                       {card.company_properties?.arr && (
-                        <div className="text-sm font-mono text-[#FFED00] font-bold">{card.company_properties.arr}</div>
+                        <div className="text-sm font-mono text-blue-600 font-bold">{card.company_properties.arr}</div>
                       )}
-                      <div className="text-xs text-white/50 font-mono">{card.document_count} docs</div>
+                      <div className="text-xs text-muted-foreground/70 font-mono">{card.document_count} docs</div>
                     </div>
                   </div>
                 ))}
@@ -5691,11 +5691,11 @@ function DashboardTab({
     <div className="space-y-6">
       {/* Section switcher: Tasks (all) / Analytics (MD only) */}
       {isMD && (
-        <div className="flex items-center gap-1 border-b-2 border-white/20 pb-2">
+        <div className="flex items-center gap-1 border-b border-border/20 pb-2">
           <button
             onClick={() => setDashboardSection("tasks")}
             className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-              dashboardSection === "tasks" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+              dashboardSection === "tasks" ? "bg-[#3b82f6]/15 text-blue-600 border-b-2 border-blue-600" : "text-white/70 hover:text-white"
             }`}
           >
             <ListTodo className="h-4 w-4 inline mr-1.5 -mt-0.5" />
@@ -5704,7 +5704,7 @@ function DashboardTab({
           <button
             onClick={() => setDashboardSection("analytics")}
             className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-              dashboardSection === "analytics" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+              dashboardSection === "analytics" ? "bg-[#3b82f6]/15 text-blue-600 border-b-2 border-blue-600" : "text-white/70 hover:text-white"
             }`}
           >
             <BarChart3 className="h-4 w-4 inline mr-1.5 -mt-0.5" />
@@ -5723,67 +5723,67 @@ function DashboardTab({
       <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <ClipboardList className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Decisions</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <FileText className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <FileText className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{documents.length}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Documents</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Documents</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Folder className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Folder className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{sources.length}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Sources</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Sources</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <ListTodo className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-blue-600 dark:border-blue-700 rounded-lg bg-transparent">
+                <ListTodo className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{isMD ? tasks.length : myTasks.length}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Tasks</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Tasks</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Building2 className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Building2 className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{companyCards.length}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Companies</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Companies</p>
               </div>
             </div>
           </CardContent>
@@ -5791,21 +5791,21 @@ function DashboardTab({
       </div>
 
       {/* Task hub */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white flex flex-row items-center justify-between gap-4 py-3">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2 text-base">
-            <ListTodo className="h-5 w-5 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border flex flex-row items-center justify-between gap-4 py-3">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight flex items-center gap-2 text-base">
+            <ListTodo className="h-5 w-5 text-blue-600" />
             {isMD ? "All tasks" : "My tasks"}
           </CardTitle>
           <div className="flex items-center gap-3">
             {/* Segmented toggle for List / Gantt */}
-            <div className="flex items-center rounded-lg border-2 border-white/30 overflow-hidden">
+            <div className="flex items-center rounded-lg border border-border/30 overflow-hidden">
               <button
                 onClick={() => setViewMode("list")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
                   viewMode === "list"
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                    ? "bg-[#3b82f6] text-black"
+                    : "bg-transparent text-muted-foreground hover:text-white hover:bg-muted/50"
                 }`}
               >
                 <ListTodo className="h-3.5 w-3.5" />
@@ -5816,8 +5816,8 @@ function DashboardTab({
                 onClick={() => setViewMode("gantt")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
                   viewMode === "gantt"
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                    ? "bg-[#3b82f6] text-black"
+                    : "bg-transparent text-muted-foreground hover:text-white hover:bg-muted/50"
                 }`}
               >
                 <GanttChart className="h-3.5 w-3.5" />
@@ -5828,7 +5828,7 @@ function DashboardTab({
               <Button
                 size="sm"
                 onClick={() => setAddTaskOpen(true)}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-mono font-bold uppercase tracking-wider text-xs border-2 border-[#FFED00] transition-all hover:shadow-[0_0_16px_rgba(255,237,0,0.4)]"
+                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 font-mono font-bold uppercase tracking-wider text-xs border border-blue-600 dark:border-blue-700 transition-all hover:shadow-[0_0_16px_rgba(255,237,0,0.4)]"
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Add task
@@ -5840,15 +5840,15 @@ function DashboardTab({
           {isMD && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <Label className="text-white font-mono text-xs uppercase tracking-wider">Assignee</Label>
+                <Label className="text-foreground font-mono text-xs uppercase tracking-wider">Assignee</Label>
                 <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                  <SelectTrigger className="border border-border bg-card text-foreground mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="all" className="text-white">All</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="all" className="text-foreground">All</SelectItem>
                     {teamMembers.map((m) => (
-                      <SelectItem key={m.id} value={m.id} className="text-white">
+                      <SelectItem key={m.id} value={m.id} className="text-foreground">
                         {m.full_name || m.email || m.id.slice(0, 8)}
                       </SelectItem>
                     ))}
@@ -5856,17 +5856,17 @@ function DashboardTab({
                 </Select>
               </div>
               <div>
-                <Label className="text-white font-mono text-xs uppercase tracking-wider">Status</Label>
+                <Label className="text-foreground font-mono text-xs uppercase tracking-wider">Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                  <SelectTrigger className="border border-border bg-card text-foreground mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
-                    <SelectItem value="all" className="text-white">All</SelectItem>
-                    <SelectItem value="not_started" className="text-white">Not started</SelectItem>
-                    <SelectItem value="in_progress" className="text-white">In progress</SelectItem>
-                    <SelectItem value="done" className="text-white">Done</SelectItem>
-                    <SelectItem value="cancelled" className="text-white">Cancelled</SelectItem>
+                  <SelectContent className="bg-[#050505] border border-border">
+                    <SelectItem value="all" className="text-foreground">All</SelectItem>
+                    <SelectItem value="not_started" className="text-foreground">Not started</SelectItem>
+                    <SelectItem value="in_progress" className="text-foreground">In progress</SelectItem>
+                    <SelectItem value="done" className="text-foreground">Done</SelectItem>
+                    <SelectItem value="cancelled" className="text-foreground">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -5879,12 +5879,12 @@ function DashboardTab({
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-white/60 font-mono uppercase">Range:</span>
+                    <span className="text-xs text-muted-foreground font-mono uppercase">Range:</span>
                     {([4, 8, 12] as const).map((w) => (
                       <button
                         key={w}
                         onClick={() => setGanttRange(w)}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#3b82f6]/20 text-blue-600 border border-blue-600" : "text-muted-foreground border border-border hover:border-white/40"}`}
                       >
                         {w}w
                       </button>
@@ -5892,16 +5892,16 @@ function DashboardTab({
                   </div>
                   {isMD && (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-white/60 font-mono uppercase">Group:</span>
+                      <span className="text-xs text-muted-foreground font-mono uppercase">Group:</span>
                       <button
                         onClick={() => setGanttGroupBy("none")}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#3b82f6]/20 text-blue-600 border border-blue-600" : "text-muted-foreground border border-border hover:border-white/40"}`}
                       >
                         Flat
                       </button>
                       <button
                         onClick={() => setGanttGroupBy("assignee")}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#3b82f6]/20 text-blue-600 border border-blue-600" : "text-muted-foreground border border-border hover:border-white/40"}`}
                       >
                         By Assignee
                       </button>
@@ -5912,14 +5912,14 @@ function DashboardTab({
                 <div className="flex items-center gap-3 flex-wrap">
                   {[
                     { label: "Not started", color: "#6b7280" },
-                    { label: "In progress", color: "#FFED00" },
+                    { label: "In progress", color: "#3b82f6" },
                     { label: "Done", color: "#22c55e" },
                     { label: "Cancelled", color: "#ef4444" },
                     { label: "Overdue", color: "#f97316" },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
-                      <span className="text-[10px] text-white/60 font-mono">{item.label}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{item.label}</span>
                     </div>
                   ))}
                 </div>
@@ -5941,7 +5941,7 @@ function DashboardTab({
                     </div>
                   </div>
                   {/* Today marker info */}
-                  <div className="text-[10px] text-white/40 font-mono mb-1">Today: {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
+                  <div className="text-[10px] text-muted-foreground/60 font-mono mb-1">Today: {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
                   {/* Gantt rows */}
                   {(() => {
                     const totalMs = ganttWeeks * weekMs;
@@ -5952,7 +5952,7 @@ function DashboardTab({
                       if (task.status === "cancelled") return { bg: "#ef4444", border: "#dc2626", opacity: 0.5 };
                       if (isOverdue) return { bg: "#f97316", border: "#ea580c", opacity: 0.95 };
                       if (task.status === "done") return { bg: "#22c55e", border: "#16a34a", opacity: 0.9 };
-                      if (task.status === "in_progress") return { bg: "#FFED00", border: "#d4c800", opacity: 0.9 };
+                      if (task.status === "in_progress") return { bg: "#3b82f6", border: "#d4c800", opacity: 0.9 };
                       return { bg: "#6b7280", border: "#4b5563", opacity: 0.75 };
                     };
                     const renderRow = (task: Task) => {
@@ -5966,10 +5966,10 @@ function DashboardTab({
                         const edgeLeft = taskStartMs < ganttStartMs ? 0 : 99.5;
                         const { bg, border: borderColor } = ganttStatusColor(task);
                         return (
-                          <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
-                            <div className="text-white truncate pr-2" title={task.title}>
-                              <span className={task.status === "cancelled" ? "line-through text-white/40" : ""}>{task.title}</span>
-                              {isMD && <span className="block text-xs text-white/50 truncate">{displayName(task.assignee_user_id)}</span>}
+                          <div key={task.id} className="grid py-1.5 items-center border-b border-border/30 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
+                            <div className="text-foreground truncate pr-2" title={task.title}>
+                              <span className={task.status === "cancelled" ? "line-through text-muted-foreground/60" : ""}>{task.title}</span>
+                              {isMD && <span className="block text-xs text-muted-foreground/70 truncate">{displayName(task.assignee_user_id)}</span>}
                             </div>
                             <div className="relative h-7">
                               <div className="absolute top-0.5 h-6 w-1 rounded" style={{ left: `${edgeLeft}%`, backgroundColor: bg, borderLeft: `2px solid ${borderColor}` }} title={`${task.title}: outside visible range`} />
@@ -5984,10 +5984,10 @@ function DashboardTab({
                       const statusLabel = task.status === "not_started" ? "Not started" : task.status === "in_progress" ? "In progress" : task.status === "done" ? "Done" : "Cancelled";
                       const tooltipText = `${task.title}\nStatus: ${statusLabel}\n${task.start_date ? "Start: " + new Date(task.start_date).toLocaleDateString() : "No start date"}${task.deadline ? "\nDeadline: " + new Date(task.deadline).toLocaleDateString() : "\nNo deadline"}${task.assignee_user_id ? "\nAssignee: " + displayName(task.assignee_user_id) : ""}`;
                       return (
-                        <div key={task.id} className="grid py-1.5 items-center border-b border-white/10 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
-                          <div className="text-white truncate pr-2" title={task.title}>
-                            <span className={task.status === "cancelled" ? "line-through text-white/40" : ""}>{task.title}</span>
-                            {isMD && <span className="block text-xs text-white/50 truncate">{displayName(task.assignee_user_id)}</span>}
+                        <div key={task.id} className="grid py-1.5 items-center border-b border-border/30 font-mono text-sm" style={{ gridTemplateColumns: isMD ? "220px 1fr" : "180px 1fr" }}>
+                          <div className="text-foreground truncate pr-2" title={task.title}>
+                            <span className={task.status === "cancelled" ? "line-through text-muted-foreground/60" : ""}>{task.title}</span>
+                            {isMD && <span className="block text-xs text-muted-foreground/70 truncate">{displayName(task.assignee_user_id)}</span>}
                           </div>
                           <div className="relative h-7">
                             {/* Today line */}
@@ -5999,7 +5999,7 @@ function DashboardTab({
                               title={tooltipText}
                             >
                               {width > 8 && (
-                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold truncate px-1" style={{ color: bg === "#FFED00" ? "#000" : "#fff" }}>
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold truncate px-1" style={{ color: bg === "#3b82f6" ? "#000" : "#fff" }}>
                                   {task.title.length > 18 ? task.title.slice(0, 16) + ".." : task.title}
                                 </span>
                               )}
@@ -6018,7 +6018,7 @@ function DashboardTab({
                       }
                       return Array.from(grouped.entries()).map(([userId, groupTasks]) => (
                         <div key={userId} className="mb-3">
-                          <div className="text-xs font-mono text-[#FFED00] uppercase tracking-wider mb-1 border-b border-[#FFED00]/30 pb-1">
+                          <div className="text-xs font-mono text-blue-600 uppercase tracking-wider mb-1 border-b border-blue-600/30 pb-1">
                             {userId === "__unassigned__" ? "Unassigned" : displayName(userId)}
                           </div>
                           {groupTasks.map(renderRow)}
@@ -6028,7 +6028,7 @@ function DashboardTab({
                     return filteredTasks.map(renderRow);
                   })()}
                   {filteredTasks.length === 0 && (
-                    <div className="text-white/50 font-mono text-sm py-8 text-center">
+                    <div className="text-muted-foreground/70 font-mono text-sm py-8 text-center">
                       {isMD ? "No tasks. Add one to see the timeline." : "No tasks assigned to you."}
                     </div>
                   )}
@@ -6038,14 +6038,14 @@ function DashboardTab({
           ) : (
             <div className="space-y-2">
               {filteredTasks.length === 0 ? (
-                <p className="text-white/60 font-mono text-sm">No tasks {isMD ? "" : "assigned to you"}.</p>
+                <p className="text-muted-foreground font-mono text-sm">No tasks {isMD ? "" : "assigned to you"}.</p>
               ) : (
                 filteredTasks.map((task) => {
                   const statusBadgeClass =
                     task.status === "done" ? "border-green-500/50 text-green-400 bg-green-500/10" :
-                    task.status === "in_progress" ? "border-[#FFED00]/50 text-[#FFED00] bg-[#FFED00]/10" :
+                    task.status === "in_progress" ? "border-blue-600/50 text-blue-600 bg-[#3b82f6]/10" :
                     task.status === "cancelled" ? "border-red-500/50 text-red-400 bg-red-500/10" :
-                    "border-white/30 text-white/60 bg-white/5";
+                    "border-white/30 text-muted-foreground bg-muted/30";
                   const statusLabel =
                     task.status === "not_started" ? "Not started" :
                     task.status === "in_progress" ? "In progress" :
@@ -6060,9 +6060,9 @@ function DashboardTab({
                       onClick={() => setSelectedTask(task)}
                       className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all group ${
                         isOverdue ? "border-orange-500/40 bg-orange-500/5 hover:border-orange-500/60" :
-                        task.status === "cancelled" ? "border-white/10 bg-white/[0.02] opacity-60 hover:opacity-80" :
+                        task.status === "cancelled" ? "border-border/30 bg-white/[0.02] opacity-60 hover:opacity-80" :
                         task.status === "done" ? "border-green-500/20 bg-green-500/[0.03] hover:border-green-500/40" :
-                        "border-white/15 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.06]"
+                        "border-border/50 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.06]"
                       }`}
                     >
                       {/* Priority dot */}
@@ -6070,13 +6070,13 @@ function DashboardTab({
                       {/* Main info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`font-mono font-bold text-sm truncate ${task.status === "cancelled" ? "text-white/40 line-through" : "text-white"}`}>{task.title}</span>
+                          <span className={`font-mono font-bold text-sm truncate ${task.status === "cancelled" ? "text-muted-foreground/60 line-through" : "text-white"}`}>{task.title}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${statusBadgeClass}`}>{statusLabel}</Badge>
-                          {isMD && <span className="text-[10px] text-white/50 font-mono">{displayName(task.assignee_user_id)}</span>}
+                          {isMD && <span className="text-[10px] text-muted-foreground/70 font-mono">{displayName(task.assignee_user_id)}</span>}
                           {task.deadline && (
-                            <span className={`text-[10px] font-mono flex items-center gap-1 ${isOverdue ? "text-orange-400 font-bold" : "text-white/40"}`}>
+                            <span className={`text-[10px] font-mono flex items-center gap-1 ${isOverdue ? "text-orange-400 font-bold" : "text-muted-foreground/60"}`}>
                               {isOverdue && <AlertTriangle className="h-2.5 w-2.5" />}
                               <CalendarIcon className="h-2.5 w-2.5" />
                               {format(new Date(task.deadline), "MMM d")}
@@ -6085,7 +6085,7 @@ function DashboardTab({
                         </div>
                       </div>
                       {/* Quick action chevron */}
-                      <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
+                      <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-muted-foreground/70 shrink-0 transition-colors" />
                     </div>
                   );
                 })
@@ -6097,19 +6097,19 @@ function DashboardTab({
 
       {/* Add task dialog (MD only) */}
       <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-        <DialogContent className="border-2 border-white bg-[#050505] text-white max-w-lg">
+        <DialogContent className="border border-border bg-[#050505] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Plus className="h-5 w-5 text-[#FFED00]" />
+              <Plus className="h-5 w-5 text-blue-600" />
               New Task
             </DialogTitle>
-            <DialogDescription className="text-white/60 font-mono text-xs">Create and assign a task to your team.</DialogDescription>
+            <DialogDescription className="text-muted-foreground font-mono text-xs">Create and assign a task to your team.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div>
-              <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Title *</Label>
+              <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Title *</Label>
               <Input
-                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
+                className="border border-white/30 bg-muted/30 text-white mt-1.5 font-mono placeholder:text-muted-foreground/40 focus:border-blue-600 transition-colors"
                 value={addTaskTitle}
                 onChange={(e) => setAddTaskTitle(e.target.value)}
                 placeholder="e.g. Review Q4 financials for TechCorp"
@@ -6117,15 +6117,15 @@ function DashboardTab({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Assignee</Label>
+                <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Assignee</Label>
                 <Select value={addTaskAssignee || "unassigned"} onValueChange={(v) => setAddTaskAssignee(v === "unassigned" ? "" : v)}>
-                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                  <SelectTrigger className="border border-white/30 bg-muted/30 text-white mt-1.5 font-mono focus:border-blue-600">
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0a0a0a] border border-white/30">
-                    <SelectItem value="unassigned" className="text-white/70 font-mono">Unassigned</SelectItem>
+                    <SelectItem value="unassigned" className="text-muted-foreground font-mono">Unassigned</SelectItem>
                     {teamMembers.map((m) => (
-                      <SelectItem key={m.id} value={m.id} className="text-white font-mono">
+                      <SelectItem key={m.id} value={m.id} className="text-foreground font-mono">
                         {m.full_name || m.email || m.id.slice(0, 8)}
                       </SelectItem>
                     ))}
@@ -6133,26 +6133,26 @@ function DashboardTab({
                 </Select>
               </div>
               <div>
-                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Priority</Label>
+                <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Priority</Label>
                 <Select value={addTaskPriority} onValueChange={(v: "low" | "medium" | "high") => setAddTaskPriority(v)}>
-                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                  <SelectTrigger className="border border-white/30 bg-muted/30 text-white mt-1.5 font-mono focus:border-blue-600">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0a0a0a] border border-white/30">
-                    <SelectItem value="low" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400" />Low</span></SelectItem>
-                    <SelectItem value="medium" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-400" />Medium</span></SelectItem>
-                    <SelectItem value="high" className="text-white font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400" />High</span></SelectItem>
+                    <SelectItem value="low" className="text-foreground font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400" />Low</span></SelectItem>
+                    <SelectItem value="medium" className="text-foreground font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-400" />Medium</span></SelectItem>
+                    <SelectItem value="high" className="text-foreground font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400" />High</span></SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Start Date</Label>
+                <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Start Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskStartDate ? "text-white" : "text-white/40"}`}>
-                      <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-muted/30 hover:bg-muted/50 hover:border-blue-600 ${addTaskStartDate ? "text-white" : "text-muted-foreground/60"}`}>
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground/70" />
                       {addTaskStartDate ? format(new Date(addTaskStartDate), "MMM d, yyyy") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
@@ -6161,15 +6161,15 @@ function DashboardTab({
                       mode="single"
                       selected={addTaskStartDate ? new Date(addTaskStartDate) : undefined}
                       onSelect={(date) => setAddTaskStartDate(date ? date.toISOString() : "")}
-                      className="text-white"
+                      className="text-foreground"
                       classNames={{
-                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
-                        day_today: "bg-white/10 text-white",
-                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
-                        caption_label: "text-white font-mono font-bold text-sm",
-                        head_cell: "text-white/50 font-mono text-xs w-9",
+                        day_selected: "bg-[#3b82f6] text-black hover:bg-[#3b82f6] hover:text-black focus:bg-[#3b82f6] focus:text-black",
+                        day_today: "bg-muted/50 text-white",
+                        nav_button: "text-muted-foreground hover:text-white border border-border hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        caption_label: "text-foreground font-mono font-bold text-sm",
+                        head_cell: "text-muted-foreground/70 font-mono text-xs w-9",
                         cell: "h-9 w-9 text-center text-sm p-0",
-                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-muted/50 rounded-md",
                         day_outside: "text-white/20",
                       }}
                     />
@@ -6177,11 +6177,11 @@ function DashboardTab({
                 </Popover>
               </div>
               <div>
-                <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Deadline</Label>
+                <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Deadline</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskDeadline ? "text-white" : "text-white/40"}`}>
-                      <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-muted/30 hover:bg-muted/50 hover:border-blue-600 ${addTaskDeadline ? "text-white" : "text-muted-foreground/60"}`}>
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground/70" />
                       {addTaskDeadline ? format(new Date(addTaskDeadline), "MMM d, yyyy") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
@@ -6190,15 +6190,15 @@ function DashboardTab({
                       mode="single"
                       selected={addTaskDeadline ? new Date(addTaskDeadline) : undefined}
                       onSelect={(date) => setAddTaskDeadline(date ? date.toISOString() : "")}
-                      className="text-white"
+                      className="text-foreground"
                       classNames={{
-                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
-                        day_today: "bg-white/10 text-white",
-                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
-                        caption_label: "text-white font-mono font-bold text-sm",
-                        head_cell: "text-white/50 font-mono text-xs w-9",
+                        day_selected: "bg-[#3b82f6] text-black hover:bg-[#3b82f6] hover:text-black focus:bg-[#3b82f6] focus:text-black",
+                        day_today: "bg-muted/50 text-white",
+                        nav_button: "text-muted-foreground hover:text-white border border-border hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        caption_label: "text-foreground font-mono font-bold text-sm",
+                        head_cell: "text-muted-foreground/70 font-mono text-xs w-9",
                         cell: "h-9 w-9 text-center text-sm p-0",
-                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-muted/50 rounded-md",
                         day_outside: "text-white/20",
                       }}
                     />
@@ -6207,24 +6207,24 @@ function DashboardTab({
               </div>
             </div>
             <div>
-              <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Description</Label>
+              <Label className="text-foreground/80 font-mono text-xs uppercase tracking-wider">Description</Label>
               <Textarea
-                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono min-h-[80px] placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
+                className="border border-white/30 bg-muted/30 text-white mt-1.5 font-mono min-h-[80px] placeholder:text-muted-foreground/40 focus:border-blue-600 transition-colors"
                 value={addTaskDescription}
                 onChange={(e) => setAddTaskDescription(e.target.value)}
                 placeholder="What needs to be done? Add details, context, links..."
               />
             </div>
-            <Separator className="bg-white/10" />
+            <Separator className="bg-muted/50" />
             <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
                 onClick={() => setAddTaskOpen(false)}
-                className="text-white/50 hover:text-white hover:bg-white/5 font-mono text-sm"
+                className="text-muted-foreground/70 hover:text-white hover:bg-muted/30 font-mono text-sm"
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateTask} disabled={addTaskSaving || !addTaskTitle.trim()} className="bg-[#FFED00] text-black font-bold font-mono hover:bg-[#FFED00]/80 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.3)] disabled:opacity-40">
+              <Button onClick={handleCreateTask} disabled={addTaskSaving || !addTaskTitle.trim()} className="bg-[#3b82f6] text-black font-bold font-mono hover:bg-[#3b82f6]/80 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.3)] disabled:opacity-40">
                 {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                 Create Task
               </Button>
@@ -6235,15 +6235,15 @@ function DashboardTab({
 
       {/* Delete task confirm (MD only) */}
       <AlertDialog open={!!taskToDelete} onOpenChange={(open) => !open && setTaskToDelete(null)}>
-        <AlertDialogContent className="border-2 border-white bg-[#050505] text-white">
+        <AlertDialogContent className="border border-border bg-[#050505] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-mono font-black text-white">Delete task?</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/70 font-mono">
+            <AlertDialogDescription className="text-muted-foreground font-mono">
               {taskToDelete ? `"${taskToDelete.title}" will be permanently removed.` : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-white text-white hover:bg-white/10">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-white text-white hover:bg-muted/50">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteTask}
               disabled={!!deletingTaskId}
@@ -6257,7 +6257,7 @@ function DashboardTab({
 
       {/* Task detail dialog — opens when clicking a task row */}
       <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
-        <DialogContent className="border border-white/20 bg-[#050505] text-white max-w-lg">
+        <DialogContent className="border border-border bg-[#050505] text-white max-w-lg">
           {selectedTask && (() => {
             const t = selectedTask;
             const isTerminal = t.status === "done" || t.status === "cancelled";
@@ -6265,8 +6265,8 @@ function DashboardTab({
             const isOverdue = deadlineMs && deadlineMs < now && !isTerminal;
             const statusColor =
               t.status === "done" ? "text-green-400" :
-              t.status === "in_progress" ? "text-[#FFED00]" :
-              t.status === "cancelled" ? "text-red-400" : "text-white/60";
+              t.status === "in_progress" ? "text-blue-600" :
+              t.status === "cancelled" ? "text-red-400" : "text-muted-foreground";
             const statusLabel =
               t.status === "not_started" ? "Not started" :
               t.status === "in_progress" ? "In progress" :
@@ -6275,7 +6275,7 @@ function DashboardTab({
               <>
                 <DialogHeader>
                   <DialogTitle className="font-mono font-black text-lg leading-tight pr-8">
-                    <span className={t.status === "cancelled" ? "line-through text-white/40" : ""}>{t.title}</span>
+                    <span className={t.status === "cancelled" ? "line-through text-muted-foreground/60" : ""}>{t.title}</span>
                   </DialogTitle>
                   <DialogDescription className="sr-only">Task details</DialogDescription>
                 </DialogHeader>
@@ -6284,9 +6284,9 @@ function DashboardTab({
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge className={`font-mono text-xs ${
                       t.status === "done" ? "bg-green-500/15 text-green-400 border-green-500/30" :
-                      t.status === "in_progress" ? "bg-[#FFED00]/15 text-[#FFED00] border-[#FFED00]/30" :
+                      t.status === "in_progress" ? "bg-[#3b82f6]/15 text-blue-600 border-blue-600/30" :
                       t.status === "cancelled" ? "bg-red-500/15 text-red-400 border-red-500/30" :
-                      "bg-white/5 text-white/60 border-white/20"
+                      "bg-muted/30 text-muted-foreground border-border"
                     }`}>
                       {statusLabel}
                     </Badge>
@@ -6299,31 +6299,31 @@ function DashboardTab({
 
                   {/* Info grid */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Assignee</div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-border/30">
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Assignee</div>
                       <div className="text-sm font-mono text-white flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5 text-white/40" />
+                        <Users className="h-3.5 w-3.5 text-muted-foreground/60" />
                         {displayName(t.assignee_user_id)}
                       </div>
                     </div>
-                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider" title="Who set this requirement">Created by</div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-border/30">
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider" title="Who set this requirement">Created by</div>
                       <div className="text-sm font-mono text-white flex items-center gap-1.5">
-                        <User className="h-3.5 w-3.5 text-white/40" />
+                        <User className="h-3.5 w-3.5 text-muted-foreground/60" />
                         {displayName(t.created_by)}
                       </div>
                     </div>
-                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Start Date</div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-border/30">
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Start Date</div>
                       <div className="text-sm font-mono text-white flex items-center gap-1.5">
-                        <CalendarIcon className="h-3.5 w-3.5 text-white/40" />
+                        <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground/60" />
                         {t.start_date ? format(new Date(t.start_date), "MMM d, yyyy") : "Not set"}
                       </div>
                     </div>
-                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Deadline</div>
+                    <div className="space-y-1 p-3 rounded-lg bg-white/[0.03] border border-border/30">
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Deadline</div>
                       <div className={`text-sm font-mono flex items-center gap-1.5 ${isOverdue ? "text-orange-400" : "text-white"}`}>
-                        <Clock className="h-3.5 w-3.5 text-white/40" />
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
                         {t.deadline ? format(new Date(t.deadline), "MMM d, yyyy") : "Not set"}
                       </div>
                     </div>
@@ -6332,35 +6332,35 @@ function DashboardTab({
                   {/* Description */}
                   {t.description && (
                     <div className="space-y-1.5">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Description</div>
-                      <div className="text-sm font-mono text-white/80 p-3 rounded-lg bg-white/[0.03] border border-white/10 whitespace-pre-wrap">{t.description}</div>
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Description</div>
+                      <div className="text-sm font-mono text-white/80 p-3 rounded-lg bg-white/[0.03] border border-border/30 whitespace-pre-wrap">{t.description}</div>
                     </div>
                   )}
 
                   {/* Status note */}
                   {t.status_note && (
                     <div className="space-y-1.5">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Status Note</div>
-                      <div className="text-sm font-mono text-white/70 italic p-3 rounded-lg bg-white/[0.03] border border-white/10">"{t.status_note}"</div>
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Status Note</div>
+                      <div className="text-sm font-mono text-white/70 italic p-3 rounded-lg bg-white/[0.03] border border-border/30">"{t.status_note}"</div>
                     </div>
                   )}
 
                   {/* Timestamps */}
-                  <div className="flex items-center gap-4 text-[10px] text-white/30 font-mono">
+                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground/40 font-mono">
                     <span>Created: {format(new Date(t.created_at), "MMM d, yyyy 'at' h:mm a")}</span>
                     <span>Updated: {format(new Date(t.updated_at), "MMM d, yyyy 'at' h:mm a")}</span>
                   </div>
 
-                  <Separator className="bg-white/10" />
+                  <Separator className="bg-muted/50" />
 
                   {/* Actions */}
                   {!isTerminal && (
                     <div className="space-y-3">
-                      <div className="text-[10px] text-white/40 font-mono uppercase tracking-wider">Update Status</div>
+                      <div className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">Update Status</div>
                       <div className="flex items-center gap-2">
                         <Input
                           placeholder="Add a note (optional)"
-                          className="flex-1 border border-white/20 bg-white/5 text-white text-xs font-mono h-9 placeholder:text-white/30"
+                          className="flex-1 border border-border bg-muted/30 text-foreground text-xs font-mono h-9 placeholder:text-muted-foreground/40"
                           value={statusNote[t.id] ?? ""}
                           onChange={(e) => setStatusNote((prev) => ({ ...prev, [t.id]: e.target.value }))}
                         />
@@ -6370,7 +6370,7 @@ function DashboardTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs flex-1"
+                            className="border-blue-600/50 text-blue-600 hover:bg-[#3b82f6]/10 font-mono text-xs flex-1"
                             disabled={statusUpdatingId === t.id}
                             onClick={() => { handleUpdateStatus(t.id, "in_progress", statusNote[t.id] || undefined); setSelectedTask(null); }}
                           >
@@ -6420,11 +6420,11 @@ function DashboardTab({
 
       {/* Latest decision / document / source — keep for context */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Decision</CardTitle>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base text-foreground font-mono font-bold uppercase tracking-tight">Latest Decision</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-white/70 font-mono">
+          <CardContent className="text-sm text-muted-foreground font-mono">
             {latestDecision ? (
               <div className="space-y-1">
                 <div className="font-mono font-bold text-white">{latestDecision.startupName}</div>
@@ -6436,11 +6436,11 @@ function DashboardTab({
             )}
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Document</CardTitle>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base text-foreground font-mono font-bold uppercase tracking-tight">Latest Document</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-white/70 font-mono">
+          <CardContent className="text-sm text-muted-foreground font-mono">
             {latestDocument ? (
               <div className="font-mono font-bold text-white">{latestDocument.title || "Untitled document"}</div>
             ) : (
@@ -6448,11 +6448,11 @@ function DashboardTab({
             )}
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Source</CardTitle>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base text-foreground font-mono font-bold uppercase tracking-tight">Latest Source</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-white/70 font-mono">
+          <CardContent className="text-sm text-muted-foreground font-mono">
             {latestSource ? (
               <div className="font-mono font-bold text-white">{latestSource.title || "Untitled source"}</div>
             ) : (
@@ -6542,35 +6542,35 @@ function OnboardingTab({
 
   return (
     <div className="space-y-6">
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-            <Sparkles className="h-5 w-5 text-[#FFED00]" />
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+            <Sparkles className="h-5 w-5 text-blue-600" />
             Tier 2 VC Fund Onboarding
           </CardTitle>
-          <CardDescription className="text-white/70 font-mono">
+          <CardDescription className="text-muted-foreground font-mono">
             Recommended onboarding flow for VC teams. Complete the steps below to unlock full
             intelligence and analytics.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 text-white">
+        <CardContent className="space-y-4 text-foreground">
           {steps.map((step) => (
-            <div key={step.title} className="flex items-start justify-between gap-4 border-2 border-white rounded-md p-4 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
+            <div key={step.title} className="flex items-start justify-between gap-4 border border-border rounded-md p-4 bg-transparent hover:border-blue-600 hover:bg-blue-50 dark:bg-blue-950 transition-all">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   {step.status ? (
-                    <CheckCircle className="h-4 w-4 text-[#FFED00]" />
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
                   ) : (
-                    <AlertTriangle className="h-4 w-4 text-white/50" />
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground/70" />
                   )}
                   <span className="font-mono font-bold text-white">{step.title}</span>
-                  <Badge variant="outline" className={step.status ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono text-xs" : "border-white/50 text-white/50 bg-transparent font-mono text-xs"}>
+                  <Badge variant="outline" className={step.status ? "border-blue-600 text-blue-600 bg-transparent font-mono text-xs" : "border-white/50 text-muted-foreground/70 bg-transparent font-mono text-xs"}>
                     {step.status ? "Complete" : "Pending"}
                   </Badge>
                 </div>
-                <p className="text-sm text-white/70 font-mono">{step.description}</p>
+                <p className="text-sm text-muted-foreground font-mono">{step.description}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={step.action} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+              <Button variant="outline" size="sm" onClick={step.action} className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold">
                 {step.actionLabel}
               </Button>
             </div>
@@ -6587,12 +6587,12 @@ function OnboardingTab({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Recommended Fund Data</CardTitle>
-            <CardDescription className="text-white/70 font-mono">Prioritize these sources for strong answers.</CardDescription>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base text-foreground font-mono font-bold uppercase tracking-tight">Recommended Fund Data</CardTitle>
+            <CardDescription className="text-muted-foreground font-mono">Prioritize these sources for strong answers.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-white/70 font-mono">
+          <CardContent className="space-y-2 text-sm text-muted-foreground font-mono">
             <ul className="list-disc pl-4 space-y-1">
               <li>IC memos, diligence notes, and investment theses</li>
               <li>Portfolio updates, KPIs, and board decks</li>
@@ -6603,12 +6603,12 @@ function OnboardingTab({
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
-            <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Sync Guidance</CardTitle>
-            <CardDescription className="text-white/70 font-mono">Fastest path to a live knowledge base.</CardDescription>
+        <Card className="border border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base text-foreground font-mono font-bold uppercase tracking-tight">Sync Guidance</CardTitle>
+            <CardDescription className="text-muted-foreground font-mono">Fastest path to a live knowledge base.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-white/70 font-mono">
+          <CardContent className="space-y-2 text-sm text-muted-foreground font-mono">
             <div className="space-y-1">
               <div className="font-mono font-bold text-white">Google Drive</div>
               <p>Import key docs directly from Drive to keep investment materials current.</p>
@@ -6718,23 +6718,23 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
-          <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Filters</CardTitle>
-          <CardDescription className="text-white/70 font-mono">Filter decisions by sector, stage, or partner</CardDescription>
+      <Card className="border border-border bg-card">
+        <CardHeader className="border-b border-border">
+          <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Filters</CardTitle>
+          <CardDescription className="text-muted-foreground font-mono">Filter decisions by sector, stage, or partner</CardDescription>
         </CardHeader>
-        <CardContent className="text-white">
+        <CardContent className="text-foreground">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label className="text-white font-mono font-bold">Sector</Label>
+              <Label className="text-foreground font-mono font-bold">Sector</Label>
               <Select value={selectedSector} onValueChange={setSelectedSector}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-border bg-card text-foreground">
                   <SelectValue placeholder="All sectors" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="all" className="text-white">All sectors</SelectItem>
+                <SelectContent className="bg-[#050505] border border-border">
+                  <SelectItem value="all" className="text-foreground">All sectors</SelectItem>
                   {sectors.map((sector) => (
-                    <SelectItem key={sector} value={sector} className="text-white">
+                    <SelectItem key={sector} value={sector} className="text-foreground">
                       {sector}
                     </SelectItem>
                   ))}
@@ -6742,15 +6742,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </Select>
             </div>
             <div>
-              <Label className="text-white font-mono font-bold">Stage</Label>
+              <Label className="text-foreground font-mono font-bold">Stage</Label>
               <Select value={selectedStage} onValueChange={setSelectedStage}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-border bg-card text-foreground">
                   <SelectValue placeholder="All stages" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="all" className="text-white">All stages</SelectItem>
+                <SelectContent className="bg-[#050505] border border-border">
+                  <SelectItem value="all" className="text-foreground">All stages</SelectItem>
                   {stages.map((stage) => (
-                    <SelectItem key={stage} value={stage} className="text-white">
+                    <SelectItem key={stage} value={stage} className="text-foreground">
                       {stage}
                     </SelectItem>
                   ))}
@@ -6758,15 +6758,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </Select>
             </div>
             <div>
-              <Label className="text-white font-mono font-bold">Partner</Label>
+              <Label className="text-foreground font-mono font-bold">Partner</Label>
               <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-border bg-card text-foreground">
                   <SelectValue placeholder="All partners" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
-                  <SelectItem value="all" className="text-white">All partners</SelectItem>
+                <SelectContent className="bg-[#050505] border border-border">
+                  <SelectItem value="all" className="text-foreground">All partners</SelectItem>
                   {partners.map((partner) => (
-                    <SelectItem key={partner} value={partner} className="text-white">
+                    <SelectItem key={partner} value={partner} className="text-foreground">
                       {partner}
                     </SelectItem>
                   ))}
@@ -6784,7 +6784,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   setSelectedStage("all");
                   setSelectedPartner("all");
                 }}
-                className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                className="border border-border bg-card text-foreground hover:bg-muted/50 hover:border-blue-600 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-500 font-bold"
               >
                 Clear filters ({filteredDecisions.length} decisions)
               </Button>
@@ -6795,49 +6795,49 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Target className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Target className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.totalDecisions}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions Logged</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Decisions Logged</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-blue-600 dark:border-blue-700 rounded-lg bg-transparent">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.positiveRate}%</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Positive Rate</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Positive Rate</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1">
                 <p className="text-2xl font-mono font-black">{analytics.avgConfidence}%</p>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <p className="text-xs text-white/70 font-mono cursor-help">
+                      <p className="text-xs text-muted-foreground font-mono cursor-help">
                         Avg Confidence
                         <span className="ml-1">ℹ️</span>
                       </p>
                     </TooltipTrigger>
-                    <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                    <TooltipContent className="bg-[#050505] border border-border text-white">
                       <p className="max-w-xs font-mono">
                         Average confidence score (0-100) you assigned when logging decisions.
                         <br />
@@ -6850,15 +6850,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="pt-4 text-white">
+        <Card className="border border-border bg-card">
+          <CardContent className="pt-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Clock className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-border rounded-lg bg-transparent">
+                <Clock className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.avgDecisionVelocity}</p>
-                <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Avg Velocity (days)</p>
+                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Avg Velocity (days)</p>
               </div>
             </div>
           </CardContent>
@@ -6867,54 +6867,54 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {hasEnoughData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <Clock className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last7}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (7d)</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Decisions (7d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last30}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (30d)</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Decisions (30d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last90}</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">Decisions (90d)</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Decisions (90d)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
-            <CardContent className="pt-4 text-white">
+          <Card className="border border-border bg-card">
+            <CardContent className="pt-4 text-foreground">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-border rounded-lg bg-transparent">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.momentumPct}%</p>
-                  <p className="text-xs text-white/70 font-mono uppercase tracking-wider">30d Momentum</p>
+                  <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">30d Momentum</p>
                 </div>
               </div>
             </CardContent>
@@ -6923,12 +6923,12 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
       )}
 
       {!hasEnoughData ? (
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-border bg-card">
           <CardContent className="pt-6 text-white">
             <div className="text-center py-8">
-              <AlertTriangle className="h-12 w-12 text-white/50 mx-auto mb-4" />
+              <AlertTriangle className="h-12 w-12 text-muted-foreground/70 mx-auto mb-4" />
               <p className="text-lg font-mono font-bold mb-2">Not Enough Data</p>
-              <p className="text-sm text-white/70 font-mono">
+              <p className="text-sm text-muted-foreground font-mono">
                 You need at least 5 decisions to see analytics. Start logging decisions to unlock insights.
               </p>
             </div>
@@ -6940,58 +6940,58 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
         <>
           {/* ========== ADVANCED DECISION ANALYTICS ========== */}
           {adv && (
-          <Card className="border-2 border-[#FFED00]/50 bg-transparent">
-            <CardHeader className="border-b-2 border-white">
-              <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                <Sparkles className="h-5 w-5 text-[#FFED00]" />
+          <Card className="border border-blue-600 dark:border-blue-700/50 bg-transparent">
+            <CardHeader className="border-b border-border">
+              <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                <Sparkles className="h-5 w-5 text-blue-600" />
                 Advanced Decision Analytics
               </CardTitle>
-              <CardDescription className="text-white/70 font-mono">Insights, calibration, and focus recommendations</CardDescription>
+              <CardDescription className="text-muted-foreground font-mono">Insights, calibration, and focus recommendations</CardDescription>
             </CardHeader>
             <CardContent className="pt-4 text-white space-y-6">
               {/* Advanced Insights KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {adv.bestSectorByRate && (
-                  <div className="p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Best sector (rate)</p>
-                    <p className="font-mono font-bold text-[#FFED00]">{adv.bestSectorByRate.sector}</p>
+                  <div className="p-3 rounded-lg border border-blue-600/30 bg-blue-50 dark:bg-blue-950">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Best sector (rate)</p>
+                    <p className="font-mono font-bold text-blue-600">{adv.bestSectorByRate.sector}</p>
                     <p className="text-xs font-mono text-white/80">{adv.bestSectorByRate.rate}% ({adv.bestSectorByRate.total} decisions)</p>
                   </div>
                 )}
                 {adv.worstSectorByRate && adv.worstSectorByRate.sector !== adv.bestSectorByRate?.sector && (
-                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Lowest sector (rate)</p>
+                  <div className="p-3 rounded-lg border border-border bg-muted/30">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Lowest sector (rate)</p>
                     <p className="font-mono font-bold text-white">{adv.worstSectorByRate.sector}</p>
                     <p className="text-xs font-mono text-white/70">{adv.worstSectorByRate.rate}% ({adv.worstSectorByRate.total})</p>
                   </div>
                 )}
                 {adv.topSectorByVolume && (
-                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Top sector (volume)</p>
+                  <div className="p-3 rounded-lg border border-border bg-muted/30">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Top sector (volume)</p>
                     <p className="font-mono font-bold text-white">{adv.topSectorByVolume.sector}</p>
                     <p className="text-xs font-mono text-white/70">{adv.topSectorByVolume.total} decisions</p>
                   </div>
                 )}
-                <div className="p-3 rounded-lg border border-white/20 bg-white/5">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Concentration (top 3)</p>
+                <div className="p-3 rounded-lg border border-border bg-muted/30">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Concentration (top 3)</p>
                   <p className="font-mono font-bold text-white">{adv.concentrationTop3Pct ?? 0}%</p>
                   <p className="text-xs font-mono text-white/70 truncate" title={(adv.concentrationTop3Sectors ?? []).join(", ")}>
                     {(adv.concentrationTop3Sectors ?? []).join(", ") || "—"}
                   </p>
                 </div>
                 {adv.momDecisionsPct != null && (
-                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM volume change</p>
-                    <p className={`font-mono font-bold ${adv.momDecisionsPct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                  <div className="p-3 rounded-lg border border-border bg-muted/30">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">MoM volume change</p>
+                    <p className={`font-mono font-bold ${adv.momDecisionsPct >= 0 ? "text-blue-600" : "text-orange-400"}`}>
                       {adv.momDecisionsPct >= 0 ? "+" : ""}{adv.momDecisionsPct}%
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
                   </div>
                 )}
                 {adv.momPositiveRatePct != null && (
-                  <div className="p-3 rounded-lg border border-white/20 bg-white/5">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM positive rate</p>
-                    <p className={`font-mono font-bold ${adv.momPositiveRatePct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                  <div className="p-3 rounded-lg border border-border bg-muted/30">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">MoM positive rate</p>
+                    <p className={`font-mono font-bold ${adv.momPositiveRatePct >= 0 ? "text-blue-600" : "text-orange-400"}`}>
                       {adv.momPositiveRatePct >= 0 ? "+" : ""}{adv.momPositiveRatePct}pp
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
@@ -7001,38 +7001,38 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
               {/* Calibration: High vs Low confidence */}
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg border border-white/20 bg-white/5">
-                  <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — High confidence (81–100)</p>
+                <div className="p-4 rounded-lg border border-border bg-muted/30">
+                  <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Calibration — High confidence (81–100)</p>
                   <p className="font-mono font-bold text-white text-lg">{(adv.calibrationHighConfidence?.positiveRate ?? 0)}% positive rate</p>
                   <p className="text-xs font-mono text-white/70">{(adv.calibrationHighConfidence?.total ?? 0)} decisions in this band</p>
-                  <p className="text-[10px] font-mono text-white/50 mt-1">When you were very confident, how often were you right?</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/70 mt-1">When you were very confident, how often were you right?</p>
                 </div>
-                <div className="p-4 rounded-lg border border-white/20 bg-white/5">
-                  <p className="text-xs font-mono uppercase tracking-wider text-white/60 mb-2">Calibration — Low confidence (0–40)</p>
+                <div className="p-4 rounded-lg border border-border bg-muted/30">
+                  <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Calibration — Low confidence (0–40)</p>
                   <p className="font-mono font-bold text-white text-lg">{(adv.calibrationLowConfidence?.positiveRate ?? 0)}% positive rate</p>
                   <p className="text-xs font-mono text-white/70">{(adv.calibrationLowConfidence?.total ?? 0)} decisions in this band</p>
-                  <p className="text-[10px] font-mono text-white/50 mt-1">When you were uncertain, how often did it still go positive?</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/70 mt-1">When you were uncertain, how often did it still go positive?</p>
                 </div>
               </div>
 
               {/* Confidence by outcome */}
-              <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-white/20 bg-white/5">
-                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-[#FFED00]">{adv.confidenceWhenPositive ?? 0}%</strong></span>
-                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when negative:</span> <strong className="text-white">{adv.confidenceWhenNegative ?? 0}%</strong></span>
-                <span className="font-mono text-sm"><span className="text-white/60">Pending:</span> <strong className="text-white">{adv.pendingPct ?? 0}%</strong> of decisions</span>
+              <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-border bg-muted/30">
+                <span className="font-mono text-sm"><span className="text-muted-foreground">Avg confidence when positive:</span> <strong className="text-blue-600">{adv.confidenceWhenPositive ?? 0}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-muted-foreground">Avg confidence when negative:</span> <strong className="text-foreground">{adv.confidenceWhenNegative ?? 0}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-muted-foreground">Pending:</span> <strong className="text-foreground">{adv.pendingPct ?? 0}%</strong> of decisions</span>
               </div>
 
               {/* Suggested focus */}
               {adv.suggestedFocus && (
-                <div className="p-3 rounded-lg border border-[#FFED00]/40 bg-[#FFED00]/10">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mb-1">Suggested focus</p>
-                  <p className="font-mono font-bold text-[#FFED00]">{adv.suggestedFocus}</p>
+                <div className="p-3 rounded-lg border border-blue-600/40 bg-[#3b82f6]/10">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Suggested focus</p>
+                  <p className="font-mono font-bold text-blue-600">{adv.suggestedFocus}</p>
                 </div>
               )}
 
               {/* Peak month */}
               {adv.peakMonth && (
-                <p className="text-xs font-mono text-white/50">Peak month: <strong className="text-white">{adv.peakMonth.date}</strong> ({adv.peakMonth.decisions} decisions)</p>
+                <p className="text-xs font-mono text-muted-foreground/70">Peak month: <strong className="text-foreground">{adv.peakMonth.date}</strong> ({adv.peakMonth.decisions} decisions)</p>
               )}
             </CardContent>
           </Card>
@@ -7043,15 +7043,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             const stages = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.stage))).sort();
             const sectors = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.sector))).sort();
             return (
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
-                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+              <Card className="border border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-blue-600" />
                     Sector × Stage Heatmap
                   </CardTitle>
-                  <CardDescription className="text-white/70 font-mono">Decision volume and positive rate by sector and stage</CardDescription>
+                  <CardDescription className="text-muted-foreground font-mono">Decision volume and positive rate by sector and stage</CardDescription>
                 </CardHeader>
-                <CardContent className="text-white">
+                <CardContent className="text-foreground">
                   <div className="overflow-x-auto">
                     <table className="w-full font-mono text-xs border-collapse">
                       <thead>
@@ -7064,7 +7064,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       </thead>
                       <tbody>
                         {sectors.map((sector) => (
-                          <tr key={sector} className="border-b border-white/10 hover:bg-white/5">
+                          <tr key={sector} className="border-b border-border/30 hover:bg-muted/30">
                             <td className="p-2 font-bold text-white truncate max-w-[120px]" title={sector}>{sector}</td>
                             {stages.map((stage) => {
                               const cell = analytics.sectorStageMatrix.find((c) => c.sector === sector && c.stage === stage);
@@ -7095,15 +7095,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Sector Performance */}
           {analytics.sectorStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Sector Performance
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Decision breakdown by sector</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Decision breakdown by sector</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.sectorStats.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7111,7 +7111,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7123,13 +7123,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Stage Performance */}
           {analytics.stageStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
-                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <PieChart className="h-5 w-5 text-[#FFED00]" />
+              <Card className="border border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                    <PieChart className="h-5 w-5 text-blue-600" />
                     Stage Distribution
                   </CardTitle>
-                  <CardDescription className="text-white/70 font-mono">Decisions by funding stage</CardDescription>
+                  <CardDescription className="text-muted-foreground font-mono">Decisions by funding stage</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={250}>
@@ -7157,13 +7157,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
-                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+              <Card className="border border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-blue-600" />
                     Stage Conversion Rates
                   </CardTitle>
-                  <CardDescription className="text-white/70 font-mono">
+                  <CardDescription className="text-muted-foreground font-mono">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -7172,7 +7172,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                             <span className="ml-1">ℹ️</span>
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                        <TooltipContent className="bg-[#050505] border border-border text-white">
                           <p className="max-w-xs font-mono">
                             Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                             <br />
@@ -7183,7 +7183,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     </TooltipProvider>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="text-white">
+                <CardContent className="text-foreground">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={analytics.stageStats}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7191,7 +7191,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis stroke="#FFFFFF" />
                       <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                       <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                      <Bar dataKey="conversionRate" fill="#FFED00" name="Conversion Rate %" />
+                      <Bar dataKey="conversionRate" fill="#3b82f6" name="Conversion Rate %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -7201,15 +7201,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Performance */}
           {analytics.partnerStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Users className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <Users className="h-5 w-5 text-blue-600" />
                   Partner Performance
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Decision metrics by partner</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Decision metrics by partner</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.partnerStats.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7218,7 +7218,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis yAxisId="right" orientation="right" stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#FFED00" name="Total Decisions" />
+                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#3b82f6" name="Total Decisions" />
                     <Bar yAxisId="right" dataKey="winRate" fill="#FFFFFF" name="Win Rate %" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7228,15 +7228,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Outcome Mix */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Partner Outcome Mix
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Outcome breakdown by partner (top 10)</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Outcome breakdown by partner (top 10)</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7244,7 +7244,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7255,15 +7255,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity by Partner */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <Clock className="h-5 w-5 text-blue-600" />
                   Decision Velocity by Partner
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Average decision cycle length (days)</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Average decision cycle length (days)</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={partnerOutcomeSeries.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7271,7 +7271,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="avgDecisionVelocity" fill="#FFED00" name="Avg Days" />
+                    <Bar dataKey="avgDecisionVelocity" fill="#3b82f6" name="Avg Days" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7281,15 +7281,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Outcome & Confidence */}
           {analytics.outcomeStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
-                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <PieChart className="h-5 w-5 text-[#FFED00]" />
+              <Card className="border border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                    <PieChart className="h-5 w-5 text-blue-600" />
                     Outcome Mix
                   </CardTitle>
-                  <CardDescription className="text-white/70 font-mono">Overall outcome distribution</CardDescription>
+                  <CardDescription className="text-muted-foreground font-mono">Overall outcome distribution</CardDescription>
                 </CardHeader>
-                <CardContent className="text-white">
+                <CardContent className="text-foreground">
                   <ResponsiveContainer width="100%" height={260}>
                     <RechartsPieChart>
                       <Pie
@@ -7301,7 +7301,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                         cy="50%"
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={90}
-                        fill="#FFED00"
+                        fill="#3b82f6"
                         dataKey="value"
                       >
                         {analytics.outcomeStats.map((entry, index) => (
@@ -7315,15 +7315,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
-                  <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+              <Card className="border border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                    <BarChart3 className="h-5 w-5 text-blue-600" />
                     Confidence by Outcome
                   </CardTitle>
-                  <CardDescription className="text-white/70 font-mono">Average confidence score per outcome</CardDescription>
+                  <CardDescription className="text-muted-foreground font-mono">Average confidence score per outcome</CardDescription>
                 </CardHeader>
-                <CardContent className="text-white">
+                <CardContent className="text-foreground">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={analytics.outcomeStats}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7331,7 +7331,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis stroke="#FFFFFF" />
                       <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                       <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                      <Bar dataKey="avgConfidence" fill="#FFED00" name="Avg Confidence %" />
+                      <Bar dataKey="avgConfidence" fill="#3b82f6" name="Avg Confidence %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -7341,15 +7341,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence Distribution */}
           {analytics.confidenceBuckets.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Confidence Distribution
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Decision volume by confidence band</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Decision volume by confidence band</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.confidenceBuckets}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7357,7 +7357,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7368,15 +7368,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Age Distribution */}
           {analytics.ageBuckets.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Decision Age Distribution
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Volume and outcome mix by decision age</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Volume and outcome mix by decision age</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.ageBuckets}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7384,7 +7384,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7395,15 +7395,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome by Stage */}
           {analytics.outcomeByStage.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Outcome by Stage
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Stage-level outcome mix</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Stage-level outcome mix</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.outcomeByStage}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7411,7 +7411,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7422,15 +7422,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Geo Focus */}
           {analytics.geoStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Geo Focus
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Decision volume by geography</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Decision volume by geography</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={analytics.geoStats.slice(0, 12)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7438,7 +7438,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="total" fill="#FFED00" name="Total Decisions" />
+                    <Bar dataKey="total" fill="#3b82f6" name="Total Decisions" />
                     <Bar dataKey="avgConfidence" fill="#FFFFFF" name="Avg Confidence" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7448,15 +7448,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Time Series */}
           {analytics.timeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                   Decision Trends Over Time
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Monthly decision volume and outcomes</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Monthly decision volume and outcomes</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={analytics.timeSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7464,7 +7464,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="decisions" stroke="#FFED00" name="Total Decisions" />
+                    <Line type="monotone" dataKey="decisions" stroke="#3b82f6" name="Total Decisions" />
                     <Line type="monotone" dataKey="positive" stroke="#FFFFFF" name="Positive" />
                     <Line type="monotone" dataKey="negative" stroke="#FFFFFF" name="Negative" />
                     <Line type="monotone" dataKey="pending" stroke="#FFFFFF" name="Pending" />
@@ -7476,15 +7476,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Mix */}
           {analytics.actionTypeStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Action Type Mix
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Outcomes by decision action</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Outcomes by decision action</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.actionTypeStats.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7492,7 +7492,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7503,15 +7503,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Conversion Rate */}
           {actionConversionSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Action Type Conversion Rate
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Positive rate by action type</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Positive rate by action type</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={actionConversionSeries.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7519,7 +7519,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="conversionRate" fill="#FFED00" name="Positive Rate %" />
+                    <Bar dataKey="conversionRate" fill="#3b82f6" name="Positive Rate %" />
                     <Bar dataKey="total" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7529,15 +7529,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Win Rate */}
           {analytics.partnerStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
                   Partner Win Rate
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Win rate by partner (top 10 by volume)</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Win rate by partner (top 10 by volume)</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={analytics.partnerStats.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7545,7 +7545,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="winRate" fill="#FFED00" name="Win Rate %" />
+                    <Bar dataKey="winRate" fill="#3b82f6" name="Win Rate %" />
                     <Bar dataKey="totalDecisions" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7555,15 +7555,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity */}
           {analytics.decisionVelocity.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <Clock className="h-5 w-5 text-blue-600" />
                   Decision Velocity Trend
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Average decision time over time</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Average decision time over time</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.decisionVelocity}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7571,7 +7571,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="avgDays" stroke="#FFED00" name="Avg Days" />
+                    <Line type="monotone" dataKey="avgDays" stroke="#3b82f6" name="Avg Days" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7580,15 +7580,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome Rate Trend */}
           {analytics.outcomeRateSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                   Positive Rate Trend
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Monthly positive rate across decisions</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Monthly positive rate across decisions</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.outcomeRateSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7596,7 +7596,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#3b82f6" name="Positive Rate %" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7605,15 +7605,15 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Cumulative Decisions */}
           {analytics.cumulativeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                   Cumulative Decisions
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">Total decisions over time</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">Total decisions over time</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={analytics.cumulativeSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF" opacity={0.2} />
@@ -7621,7 +7621,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#FFED00" name="Cumulative Decisions" />
+                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#3b82f6" name="Cumulative Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7630,13 +7630,13 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence vs Positive Rate */}
           {confidenceRateSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-foreground font-mono font-bold uppercase tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                   Confidence vs Positive Rate
                 </CardTitle>
-                <CardDescription className="text-white/70 font-mono">How confidence bands correlate with outcomes</CardDescription>
+                <CardDescription className="text-muted-foreground font-mono">How confidence bands correlate with outcomes</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -7646,7 +7646,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#3b82f6" name="Positive Rate %" />
                     <Line type="monotone" dataKey="total" stroke="#FFFFFF" name="Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -7656,31 +7656,31 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Top Startups */}
           {analytics.startupStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Startups by Decision Volume</CardTitle>
-                <CardDescription className="text-white/70 font-mono">Most discussed companies and outcomes</CardDescription>
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Top Startups by Decision Volume</CardTitle>
+                <CardDescription className="text-muted-foreground font-mono">Most discussed companies and outcomes</CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b-2 border-white">
-                        <th className="text-left p-2 text-white font-bold">Startup</th>
-                        <th className="text-right p-2 text-white font-bold">Total</th>
-                        <th className="text-right p-2 text-white font-bold">Positive</th>
-                        <th className="text-right p-2 text-white font-bold">Negative</th>
-                        <th className="text-right p-2 text-white font-bold">Pending</th>
-                        <th className="text-right p-2 text-white font-bold">Avg Confidence</th>
+                      <tr className="border-b border-border">
+                        <th className="text-left p-2 text-foreground font-bold">Startup</th>
+                        <th className="text-right p-2 text-foreground font-bold">Total</th>
+                        <th className="text-right p-2 text-foreground font-bold">Positive</th>
+                        <th className="text-right p-2 text-foreground font-bold">Negative</th>
+                        <th className="text-right p-2 text-foreground font-bold">Pending</th>
+                        <th className="text-right p-2 text-foreground font-bold">Avg Confidence</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.startupStats.slice(0, 10).map((startup) => (
-                        <tr key={startup.startupName} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                        <tr key={startup.startupName} className="border-b border-white/30 hover:bg-blue-50 dark:bg-blue-950">
                           <td className="p-2 font-bold text-white">{startup.startupName}</td>
                           <td className="text-right p-2 text-white">{startup.total}</td>
-                          <td className="text-right p-2 text-[#FFED00]">{startup.positive}</td>
-                          <td className="text-right p-2 text-white/50">{startup.negative}</td>
+                          <td className="text-right p-2 text-blue-600">{startup.positive}</td>
+                          <td className="text-right p-2 text-muted-foreground/70">{startup.negative}</td>
                           <td className="text-right p-2 text-white/70">{startup.pending}</td>
                           <td className="text-right p-2 text-white">{startup.avgConfidence}%</td>
                         </tr>
@@ -7694,10 +7694,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Sector Conversion Rates Table */}
           {analytics.sectorStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
-                <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Sector Conversion Rates</CardTitle>
-                <CardDescription className="text-white/70 font-mono">
+            <Card className="border border-border bg-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="text-foreground font-mono font-bold uppercase tracking-tight">Sector Conversion Rates</CardTitle>
+                <CardDescription className="text-muted-foreground font-mono">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -7706,7 +7706,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                           <span className="ml-1">ℹ️</span>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                      <TooltipContent className="bg-[#050505] border border-border text-white">
                         <p className="max-w-xs font-mono">
                           Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                           <br />
@@ -7717,27 +7717,27 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   </TooltipProvider>
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-white">
+              <CardContent className="text-foreground">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b-2 border-white">
-                        <th className="text-left p-2 text-white font-bold">Sector</th>
-                        <th className="text-right p-2 text-white font-bold">Total</th>
-                        <th className="text-right p-2 text-white font-bold">Positive</th>
-                        <th className="text-right p-2 text-white font-bold">Negative</th>
-                        <th className="text-right p-2 text-white font-bold">Pending</th>
-                        <th className="text-right p-2 text-white font-bold">Conversion %</th>
-                        <th className="text-right p-2 text-white font-bold">Avg Confidence</th>
+                      <tr className="border-b border-border">
+                        <th className="text-left p-2 text-foreground font-bold">Sector</th>
+                        <th className="text-right p-2 text-foreground font-bold">Total</th>
+                        <th className="text-right p-2 text-foreground font-bold">Positive</th>
+                        <th className="text-right p-2 text-foreground font-bold">Negative</th>
+                        <th className="text-right p-2 text-foreground font-bold">Pending</th>
+                        <th className="text-right p-2 text-foreground font-bold">Conversion %</th>
+                        <th className="text-right p-2 text-foreground font-bold">Avg Confidence</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.sectorStats.map((sector) => (
-                        <tr key={sector.sector} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                        <tr key={sector.sector} className="border-b border-white/30 hover:bg-blue-50 dark:bg-blue-950">
                           <td className="p-2 font-bold text-white">{sector.sector}</td>
                           <td className="text-right p-2 text-white">{sector.total}</td>
-                          <td className="text-right p-2 text-[#FFED00]">{sector.positive}</td>
-                          <td className="text-right p-2 text-white/50">{sector.negative}</td>
+                          <td className="text-right p-2 text-blue-600">{sector.positive}</td>
+                          <td className="text-right p-2 text-muted-foreground/70">{sector.negative}</td>
                           <td className="text-right p-2 text-white/70">{sector.pending}</td>
                           <td className="text-right p-2 font-bold text-white">{sector.conversionRate}%</td>
                           <td className="text-right p-2 text-white">{sector.avgConfidence}%</td>
@@ -12875,3497 +12875,3 @@ export default function CIS() {
                     href={linkData.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
-                  >
-                    {linkData.text}
-                  </a>
-                );
-              }
-            } else if (part) {
-              parts.push(<span key={`${keyPrefix}t-${i}-${idx}`}>{part}</span>);
-            }
-          });
-        }
-        if (match[2]) {
-          // ***bold italic***
-          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-[#FFED00]">{match[2]}</strong>);
-        } else if (match[3]) {
-          // **bold**
-          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-[#FFED00]">{match[3]}</strong>);
-        } else if (match[4]) {
-          // *italic*
-          parts.push(<em key={`${keyPrefix}i${i}`} className="italic text-white/90">{match[4]}</em>);
-        } else if (match[5]) {
-          // `code`
-          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-[#FFED00] font-mono">{match[5]}</code>);
-        } else if (match[6]) {
-          // [1] source reference
-          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-[#FFED00]/20 text-[#FFED00] text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[6]}</span>);
-        }
-        lastIndex = match.index + match[0].length;
-        i++;
-      }
-      // Handle remaining text after last match (check for link placeholders)
-      if (lastIndex < processedText.length) {
-        const remainingText = processedText.slice(lastIndex);
-        const remainingParts = remainingText.split(/(__LINK_\d+__)/g);
-        remainingParts.forEach((part, idx) => {
-          if (part.startsWith('__LINK_') && part.endsWith('__')) {
-            const linkData = linkPlaceholders[part];
-            if (linkData) {
-              parts.push(
-                <a
-                  key={`${keyPrefix}link-end-${idx}`}
-                  href={linkData.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
-                >
-                  {linkData.text}
-                </a>
-              );
-            }
-          } else if (part) {
-            parts.push(<span key={`${keyPrefix}end-${idx}`}>{part}</span>);
-          }
-        });
-      }
-      return parts.length > 0 ? parts : [<span key={`${keyPrefix}plain`}>{raw}</span>];
-    };
-
-    const lines = text.split("\n");
-    type Block =
-      | { type: "h1"; content: string }
-      | { type: "h2"; content: string }
-      | { type: "h3"; content: string }
-      | { type: "p"; content: string }
-      | { type: "ul"; items: string[] }
-      | { type: "ol"; items: string[] }
-      | { type: "table"; rows: string[][] }
-      | { type: "hr" }
-      | { type: "blank" };
-
-    const blocks: Block[] = [];
-    let ulItems: string[] = [];
-    let olItems: string[] = [];
-    let paragraph: string[] = [];
-    let tableRows: string[][] = [];
-
-    const isTableRow = (s: string) => /^\|.+\|$/.test(s.trim());
-    const parseTableRow = (s: string) => s.split("|").map((c) => c.trim()).filter((_, i, arr) => i > 0 && i < arr.length - 1);
-    const isTableSeparator = (cells: string[]) => cells.every((c) => /^[-:\s]+$/.test(c));
-
-    const flushTable = () => {
-      if (tableRows.length) {
-        const rows = tableRows.filter((row) => row.some((c) => c.length > 0));
-        if (rows.length) blocks.push({ type: "table", rows });
-        tableRows = [];
-      }
-    };
-
-    const flushParagraph = () => {
-      if (paragraph.length) {
-        blocks.push({ type: "p", content: paragraph.join(" ") });
-        paragraph = [];
-      }
-    };
-    const flushUl = () => {
-      if (ulItems.length) {
-        blocks.push({ type: "ul", items: [...ulItems] });
-        ulItems = [];
-      }
-    };
-    const flushOl = () => {
-      if (olItems.length) {
-        blocks.push({ type: "ol", items: [...olItems] });
-        olItems = [];
-      }
-    };
-    const flushAll = () => { flushParagraph(); flushUl(); flushOl(); flushTable(); };
-
-    for (const raw of lines) {
-      const line = raw.trimEnd();
-      const trimmed = line.trim();
-
-      // Blank line
-      if (!trimmed) { flushAll(); continue; }
-
-      // Table row: | cell | cell |
-      if (isTableRow(trimmed)) {
-        flushParagraph(); flushUl(); flushOl();
-        const cells = parseTableRow(trimmed);
-        if (cells.length && !(tableRows.length === 1 && isTableSeparator(cells))) {
-          tableRows.push(cells);
-        }
-        continue;
-      } else {
-        flushTable();
-      }
-
-      // Horizontal rule
-      if (/^(---+|\*\*\*+|___+)$/.test(trimmed)) { flushAll(); blocks.push({ type: "hr" }); continue; }
-
-      // Headings: ## or ###
-      const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
-      if (headingMatch) {
-        flushAll();
-        const level = headingMatch[1].length;
-        const content = headingMatch[2].replace(/\s*#+$/, ""); // strip trailing #
-        if (level === 1) blocks.push({ type: "h1", content });
-        else if (level === 2) blocks.push({ type: "h2", content });
-        else blocks.push({ type: "h3", content });
-        continue;
-      }
-
-      // Unordered list: - item or * item
-      if (/^[-*]\s+/.test(trimmed)) {
-        flushParagraph(); flushOl();
-        ulItems.push(trimmed.replace(/^[-*]\s+/, ""));
-        continue;
-      }
-
-      // Ordered list: 1. item, 2. item
-      if (/^\d+[.)]\s+/.test(trimmed)) {
-        flushParagraph(); flushUl();
-        olItems.push(trimmed.replace(/^\d+[.)]\s+/, ""));
-        continue;
-      }
-
-      // Lines ending with ":" that are short → treat as sub-heading
-      if (trimmed.endsWith(":") && trimmed.length < 80 && !trimmed.startsWith("http")) {
-        flushAll();
-        blocks.push({ type: "h3", content: trimmed.replace(/:$/, "") });
-        continue;
-      }
-
-      // Normal paragraph text
-      flushUl(); flushOl();
-      paragraph.push(trimmed);
-    }
-    flushAll();
-
-    return (
-      <div className="space-y-3">
-        {blocks.map((block, idx) => {
-          switch (block.type) {
-            case "h1":
-              return (
-                <h2 key={idx} className="text-base font-bold text-[#FFED00] font-mono mt-3 mb-1 border-b border-white/20 pb-1">
-                  {renderInline(block.content, `h1-${idx}-`)}
-                </h2>
-              );
-            case "h2":
-              return (
-                <h3 key={idx} className="text-sm font-bold text-[#FFED00] font-mono mt-3 mb-1">
-                  {renderInline(block.content, `h2-${idx}-`)}
-                </h3>
-              );
-            case "h3":
-              return (
-                <h4 key={idx} className="text-sm font-semibold text-white/90 font-mono mt-2 mb-0.5">
-                  {renderInline(block.content, `h3-${idx}-`)}
-                </h4>
-              );
-            case "ul":
-              return (
-                <ul key={idx} className="list-disc pl-5 text-sm text-white space-y-1.5">
-                  {block.items.map((item, i) => (
-                    <li key={i} className="text-white leading-relaxed">{renderInline(item, `ul-${idx}-${i}-`)}</li>
-                  ))}
-                </ul>
-              );
-            case "ol":
-              return (
-                <ol key={idx} className="list-decimal pl-5 text-sm text-white space-y-1.5">
-                  {block.items.map((item, i) => (
-                    <li key={i} className="text-white leading-relaxed">{renderInline(item, `ol-${idx}-${i}-`)}</li>
-                  ))}
-                </ol>
-              );
-            case "hr":
-              return <hr key={idx} className="border-white/20 my-3" />;
-            case "table": {
-              const { rows } = block;
-              const [head, ...body] = rows;
-              return (
-                <div key={idx} className="my-3 overflow-x-auto">
-                  <table className="w-full border-collapse text-sm font-mono text-white">
-                    {head && head.length > 0 && (
-                      <thead>
-                        <tr>
-                          {head.map((cell, cidx) => (
-                            <th key={cidx} className="border border-white/30 px-3 py-2 text-left font-bold text-[#FFED00] bg-white/5">
-                              {renderInline(cell, `th-${idx}-${cidx}-`)}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                    )}
-                    <tbody>
-                      {body.map((row, ridx) => (
-                        <tr key={ridx}>
-                          {row.map((cell, cidx) => (
-                            <td key={cidx} className="border border-white/20 px-3 py-2 text-white/90">
-                              {renderInline(cell, `td-${idx}-${ridx}-${cidx}-`)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            }
-            case "p":
-              return (
-                <p key={idx} className="text-sm text-white leading-relaxed">
-                  {renderInline(block.content, `p-${idx}-`)}
-                </p>
-              );
-            default:
-              return null;
-          }
-        })}
-      </div>
-    );
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden cis-app">
-      {/* Black + yellow background: grid + subtle mesh */}
-      <div className="fixed inset-0 cis-grid-bg cis-mesh-bg pointer-events-none" />
-
-      <div className="relative z-10 max-w-[1600px] mx-auto px-4 py-3 space-y-3">
-        {/* Top navigation bar */}
-        <header className="flex items-center justify-between gap-4 border-b-2 border-white/20 pb-3 cis-fade-in">
-          <div className="flex items-center gap-6 min-w-0">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
-                <Brain className="h-5 w-5" />
-              </span>
-              <span className="font-bold text-white text-lg tracking-tight hidden sm:inline">CIS</span>
-            </div>
-            <nav className="flex items-center gap-0.5 flex-wrap">
-              {profile?.role !== "lp" && (
-                <button
-                  onClick={() => setActiveTab("chat")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "chat" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Chat
-                </button>
-              )}
-              {(profile?.role === "managing_partner" || profile?.role === "organizer") && (
-                <button
-                  onClick={() => setActiveTab("onboarding")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "onboarding" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Onboarding
-                </button>
-              )}
-              <button
-                onClick={() => setActiveTab("overview")}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "overview" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Dashboard
-              </button>
-              {profile?.role !== "lp" && (
-                <button
-                  onClick={() => setActiveTab("sources")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "sources" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Sources
-                </button>
-              )}
-              {profile?.role !== "lp" && (
-                <button
-                  onClick={() => setActiveTab("decisions")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "decisions" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Decisions
-                </button>
-              )}
-              {profile?.role !== "lp" && (
-                <button
-                  onClick={() => setActiveTab("companies")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "companies" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Companies
-                </button>
-              )}
-              {profile?.role !== "lp" && (
-                <button
-                  onClick={() => setActiveTab("connections")}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "connections" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Connections
-                </button>
-              )}
-              {(profile?.role as string) === "admin" && (
-                <Link to="/admin" className="px-3 py-2 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
-                  <Shield className="h-4 w-4" />
-                  Admin
-                </Link>
-              )}
-            </nav>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 hover:border-[#FFED00]/30 text-white font-medium text-sm shrink-0 transition-all">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-xs font-bold">
-                  {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
-                </span>
-                <span className="max-w-[140px] truncate hidden sm:inline">{profile?.full_name || profile?.email || "Account"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-white/40" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 border border-white/20 bg-black/95 backdrop-blur-xl text-white">
-              <DropdownMenuItem
-                onClick={() => setActiveTab("account")}
-                className="cursor-pointer text-white/80 focus:bg-white/10 focus:text-white"
-              >
-                <User className="h-4 w-4 mr-2" />
-                My Account
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem onClick={signOut} className="cursor-pointer text-red-400 focus:bg-red-500/20 focus:text-red-200">
-                <LogOut className="h-4 w-4 mr-2" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-
-        {/* Main Layout — sidebar only when on Chat tab */}
-        <div className="flex gap-4">
-          {activeTab === "chat" && (
-          <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-            {/* Chat Threads */}
-            <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
-                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
-                  Chat Threads
-                </div>
-                <div className="space-y-3">
-                  <Button
-                    onClick={async () => {
-                      const newThreadId = await createChatThread(`Chat ${threads.length + 1}`, null);
-                      if (newThreadId) {
-                        setActiveThread(newThreadId);
-                        setMessages([]);
-                        // Reload threads to show the new one
-                        const eventId = activeEventId || (await ensureActiveEventId());
-                        if (eventId) {
-                          const { data: threadRows } = await supabase
-                            .from("chat_threads")
-                            .select("*")
-                            .eq("event_id", eventId)
-                            .order("created_at", { ascending: true });
-                          if (threadRows?.length) {
-                            const mappedThreads = threadRows.map((t: any) => ({
-                              id: t.id,
-                              title: t.title,
-                              parentId: t.parent_id || undefined,
-                            }));
-                            setThreads(mappedThreads);
-                          }
-                        }
-                      }
-                    }}
-                    className="w-full cis-btn-primary text-sm py-2.5"
-                  >
-                    <MessageSquarePlus className="h-4 w-4 mr-2" />
-                    Create New Chat
-                  </Button>
-                  {threads.length > 0 ? (
-                    <div className="max-h-64 overflow-y-auto">
-                      <ThreadTree
-                        threads={threads}
-                        active={activeThread}
-                        onSelect={(id) => {
-                          setActiveThread(id);
-                          setMessages([]);
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-xs text-white/50 text-center py-4">
-                      No threads yet
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            {/* Knowledge Scope — compact, scrollable, with grouped Drive folders */}
-            <div className="cis-surface p-2 sticky top-4 cis-fade-in-up cis-stagger-3 opacity-0 [animation-fill-mode:forwards] max-h-[min(340px,45vh)] flex flex-col min-w-0">
-                <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
-                  <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wider truncate">
-                    Knowledge Scope
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const allChecked = scopes.every((s) => s.checked);
-                      setScopes((prev) => prev.map((s) => ({ ...s, checked: !allChecked })));
-                    }}
-                    className="text-[10px] text-white/40 hover:text-[#FFED00] font-mono transition-colors shrink-0"
-                  >
-                    {scopes.every((s) => s.checked) ? "Deselect All" : "Select All"}
-                  </button>
-                </div>
-                <div className="flex flex-col gap-0.5 overflow-y-auto min-h-0">
-                  {/* Non-folder scopes */}
-                  <div className="flex flex-wrap gap-1">
-                    {scopes.filter((s) => s.type !== "folder").map((s) => (
-                      <label
-                        key={s.id}
-                        className={`inline-flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono shrink-0 max-w-full min-w-0 ${
-                          s.checked
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
-                        }`}
-                      >
-                        <Checkbox
-                          checked={s.checked}
-                          onCheckedChange={(val) => toggleScope(s.id, val === true)}
-                          className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
-                        />
-                        <span className="truncate">{s.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {/* Folder scopes — grouped by category (show all: Portfolio Companies, Funds, BD, Mentors/Corporates, etc.) */}
-                  {(() => {
-                    const folderScopes = scopes.filter((s) => s.type === "folder");
-
-                    // Group by category
-                    const catGroups = new Map<string, ScopeItem[]>();
-                    for (const fs of folderScopes) {
-                      const cat = fs.category || "Portfolio Companies";
-                      if (!catGroups.has(cat)) catGroups.set(cat, []);
-                      catGroups.get(cat)!.push(fs);
-                    }
-
-                    const orderedCats = [...FOLDER_CATEGORIES, ...Array.from(catGroups.keys()).filter((c) => !FOLDER_CATEGORIES.includes(c as any))];
-
-                    return orderedCats.map((catName) => {
-                      const catItems = catGroups.get(catName) ?? [];
-                      const catAllChecked = catItems.length > 0 && catItems.every((i) => i.checked);
-                      const catSomeChecked = catItems.some((i) => i.checked);
-                      const isCatExpanded = expandedScopeGroups.has(`cat:${catName}`);
-
-                      // Sub-group by company name (before first " / ")
-                      const companyGroups = new Map<string, ScopeItem[]>();
-                      for (const fs of catItems) {
-                        const sepIdx = fs.label.indexOf(" / ");
-                        const groupName = sepIdx > 0 ? fs.label.slice(0, sepIdx).trim() : fs.label.trim();
-                        if (!companyGroups.has(groupName)) companyGroups.set(groupName, []);
-                        companyGroups.get(groupName)!.push(fs);
-                      }
-
-                      return (
-                        <div key={catName} className="flex flex-col mt-1">
-                          {/* Category header */}
-                          <div
-                            className="flex items-center gap-1 cursor-pointer group"
-                            onClick={() => {
-                              setExpandedScopeGroups((prev) => {
-                                const next = new Set(prev);
-                                const key = `cat:${catName}`;
-                                if (next.has(key)) next.delete(key); else next.add(key);
-                                return next;
-                              });
-                            }}
-                          >
-                            <Checkbox
-                              checked={catAllChecked}
-                              onCheckedChange={(val) => {
-                                const checked = val === true;
-                                setScopes((prev) =>
-                                  prev.map((s) =>
-                                    catItems.some((i) => i.id === s.id) ? { ...s, checked } : s
-                                  )
-                                );
-                              }}
-                              className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <span className={`text-[9px] font-mono uppercase tracking-wider ${catSomeChecked ? "text-[#FFED00]/70" : "text-white/40"} group-hover:text-[#FFED00]/80`}>
-                              {catName}
-                            </span>
-                            <span className="text-[8px] text-white/30">({catItems.length})</span>
-                            <span className="ml-auto shrink-0 text-white/30 group-hover:text-[#FFED00]/60">
-                              {isCatExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
-                            </span>
-                          </div>
-
-                          {/* Expanded company groups inside this category (or empty state) */}
-                          {isCatExpanded && (
-                            <div className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-1.5">
-                              {catItems.length === 0 ? (
-                                <span className="text-[9px] font-mono text-white/40">No folders in this category. Add folders in Sources → Document Folders.</span>
-                              ) : null}
-                              {Array.from(companyGroups.entries()).map(([groupName, items]) => {
-                                const allChecked = items.every((i) => i.checked);
-                                const someChecked = items.some((i) => i.checked);
-                                const isExpanded = expandedScopeGroups.has(groupName);
-                                const hasSubfolders = items.length > 1 || (items.length === 1 && items[0].label.includes(" / "));
-                                return (
-                                  <div key={groupName} className="flex flex-col">
-                                    <div
-                                      className={`flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono ${
-                                        allChecked
-                                          ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
-                                          : someChecked
-                                            ? "border-[#FFED00]/30 bg-[#FFED00]/5 text-[#FFED00]/80"
-                                            : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
-                                      }`}
-                                    >
-                                      <Checkbox
-                                        checked={allChecked}
-                                        onCheckedChange={(val) => {
-                                          const checked = val === true;
-                                          setScopes((prev) =>
-                                            prev.map((s) =>
-                                              items.some((i) => i.id === s.id) ? { ...s, checked } : s
-                                            )
-                                          );
-                                        }}
-                                        className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
-                                      />
-                                      <Folder className="h-2.5 w-2.5 shrink-0" />
-                                      <span className="truncate flex-1" onClick={() => {
-                                        const checked = !allChecked;
-                                        setScopes((prev) =>
-                                          prev.map((s) =>
-                                            items.some((i) => i.id === s.id) ? { ...s, checked } : s
-                                          )
-                                        );
-                                      }}>{groupName}</span>
-                                      {someChecked && <span className="text-[8px] text-[#FFED00]/60 shrink-0">{items.filter(i => i.checked).length}/{items.length}</span>}
-                                      {hasSubfolders && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setExpandedScopeGroups((prev) => {
-                                              const next = new Set(prev);
-                                              if (next.has(groupName)) next.delete(groupName);
-                                              else next.add(groupName);
-                                              return next;
-                                            });
-                                          }}
-                                          className="p-0 shrink-0 text-white/40 hover:text-[#FFED00]"
-                                        >
-                                          {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
-                                        </button>
-                                      )}
-                                    </div>
-                                    {isExpanded && hasSubfolders && (
-                                      <div className="ml-3 mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-1.5">
-                                        {items.map((sub) => {
-                                          const subLabel = sub.label.includes(" / ") ? sub.label.slice(sub.label.indexOf(" / ") + 3) : sub.label;
-                                          return (
-                                            <label
-                                              key={sub.id}
-                                              className={`inline-flex items-center gap-1 text-[9px] border px-1 py-0.5 rounded cursor-pointer transition-all font-mono max-w-full min-w-0 ${
-                                                sub.checked
-                                                  ? "border-[#FFED00]/40 bg-[#FFED00]/5 text-[#FFED00]/90"
-                                                  : "border-white/10 bg-transparent text-white/50 hover:border-white/30 hover:text-white/70"
-                                              }`}
-                                            >
-                                              <Checkbox
-                                                checked={sub.checked}
-                                                onCheckedChange={(val) => toggleScope(sub.id, val === true)}
-                                                className="h-2 w-2 border-white/30 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
-                                              />
-                                              <span className="truncate">{subLabel}</span>
-                                            </label>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-
-          </div>
-          )}
-
-          {/* Main Content Area */}
-          <div className="flex-1 min-w-0 cis-fade-in-up cis-stagger-4 opacity-0 [animation-fill-mode:forwards]">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-
-          {/* Onboarding Tab */}
-          <TabsContent value="onboarding">
-            <OnboardingTab
-              profile={profile}
-              sources={sources}
-              documents={documents}
-              decisions={decisions}
-              tasks={tasks}
-              onNavigate={setActiveTab}
-            />
-          </TabsContent>
-
-          {/* Chat Tab */}
-          <TabsContent value="chat" className="overflow-hidden">
-            {isDeveloper && (
-              <Card className="border-2 border-white bg-transparent mb-3">
-                <CardHeader className="pb-2 border-b-2 border-white">
-                  <CardTitle className="text-sm text-white font-mono font-black uppercase tracking-tight">Developer Cost Log</CardTitle>
-                  <CardDescription className="text-xs text-white/70 font-mono">
-                    Estimated Claude spend (local only).
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-xs space-y-2">
-                  <div className="font-medium">
-                    Total: $
-                    {costLog.reduce((sum, entry) => sum + entry.estCostUsd, 0).toFixed(4)}
-                  </div>
-                  {costLog.length === 0 ? (
-                    <div className="text-white/70 font-mono">No Claude calls logged yet.</div>
-                  ) : (
-                    costLog.slice(0, 5).map((entry) => (
-                      <div key={entry.ts} className="border rounded-md p-2">
-                        <div className="font-medium">${entry.estCostUsd} • {entry.ts}</div>
-                        <div className="text-white/70 font-mono">Q: {entry.question}</div>
-                        <div className="text-white/70 font-mono">
-                          Tokens: {entry.estInputTokens} in / {entry.estOutputTokens} out
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            )}
-            {/* Chat Container — fills viewport, input at bottom of card */}
-            <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)", minHeight: "600px" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
-                {/* Chat header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/15 bg-black/40 flex-shrink-0">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
-                      <Brain className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-white tracking-tight">Intelligence Chat</div>
-                      <div className="text-[10px] text-white/50 font-mono uppercase tracking-wider truncate" title={scopes.filter((s) => s.checked).map((s) => s.label).join(", ") || "None"}>
-                        Scope: {(() => {
-                          const labels = scopes.filter((s) => s.checked).map((s) => s.label);
-                          if (labels.length === 0) return "None";
-                          if (labels.length <= 2) return labels.join(", ");
-                          return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                  {chatIsLoading && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFED00]/10 border border-[#FFED00]/25">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFED00] opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFED00]" />
-                      </span>
-                      <span className="text-[11px] text-[#FFED00] font-mono font-semibold animate-pulse">Processing</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Messages area — scrollable, content aligned to bottom */}
-                <div 
-                  ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto px-5 py-5 bg-transparent scroll-smooth flex flex-col"
-                >
-                  {/* Spacer pushes messages to bottom when few messages */}
-                  <div className="flex-1" />
-                  {scopedMessages.length === 0 ? (
-                    <div className="flex items-center justify-center min-h-[300px]">
-                      <div className="text-center space-y-4 max-w-md">
-                        <div className="flex justify-center">
-                          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFED00]/10 border-2 border-[#FFED00]/20">
-                            <Brain className="h-8 w-8 text-[#FFED00]" />
-                          </span>
-                        </div>
-                        <div className="text-xl font-bold text-white">Start a conversation</div>
-                        <div className="text-sm text-white/50 font-mono leading-relaxed">
-                          Ask questions about your documents, companies, and portfolio. The AI will search your knowledge base to provide intelligent answers.
-                        </div>
-                        <div className="flex flex-wrap gap-2 justify-center pt-2">
-                          {["Summarize recent deal flow", "Compare company financials", "What risks have been flagged?"].map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              onClick={() => { setInput(suggestion); }}
-                              className="text-xs px-3 py-1.5 rounded-full border border-white/20 text-white/60 hover:text-[#FFED00] hover:border-[#FFED00]/40 transition-all font-mono"
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-5">
-                      {scopedMessages.map((m, index) => (
-                        <div
-                          key={m.id}
-                          className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-                            m.author === "user" ? "justify-end" : "justify-start"
-                          }`}
-                          style={{ animationDelay: `${Math.min(index, 5) * 50}ms` }}
-                        >
-                          {m.author === "assistant" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                              <Brain className="w-4 h-4 text-[#FFED00]" />
-                            </div>
-                          )}
-                          <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                              m.author === "user"
-                                ? "bg-[#FFED00] text-black font-mono shadow-lg shadow-[#FFED00]/10"
-                                : "bg-white/[0.04] border border-white/15 text-white font-mono backdrop-blur-sm"
-                            }`}
-                          >
-                            {m.author === "assistant" ? (
-                              <>
-                                <div className="prose prose-sm dark:prose-invert max-w-none text-white [&_*]:text-white [&_p]:text-white [&_strong]:text-white [&_em]:text-white [&_ul]:text-white [&_ol]:text-white [&_li]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_code]:text-white [&_pre]:text-white">
-                                  {m.isStreaming && m.text === "..." ? (
-                                    <span className="inline-flex items-center gap-1 text-white">
-                                      <span className="animate-pulse">.</span>
-                                      <span className="animate-pulse delay-75">.</span>
-                                      <span className="animate-pulse delay-150">.</span>
-                                    </span>
-                                  ) : (
-                                    <>
-                                      {renderAssistantContent(cleanVerifiableCitationTags(m.text))}
-                                      {m.isStreaming && (
-                                        <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                                {/* Sources: one button that expands a clickable list */}
-                                {!m.isStreaming && ((m.sourceDocs?.length ?? 0) > 0 || (m.contextLabels?.length ?? 0) > 0) && (
-                                  <div className="mt-2 pt-2 border-t border-white/10">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
-                                        >
-                                          <FileText className="h-3 w-3 mr-1.5" />
-                                          Sources
-                                          <span className="ml-1 text-white/50">({(m.sourceDocs?.length ?? 0) + (m.contextLabels?.length ?? 0)})</span>
-                                          <ChevronDown className="h-3 w-3 ml-1.5" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="start" className="w-80 bg-black/95 border border-white/20 text-white">
-                                        {m.sourceDocs && m.sourceDocs.length > 0 && (
-                                          <>
-                                            <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/50">
-                                              Documents
-                                            </div>
-                                            {m.sourceDocs.map((doc, idx) => (
-                                              <DropdownMenuItem
-                                                key={doc.id}
-                                                className="font-mono text-xs cursor-pointer"
-                                                onSelect={(e) => {
-                                                  e.preventDefault();
-                                                  handleOpenDocument(doc.id);
-                                                }}
-                                              >
-                                                {idx + 1}. {doc.title || "Document"}
-                                              </DropdownMenuItem>
-                                            ))}
-                                          </>
-                                        )}
-                                        {m.contextLabels && m.contextLabels.length > 0 && (
-                                          <>
-                                            {m.sourceDocs && m.sourceDocs.length > 0 && <DropdownMenuSeparator />}
-                                            <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/50">
-                                              Also used
-                                            </div>
-                                            {m.contextLabels.map((label) => (
-                                              <DropdownMenuItem key={label} disabled className="font-mono text-xs text-white/60">
-                                                {label}
-                                              </DropdownMenuItem>
-                                            ))}
-                                          </>
-                                        )}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                )}
-                                {/* Log Connection button - appears after each AI response */}
-                                {!m.isStreaming && m.text && m.text !== "..." && (
-                                  <div className="mt-2 pt-2 border-t border-white/10">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleLogDecisionFromChat(m.text)}
-                                      className="text-xs h-6 px-2 text-white/50 hover:text-[#FFED00] hover:bg-white/5 font-mono"
-                                    >
-                                      <Link2 className="h-3 w-3 mr-1" />
-                                      Log Connection
-                                    </Button>
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="group flex items-start gap-2">
-                                <div className="text-sm leading-relaxed whitespace-pre-wrap text-black flex-1">{m.text}</div>
-                                {!chatIsLoading && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingMessageId(m.id);
-                                      setInput(m.text);
-                                      setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='Ask a question']")?.focus(), 50);
-                                    }}
-                                    className="flex-shrink-0 p-1.5 rounded-lg text-black/50 hover:text-black hover:bg-black/10 transition-all opacity-60 hover:opacity-100"
-                                    title="Edit and resend"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          {m.author === "user" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                              <svg className="w-4 h-4 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* Animated thinking indicator — shows while loading */}
-                      {chatIsLoading && (
-                        <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                            <Brain className="w-4 h-4 text-[#FFED00] animate-pulse" />
-                          </div>
-                          <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white/[0.04] border border-[#FFED00]/20 text-white font-mono backdrop-blur-sm">
-                            <div className="flex items-center gap-3">
-                              <div className="flex gap-1">
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "0ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "150ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "300ms" }} />
-                              </div>
-                              <span className="text-sm text-[#FFED00]/80 font-semibold transition-all duration-500">
-                                {chatLoadingStage}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Sources Used — collapsible strip */}
-                {lastEvidence && lastEvidence.docs.length > 0 && (
-                  <div className="border-t border-white/10 bg-black/30 px-5 py-2.5 flex-shrink-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <FileText className="h-3 w-3 text-white/50" />
-                      <span className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">Sources Used</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {lastEvidence.docs.slice(0, 3).map((doc, index) => (
-                        <Button
-                          key={doc.id}
-                          size="sm"
-                          variant="outline"
-                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
-                          onClick={() => handleOpenDocument(doc.id)}
-                        >
-                          {index + 1}. {doc.title || doc.file_name || "Untitled"}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Input bar — at bottom of card */}
-                <div className="border-t-2 border-white/15 bg-black/50 backdrop-blur-md p-4 flex-shrink-0">
-                  {editingMessageId && (
-                    <div className="flex items-center gap-2 mb-2 px-1">
-                      <span className="text-xs font-mono text-[#FFED00]/90">Editing message</span>
-                      <button
-                        type="button"
-                        onClick={() => { setEditingMessageId(null); setInput(""); }}
-                        className="text-xs font-mono text-white/60 hover:text-white underline"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 relative">
-                      <Textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder={editingMessageId ? "Edit your question and press Enter to resend..." : "Ask a question about your portfolio..."}
-                        className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey && !(chatIsLoading || isClaudeLoading)) {
-                            e.preventDefault();
-                            addMessage();
-                          }
-                        }}
-                      />
-                    </div>
-                    <Button 
-                      onClick={(chatIsLoading || isClaudeLoading) ? stopGenerating : addMessage} 
-                      disabled={!(chatIsLoading || isClaudeLoading) && !input.trim()}
-                      size="lg"
-                      title={(chatIsLoading || isClaudeLoading) ? "Cancel" : "Send"}
-                      className={`h-[52px] w-[52px] p-0 font-bold border-2 rounded-xl transition-all ${
-                        (chatIsLoading || isClaudeLoading)
-                          ? "bg-white/[0.08] text-[#FFED00] border-white/30 hover:bg-white/[0.14] hover:border-[#FFED00]/50 hover:shadow-[0_0_20px_rgba(255,237,0,0.18)]"
-                          : "bg-[#FFED00] text-black hover:bg-[#FFED00]/90 border-[#FFED00] hover:shadow-[0_0_24px_rgba(255,237,0,0.4)]"
-                      } disabled:opacity-40 disabled:hover:shadow-none`}
-                    >
-                      {(chatIsLoading || isClaudeLoading) ? (
-                        <Square className="h-4 w-4 fill-current animate-pulse" />
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      )}
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between mt-2.5">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setWebSearchEnabled((prev) => !prev)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
-                          webSearchEnabled
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
-                        }`}
-                        title="Enable web search to find information about companies not in your documents"
-                      >
-                        <Globe className="h-3.5 w-3.5" />
-                        Web Search {webSearchEnabled ? "ON" : "OFF"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMultiAgentEnabled((prev) => !prev)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
-                          multiAgentEnabled
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
-                        }`}
-                        title="Multi-Agent RAG: Orchestrator routes your query to Vector, Graph, KPI, and Web agents in parallel. When OFF, uses standard single-path RAG."
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Multi-Agent {multiAgentEnabled ? "ON" : "OFF"}
-                      </button>
-                    </div>
-                    <span className="text-[11px] text-white/40 font-mono">
-                      {chatIsLoading ? (
-                        <span className="text-[#FFED00]/70 flex items-center gap-1.5">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          {chatLoadingStage}
-                        </span>
-                      ) : (
-                        "Press Enter to send  •  Shift+Enter for new line"
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Sources Tab */}
-          <TabsContent value="sources">
-            <SourcesTab
-              sources={sources}
-              documents={documents}
-              sourceFolders={sourceFolders}
-              onCreateSource={handleCreateSource}
-              onCreateFolder={handleCreateFolder}
-              onDeleteFolderAndContents={handleDeleteFolderAndContents}
-              onFolderCategoryUpdated={handleFolderCategoryUpdated}
-              onSyncCategoriesFromDrive={handleSyncCategoriesFromDrive}
-              onFoldersCategoriesSaved={handleFoldersCategoriesSaved}
-              onDriveSyncConfigChanged={(folders) => {
-                setInitialDriveSyncConfig((prev) => prev ? { ...prev, folders } : null);
-              }}
-              onDeleteSource={handleDeleteSource}
-              getGoogleAccessToken={getGoogleAccessToken}
-              onAutoLogDecision={handleAutoLogDecision}
-              onDocumentSaved={(doc) =>
-                setDocuments((prev) => [
-                  { id: doc.id, title: doc.title, storage_path: doc.storage_path, folder_id: doc.folder_id },
-                  ...prev,
-                ])
-              }
-              activeEventId={activeEventId}
-              ensureActiveEventId={ensureActiveEventId}
-              currentUserId={profile?.id || user?.id || null}
-              indexDocumentEmbeddings={indexDocumentEmbeddings}
-              onRefreshCompanyCards={async () => {
-                if (activeEventId) {
-                  const res = await getAllEntityCards(activeEventId);
-                  if (res.data) setCompanyCards(res.data as typeof companyCards);
-                }
-              }}
-              initialDriveSyncConfig={initialDriveSyncConfig}
-              onSourceFoldersRefetch={async () => {
-                if (activeEventId) {
-                  const { data } = await getSourceFoldersByEvent(activeEventId);
-                  setSourceFolders((data || []) as SourceFolder[]);
-                }
-              }}
-            />
-          </TabsContent>
-
-          {/* Dashboard Tab (task hub: MD assigns, team sees my tasks + Gantt) */}
-          <TabsContent value="overview">
-            <DashboardTab
-              profile={profile}
-              activeEventId={activeEventId}
-              currentUserId={profile?.id || user?.id || null}
-              tasks={tasks}
-              onRefetchTasks={async () => {
-                if (activeEventId) {
-                  try {
-                    const { data } = await getTasksByEvent(activeEventId);
-                    setTasks((data || []) as Task[]);
-                  } catch { /* tasks table may not exist yet */ }
-                }
-              }}
-              decisions={decisions}
-              documents={documents}
-              sources={sources}
-              companyCards={companyCards}
-            />
-          </TabsContent>
-
-          {/* Decisions Tab */}
-          <TabsContent value="decisions">
-              <DecisionLoggerTab
-              decisions={decisions}
-              setDecisions={setDecisions}
-              activeEventId={activeEventId}
-              actorDefault={profile?.full_name || profile?.email || ""}
-              draftDecision={draftDecision}
-              onDraftConsumed={() => setDraftDecision(null)}
-                draftDocumentId={draftDocumentId}
-                onDraftDocumentConsumed={() => setDraftDocumentId(null)}
-              documents={documents}
-              onOpenDocument={handleOpenDocument}
-                onOpenConverter={() => setActiveTab("sources")}
-                currentUserId={profile?.id || user?.id || null}
-            />
-          </TabsContent>
-
-          {/* Companies Tab */}
-          <TabsContent value="companies">
-            <CompaniesTab
-              companyCards={companyCards}
-              documents={documents}
-              connections={companyConnections}
-              onOpenDocument={handleOpenDocument}
-              onNavigateToConnections={() => setActiveTab("connections")}
-              onUpdateCard={async (entityId, properties) => {
-                // Track which fields the user manually edited so auto-extraction never overwrites them
-                const editedFieldNames = Object.keys(properties).filter((k) => !k.startsWith("_"));
-                const entity = await getEntityProperties(entityId);
-                const currentEditedFields: string[] = entity?.properties?._edited_fields || [];
-                const mergedEditedFields = [...new Set([...currentEditedFields, ...editedFieldNames])];
-
-                await updateCompanyCardProperties(entityId, {
-                  ...properties,
-                  _edited_fields: mergedEditedFields,
-                });
-                // Refresh card data
-                if (event) {
-                  const res = await getAllEntityCards(event.id);
-                  if (res.data) setCompanyCards(res.data as typeof companyCards);
-                }
-              }}
-            />
-          </TabsContent>
-
-          {/* Connections Graph Tab */}
-          <TabsContent value="connections">
-            <ConnectionsGraphTab
-              connections={companyConnections}
-              documents={documents}
-              pendingReviews={pendingReviews}
-              onUpdateStatus={handleUpdateConnectionStatus}
-              onAddConnection={() => setLogDecisionDialogOpen(true)}
-              onSuggestConnections={handleSuggestConnections}
-              onImportConnections={handleImportConnections}
-              onReviewPending={async (edgeId: string, status: "approved" | "rejected") => {
-                const userId = profile?.id || user?.id;
-                if (!userId) {
-                  toast({ title: "Not authenticated", variant: "destructive" });
-                  return;
-                }
-                try {
-                  const { error } = await updateKgEdgeReview(edgeId, status, userId);
-                  if (error) {
-                    toast({ title: "Review failed", description: error.message, variant: "destructive" });
-                  } else {
-                    toast({ title: status === "approved" ? "Connection approved" : "Connection rejected" });
-                    if (activeEventId) {
-                      const { data } = await getPendingRelationshipReviews(activeEventId);
-                      if (data) {
-                        setPendingReviews(data.map((r: any) => ({
-                          id: r.id,
-                          relation_type: r.relation_type,
-                          confidence: r.confidence || 0.5,
-                          properties: r.properties || {},
-                          source_document_id: r.source_document_id,
-                          created_at: r.created_at,
-                          source_entity: r.source_entity || null,
-                          target_entity: r.target_entity || null,
-                        })));
-                      }
-                      const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
-                      if (connData) setCompanyConnections(connData as typeof companyConnections);
-                    }
-                  }
-                } catch (err) {
-                  toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
-                }
-              }}
-              onBatchReviewPending={async (edgeIds: string[], status: "approved" | "rejected") => {
-                const userId = profile?.id || user?.id;
-                if (!userId) {
-                  toast({ title: "Not authenticated", variant: "destructive" });
-                  return;
-                }
-                if (edgeIds.length === 0) return;
-                let succeeded = 0;
-                let failed = 0;
-                try {
-                  for (const id of edgeIds) {
-                    const { error } = await updateKgEdgeReview(id, status, userId);
-                    if (error) {
-                      console.warn(`[BatchReview] Edge ${id} failed:`, error.message);
-                      failed++;
-                    } else {
-                      succeeded++;
-                    }
-                  }
-                  if (failed > 0) {
-                    toast({ title: `${succeeded} ${status}, ${failed} failed`, description: "Some reviews could not be processed. The trigger migration may need to be applied.", variant: "destructive" });
-                  } else {
-                    toast({ title: `${succeeded} connection(s) ${status === "approved" ? "approved" : "rejected"}` });
-                  }
-                  // Always reload regardless of partial failures
-                  if (activeEventId) {
-                    const { data } = await getPendingRelationshipReviews(activeEventId);
-                    if (data) {
-                      setPendingReviews(data.map((r: any) => ({
-                        id: r.id,
-                        relation_type: r.relation_type,
-                        confidence: r.confidence || 0.5,
-                        properties: r.properties || {},
-                        source_document_id: r.source_document_id,
-                        created_at: r.created_at,
-                        source_entity: r.source_entity || null,
-                        target_entity: r.target_entity || null,
-                      })));
-                    } else {
-                      setPendingReviews([]);
-                    }
-                    const { data: connData } = await getCompanyConnectionsByEvent(activeEventId);
-                    if (connData) setCompanyConnections(connData as typeof companyConnections);
-                  }
-                } catch (err) {
-                  toast({ title: "Batch failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
-                }
-              }}
-            />
-            {/* AI Suggested Connections */}
-            {(suggestionsLoading || aiSuggestions.length > 0) && (
-              <Card className="mt-4 border-2 border-[#6366f1] bg-transparent">
-                <CardHeader className="pb-2 border-b-2 border-[#6366f1]">
-                  <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#6366f1] flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    AI-Suggested Connections
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-3">
-                  {suggestionsLoading ? (
-                    <div className="flex items-center justify-center py-6 gap-2 text-white/70 font-mono">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Analyzing documents for connections...
-                    </div>
-                  ) : (
-                    aiSuggestions.map((s, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 border-2 border-white/20 rounded-md hover:border-[#6366f1] transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-2 text-white font-mono font-bold">
-                              <span>{s.source_company}</span>
-                              <span className="text-white/50">→</span>
-                              <span>{s.target_company}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs border-[#6366f1] text-[#6366f1] bg-transparent font-mono">
-                                {s.connection_type}
-                              </Badge>
-                              <span className="text-xs text-white/50 font-mono">
-                                {Math.round(s.confidence * 100)}% confidence
-                              </span>
-                            </div>
-                            <p className="text-xs text-white/60 font-mono mt-2">{s.reasoning}</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setPendingDecisionContext({ aiReasoning: s.reasoning });
-                              setLogDecisionDialogOpen(true);
-                            }}
-                            className="bg-[#6366f1] text-white hover:bg-[#6366f1]/80 font-bold text-xs"
-                          >
-                            + Add
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-              {/* Account Tab */}
-              <TabsContent value="account">
-                <Card className="border-2 border-white/20 bg-black/30 backdrop-blur-sm rounded-xl max-w-2xl">
-                  <CardHeader className="border-b-2 border-white/15 bg-black/40">
-                    <CardTitle className="text-lg font-bold text-white flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-lg font-bold">
-                        {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
-                      </span>
-                      My Account
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-5">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between py-3 border-b border-white/10">
-                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Name</span>
-                        <span className="text-sm text-white font-medium">{profile?.full_name || "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-3 border-b border-white/10">
-                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Email</span>
-                        <span className="text-sm text-white font-medium">{profile?.email || "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-3 border-b border-white/10">
-                        <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Role</span>
-                        <Badge className="bg-[#FFED00]/20 text-[#FFED00] border-[#FFED00]/40 text-xs font-semibold">
-                          {profile?.role?.toUpperCase() || "MEMBER"}
-                        </Badge>
-                      </div>
-                      {profile?.organization_id && (
-                        <div className="flex items-center justify-between py-3 border-b border-white/10">
-                          <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Organization</span>
-                          <span className="text-xs text-white/60 font-mono">{profile.organization_id.slice(0, 8)}…</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 pt-4">
-                      <a
-                        href="/"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 text-sm text-white/70 hover:text-white hover:border-white/40 transition-all font-medium"
-                      >
-                        ← Back to Matchmaking
-                      </a>
-                      <Button
-                        onClick={signOut}
-                        variant="outline"
-                        className="border-red-500/40 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/60"
-                      >
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Log out
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </div>
-
-      {/* Document Viewer Modal */}
-      <Dialog open={!!viewingDocument} onOpenChange={(open) => !open && setViewingDocument(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between gap-2">
-              <span>{viewingDocument?.title || "Document Viewer"}</span>
-              <Button variant="secondary" onClick={handleLogDecisionFromDocument}>
-                Add decision
-              </Button>
-            </DialogTitle>
-            <DialogDescription>
-              {viewingDocument?.file_name && `File: ${viewingDocument.file_name}`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto space-y-4">
-            <Tabs defaultValue="extracted" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="extracted">Extracted JSON</TabsTrigger>
-                <TabsTrigger value="raw">Raw Content</TabsTrigger>
-              </TabsList>
-              <TabsContent value="extracted" className="mt-4">
-                {viewingDocument?.extracted_json ? (
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground mb-2">
-                      Structured data extracted by AI
-                    </div>
-                    <pre className="p-4 bg-transparent border-2 border-white rounded-lg overflow-auto max-h-[500px] text-xs text-white font-mono">
-                      {JSON.stringify(viewingDocument.extracted_json, null, 2)}
-                    </pre>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        const blob = new Blob([JSON.stringify(viewingDocument?.extracted_json, null, 2)], {
-                          type: "application/json",
-                        });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${viewingDocument?.title || "document"}-extracted.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download JSON
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No extracted JSON available</p>
-                  </div>
-                )}
-              </TabsContent>
-              <TabsContent value="raw" className="mt-4">
-                {viewingDocument?.raw_content ? (
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground mb-2">
-                      Original text content ({viewingDocument.raw_content.length} characters)
-                    </div>
-                    <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs whitespace-pre-wrap">
-                      {viewingDocument.raw_content}
-                    </pre>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        const blob = new Blob([viewingDocument?.raw_content || ""], { type: "text/plain" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${viewingDocument?.title || "document"}-raw.txt`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Raw Text
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No raw content stored</p>
-                    {viewingDocument?.storage_path && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-4"
-                        onClick={async () => {
-                          if (!viewingDocument?.storage_path) return;
-                          const { data, error } = await supabase.storage
-                            .from("cis-documents")
-                            .createSignedUrl(viewingDocument.storage_path, 60);
-                          if (error || !data?.signedUrl) {
-                            toast({
-                              title: "File not found",
-                              description: "Could not access stored file.",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-                        }}
-                      >
-                        <Link2 className="h-4 w-4 mr-2" />
-                        Open Stored File
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Log Decision Dialog - Create company connections from chat */}
-      <Dialog open={logDecisionDialogOpen} onOpenChange={setLogDecisionDialogOpen}>
-        <DialogContent className="sm:max-w-lg bg-[#050505] border-2 border-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white font-mono font-black uppercase">
-              <Link2 className="h-5 w-5 text-[#FFED00]" />
-              Log Decision / Connection
-            </DialogTitle>
-            <DialogDescription className="text-white/70 font-mono">
-              Record a connection between two companies based on AI insight
-            </DialogDescription>
-          </DialogHeader>
-
-          <LogDecisionForm
-            documents={documents}
-            pendingContext={pendingDecisionContext}
-            onSubmit={handleCreateConnection}
-            onCancel={() => {
-              setLogDecisionDialogOpen(false);
-              setPendingDecisionContext(null);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// Log Decision Form Component
-function LogDecisionForm({
-  documents,
-  pendingContext,
-  onSubmit,
-  onCancel,
-}: {
-  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
-  pendingContext: { aiReasoning: string; sourceDocIds?: string[] } | null;
-  onSubmit: (data: {
-    source_company_name: string;
-    target_company_name: string;
-    source_document_id?: string | null;
-    target_document_id?: string | null;
-    connection_type: ConnectionType;
-    connection_status: ConnectionStatus;
-    ai_reasoning?: string | null;
-    notes?: string | null;
-  }) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [sourceCompany, setSourceCompany] = useState("");
-  const [targetCompany, setTargetCompany] = useState("");
-  const [sourceDocId, setSourceDocId] = useState<string>("none");
-  const [targetDocId, setTargetDocId] = useState<string>("none");
-  const [connectionType, setConnectionType] = useState<ConnectionType>("BD");
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("To Connect");
-  const [notes, setNotes] = useState("");
-  const [editableRationale, setEditableRationale] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Initialize editable rationale from AI context
-  useEffect(() => {
-    if (pendingContext?.aiReasoning) {
-      setEditableRationale(pendingContext.aiReasoning.substring(0, 500));
-    }
-  }, [pendingContext?.aiReasoning]);
-
-  // Extract company names from AI reasoning using known document titles + bold patterns
-  useEffect(() => {
-    if (!pendingContext?.aiReasoning) return;
-    const text = pendingContext.aiReasoning;
-
-    // Strategy 1: Match known company names from uploaded documents
-    const knownNames = documents
-      .map((d) => d.title?.trim())
-      .filter((t): t is string => !!t && t.length > 1 && t.length < 60);
-
-    // Find which known names appear in the AI text (case-insensitive)
-    const foundNames = knownNames.filter((name) =>
-      text.toLowerCase().includes(name.toLowerCase())
-    );
-
-    if (foundNames.length >= 2) {
-      setSourceCompany(foundNames[0]);
-      setTargetCompany(foundNames[1]);
-      return;
-    }
-
-    // Strategy 2: Extract **bold** company names from markdown (Claude often bolds company names)
-    const boldPattern = /\*\*([A-Z][a-zA-Z0-9 ]+?)\*\*/g;
-    const boldMatches: string[] = [];
-    let bm;
-    while ((bm = boldPattern.exec(text)) !== null) {
-      const name = bm[1].trim();
-      // Skip common non-company bold words
-      if (!/^(Note|Warning|Status|Connection|Type|Why|How|Key|Summary|Position|Duration|Schedule|Current|Potential|Recommended)$/i.test(name)) {
-        boldMatches.push(name);
-      }
-    }
-    if (boldMatches.length >= 2) {
-      setSourceCompany(boldMatches[0]);
-      setTargetCompany(boldMatches[1]);
-      return;
-    }
-
-    // Strategy 3: Look for "X → Y" or "X and Y" connection patterns
-    const arrowMatch = text.match(/([A-Z][a-zA-Z0-9 ]+?)\s*[→→>]\s*([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\()/);
-    if (arrowMatch) {
-      setSourceCompany(arrowMatch[1].trim());
-      setTargetCompany(arrowMatch[2].trim());
-      return;
-    }
-
-    // Strategy 4: Classic sentence patterns (broader than before)
-    const sentencePatterns = [
-      /connect(?:ing)?\s+([A-Z][a-zA-Z0-9 ]+?)\s+(?:to|with)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
-      /partner(?:ship)?\s+(?:between|with)\s+([A-Z][a-zA-Z0-9 ]+?)\s+(?:and|&)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
-      /([A-Z][a-zA-Z0-9 ]+?)\s+(?:could|should|would|can|might)\s+(?:partner|connect|collaborate|work)\s+with\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
-      /introduce\s+([A-Z][a-zA-Z0-9 ]+?)\s+to\s+([A-Z][a-zA-Z0-9 ]+?)(?:\s|$|\n|,|\.)/i,
-    ];
-    for (const pattern of sentencePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        setSourceCompany(match[1].trim());
-        setTargetCompany(match[2].trim());
-        return;
-      }
-    }
-
-    // Strategy 5: If we found exactly 1 known name, use it as source
-    if (foundNames.length === 1) {
-      setSourceCompany(foundNames[0]);
-      // Try to find one bold name that's different
-      const other = boldMatches.find((b) => b.toLowerCase() !== foundNames[0].toLowerCase());
-      if (other) setTargetCompany(other);
-    }
-  }, [pendingContext?.aiReasoning, documents]);
-
-  const handleSubmit = async () => {
-    if (!sourceCompany.trim() || !targetCompany.trim()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await onSubmit({
-        source_company_name: sourceCompany.trim(),
-        target_company_name: targetCompany.trim(),
-        source_document_id: sourceDocId === "none" ? null : sourceDocId,
-        target_document_id: targetDocId === "none" ? null : targetDocId,
-        connection_type: connectionType,
-        connection_status: connectionStatus,
-        ai_reasoning: editableRationale.trim() || pendingContext?.aiReasoning || null,
-        notes: notes.trim() || null,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4 py-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Source Company</Label>
-          <Input
-            value={sourceCompany}
-            onChange={(e) => setSourceCompany(e.target.value)}
-            placeholder="e.g., Ridelink"
-            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Target Company</Label>
-          <Input
-            value={targetCompany}
-            onChange={(e) => setTargetCompany(e.target.value)}
-            placeholder="e.g., Weego"
-            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Source Document (optional)</Label>
-          <Select value={sourceDocId} onValueChange={setSourceDocId}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
-              <SelectValue placeholder="Link to document..." />
-            </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
-              <SelectItem value="none" className="text-white font-mono">None</SelectItem>
-              {documents.map((doc) => (
-                <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
-                  {doc.title || "Untitled"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Target Document (optional)</Label>
-          <Select value={targetDocId} onValueChange={setTargetDocId}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
-              <SelectValue placeholder="Link to document..." />
-            </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
-              <SelectItem value="none" className="text-white font-mono">None</SelectItem>
-              {documents.filter((d) => d.id !== sourceDocId || sourceDocId === "none").map((doc) => (
-                <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
-                  {doc.title || "Untitled"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Connection Type</Label>
-          <Select value={connectionType} onValueChange={(v) => setConnectionType(v as ConnectionType)}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
-              <SelectItem value="BD" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  BD (Business Dev)
-                </span>
-              </SelectItem>
-              <SelectItem value="INV" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#FFED00]" />
-                  INV (Investment)
-                </span>
-              </SelectItem>
-              <SelectItem value="Knowledge" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                  Knowledge
-                </span>
-              </SelectItem>
-              <SelectItem value="Partnership" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  Partnership
-                </span>
-              </SelectItem>
-              <SelectItem value="Portfolio" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-500" />
-                  Portfolio
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold">Status</Label>
-          <Select value={connectionStatus} onValueChange={(v) => setConnectionStatus(v as ConnectionStatus)}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
-              <SelectItem value="To Connect" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <Clock className="h-3 w-3 text-yellow-500" />
-                  To Connect
-                </span>
-              </SelectItem>
-              <SelectItem value="In Progress" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-3 w-3 text-blue-500" />
-                  In Progress
-                </span>
-              </SelectItem>
-              <SelectItem value="Connected" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <CheckCircle className="h-3 w-3 text-green-500" />
-                  Connected
-                </span>
-              </SelectItem>
-              <SelectItem value="Rejected" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <AlertTriangle className="h-3 w-3 text-red-500" />
-                  Rejected
-                </span>
-              </SelectItem>
-              <SelectItem value="Completed" className="text-white font-mono">
-                <span className="flex items-center gap-2">
-                  <CheckCircle className="h-3 w-3 text-emerald-500" />
-                  Completed
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-white font-mono font-bold">Additional Notes</Label>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add any additional context..."
-          className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono min-h-[80px]"
-        />
-      </div>
-
-      {pendingContext?.aiReasoning && (
-        <div className="space-y-2">
-          <Label className="text-white font-mono font-bold text-xs">AI Rationale (editable — this is your decision record)</Label>
-          <Textarea
-            value={editableRationale}
-            onChange={(e) => setEditableRationale(e.target.value)}
-            className="border-2 border-white/30 bg-white/5 text-white/80 placeholder:text-white/30 font-mono text-xs min-h-[80px] max-h-[150px]"
-            placeholder="Edit the AI rationale to capture your reasoning..."
-          />
-          <p className="text-[10px] text-white/40 font-mono">
-            This rationale will be saved with the connection for your team's reference.
-          </p>
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2 pt-2">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          className="border-2 border-white bg-transparent text-white hover:bg-white/10 font-mono"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !sourceCompany.trim() || !targetCompany.trim()}
-          className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            <>
-              <Link2 className="h-4 w-4 mr-2" />
-              Log Connection
-            </>
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// Kanban Card Component — used inside the Kanban board columns
-function KanbanCard({
-  conn,
-  onUpdateStatus,
-  statusColor,
-}: {
-  conn: {
-    id: string;
-    source_company_name: string;
-    target_company_name: string;
-    connection_type: ConnectionType;
-    connection_status: ConnectionStatus;
-    ai_reasoning?: string | null;
-    notes?: string | null;
-    created_at: string;
-  };
-  onUpdateStatus: (id: string, status: ConnectionStatus) => Promise<void>;
-  statusColor: string;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const allStatuses: ConnectionStatus[] = ["To Connect", "In Progress", "Connected", "Rejected", "Completed"];
-  // Next logical status for quick-advance button
-  const statusOrder: ConnectionStatus[] = ["To Connect", "In Progress", "Connected", "Completed"];
-  const currentIdx = statusOrder.indexOf(conn.connection_status);
-  const nextStatus = currentIdx >= 0 && currentIdx < statusOrder.length - 1
-    ? statusOrder[currentIdx + 1]
-    : null;
-
-  return (
-    <div
-      className="rounded-md border border-white/20 bg-[#050505] p-2.5 cursor-pointer hover:border-[#FFED00] transition-all group"
-      onClick={() => setIsExpanded(!isExpanded)}
-    >
-      {/* Card Header */}
-      <div className="flex items-start justify-between gap-1">
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-mono font-bold text-white leading-tight truncate" title={conn.source_company_name}>
-            {conn.source_company_name}
-          </div>
-          <div className="text-[10px] text-white/40 font-mono">→</div>
-          <div className="text-xs font-mono font-bold text-white leading-tight truncate" title={conn.target_company_name}>
-            {conn.target_company_name}
-          </div>
-        </div>
-        <Badge
-          variant="outline"
-          className="text-[9px] px-1 py-0 border-white/30 bg-transparent font-mono shrink-0"
-          style={{ color: CONNECTION_TYPE_COLORS[conn.connection_type], borderColor: CONNECTION_TYPE_COLORS[conn.connection_type] }}
-        >
-          {conn.connection_type}
-        </Badge>
-      </div>
-
-      {/* Rationale preview */}
-      {conn.ai_reasoning && (
-        <p className="text-[10px] text-white/40 font-mono mt-1.5 line-clamp-2 leading-tight">
-          {conn.ai_reasoning.substring(0, 80)}{conn.ai_reasoning.length > 80 ? "..." : ""}
-        </p>
-      )}
-
-      {/* Expanded: show full rationale + status buttons */}
-      {isExpanded && (
-        <div className="mt-2 pt-2 border-t border-white/10 space-y-2" onClick={(e) => e.stopPropagation()}>
-          {conn.ai_reasoning && (
-            <p className="text-[10px] text-white/60 font-mono leading-relaxed whitespace-pre-wrap">
-              {conn.ai_reasoning}
-            </p>
-          )}
-          {conn.notes && (
-            <p className="text-[10px] text-white/50 font-mono italic">
-              Note: {conn.notes}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-1 mt-1">
-            {allStatuses
-              .filter((s) => s !== conn.connection_status)
-              .map((s) => (
-                <button
-                  key={s}
-                  className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-white/20 hover:bg-white/10 transition-colors"
-                  style={{ color: CONNECTION_STATUS_COLORS[s], borderColor: CONNECTION_STATUS_COLORS[s] + "60" }}
-                  onClick={() => onUpdateStatus(conn.id, s)}
-                >
-                  → {s}
-                </button>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Quick advance button (only if not expanded) */}
-      {!isExpanded && nextStatus && (
-        <div className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            className="w-full text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition-colors"
-            style={{
-              color: CONNECTION_STATUS_COLORS[nextStatus],
-              borderColor: CONNECTION_STATUS_COLORS[nextStatus] + "40",
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onUpdateStatus(conn.id, nextStatus);
-            }}
-          >
-            → {nextStatus}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// COMPANIES TAB — Auto-Created Company Cards
-// ============================================================================
-
-function CompaniesTab({
-  companyCards,
-  documents,
-  connections,
-  onOpenDocument,
-  onNavigateToConnections,
-  onUpdateCard,
-}: {
-  companyCards: Array<{
-    company_id: string;
-    company_name: string;
-    entity_type?: string;
-    company_properties: Record<string, any>;
-    document_count: number;
-    document_ids?: string[];
-    connection_count?: number;
-    connection_ids?: string[];
-    kpi_count?: number;
-    kpi_summary?: Record<string, any>;
-    relationship_count?: number;
-    related_companies?: string[];
-    created_at?: string;
-  }>;
-  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
-  connections: Array<{
-    id: string;
-    source_company_name: string;
-    target_company_name: string;
-    connection_type: ConnectionType;
-    connection_status: ConnectionStatus;
-  }>;
-  onOpenDocument: (id: string) => void;
-  onNavigateToConnections: () => void;
-  onUpdateCard: (entityId: string, properties: Record<string, any>) => Promise<void>;
-}) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<"all" | "company" | "fund">("all");
-  const [contentFilter, setContentFilter] = useState<"with_content" | "with_docs" | "all">("with_content");
-  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-
-  // Helper: does a card have meaningful content?
-  const cardHasContent = (card: typeof companyCards[0]) => {
-    const props = card.company_properties || {};
-    const hasBio = !!props.bio && props.bio.length > 0;
-    const hasIndustry = !!props.industry;
-    const hasFundingStage = !!props.funding_stage;
-    const hasHQ = !!props.headquarters;
-    const hasAmount = !!props.amount_seeking;
-    const filledFields = [hasBio, hasIndustry, hasFundingStage, hasHQ, hasAmount].filter(Boolean).length;
-    return card.document_count > 0 || filledFields >= 2;
-  };
-
-  const companyCounts = useMemo(() => {
-    const companies = companyCards.filter((c) => (c.entity_type || "company") === "company").length;
-    const funds = companyCards.filter((c) => c.entity_type === "fund").length;
-    const withContent = companyCards.filter(cardHasContent).length;
-    const withDocs = companyCards.filter((c) => c.document_count > 0).length;
-    return { companies, funds, total: companyCards.length, withContent, withDocs };
-  }, [companyCards]);
-  
-  const filteredCards = useMemo(() => {
-    let cards = companyCards;
-    // Content filter applies to all cards equally (no "primary" card; every card must pass)
-    if (contentFilter === "with_content") {
-      cards = cards.filter(cardHasContent);
-    } else if (contentFilter === "with_docs") {
-      cards = cards.filter((c) => c.document_count > 0);
-    }
-    if (filterType !== "all") {
-      cards = cards.filter((c) => (c.entity_type || "company") === filterType);
-    }
-    if (!searchQuery.trim()) return cards;
-    const q = searchQuery.toLowerCase();
-    return cards.filter(
-      (card) =>
-        card.company_name.toLowerCase().includes(q) ||
-        (card.company_properties?.bio || "").toLowerCase().includes(q) ||
-        (card.company_properties?.funding_stage || "").toLowerCase().includes(q) ||
-        (card.company_properties?.geo_focus || []).some((g: string) => g.toLowerCase().includes(q)) ||
-        (card.company_properties?.industry_preferences || []).some((g: string) => g.toLowerCase().includes(q)) ||
-        (card.company_properties?.industry || "").toLowerCase().includes(q) ||
-        (card.related_companies || []).some((c: string) => c.toLowerCase().includes(q))
-    );
-  }, [companyCards, searchQuery, filterType, contentFilter]);
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-mono font-black uppercase tracking-tight text-white">
-            Entity Cards
-          </h2>
-          <p className="text-sm text-white/70 font-mono mt-1">
-            Auto-created from documents & CSV imports • {companyCounts.companies} companies • {companyCounts.funds} investors/funds
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {/* Filter pills */}
-          <div className="flex border-2 border-white rounded-md overflow-hidden">
-            {(["all", "company", "fund"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilterType(t)}
-                className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
-                  filterType === t
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white hover:bg-white/10"
-                }`}
-              >
-                {t === "all" ? `All (${companyCounts.total})` : t === "company" ? `Companies (${companyCounts.companies})` : `Funds (${companyCounts.funds})`}
-              </button>
-            ))}
-          </div>
-          {/* Content filter */}
-          <div className="flex border-2 border-white/40 rounded-md overflow-hidden">
-            {([
-              { key: "with_content" as const, label: `With Content (${companyCounts.withContent})` },
-              { key: "with_docs" as const, label: `With Docs (${companyCounts.withDocs})` },
-              { key: "all" as const, label: `All (${companyCounts.total})` },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setContentFilter(key)}
-                className={`px-3 py-1.5 text-xs font-mono font-bold transition-colors ${
-                  contentFilter === key
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/70 hover:bg-white/10"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {/* View toggle */}
-          <div className="flex border-2 border-white rounded-md overflow-hidden">
-            {(["cards", "table"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
-                className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
-                  viewMode === v
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white hover:bg-white/10"
-                }`}
-              >
-                {v === "cards" ? "Cards" : "Table"}
-              </button>
-            ))}
-          </div>
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-48 border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
-          />
-          <Button
-            onClick={onNavigateToConnections}
-            variant="outline"
-            className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
-          >
-            <Link2 className="h-4 w-4 mr-2" />
-            Connections
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      {filteredCards.length === 0 ? (
-        <Card className="border-2 border-white bg-transparent">
-          <CardContent className="p-12 text-center">
-            <Building2 className="h-16 w-16 mx-auto mb-4 text-white/30" />
-            <p className="text-white/70 font-mono font-bold mb-2">
-              {searchQuery ? "No entities match your search" : "No entity cards yet"}
-            </p>
-            <p className="text-sm text-white/50 font-mono">
-              {searchQuery
-                ? "Try a different search term"
-                : "Upload documents or CSV files to automatically create entity cards"}
-            </p>
-          </CardContent>
-        </Card>
-      ) : viewMode === "table" ? (
-        /* ── TABLE VIEW ── */
-        <Card className="border-2 border-white bg-transparent overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm font-mono">
-              <thead>
-                <tr className="border-b-2 border-white/30 bg-white/5">
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Name</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Type</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Industry</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Stage</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">ARR</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Market</th>
-                  <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">HQ</th>
-                  <th className="text-right p-3 text-white/70 font-bold uppercase text-xs">Docs</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCards.map((card) => {
-                  const props = card.company_properties || {};
-                  const isFund = (card.entity_type || "company") === "fund";
-                  const geos = (props.geo_focus || props.geo_markets || []) as string[];
-                  const chequeOrStage = isFund
-                    ? props.cheque_size || ""
-                    : props.funding_stage || "";
-                  return (
-                    <tr
-                      key={card.company_id}
-                      className="border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
-                      onClick={() =>
-                        setExpandedCardId(
-                          expandedCardId === card.company_id ? null : card.company_id
-                        )
-                      }
-                    >
-                      <td className="p-3 text-white font-bold">
-                        <div>{card.company_name}</div>
-                        {props.bio && <div className="text-[10px] text-white/40 truncate max-w-[200px] mt-0.5">{props.bio}</div>}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant="outline" className={`text-xs font-mono ${isFund ? "border-blue-400 text-blue-400" : "border-green-400 text-green-400"}`}>
-                          {isFund ? "Fund" : "Company"}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-white/70 max-w-[120px] truncate">
-                        {props.industry || "—"}
-                      </td>
-                      <td className="p-3 text-white/70">{chequeOrStage || "—"}</td>
-                      <td className="p-3 text-white/70">{props.arr || props.mrr || "—"}</td>
-                      <td className="p-3 text-white/70 max-w-[150px] truncate">
-                        {geos.slice(0, 3).join(", ") || "—"}
-                      </td>
-                      <td className="p-3 text-white/70 max-w-[120px] truncate">{props.headquarters || "—"}</td>
-                      <td className="p-3 text-right text-white/70">{card.document_count || 0}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : (
-        /* ── CARD VIEW ── */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredCards.map((card) => (
-            <CompanyCard
-              key={card.company_id}
-              card={card}
-              documents={documents}
-              connections={connections}
-              onOpenDocument={onOpenDocument}
-              isExpanded={expandedCardId === card.company_id}
-              onToggleExpand={() =>
-                setExpandedCardId(
-                  expandedCardId === card.company_id ? null : card.company_id
-                )
-              }
-              onUpdateCard={onUpdateCard}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Editable field component ──
-function EditableField({
-  label,
-  value,
-  placeholder,
-  icon: Icon,
-  onSave,
-  multiline = false,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  icon?: any;
-  onSave: (val: string) => void;
-  multiline?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => { setDraft(value); }, [value]);
-
-  if (editing) {
-    return (
-      <div className="space-y-1">
-        <div className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">
-          {label}
-        </div>
-        {multiline ? (
-          <Textarea
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => { onSave(draft); setEditing(false); }}
-            onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
-            placeholder={placeholder}
-            className="min-h-[56px] text-xs font-mono border-[#FFED00] bg-black/50 text-white resize-none"
-          />
-        ) : (
-          <Input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => { onSave(draft); setEditing(false); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { onSave(draft); setEditing(false); }
-              if (e.key === "Escape") { setDraft(value); setEditing(false); }
-            }}
-            placeholder={placeholder}
-            className="h-7 text-xs font-mono border-[#FFED00] bg-black/50 text-white"
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setEditing(true)}
-      className="w-full text-left group"
-    >
-      <div className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-wider">
-        {label}
-      </div>
-      <div className="flex items-center gap-1.5 mt-0.5">
-        {Icon && <Icon className="h-3 w-3 text-white/40 flex-shrink-0" />}
-        <span className={`text-xs font-mono ${value ? "text-white/80" : "text-white/30 italic"} group-hover:text-[#FFED00] transition-colors`}>
-          {value || placeholder}
-        </span>
-        <Pencil className="h-2.5 w-2.5 text-white/20 group-hover:text-[#FFED00] ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-    </button>
-  );
-}
-
-// ── Individual Company Card Component (Rich & Editable) ──
-function CompanyCard({
-  card,
-  documents,
-  connections,
-  onOpenDocument,
-  isExpanded,
-  onToggleExpand,
-  onUpdateCard,
-}: {
-  card: {
-    company_id: string;
-    company_name: string;
-    entity_type?: string;
-    company_properties: Record<string, any>;
-    document_count: number;
-    document_ids?: string[];
-    connection_count?: number;
-    connection_ids?: string[];
-    kpi_count?: number;
-    kpi_summary?: Record<string, any>;
-    relationship_count?: number;
-    related_companies?: string[];
-    created_at?: string;
-  };
-  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
-  connections: Array<{
-    id: string;
-    source_company_name: string;
-    target_company_name: string;
-    connection_type: ConnectionType;
-    connection_status: ConnectionStatus;
-  }>;
-  onOpenDocument: (id: string) => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-  onUpdateCard: (entityId: string, properties: Record<string, any>) => Promise<void>;
-}) {
-  const props = card.company_properties || {};
-  const isFund = (card.entity_type || "company") === "fund";
-  const companyDocs = documents.filter((d) => (card.document_ids || []).includes(d.id));
-  const companyConnections = connections.filter(
-    (c) =>
-      c.source_company_name === card.company_name ||
-      c.target_company_name === card.company_name
-  );
-
-  const saveField = (field: string, value: string) => {
-    onUpdateCard(card.company_id, { [field]: value });
-  };
-
-  // Determine stage color / type color
-  const stageColors: Record<string, string> = {
-    "pre-seed": "#a78bfa",
-    "seed": "#34d399",
-    "series a": "#60a5fa",
-    "series b": "#f59e0b",
-    "series c": "#ef4444",
-    "growth": "#ec4899",
-  };
-  const stageKey = (props.funding_stage || "").toLowerCase();
-  const stageColor = stageColors[stageKey] || "#FFED00";
-  const typeColor = isFund ? "#60a5fa" : "#34d399";
-
-  // Parse founders from JSONB
-  let founders: Array<{ name: string; role: string; linkedin: string; pedigree: string; background: string }> = [];
-  try {
-    if (typeof props.founders === "string") founders = JSON.parse(props.founders);
-    else if (Array.isArray(props.founders)) founders = props.founders;
-  } catch { /* ignore */ }
-
-  // Parse competitors from JSONB
-  let competitors: Array<{ name: string; differentiator: string }> = [];
-  try {
-    if (typeof props.competitors === "string") competitors = JSON.parse(props.competitors);
-    else if (Array.isArray(props.competitors)) competitors = props.competitors;
-  } catch { /* ignore */ }
-
-  // Fund-specific fields
-  const geoFocus = (props.geo_focus || []) as string[];
-  const industryPrefs = (props.industry_preferences || []) as string[];
-  const teamMembers = (props.team_members || []) as string[];
-  const chequeSize = props.cheque_size || "";
-  const keyPartnerships = (props.key_partnerships || []) as string[];
-  const geoMarkets = (props.geo_markets || []) as string[];
-
-  // Property tracking
-  const propertySources: Record<string, { document_id: string; confidence: number; extracted_at: string }> = props._property_sources || {};
-  const propertyConflicts: Array<{ field: string; values: Array<{ value: any; source: string; confidence?: number }>; detected_at: string }> = props._property_conflicts || [];
-  const hasConflicts = propertyConflicts.length > 0;
-
-  // Auto-resolve existing conflicts: apply highest-confidence value per field and persist (no manual UI)
-  useEffect(() => {
-    if (!hasConflicts || propertyConflicts.length === 0) return;
-    const updates: Record<string, any> = {};
-    for (const c of propertyConflicts) {
-      const withConf = c.values.map((v) => ({
-        ...v,
-        confidence: v.confidence ?? propertySources[c.field]?.confidence ?? 0,
-      }));
-      const best = [...withConf].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
-      if (best) updates[c.field] = best.value;
-    }
-    if (Object.keys(updates).length > 0) {
-      onUpdateCard(card.company_id, { ...updates, _property_conflicts: [] });
-    }
-  }, [hasConflicts]); // eslint-disable-line react-hooks/exhaustive-deps -- run once when card has conflicts to auto-resolve
-
-  // Count auto-filled properties
-  const autoFilledCount = Object.keys(propertySources).length;
-
-  return (
-    <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
-      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
-    }`}>
-      {/* ── A. Header: Identity ── */}
-      <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
-        <div className="flex items-start gap-3">
-          {/* Logo / type icon */}
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/20"
-            style={{ backgroundColor: typeColor + "15" }}>
-            {props.logo_url ? (
-              <img src={props.logo_url} alt="" className="w-8 h-8 rounded object-cover" />
-            ) : isFund ? (
-              <DollarSign className="h-5 w-5" style={{ color: typeColor }} />
-            ) : (
-              <Building2 className="h-5 w-5" style={{ color: typeColor }} />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-base font-mono font-black text-white truncate">
-                {card.company_name}
-              </CardTitle>
-              <Badge variant="outline" className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0"
-                style={{ borderColor: typeColor, color: typeColor }}>
-                {isFund ? "FUND" : "COMPANY"}
-              </Badge>
-              {autoFilledCount > 0 && (
-                <Badge className="text-[9px] font-mono font-bold px-1.5 py-0 flex-shrink-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/40">
-                  <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                  {autoFilledCount} auto-filled
-                </Badge>
-              )}
-            </div>
-            <p className={`text-xs font-mono mt-0.5 ${props.bio ? "text-white/60" : "text-white/30 italic"} line-clamp-1`}>
-              {props.bio || (isFund && geoFocus.length ? geoFocus.slice(0, 3).join(", ") : "Click to add one-sentence bio...")}
-            </p>
-            {/* Quick meta tags */}
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {props.industry && (
-                <span className="text-[9px] font-mono text-white/40 bg-white/5 px-1.5 py-0.5 rounded">{props.industry}</span>
-              )}
-              {props.headquarters && (
-                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
-                  <MapPin className="h-2.5 w-2.5" />{props.headquarters}
-                </span>
-              )}
-              {props.founded_year && (
-                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
-                  <Calendar className="h-2.5 w-2.5" />{props.founded_year}
-                </span>
-              )}
-              {props.team_size && (
-                <span className="text-[9px] font-mono text-white/40 flex items-center gap-0.5">
-                  <Users className="h-2.5 w-2.5" />{props.team_size} people
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {!isFund && props.funding_stage && (
-              <Badge
-                className="text-[10px] font-mono font-bold border-0 px-2 py-0.5"
-                style={{ backgroundColor: stageColor + "20", color: stageColor }}
-              >
-                {props.funding_stage}
-              </Badge>
-            )}
-            {isFund && chequeSize && (
-              <Badge className="text-[10px] font-mono font-bold border-0 px-2 py-0.5 bg-blue-500/20 text-blue-400">
-                {chequeSize}
-              </Badge>
-            )}
-            <ChevronDown className={`h-4 w-4 text-white/40 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="pt-3 space-y-3">
-        {/* Quick info row (always visible) */}
-        {isFund ? (
-          /* Fund quick info: geo, verticals, team */
-          <div className="space-y-2">
-            {geoFocus.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <Globe className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
-                {geoFocus.slice(0, 6).map((g) => (
-                  <Badge key={g} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">
-                    {g}
-                  </Badge>
-                ))}
-                {geoFocus.length > 6 && <span className="text-[9px] text-white/40 font-mono">+{geoFocus.length - 6}</span>}
-              </div>
-            )}
-            {industryPrefs.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <Target className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
-                {industryPrefs.slice(0, 5).map((v) => (
-                  <Badge key={v} variant="outline" className="text-[9px] font-mono text-[#FFED00]/80 border-[#FFED00]/30 px-1.5 py-0">
-                    {v}
-                  </Badge>
-                ))}
-                {industryPrefs.length > 5 && <span className="text-[9px] text-white/40 font-mono">+{industryPrefs.length - 5}</span>}
-              </div>
-            )}
-            {teamMembers.length > 0 && (
-              <div className="flex flex-wrap gap-1 items-center">
-                <Users className="h-3 w-3 text-white/40 flex-shrink-0" />
-                <span className="text-[10px] text-white/60 font-mono">
-                  {teamMembers.join(", ")}
-                </span>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Company quick info: stats row */
-          <div className="grid grid-cols-4 gap-1 text-center">
-            {[
-              { val: card.document_count || 0, label: "Docs", icon: FileText },
-              { val: card.connection_count || 0, label: "Links", icon: Link2 },
-              { val: card.kpi_count || 0, label: "KPIs", icon: BarChart3 },
-              { val: card.relationship_count || 0, label: "Rels", icon: Users },
-            ].map(({ val, label, icon: Ic }) => (
-              <div key={label}>
-                <div className="text-lg font-mono font-black text-[#FFED00]">{val}</div>
-                <div className="flex items-center justify-center gap-1">
-                  <Ic className="h-2.5 w-2.5 text-white/40" />
-                  <span className="text-[10px] text-white/50 font-mono">{label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Expanded view ── */}
-        {isExpanded && (
-          <div className="space-y-4 pt-2 border-t border-white/10">
-            {/* B. Fund Details OR Investment Snapshot (company) */}
-            {isFund ? (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Fund Details</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                  <EditableField label="Cheque Size Range" value={chequeSize || ""} placeholder="e.g. $500K - $1M" icon={DollarSign} onSave={(v) => saveField("cheque_size", v)} />
-                  <EditableField label="Min Ticket Size" value={props.min_ticket_size ? `$${(props.min_ticket_size / 1000).toFixed(0)}K` : ""} placeholder="e.g. $100K" icon={TrendingDown} onSave={(v) => {
-                    const num = parseInt(v.replace(/[^0-9]/g, '')) || 0;
-                    saveField("min_ticket_size", num.toString());
-                  }} />
-                  <EditableField label="Max Ticket Size" value={props.max_ticket_size ? `$${(props.max_ticket_size / 1000000).toFixed(1)}M` : ""} placeholder="e.g. $5M" icon={TrendingUp} onSave={(v) => {
-                    const num = parseInt(v.replace(/[^0-9]/g, '')) || 0;
-                    saveField("max_ticket_size", num.toString());
-                  }} />
-                  <EditableField label="Fund Stage" value={props.fund_stage || ""} placeholder="e.g. Fund I, Fund II" icon={Rocket} onSave={(v) => saveField("fund_stage", v)} />
-                  <EditableField label="AUM / Fund Size" value={props.aum || ""} placeholder="e.g. $50M" icon={BarChart3} onSave={(v) => saveField("aum", v)} />
-                  <EditableField label="Portfolio Companies" value={props.portfolio_count ? props.portfolio_count.toString() : ""} placeholder="e.g. 25" icon={Building2} onSave={(v) => saveField("portfolio_count", v)} />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Investment Snapshot</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                  <EditableField label="Funding Stage" value={props.funding_stage || ""} placeholder="e.g. Seed, Series A" icon={Rocket} onSave={(v) => saveField("funding_stage", v)} />
-                  <EditableField label="Amount Seeking" value={props.amount_seeking || ""} placeholder="e.g. $2M" icon={DollarSign} onSave={(v) => saveField("amount_seeking", v)} />
-                  <EditableField label="Valuation" value={props.valuation || ""} placeholder="e.g. $10M pre-money" icon={TrendingUp} onSave={(v) => saveField("valuation", v)} />
-                  <EditableField label="ARR" value={props.arr || ""} placeholder="e.g. $500K" icon={BarChart3} onSave={(v) => saveField("arr", v)} />
-                  <EditableField label="MRR" value={props.mrr || ""} placeholder="e.g. $40K" icon={BarChart3} onSave={(v) => saveField("mrr", v)} />
-                  <EditableField label="Burn Rate" value={props.burn_rate || ""} placeholder="e.g. $80K/mo" icon={TrendingDown} onSave={(v) => saveField("burn_rate", v)} />
-                  <EditableField label="Runway" value={props.runway_months || ""} placeholder="e.g. 18 months" icon={Clock} onSave={(v) => saveField("runway_months", v)} />
-                  <EditableField label="Use of Funds" value={props.use_of_funds || ""} placeholder="e.g. 40% product, 30% growth, 30% ops" icon={PieChart} onSave={(v) => saveField("use_of_funds", v)} />
-                </div>
-              </div>
-            )}
-
-            {/* One-Sentence Bio */}
-            <EditableField label="One-Sentence Bio" value={props.bio || ""} placeholder="High-level pitch, e.g. 'AI-powered logistics for MENA'" icon={Sparkles} onSave={(v) => saveField("bio", v)} multiline />
-
-            {/* C. Market & Product */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Market & Product</span>
-              </div>
-              <div className="space-y-2 pl-1">
-                <EditableField label="Problem" value={props.problem || ""} placeholder="What gap exists in the market?" onSave={(v) => saveField("problem", v)} multiline />
-                <EditableField label="Solution" value={props.solution || ""} placeholder="How do they fix it?" onSave={(v) => saveField("solution", v)} multiline />
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <EditableField label="TAM" value={props.tam || ""} placeholder="e.g. $4.5B" icon={PieChart} onSave={(v) => saveField("tam", v)} />
-                  <EditableField label="SAM" value={props.sam || ""} placeholder="e.g. $1.2B" icon={PieChart} onSave={(v) => saveField("sam", v)} />
-                  <EditableField label="SOM" value={props.som || ""} placeholder="e.g. $200M" icon={PieChart} onSave={(v) => saveField("som", v)} />
-                  <EditableField label="Market Growth Rate" value={props.market_growth_rate || ""} placeholder="e.g. 25% CAGR" icon={TrendingUp} onSave={(v) => saveField("market_growth_rate", v)} />
-                </div>
-                <EditableField label="Competitive Edge / Moat" value={props.competitive_edge || ""} placeholder="Why they win — unfair advantage" icon={Award} onSave={(v) => saveField("competitive_edge", v)} multiline />
-              </div>
-            </div>
-
-            {/* Business Model & GTM */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <ShoppingCart className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Business Model & GTM</span>
-              </div>
-              <div className="space-y-2 pl-1">
-                <EditableField label="Business Model" value={props.business_model || ""} placeholder="How the company makes money (SaaS, marketplace, etc.)" onSave={(v) => saveField("business_model", v)} multiline />
-                <EditableField label="Revenue Model" value={props.revenue_model || ""} placeholder="Revenue streams and pricing model" onSave={(v) => saveField("revenue_model", v)} multiline />
-                <EditableField label="Pricing" value={props.pricing || ""} placeholder="Pricing tiers or strategy" onSave={(v) => saveField("pricing", v)} />
-                <EditableField label="GTM Strategy" value={props.gtm_strategy || ""} placeholder="Go-to-market approach, channels, customer acquisition" icon={Megaphone} onSave={(v) => saveField("gtm_strategy", v)} multiline />
-              </div>
-            </div>
-
-            {/* Unit Economics */}
-            {(props.cac || props.ltv || props.ltv_cac_ratio || props.gross_margin || props.net_margin || props.churn_rate || props.payback_period) ? (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Percent className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Unit Economics</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                  <EditableField label="CAC" value={props.cac || ""} placeholder="e.g. $50" icon={DollarSign} onSave={(v) => saveField("cac", v)} />
-                  <EditableField label="LTV" value={props.ltv || ""} placeholder="e.g. $500" icon={DollarSign} onSave={(v) => saveField("ltv", v)} />
-                  <EditableField label="LTV:CAC Ratio" value={props.ltv_cac_ratio || ""} placeholder="e.g. 10:1" icon={TrendingUp} onSave={(v) => saveField("ltv_cac_ratio", v)} />
-                  <EditableField label="Payback Period" value={props.payback_period || ""} placeholder="e.g. 3 months" icon={Clock} onSave={(v) => saveField("payback_period", v)} />
-                  <EditableField label="Gross Margin" value={props.gross_margin || ""} placeholder="e.g. 70%" icon={Percent} onSave={(v) => saveField("gross_margin", v)} />
-                  <EditableField label="Net Margin" value={props.net_margin || ""} placeholder="e.g. 15%" icon={Percent} onSave={(v) => saveField("net_margin", v)} />
-                  <EditableField label="Churn Rate" value={props.churn_rate || ""} placeholder="e.g. 3% monthly" icon={Repeat} onSave={(v) => saveField("churn_rate", v)} />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Percent className="h-3.5 w-3.5 text-white/30" />
-                  <span className="text-xs font-mono font-bold text-white/30 uppercase tracking-wider">Unit Economics</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                  <EditableField label="CAC" value="" placeholder="e.g. $50" icon={DollarSign} onSave={(v) => saveField("cac", v)} />
-                  <EditableField label="LTV" value="" placeholder="e.g. $500" icon={DollarSign} onSave={(v) => saveField("ltv", v)} />
-                  <EditableField label="LTV:CAC Ratio" value="" placeholder="e.g. 10:1" icon={TrendingUp} onSave={(v) => saveField("ltv_cac_ratio", v)} />
-                  <EditableField label="Gross Margin" value="" placeholder="e.g. 70%" icon={Percent} onSave={(v) => saveField("gross_margin", v)} />
-                  <EditableField label="Churn Rate" value="" placeholder="e.g. 3% monthly" icon={Repeat} onSave={(v) => saveField("churn_rate", v)} />
-                </div>
-              </div>
-            )}
-
-            {/* Traction */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Zap className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Traction</span>
-              </div>
-              <div className="space-y-2 pl-1">
-                <EditableField label="Traction Summary" value={props.traction || ""} placeholder="Key milestones, user counts, revenue highlights" onSave={(v) => saveField("traction", v)} multiline />
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <EditableField label="Customers / Users" value={props.customers_count || ""} placeholder="e.g. 10K users" icon={Users} onSave={(v) => saveField("customers_count", v)} />
-                  <EditableField label="Growth Rate" value={props.growth_rate || ""} placeholder="e.g. 20% MoM" icon={TrendingUp} onSave={(v) => saveField("growth_rate", v)} />
-                  {props.gmv && <EditableField label="GMV" value={props.gmv || ""} placeholder="e.g. $5M" icon={DollarSign} onSave={(v) => saveField("gmv", v)} />}
-                </div>
-              </div>
-            </div>
-
-            {/* Competitors */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Competitors</span>
-              </div>
-              {competitors.length > 0 ? (
-                <div className="space-y-1.5 pl-1">
-                  {competitors.map((c, i) => (
-                    <div key={i} className="text-xs font-mono bg-white/5 rounded-md px-2 py-1.5">
-                      <span className="text-white font-bold">{c.name}</span>
-                      {c.differentiator && (
-                        <span className="text-white/50"> — {c.differentiator}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-white/30 italic font-mono pl-1">No competitors extracted — enrich from deck or add manually</p>
-              )}
-            </div>
-
-            {/* D. Team / Founders */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Users className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Team</span>
-                {props.team_size && <span className="text-[9px] font-mono text-white/40">({props.team_size} employees)</span>}
-              </div>
-              {founders.length > 0 ? (
-                <div className="space-y-2 pl-1">
-                  {founders.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs font-mono bg-white/5 rounded-md px-2 py-1.5">
-                      <Briefcase className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div>
-                          <span className="text-white font-bold">{f.name}</span>
-                          {f.role && <span className="text-white/50"> — {f.role}</span>}
-                          {(f.pedigree || f.background) && (
-                            <Badge className="ml-1.5 text-[9px] bg-white/10 text-white/70 border-0 py-0">{f.pedigree || f.background}</Badge>
-                          )}
-                        </div>
-                        {f.linkedin && (
-                          <a href={f.linkedin.startsWith("http") ? f.linkedin : `https://${f.linkedin}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-0.5 text-blue-400 hover:text-blue-300 text-[10px]">
-                            <Linkedin className="h-3 w-3" /> LinkedIn
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-white/30 italic font-mono pl-1">
-                  No founders extracted yet — enrich from pitch deck or add manually
-                </p>
-              )}
-            </div>
-
-            {/* Geo Markets */}
-            {geoMarkets.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Target Markets</span>
-                </div>
-                <div className="flex flex-wrap gap-1 pl-1">
-                  {geoMarkets.map((g, i) => (
-                    <Badge key={i} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">{g}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Key Partnerships */}
-            {keyPartnerships.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Handshake className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Key Partnerships</span>
-                </div>
-                <div className="flex flex-wrap gap-1 pl-1">
-                  {keyPartnerships.map((p, i) => (
-                    <Badge key={i} variant="outline" className="text-[9px] font-mono text-white/70 border-white/20 px-1.5 py-0">{p}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Awards & Recognition */}
-            {props.awards_recognition && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Trophy className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Awards & Recognition</span>
-                </div>
-                <p className="text-xs font-mono text-white/60 pl-1">{props.awards_recognition}</p>
-              </div>
-            )}
-
-            {/* E. AI Rationale */}
-            <EditableField label="AI Rationale — Why this deal?" value={props.ai_rationale || ""} placeholder="Auto-filled when AI analyzes this company's documents" icon={Sparkles} onSave={(v) => saveField("ai_rationale", v)} multiline />
-
-            {/* Contact & Social */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Contact & Social</span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-                <EditableField label="Website" value={props.website || ""} placeholder="https://..." icon={Globe} onSave={(v) => saveField("website", v)} />
-                <EditableField label="Email" value={props.email || ""} placeholder="hello@company.com" icon={Mail} onSave={(v) => saveField("email", v)} />
-                <EditableField label="Phone" value={props.phone || ""} placeholder="+1 (555) 123-4567" icon={Phone} onSave={(v) => saveField("phone", v)} />
-                <EditableField label="LinkedIn" value={props.linkedin_url || ""} placeholder="https://linkedin.com/company/..." icon={Linkedin} onSave={(v) => saveField("linkedin_url", v)} />
-                <EditableField label="Twitter / X" value={props.twitter_url || ""} placeholder="@handle or URL" icon={Twitter} onSave={(v) => saveField("twitter_url", v)} />
-                <EditableField label="Logo URL" value={props.logo_url || ""} placeholder="https://logo.png" onSave={(v) => saveField("logo_url", v)} />
-              </div>
-              {/* Quick social links row */}
-              {(props.website || props.linkedin_url || props.twitter_url || props.email) && (
-                <div className="flex items-center gap-3 mt-2 pl-1">
-                  {props.website && (
-                    <a href={props.website.startsWith("http") ? props.website : `https://${props.website}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-[#FFED00] transition-colors" title={props.website}>
-                      <Globe className="h-4 w-4" />
-                    </a>
-                  )}
-                  {props.linkedin_url && (
-                    <a href={props.linkedin_url.startsWith("http") ? props.linkedin_url : `https://${props.linkedin_url}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-blue-400 transition-colors" title="LinkedIn">
-                      <Linkedin className="h-4 w-4" />
-                    </a>
-                  )}
-                  {props.twitter_url && (
-                    <a href={props.twitter_url.startsWith("http") ? props.twitter_url : `https://twitter.com/${props.twitter_url.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-sky-400 transition-colors" title="Twitter / X">
-                      <Twitter className="h-4 w-4" />
-                    </a>
-                  )}
-                  {props.email && (
-                    <a href={`mailto:${props.email}`} className="text-white/50 hover:text-emerald-400 transition-colors" title={props.email}>
-                      <Mail className="h-4 w-4" />
-                    </a>
-                  )}
-                  {props.phone && (
-                    <a href={`tel:${props.phone}`} className="text-white/50 hover:text-emerald-400 transition-colors" title={props.phone}>
-                      <Phone className="h-4 w-4" />
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Company Details */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
-              <EditableField label="Founded Year" value={props.founded_year || ""} placeholder="e.g. 2022" icon={Calendar} onSave={(v) => saveField("founded_year", v)} />
-              <EditableField label="Headquarters" value={props.headquarters || ""} placeholder="e.g. San Francisco, CA" icon={MapPin} onSave={(v) => saveField("headquarters", v)} />
-              <EditableField label="Team Size" value={props.team_size || ""} placeholder="e.g. 25 employees" icon={Users} onSave={(v) => saveField("team_size", v)} />
-              <EditableField label="Industry" value={props.industry || ""} placeholder="e.g. Fintech, SaaS" icon={Building2} onSave={(v) => saveField("industry", v)} />
-            </div>
-
-            {/* Property Sources (auto-fill info) */}
-            {autoFilledCount > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
-                    Auto-filled from {autoFilledCount} field{autoFilledCount > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1 pl-1">
-                  {Object.entries(propertySources).map(([field, source]) => {
-                    const doc = documents.find((d) => d.id === source.document_id);
-                    const conf = source.confidence || 0;
-                    return (
-                      <TooltipProvider key={field}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge
-                              variant="outline"
-                              className={`text-[9px] font-mono px-1.5 py-0 cursor-help ${
-                                conf >= 0.8
-                                  ? "border-emerald-500/30 text-emerald-400/80"
-                                  : conf >= 0.5
-                                  ? "border-yellow-500/30 text-yellow-400/80"
-                                  : "border-red-500/30 text-red-400/80"
-                              }`}
-                            >
-                              {field.replace(/_/g, " ")}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs font-mono max-w-xs">
-                            <p>Source: {doc?.title || source.document_id?.slice(0, 8) || "unknown"}</p>
-                            <p>Confidence: {(conf * 100).toFixed(0)}%</p>
-                            {source.extracted_at && <p>Extracted: {new Date(source.extracted_at).toLocaleDateString()}</p>}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <Separator className="bg-white/10" />
-
-            {/* Documents List */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <FileText className="h-3.5 w-3.5 text-[#FFED00]" />
-                <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
-                  Source Documents ({companyDocs.length})
-                </span>
-              </div>
-              {companyDocs.length > 0 ? (
-                <div className="space-y-1">
-                  {companyDocs.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={(e) => { e.stopPropagation(); onOpenDocument(doc.id); }}
-                      className="w-full text-left text-xs font-mono text-white/70 hover:text-[#FFED00] hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
-                      title={doc.title || "Untitled"}
-                    >
-                      <FileText className="h-3 w-3 inline mr-1.5" />
-                      {doc.title || "Untitled"}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-white/30 italic font-mono pl-1">No documents linked yet</p>
-              )}
-            </div>
-
-            {/* Connections */}
-            {companyConnections.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Link2 className="h-3.5 w-3.5 text-[#FFED00]" />
-                  <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
-                    Connections ({companyConnections.length})
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {companyConnections.map((conn) => {
-                    const other =
-                      conn.source_company_name === card.company_name
-                        ? conn.target_company_name
-                        : conn.source_company_name;
-                    return (
-                      <div key={conn.id} className="text-xs font-mono text-white/60 px-2 py-1 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status] }} />
-                        <span className="truncate flex-1">{other}</span>
-                        <Badge variant="outline" className="text-[9px] border-white/20 text-white/40 bg-transparent py-0">
-                          {conn.connection_type} · {conn.connection_status}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Related Companies */}
-            {(card.related_companies || []).length > 0 && (
-              <div>
-                <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
-                  Related Entities ({card.relationship_count || 0})
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {(card.related_companies || []).map((name, idx) => (
-                    <Badge key={idx} variant="outline" className="text-[10px] border-white/20 text-white/60 bg-transparent font-mono">
-                      {name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* KPIs */}
-            {(card.kpi_count || 0) > 0 && Object.keys(card.kpi_summary || {}).length > 0 && (
-              <div>
-                <div className="text-xs font-mono font-bold text-white/50 mb-1.5 uppercase tracking-wider">
-                  Extracted KPIs
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  {Object.entries(card.kpi_summary || {}).map(([metric, data]: [string, any]) => (
-                    <div key={metric} className="text-xs font-mono text-white/60 px-1">
-                      <span className="font-bold text-white/80">{metric}:</span>{" "}
-                      {typeof data.value === "number" ? data.value.toLocaleString() : data.value}{" "}
-                      <span className="text-white/40">{data.unit || ""}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// Connections Graph Tab Component
-const CONNECTION_TYPE_COLORS: Record<ConnectionType, string> = {
-  BD: "#22c55e",        // green
-  INV: "#FFED00",       // yellow (CIS brand)
-  Knowledge: "#6366f1", // indigo
-  Partnership: "#a855f7", // purple
-  Portfolio: "#06b6d4",  // cyan
-};
-
-const CONNECTION_STATUS_COLORS: Record<ConnectionStatus, string> = {
-  "To Connect": "#eab308",  // yellow
-  "In Progress": "#3b82f6", // blue
-  Connected: "#22c55e",     // green
-  Rejected: "#ef4444",      // red
-  Completed: "#10b981",     // emerald
-};
-
-function ConnectionsGraphTab({
-  connections,
-  documents,
-  pendingReviews,
-  onUpdateStatus,
-  onAddConnection,
-  onSuggestConnections,
-  onReviewPending,
-  onBatchReviewPending,
-  onImportConnections,
-}: {
-  connections: Array<{
-    id: string;
-    source_company_name: string;
-    target_company_name: string;
-    source_document_id?: string | null;
-    target_document_id?: string | null;
-    connection_type: ConnectionType;
-    connection_status: ConnectionStatus;
-    ai_reasoning?: string | null;
-    notes?: string | null;
-    created_at: string;
-  }>;
-  documents: Array<{ id: string; title: string | null; storage_path: string | null }>;
-  pendingReviews: Array<{
-    id: string;
-    relation_type: string;
-    confidence: number;
-    properties: Record<string, any>;
-    source_document_id: string | null;
-    created_at: string;
-    source_entity: { name: string; entity_type: string } | null;
-    target_entity: { name: string; entity_type: string } | null;
-  }>;
-  onUpdateStatus: (connectionId: string, newStatus: ConnectionStatus) => Promise<void>;
-  onAddConnection: () => void;
-  onSuggestConnections?: () => void;
-  onReviewPending: (edgeId: string, status: "approved" | "rejected") => Promise<void>;
-  onBatchReviewPending?: (edgeIds: string[], status: "approved" | "rejected") => Promise<void>;
-  onImportConnections?: (file: File) => void;
-}) {
-  const [showAllPending, setShowAllPending] = useState(false);
-  const PENDING_PREVIEW_COUNT = 5;
-  const pendingToShow = showAllPending ? pendingReviews : pendingReviews.slice(0, PENDING_PREVIEW_COUNT);
-  const hasMorePending = pendingReviews.length > PENDING_PREVIEW_COUNT;
-  const companies = useMemo(() => {
-    const set = new Set<string>();
-    connections.forEach((c) => {
-      set.add(c.source_company_name);
-      set.add(c.target_company_name);
-    });
-    return Array.from(set);
-  }, [connections]);
-
-  // Group connections by status
-  const connectionsByStatus = useMemo(() => {
-    return connections.reduce((acc, conn) => {
-      if (!acc[conn.connection_status]) {
-        acc[conn.connection_status] = [];
-      }
-      acc[conn.connection_status].push(conn);
-      return acc;
-    }, {} as Record<ConnectionStatus, typeof connections>);
-  }, [connections]);
-
-  return (
-    <div className="space-y-6">
-      {/* Header with Add Connection button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-mono font-black uppercase tracking-tight text-white">
-            Company Connections
-          </h2>
-          <p className="text-sm text-white/70 font-mono mt-1">
-            {connections.length} connections between {companies.length} companies
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onImportConnections && (
-            <>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="hidden"
-                id="connections-file-input"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onImportConnections(file);
-                  e.target.value = "";
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="border-2 border-white/40 text-white hover:bg-white/10 font-bold"
-                onClick={() => document.getElementById("connections-file-input")?.click()}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Import CSV / XLSX
-              </Button>
-            </>
-          )}
-          {onSuggestConnections && (
-            <Button
-              onClick={onSuggestConnections}
-              variant="outline"
-              className="border-2 border-[#6366f1] text-[#6366f1] hover:bg-[#6366f1]/10 font-bold"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              AI Suggest
-            </Button>
-          )}
-          <Button
-            onClick={onAddConnection}
-            className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
-          >
-            <Link2 className="h-4 w-4 mr-2" />
-            Add Connection
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
-          <Card key={status} className="border-2 border-white bg-transparent">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div 
-                  className="w-3 h-3 rounded-full" 
-                  style={{ backgroundColor: CONNECTION_STATUS_COLORS[status] }}
-                />
-                <span className="text-xs font-mono text-white/70">{status}</span>
-              </div>
-              <div className="text-2xl font-mono font-black text-white">
-                {connectionsByStatus[status]?.length || 0}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Connection Type Legend */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
-          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
-            Connection Types
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-4">
-            {(Object.entries(CONNECTION_TYPE_COLORS) as [ConnectionType, string][]).map(([type, color]) => (
-              <div key={type} className="flex items-center gap-2">
-                <div className="w-4 h-1 rounded" style={{ backgroundColor: color }} />
-                <span className="text-xs font-mono text-white">{type}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Visual Graph Placeholder */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
-          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
-            Network Graph
-          </CardTitle>
-          <CardDescription className="text-white/70 font-mono">
-            Visual representation of company relationships
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {connections.length === 0 ? (
-            <div className="h-[300px] flex items-center justify-center">
-              <div className="text-center">
-                <Link2 className="h-12 w-12 mx-auto mb-4 text-white/30" />
-                <p className="text-white/70 font-mono">No connections yet</p>
-                <p className="text-sm text-white/50 font-mono mt-1">
-                  Log decisions from the chat to create connections
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="h-[400px] relative bg-white/5 rounded-lg overflow-hidden">
-              {/* Simple SVG-based graph visualization */}
-              <svg className="w-full h-full" viewBox="0 0 800 400">
-                {/* Draw edges */}
-                {connections.map((conn, idx) => {
-                  const sourceIdx = companies.indexOf(conn.source_company_name);
-                  const targetIdx = companies.indexOf(conn.target_company_name);
-                  const sourceX = 100 + (sourceIdx % 4) * 180;
-                  const sourceY = 80 + Math.floor(sourceIdx / 4) * 120;
-                  const targetX = 100 + (targetIdx % 4) * 180;
-                  const targetY = 80 + Math.floor(targetIdx / 4) * 120;
-                  return (
-                    <line
-                      key={`edge-${idx}`}
-                      x1={sourceX}
-                      y1={sourceY}
-                      x2={targetX}
-                      y2={targetY}
-                      stroke={CONNECTION_TYPE_COLORS[conn.connection_type]}
-                      strokeWidth="2"
-                      opacity="0.6"
-                    />
-                  );
-                })}
-                {/* Draw nodes */}
-                {companies.map((company, idx) => {
-                  const x = 100 + (idx % 4) * 180;
-                  const y = 80 + Math.floor(idx / 4) * 120;
-                  // Get the most common status for this company (from all connections involving it)
-                  const companyConnections = connections.filter(
-                    (c) => c.source_company_name === company || c.target_company_name === company
-                  );
-                  // Priority: Connected > In Progress > To Connect > Completed > Rejected
-                  const statusPriority: Record<ConnectionStatus, number> = {
-                    Connected: 5,
-                    "In Progress": 4,
-                    "To Connect": 3,
-                    Completed: 2,
-                    Rejected: 1,
-                  };
-                  let dominantStatus: ConnectionStatus = "To Connect";
-                  if (companyConnections.length > 0) {
-                    let bestPriority = 0;
-                    for (const cc of companyConnections) {
-                      const p = statusPriority[cc.connection_status] ?? 0;
-                      if (p > bestPriority) {
-                        bestPriority = p;
-                        dominantStatus = cc.connection_status;
-                      }
-                    }
-                  }
-                  const statusColor = CONNECTION_STATUS_COLORS[dominantStatus];
-                  return (
-                    <g key={`node-${idx}`}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="30"
-                        fill={statusColor}
-                        stroke="#FFED00"
-                        strokeWidth="2"
-                        opacity="0.8"
-                      />
-                      <text
-                        x={x}
-                        y={y}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fill="white"
-                        fontSize="10"
-                        fontFamily="monospace"
-                      >
-                        {company.length > 12 ? company.substring(0, 10) + "..." : company}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Pending Reviews Section — disabled for now (auto-extraction was wrong); re-enable when fixed */}
-      {false && pendingReviews.length > 0 && (
-        <Card className="border-2 border-[#eab308] bg-transparent">
-          <CardHeader className="pb-2 border-b-2 border-[#eab308]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#eab308]">
-                  ⚠️ Pending Reviews ({pendingReviews.length})
-                </CardTitle>
-                <CardDescription className="text-white/70 font-mono text-xs">
-                  Auto-extracted relationships — approve in bulk or one-by-one
-                </CardDescription>
-              </div>
-              {onBatchReviewPending && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-mono text-xs"
-                    onClick={() => onBatchReviewPending(pendingReviews.map((r) => r.id), "approved")}
-                  >
-                    Approve all ({pendingReviews.length})
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/10 font-mono text-xs"
-                    onClick={() => onBatchReviewPending(pendingReviews.map((r) => r.id), "rejected")}
-                  >
-                    Reject all
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-3">
-            {pendingToShow.map((review) => {
-              const sourceName = review.source_entity?.name || "Unknown";
-              const targetName = review.target_entity?.name || "Unknown";
-              const isCompanyToCompany = review.source_entity?.entity_type === "company" && 
-                                         review.target_entity?.entity_type === "company";
-              
-              if (!isCompanyToCompany) return null; // Only show company-to-company relationships
-              
-              // Map kg relation_type to connection_type
-              const connectionTypeMap: Record<string, ConnectionType> = {
-                "partner_of": "Partnership",
-                "invested_in": "INV",
-                "portfolio_company": "Portfolio",
-                "competitor_of": "BD", // Competitors are business relationships
-                "acquired": "BD", // Acquisitions are business relationships
-              };
-              const connectionType = connectionTypeMap[review.relation_type] || "BD";
-              
-              return (
-                <div
-                  key={review.id}
-                  className="flex items-center justify-between gap-4 p-3 border-2 border-[#eab308] rounded-md bg-[#eab308]/5"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-2 h-8 rounded bg-[#eab308]" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 text-white font-mono font-bold">
-                        <span>{sourceName}</span>
-                        <span className="text-white/50">→</span>
-                        <span>{targetName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs border-[#eab308] text-[#eab308] bg-transparent font-mono">
-                          {connectionType}
-                        </Badge>
-                        {review.properties?.reasoning && (
-                          <span className="text-xs text-white/50 font-mono truncate max-w-[300px]">
-                            {review.properties.reasoning.substring(0, 80)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-2 border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e]/10 font-bold"
-                      onClick={() => onReviewPending(review.id, "approved")}
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-2 border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/10 font-bold"
-                      onClick={() => onReviewPending(review.id, "rejected")}
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-            {hasMorePending && (
-              <button
-                type="button"
-                onClick={() => setShowAllPending((prev) => !prev)}
-                className="text-xs font-mono text-[#eab308] hover:underline"
-              >
-                {showAllPending ? "Show less" : `Show all (${pendingReviews.length})`}
-              </button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Kanban Board — Drag connections between columns by clicking status */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
-          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
-            Connections Pipeline (Kanban)
-          </CardTitle>
-          <CardDescription className="text-white/70 font-mono text-xs">
-            Click the status badge on any card to move it between columns
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {connections.length === 0 ? (
-            <div className="text-center py-8 text-white/70 font-mono">
-              No connections logged yet. Use the chat to discover and log connections.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 min-h-[300px]">
-              {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => {
-                const columnConnections = connectionsByStatus[status] || [];
-                const statusColor = CONNECTION_STATUS_COLORS[status];
-                return (
-                  <div
-                    key={status}
-                    className="flex flex-col rounded-lg border-2 border-white/20 bg-white/5 min-h-[250px]"
-                  >
-                    {/* Column Header */}
-                    <div
-                      className="px-3 py-2 rounded-t-lg flex items-center justify-between"
-                      style={{ borderBottom: `2px solid ${statusColor}` }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{ backgroundColor: statusColor }}
-                        />
-                        <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                          {status}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] border-white/40 text-white/60 bg-transparent font-mono">
-                        {columnConnections.length}
-                      </Badge>
-                    </div>
-                    {/* Column Cards */}
-                    <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[400px]">
-                      {columnConnections.map((conn) => (
-                        <KanbanCard
-                          key={conn.id}
-                          conn={conn}
-                          onUpdateStatus={onUpdateStatus}
-                          statusColor={statusColor}
-                        />
-                      ))}
-                      {columnConnections.length === 0 && (
-                        <div className="text-center py-6 text-white/30 font-mono text-xs">
-                          No items
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* All Connections List (detail view) */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
-          <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
-            All Connections (Detail View)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 space-y-3">
-          {connections.length === 0 ? (
-            <div className="text-center py-8 text-white/70 font-mono">
-              No connections logged yet
-            </div>
-          ) : (
-            connections.map((conn) => (
-              <div
-                key={conn.id}
-                className="flex items-center justify-between gap-4 p-3 border-2 border-white rounded-md hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all"
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <div
-                    className="w-2 h-8 rounded"
-                    style={{ backgroundColor: CONNECTION_TYPE_COLORS[conn.connection_type] }}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-white font-mono font-bold">
-                      <span>{conn.source_company_name}</span>
-                      <span className="text-white/50">→</span>
-                      <span>{conn.target_company_name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
-                        {conn.connection_type}
-                      </Badge>
-                      {conn.ai_reasoning && (
-                        <span className="text-xs text-white/50 font-mono truncate max-w-[300px]" title={conn.ai_reasoning}>
-                          {conn.ai_reasoning.substring(0, 80)}...
-                        </span>
-                      )}
-                    </div>
-                    {conn.notes && (
-                      <div className="text-xs text-white/40 font-mono mt-1 italic">
-                        Note: {conn.notes.substring(0, 100)}{conn.notes.length > 100 ? "..." : ""}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={conn.connection_status}
-                    onValueChange={(v) => onUpdateStatus(conn.id, v as ConnectionStatus)}
-                  >
-                    <SelectTrigger className="w-[140px] border-2 border-white bg-transparent text-white font-mono text-xs h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#050505] border-2 border-white">
-                      {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
-                        <SelectItem key={status} value={status} className="text-white font-mono text-xs">
-                          <span className="flex items-center gap-2">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: CONNECTION_STATUS_COLORS[status] }}
-                            />
-                            {status}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
