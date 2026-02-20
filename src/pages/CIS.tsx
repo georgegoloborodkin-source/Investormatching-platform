@@ -1572,6 +1572,7 @@ function SourcesTab({
   onDeleteFolderAndContents,
   onFolderCategoryUpdated,
   onFoldersCategoriesSaved,
+  onDriveSyncConfigChanged,
   onDeleteSource,
   getGoogleAccessToken,
   onAutoLogDecision,
@@ -1612,6 +1613,7 @@ function SourcesTab({
   onFolderCategoryUpdated?: (folderId: string, category: string) => Promise<void>;
   onSyncCategoriesFromDrive?: () => Promise<void>;
   onFoldersCategoriesSaved?: (updates: Array<{ id: string; category: string }>) => Promise<void>;
+  onDriveSyncConfigChanged?: (folders: Array<{ id: string; name: string; category?: string }>) => void;
   onDeleteSource: (sourceId: string) => Promise<void>;
   getGoogleAccessToken: () => Promise<string | null>;
   onAutoLogDecision: (input: {
@@ -4574,7 +4576,25 @@ function SourcesTab({
                               })
                               .eq("event_id", activeEventId)
                               .eq("source_type", "google_drive");
-                            toast({ title: "Folder type updated", description: `"${folder.name}" is now ${value}.` });
+
+                            // Propagate category to matching source_folders so Knowledge Scope stays in sync
+                            const rootName = folder.name?.trim() || "";
+                            const rootNorm = rootName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+                            const rootSeg = rootNorm.replace(/\s*-\s*.*$/, "").trim();
+                            for (const sf of sourceFolders) {
+                              const sfName = (sf.name || "").trim();
+                              const sfNorm = sfName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+                              const sfSeg = (sfNorm.split(/\s*\/\s*/)[0] || sfNorm).replace(/\s*-\s*.*$/, "").trim();
+                              const belongs = sfNorm === rootNorm || sfNorm.startsWith(rootNorm + " / ") || sfSeg === rootSeg;
+                              if (belongs && (sf.category || "Portfolio Companies") !== value) {
+                                await onFolderCategoryUpdated?.(sf.id, value);
+                              }
+                            }
+
+                            // Notify parent so initialDriveSyncConfig (and its backfill effect) stays in sync
+                            onDriveSyncConfigChanged?.(foldersToSave);
+
+                            toast({ title: "Folder type updated", description: `"${folder.name}" is now ${value}. Source folders re-categorized.` });
                           }
                         }}
                       >
@@ -4776,11 +4796,15 @@ function SourcesTab({
                   <Input
                     type="number"
                     min={1}
-                    max={500}
                     value={gmailMaxPerSync}
-                    onChange={(e) => setGmailMaxPerSync(Math.min(500, Math.max(1, Number(e.target.value) || 50)))}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v >= 1) setGmailMaxPerSync(v);
+                      else if (e.target.value === "") setGmailMaxPerSync(50);
+                    }}
                     className="border-2 border-white bg-transparent text-white text-xs font-mono"
                   />
+                  <p className="text-[10px] text-white/40 font-mono mt-1">No limit — enter any number.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -4796,19 +4820,18 @@ function SourcesTab({
               </div>
               {/* Save config changes */}
               <Button
-                variant="outline"
                 size="sm"
-                className="border-white/20 text-white/70 hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-mono text-[10px] h-7"
+                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold font-mono text-xs h-9 px-5 border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.4)] uppercase tracking-wider"
                 onClick={async () => {
                   if (!activeEventId) return;
                   await supabase.from("sync_configurations")
                     .update({ config: { gmail_query: gmailQuery, max_emails_per_sync: gmailMaxPerSync, include_attachments: gmailIncludeAttachments } })
                     .eq("event_id", activeEventId)
                     .eq("source_type", "gmail");
-                  toast({ title: "Gmail config saved" });
+                  toast({ title: "Gmail config saved", description: "Your Gmail sync settings have been updated." });
                 }}
               >
-                <Save className="h-3 w-3 mr-1" /> Save Settings
+                <Save className="h-4 w-4 mr-2" /> Save Settings
               </Button>
 
               {/* Sync status bar */}
@@ -7926,32 +7949,48 @@ export default function CIS() {
     return normalizeFolderMatch(s).replace(/\s*-\s*.*$/, "").trim();
   }, [normalizeFolderMatch]);
 
-  // Backfill source_folder categories from Drive sync config. Match by config ROOT using normalized
-  // name and first path segment so more folders sync (e.g. "Square Feet / X" or "SquareFeet (Pipeline) / X").
+  // Backfill source_folder categories from Drive sync config. Two-pass matching:
+  // Pass 1: exact/prefix matches (high confidence). Pass 2: segment matches (only unassigned).
+  // This prevents ambiguity when roots share a normalized segment (e.g. "Pyxis" vs "Pyxis (Dec 2025)").
   useEffect(() => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
     const assigned = new Set<string>();
+
+    // Pass 1: exact name and prefix matches (high confidence)
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
       const wantCategory = df.category ?? "Portfolio Companies";
       const rootNorm = normalizeFolderMatch(rootName);
-      const rootNormSegment = normRootOrSegment(rootName);
       const prefixNorm = rootNorm + " / ";
       for (const sf of sourceFolders) {
         if (assigned.has(sf.id)) continue;
         const name = (sf.name || "").trim();
         const nameNorm = normalizeFolderMatch(name);
-        const firstSegmentNorm = normRootOrSegment(name.split(/\s*\/\s*/)[0] || name);
-        const belongsToRoot =
-          nameNorm === rootNorm ||
-          nameNorm.startsWith(prefixNorm) ||
-          firstSegmentNorm === rootNormSegment;
-        if (!belongsToRoot) continue;
+        const exactOrPrefix = nameNorm === rootNorm || nameNorm.startsWith(prefixNorm);
+        if (!exactOrPrefix) continue;
+        assigned.add(sf.id);
         if ((sf.category || "Portfolio Companies") !== wantCategory) {
-          assigned.add(sf.id);
+          updates.push({ id: sf.id, category: wantCategory });
+        }
+      }
+    }
+
+    // Pass 2: segment-level matches for remaining unassigned source folders
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
+      if (!rootName) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const rootNormSegment = normRootOrSegment(rootName);
+      for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
+        const name = (sf.name || "").trim();
+        const firstSegmentNorm = normRootOrSegment(name.split(/\s*\/\s*/)[0] || name);
+        if (firstSegmentNorm !== rootNormSegment) continue;
+        assigned.add(sf.id);
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
           updates.push({ id: sf.id, category: wantCategory });
         }
       }
@@ -8113,35 +8152,47 @@ export default function CIS() {
     []
   );
 
-  /** Run backfill: set source_folder categories from Drive sync config (each root → category). Uses same normalized + first-segment matching as auto backfill. */
+  /** Run backfill: two-pass matching (exact/prefix first, then segment) to avoid ambiguity. */
   const handleSyncCategoriesFromDrive = useCallback(async () => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) return;
     const driveFolders = initialDriveSyncConfig.folders;
     const updates: Array<{ id: string; category: string }> = [];
     const assigned = new Set<string>();
+
+    // Pass 1: exact/prefix
     for (const df of driveFolders) {
       const rootName = (df.name || "").trim();
       if (!rootName) continue;
       const wantCategory = df.category ?? "Portfolio Companies";
       const rootNorm = normalizeFolderMatch(rootName);
-      const rootNormSegment = normRootOrSegment(rootName);
       const prefixNorm = rootNorm + " / ";
       for (const sf of sourceFolders) {
         if (assigned.has(sf.id)) continue;
-        const name = (sf.name || "").trim();
-        const nameNorm = normalizeFolderMatch(name);
-        const firstSegmentNorm = normRootOrSegment(name.split(/\s*\/\s*/)[0] || name);
-        const belongsToRoot =
-          nameNorm === rootNorm ||
-          nameNorm.startsWith(prefixNorm) ||
-          firstSegmentNorm === rootNormSegment;
-        if (!belongsToRoot) continue;
+        const nameNorm = normalizeFolderMatch((sf.name || "").trim());
+        if (nameNorm !== rootNorm && !nameNorm.startsWith(prefixNorm)) continue;
+        assigned.add(sf.id);
         if ((sf.category || "Portfolio Companies") !== wantCategory) {
-          assigned.add(sf.id);
           updates.push({ id: sf.id, category: wantCategory });
         }
       }
     }
+    // Pass 2: segment
+    for (const df of driveFolders) {
+      const rootName = (df.name || "").trim();
+      if (!rootName) continue;
+      const wantCategory = df.category ?? "Portfolio Companies";
+      const rootNormSegment = normRootOrSegment(rootName);
+      for (const sf of sourceFolders) {
+        if (assigned.has(sf.id)) continue;
+        const firstSegmentNorm = normRootOrSegment(((sf.name || "").trim().split(/\s*\/\s*/)[0] || sf.name || ""));
+        if (firstSegmentNorm !== rootNormSegment) continue;
+        assigned.add(sf.id);
+        if ((sf.category || "Portfolio Companies") !== wantCategory) {
+          updates.push({ id: sf.id, category: wantCategory });
+        }
+      }
+    }
+
     for (const { id, category } of updates) {
       const { error } = await updateFolderCategory(id, category);
       if (error) throw new Error(error.message);
@@ -13865,6 +13916,9 @@ export default function CIS() {
               onFolderCategoryUpdated={handleFolderCategoryUpdated}
               onSyncCategoriesFromDrive={handleSyncCategoriesFromDrive}
               onFoldersCategoriesSaved={handleFoldersCategoriesSaved}
+              onDriveSyncConfigChanged={(folders) => {
+                setInitialDriveSyncConfig((prev) => prev ? { ...prev, folders } : null);
+              }}
               onDeleteSource={handleDeleteSource}
               getGoogleAccessToken={getGoogleAccessToken}
               onAutoLogDecision={handleAutoLogDecision}

@@ -414,8 +414,9 @@ VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY") or os.getenv("VOYAGER_API_KEY")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-large-2")
 
 # Auto-detect embedding dimension based on model
-# Voyage model dimensions: voyage-3-lite=512, voyage-3=1024, voyage-large-2=1536, voyage-finance-2=1024
+# voyage-4-large supports 256/512/1024/2048 (NOT 1536) — keeping voyage-large-2 for 1536-dim compatibility
 _voyage_model_dims = {
+    "voyage-4-large": 1024,
     "voyage-3-lite": 512,
     "voyage-3": 1024,
     "voyage-large-2": 1536,
@@ -445,9 +446,9 @@ print(f"📊 Embeddings provider: {EMBEDDINGS_PROVIDER} "
       f"(voyage_key={'✅' if VOYAGE_API_KEY else '❌'}, "
       f"openai_key={'✅' if OPENAI_API_KEY else '❌'})")
 
-# Reranking settings (cross-encoder)
+# Reranking settings (cross-encoder) — Voyage rerank-2.5 is primary; Cohere kept as fallback
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
-RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-2.5")
 
 # Ingestion settings
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
@@ -3128,7 +3129,8 @@ async def health_check():
         "openai_model": OPENAI_EMBEDDING_MODEL if EMBEDDINGS_PROVIDER == "openai" else None,
         "openai_api_key_set": bool(OPENAI_API_KEY),
         "embedding_dim": EMBEDDING_DIM,
-        "cohere_rerank_model": RERANK_MODEL,
+        "rerank_model": RERANK_MODEL,
+        "voyage_rerank_model": VOYAGE_RERANK_MODEL,
         "cohere_api_key_set": bool(COHERE_API_KEY),
     }
     
@@ -3192,14 +3194,17 @@ async def get_embedding_config():
         },
         "embedding_dim": EMBEDDING_DIM,
         "reranking": {
-            "model": RERANK_MODEL,
+            "model": VOYAGE_RERANK_MODEL,
+            "cohere_fallback_model": RERANK_MODEL,
+            "voyage_api_key_set": bool(VOYAGE_API_KEY),
             "cohere_api_key_set": bool(COHERE_API_KEY),
         },
         "supported_voyage_models": [
+            "voyage-large-2",        # General purpose, 1536d (current default)
+            "voyage-4-large",        # Latest MoE model, 1024d (no 1536 support)
             "voyage-finance-2",      # Best for finance (recommended for VC)
-            "voyage-large-2",        # General purpose, high quality
-            "voyage-3",              # Latest general model
-            "voyage-3-lite",         # Faster, cheaper
+            "voyage-3",              # General model, 1024d
+            "voyage-3-lite",         # Faster, cheaper, 512d
             "voyage-code-3",         # Best for code
             "voyage-law-2",          # Best for legal
             "voyage-multilingual-2", # Best for non-English
@@ -4792,7 +4797,7 @@ async def generate_embedding_ollama(text: str) -> List[float]:
 #  Voyage Reranking — cross-encoder reranker for RAG accuracy
 # ---------------------------------------------------------------------------
 
-VOYAGE_RERANK_MODEL = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5-lite")
+VOYAGE_RERANK_MODEL = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5")
 
 async def rerank_with_voyage(
     query: str,
@@ -7266,7 +7271,9 @@ async def startup_event():
         print(f"   OpenAI API Key: {'✅ Set' if OPENAI_API_KEY else '❌ NOT SET'}")
     print(f"   Embedding Dimensions: {EMBEDDING_DIM}")
     print(f"🔄 RERANKING:")
-    print(f"   Model: {RERANK_MODEL}")
+    print(f"   Voyage Model: {VOYAGE_RERANK_MODEL}")
+    print(f"   Cohere Fallback Model: {RERANK_MODEL}")
+    print(f"   Voyage API Key: {'✅ Set' if VOYAGE_API_KEY else '❌ NOT SET'}")
     print(f"   Cohere API Key: {'✅ Set' if COHERE_API_KEY else '❌ NOT SET'}")
     print(f"🤖 CLAUDE:")
     print(f"   Model: {ANTHROPIC_MODEL}")
