@@ -311,8 +311,8 @@ function ThreadTree({ threads, active, onSelect }: { threads: Thread[]; active: 
     return (
       <div
         key={t.id}
-        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer border-2 border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-colors bg-transparent ${
-          active === t.id ? "border-[#FFED00] bg-[#FFED00]/10" : ""
+        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer border border-white/10 hover:border-blue-500 hover:bg-blue-600/5 transition-colors bg-white/[0.02] ${
+          active === t.id ? "border-blue-500 bg-blue-600/10" : ""
         }`}
         style={{ paddingLeft: `${12 + level * 16}px` }}
         onClick={() => onSelect(t.id)}
@@ -503,10 +503,10 @@ function DocumentConverterTab({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left: Input */}
       <div className="space-y-4">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <Upload className="h-5 w-5 text-[#FFED00]" />
+              <Upload className="h-5 w-5 text-blue-400" />
               Document Input
             </CardTitle>
             <CardDescription className="text-white/70 font-mono">
@@ -520,7 +520,7 @@ function DocumentConverterTab({
                 type="file"
                 accept=".txt,.md,.pdf,.docx,.xlsx,.xls,.csv,.json"
                 onChange={handleFileUpload}
-                className="cursor-pointer border-2 border-white bg-transparent text-white file:border-white file:bg-transparent file:text-white"
+                className="cursor-pointer border border-white/10 bg-white/[0.02] text-white file:border-white file:bg-white/[0.02] file:text-white"
               />
             </div>
 
@@ -531,7 +531,7 @@ function DocumentConverterTab({
                 placeholder="Paste pitch deck content, investment memo, or any company document here..."
                 value={documentText}
                 onChange={(e) => setDocumentText(e.target.value)}
-                className="min-h-[300px] font-mono text-sm border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="min-h-[300px] font-mono text-sm border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50"
               />
               <p className="text-xs text-white/70 font-mono mt-1">
                 {documentText.length} characters (~{Math.ceil(documentText.length / 4)} tokens)
@@ -541,7 +541,7 @@ function DocumentConverterTab({
             <Button
               onClick={handleExtract}
               disabled={isLoading || !documentText.trim()}
-              className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              className="w-full bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -559,10 +559,10 @@ function DocumentConverterTab({
         </Card>
 
         {/* Cost Info */}
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-start gap-3">
-              <DollarSign className="h-5 w-5 text-[#FFED00] mt-0.5" />
+              <DollarSign className="h-5 w-5 text-blue-400 mt-0.5" />
               <div className="text-sm font-mono">
                 <p className="font-bold text-white">Cost Transparency</p>
                 <p className="text-white/70">
@@ -579,15 +579,15 @@ function DocumentConverterTab({
       <div className="space-y-4">
         {result ? (
           <>
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center justify-between text-white">
                   <span className="flex items-center gap-2 font-mono font-black uppercase tracking-tight">
-                    <CheckCircle className="h-5 w-5 text-[#FFED00]" />
+                    <CheckCircle className="h-5 w-5 text-blue-400" />
                     Conversion Result
                   </span>
                   {result && (
-                    <Button size="sm" variant="outline" onClick={downloadJSON} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                    <Button size="sm" variant="outline" onClick={downloadJSON} className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                       <Download className="h-4 w-4 mr-1" />
                       JSON
                     </Button>
@@ -598,15 +598,15 @@ function DocumentConverterTab({
               <CardContent className="text-white">
                 <div className="space-y-4">
                   {primaryStartup ? (
-                    <div className="p-3 border-2 border-white rounded-lg space-y-2 bg-transparent hover:border-[#FFED00] transition-all">
+                    <div className="p-3 border border-white/10 rounded-lg space-y-2 bg-white/[0.02] hover:border-blue-500 transition-all">
                       <div className="flex items-center justify-between">
                         <h3 className="font-mono font-black text-lg text-white">{primaryStartup.companyName}</h3>
-                        {primaryStartup.fundingStage && <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.fundingStage}</Badge>}
+                        {primaryStartup.fundingStage && <Badge variant="outline" className="border-white text-white bg-white/[0.02] font-mono">{primaryStartup.fundingStage}</Badge>}
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        {primaryStartup.industry && <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{primaryStartup.industry}</Badge>}
+                        {primaryStartup.industry && <Badge variant="outline" className="border-blue-500 text-blue-400 bg-white/[0.02] font-mono">{primaryStartup.industry}</Badge>}
                         {primaryStartup.geoMarkets?.length > 0 && (
-                          <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{primaryStartup.geoMarkets.join(", ")}</Badge>
+                          <Badge variant="outline" className="border-white text-white bg-white/[0.02] font-mono">{primaryStartup.geoMarkets.join(", ")}</Badge>
                         )}
                       </div>
                     </div>
@@ -617,7 +617,7 @@ function DocumentConverterTab({
                   )}
 
                   {(result.errors?.length || result.warnings?.length) && (
-                    <div className="border-2 border-white rounded-md p-3 text-xs space-y-2 bg-transparent">
+                    <div className="border border-white/10 rounded-md p-3 text-xs space-y-2 bg-white/[0.02]">
                       {result.errors?.length ? (
                         <div>
                           <div className="font-mono font-bold text-white">Errors</div>
@@ -642,7 +642,7 @@ function DocumentConverterTab({
                   )}
 
                   {quickLogEnabled && (
-                    <Button onClick={handleQuickLog} className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold" variant="outline">
+                    <Button onClick={handleQuickLog} className="w-full border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold" variant="outline">
                       <ClipboardList className="h-4 w-4 mr-2" />
                       Open in Decision Log
                     </Button>
@@ -652,7 +652,7 @@ function DocumentConverterTab({
                     <summary className="cursor-pointer text-white/70 hover:text-white">
                       View full JSON
                     </summary>
-                    <pre className="mt-2 p-3 border-2 border-white rounded-lg overflow-auto max-h-[300px] text-xs bg-transparent text-white">
+                    <pre className="mt-2 p-3 border border-white/10 rounded-lg overflow-auto max-h-[300px] text-xs bg-white/[0.02] text-white">
                       {JSON.stringify(result, null, 2)}
                     </pre>
                   </details>
@@ -661,7 +661,7 @@ function DocumentConverterTab({
             </Card>
           </>
         ) : (
-          <Card className="h-full min-h-[400px] flex items-center justify-center border-2 border-white bg-transparent">
+          <Card className="h-full min-h-[400px] flex items-center justify-center border border-white/10 bg-white/[0.02]">
             <CardContent className="text-center text-white/70 font-mono">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50 text-white/50" />
               <p className="font-bold">Paste document text and click Extract</p>
@@ -947,11 +947,11 @@ function DecisionLoggerTab({
     <div className="space-y-6">
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <ClipboardList className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
@@ -961,11 +961,11 @@ function DecisionLoggerTab({
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border-2 border-blue-500 rounded-lg bg-white/[0.02]">
+                <TrendingUp className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.averageConfidence}%</p>
@@ -975,11 +975,11 @@ function DecisionLoggerTab({
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Target className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Target className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.byOutcome.positive || 0}</p>
@@ -989,11 +989,11 @@ function DecisionLoggerTab({
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Users className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Users className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.topActors.length}</p>
@@ -1006,23 +1006,23 @@ function DecisionLoggerTab({
 
       {/* Action Buttons */}
       <div className="flex gap-2 items-center">
-        <Button onClick={() => setShowForm(!showForm)} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]">
+        <Button onClick={() => setShowForm(!showForm)} className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]">
           {showForm ? "Cancel" : "Log New Decision"}
         </Button>
         {decisions.length > 0 && (
-          <Button variant="outline" onClick={handleExport} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+          <Button variant="outline" onClick={handleExport} className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
             <Download className="h-4 w-4 mr-1" />
             Export CSV
           </Button>
         )}
         <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-          <SelectTrigger className="w-[220px] border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] font-mono font-bold">
+          <SelectTrigger className="w-[220px] border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 font-mono font-bold">
             <SelectValue placeholder="Filter by document" className="text-white" />
           </SelectTrigger>
-          <SelectContent className="bg-[#050505] border-2 border-white">
-            <SelectItem value="all" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">All documents</SelectItem>
+          <SelectContent className="bg-[#050505] border border-white/10">
+            <SelectItem value="all" className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10">All documents</SelectItem>
             {documents.filter((doc) => !!doc.id).map((doc) => (
-              <SelectItem key={doc.id} value={doc.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+              <SelectItem key={doc.id} value={doc.id} className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10">
                 {doc.title || doc.id}
               </SelectItem>
             ))}
@@ -1032,8 +1032,8 @@ function DecisionLoggerTab({
 
       {/* New Decision Form */}
       {showForm && (
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Log New Decision</CardTitle>
             <CardDescription className="text-white/70 font-mono">Record a decision for pattern analysis</CardDescription>
           </CardHeader>
@@ -1045,16 +1045,16 @@ function DecisionLoggerTab({
                   placeholder="e.g., Partner A, John Smith"
                   value={actor}
                   onChange={(e) => setActor(e.target.value)}
-                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                  className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50"
                 />
               </div>
               <div>
                 <Label className="text-white font-mono font-bold">Action Type *</Label>
                 <Select value={actionType} onValueChange={(v) => setActionType(v as Decision["actionType"])}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="intro" className="text-white">Intro</SelectItem>
                     <SelectItem value="meeting" className="text-white">Meeting</SelectItem>
                     <SelectItem value="follow_up" className="text-white">Follow Up</SelectItem>
@@ -1070,7 +1070,7 @@ function DecisionLoggerTab({
                   placeholder="e.g., Company X"
                   value={startupName}
                   onChange={(e) => setStartupName(e.target.value)}
-                  className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                  className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50"
                 />
               </div>
               <div>
@@ -1079,10 +1079,10 @@ function DecisionLoggerTab({
                   value={decisionOutcome || "pending"}
                   onValueChange={(v) => setDecisionOutcome(v as Decision["outcome"])}
                 >
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="pending" className="text-white">Pending</SelectItem>
                     <SelectItem value="positive" className="text-white">Positive</SelectItem>
                     <SelectItem value="negative" className="text-white">Negative</SelectItem>
@@ -1092,10 +1092,10 @@ function DecisionLoggerTab({
               <div>
                 <Label className="text-white font-mono font-bold">Sector</Label>
                 <Select value={sector} onValueChange={setSector}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue placeholder="Select sector" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="none" className="text-white">None</SelectItem>
                     <SelectItem value="FinTech" className="text-white">FinTech</SelectItem>
                     <SelectItem value="HealthTech" className="text-white">HealthTech</SelectItem>
@@ -1122,10 +1122,10 @@ function DecisionLoggerTab({
               <div>
                 <Label className="text-white font-mono font-bold">Stage</Label>
                 <Select value={stage} onValueChange={setStage}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="none" className="text-white">None</SelectItem>
                     <SelectItem value="Pre-Seed" className="text-white">Pre-Seed</SelectItem>
                     <SelectItem value="Seed" className="text-white">Seed</SelectItem>
@@ -1144,10 +1144,10 @@ function DecisionLoggerTab({
               <div>
                 <Label className="text-white font-mono font-bold">Geography</Label>
                 <Select value={geo} onValueChange={setGeo}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue placeholder="Select geography" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="none" className="text-white">None</SelectItem>
                     <SelectItem value="Singapore" className="text-white">Singapore</SelectItem>
                     <SelectItem value="Indonesia" className="text-white">Indonesia</SelectItem>
@@ -1212,10 +1212,10 @@ function DecisionLoggerTab({
               <div>
                 <Label className="text-white font-mono font-bold">Attach Source Document</Label>
                 <Select value={attachedDocumentId} onValueChange={setAttachedDocumentId}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                     <SelectValue placeholder="Choose a document (optional)" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="none" className="text-white">No document</SelectItem>
                     {documents.filter((doc) => !!doc.id).map((doc) => (
                       <SelectItem key={doc.id} value={doc.id} className="text-white">
@@ -1225,12 +1225,12 @@ function DecisionLoggerTab({
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" onClick={onOpenConverter} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+              <Button variant="outline" onClick={onOpenConverter} className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                 Upload new
               </Button>
             </div>
 
-            <Button onClick={handleSaveDecision} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50" disabled={isSaving}>
+            <Button onClick={handleSaveDecision} className="w-full bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50" disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1245,8 +1245,8 @@ function DecisionLoggerTab({
       )}
 
       {/* Decision History */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Decision History</CardTitle>
           <CardDescription className="text-white/70 font-mono">
             {filteredDecisions.length} decisions shown • Click outcome to update
@@ -1256,10 +1256,10 @@ function DecisionLoggerTab({
           <div className="mb-4">
             <Label className="text-xs text-white/70 font-mono font-bold">Filter by document</Label>
             <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-              <SelectTrigger className="mt-1 border-2 border-white bg-transparent text-white">
+              <SelectTrigger className="mt-1 border border-white/10 bg-white/[0.02] text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border-2 border-white">
+              <SelectContent className="bg-[#050505] border border-white/10">
                 {documentOptions.map((doc) => (
                   <SelectItem key={doc.id} value={doc.id} className="text-white">
                     {doc.label}
@@ -1281,10 +1281,10 @@ function DecisionLoggerTab({
                 return (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between p-3 border-2 border-white rounded-lg hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors bg-transparent"
+                  className="flex items-center justify-between p-3 border border-white/10 rounded-lg hover:bg-blue-600/5 hover:border-blue-500 transition-colors bg-white/[0.02]"
                 >
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                    <Badge variant="outline" className="text-xs border-white text-white bg-white/[0.02] font-mono">
                       {d.actionType}
                     </Badge>
                     <div>
@@ -1306,7 +1306,7 @@ function DecisionLoggerTab({
                       size="sm"
                       variant="outline"
                       onClick={() => setViewingDecision(d)}
-                      className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                      className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       View
@@ -1316,7 +1316,7 @@ function DecisionLoggerTab({
                         size="sm"
                         variant="outline"
                         onClick={() => onOpenDocument(doc.id)}
-                        className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                        className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
                       >
                         View source
                       </Button>
@@ -1326,11 +1326,11 @@ function DecisionLoggerTab({
                       onValueChange={(v) => handleUpdateOutcome(d.id, v as Decision["outcome"])}
                       disabled={isUpdating === d.id}
                     >
-                      <SelectTrigger className="w-[100px] h-8 border-2 border-white bg-transparent text-white" disabled={isUpdating === d.id}>
+                      <SelectTrigger className="w-[100px] h-8 border border-white/10 bg-white/[0.02] text-white" disabled={isUpdating === d.id}>
                         <SelectValue />
                         {isUpdating === d.id && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                       </SelectTrigger>
-                      <SelectContent className="bg-[#050505] border-2 border-white">
+                      <SelectContent className="bg-[#050505] border border-white/10">
                         <SelectItem value="pending" className="text-white">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Pending
@@ -1338,7 +1338,7 @@ function DecisionLoggerTab({
                           </span>
                         </SelectItem>
                         <SelectItem value="positive" className="text-white">
-                          <span className="flex items-center gap-1 text-[#FFED00]">
+                          <span className="flex items-center gap-1 text-blue-400">
                             <CheckCircle className="h-3 w-3" /> Positive
                             <span className="text-xs text-white/50 ml-1 font-mono">(Success)</span>
                           </span>
@@ -1354,7 +1354,7 @@ function DecisionLoggerTab({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+                      className="h-8 w-8 text-white/70 hover:text-white hover:bg-blue-500/100/100/10"
                       onClick={() => setDeleteConfirmId(d.id)}
                       disabled={isDeleting === d.id}
                     >
@@ -1374,7 +1374,7 @@ function DecisionLoggerTab({
 
       {/* Decision View Dialog */}
       <Dialog open={!!viewingDecision} onOpenChange={(open) => !open && setViewingDecision(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border-2 border-white text-white">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#050505] border border-white/10 text-white">
           <DialogHeader>
             <DialogTitle className="text-white font-mono font-bold">Decision Details</DialogTitle>
             <DialogDescription className="text-white/70 font-mono">
@@ -1394,7 +1394,7 @@ function DecisionLoggerTab({
                 </div>
                 <div>
                   <Label className="text-xs text-white/70 font-mono font-bold">Action Type</Label>
-                  <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{viewingDecision.actionType}</Badge>
+                  <Badge variant="outline" className="border-white text-white bg-white/[0.02] font-mono">{viewingDecision.actionType}</Badge>
                 </div>
                 <div>
                   <Label className="text-xs text-white/70 font-mono font-bold">Confidence Score</Label>
@@ -1406,9 +1406,9 @@ function DecisionLoggerTab({
                     <Badge 
                       variant="outline"
                       className={
-                        viewingDecision.outcome === "positive" ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" :
-                        viewingDecision.outcome === "negative" ? "border-white/50 text-white/50 bg-transparent font-mono" :
-                        "border-white text-white bg-transparent font-mono"
+                        viewingDecision.outcome === "positive" ? "border-blue-500 text-blue-400 bg-white/[0.02] font-mono" :
+                        viewingDecision.outcome === "negative" ? "border-white/50 text-white/50 bg-white/[0.02] font-mono" :
+                        "border-white text-white bg-white/[0.02] font-mono"
                       }
                     >
                       {viewingDecision.outcome || "Pending"}
@@ -1418,7 +1418,7 @@ function DecisionLoggerTab({
                         <TooltipTrigger asChild>
                           <span className="text-xs text-white/70 cursor-help font-mono">ℹ️</span>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-xs bg-[#050505] border-2 border-white text-white">
+                        <TooltipContent className="max-w-xs bg-[#050505] border border-white/10 text-white">
                           <p className="text-xs font-mono">
                             <strong>Pending:</strong> Decision is still in progress, no outcome yet<br/>
                             <strong>Positive:</strong> Decision led to a positive result (e.g., investment, partnership)<br/>
@@ -1499,7 +1499,7 @@ function DecisionLoggerTab({
               )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-white/30">
-                <Button variant="outline" onClick={() => setViewingDecision(null)} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                <Button variant="outline" onClick={() => setViewingDecision(null)} className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                   Close
                 </Button>
               </div>
@@ -1510,21 +1510,21 @@ function DecisionLoggerTab({
 
       {/* Top Actors */}
       {stats.topActors.length > 0 && (
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Decision Makers</CardTitle>
           </CardHeader>
           <CardContent className="text-white">
             <div className="space-y-2">
               {stats.topActors.map((a, i) => (
-                <div key={a.actor} className="flex items-center justify-between p-2 border-2 border-white rounded hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
+                <div key={a.actor} className="flex items-center justify-between p-2 border border-white/10 rounded hover:border-blue-500 hover:bg-blue-600/5 transition-all bg-white/[0.02]">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono font-bold text-white/70">#{i + 1}</span>
                     <span className="font-mono font-bold text-white">{a.actor}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm font-mono">
                     <span className="text-white/70">{a.count} decisions</span>
-                    <Badge variant="outline" className={a.winRate > 50 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white text-white bg-transparent font-mono"}>
+                    <Badge variant="outline" className={a.winRate > 50 ? "border-blue-500 text-blue-400 bg-white/[0.02] font-mono" : "border-white text-white bg-white/[0.02] font-mono"}>
                       {a.winRate}% win rate
                     </Badge>
                   </div>
@@ -4019,7 +4019,7 @@ function SourcesTab({
   return (
     <div className="space-y-6">
       {!canImport && (
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-sm text-white/70 font-mono">
             Loading your active event... Imports will be available in a moment.
           </CardContent>
@@ -4028,10 +4028,10 @@ function SourcesTab({
       {/* ClickUp import temporarily disabled */}
 
       {/* Folder Management Section */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Folder className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            <Folder className="h-5 w-5 inline mr-2 text-blue-400" />
             Document Folders
           </CardTitle>
           <CardDescription className="text-white/70 font-mono">Organize your documents into folders for better context filtering.</CardDescription>
@@ -4041,11 +4041,11 @@ function SourcesTab({
           <div>
             <Label className="text-white font-mono font-bold">Select Folder for Uploads</Label>
             <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-              <SelectTrigger className="border-2 border-white bg-transparent text-white">
+              <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                 <SelectValue placeholder="Select a folder" />
               </SelectTrigger>
-              <SelectContent className="bg-[#050505] border-2 border-white max-h-[300px]">
-                <SelectItem value="none" className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+              <SelectContent className="bg-[#050505] border border-white/10 max-h-[300px]">
+                <SelectItem value="none" className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10">
                   <span className="flex items-center gap-2">
                     <Folder className="h-4 w-4" />
                     No Folder (Root)
@@ -4055,14 +4055,14 @@ function SourcesTab({
                   const catFolders = sourceFolders.filter((f) => (f.category || "Portfolio Companies") === cat);
                   return (
                     <React.Fragment key={cat}>
-                      <div className="px-2 py-1 text-[10px] font-mono text-[#FFED00]/60 uppercase tracking-wider pointer-events-none">
+                      <div className="px-2 py-1 text-[10px] font-mono text-blue-400/60 uppercase tracking-wider pointer-events-none">
                         {cat} {catFolders.length > 0 ? `(${catFolders.length})` : "(0)"}
                       </div>
                       {catFolders.length > 0 ? (
                         catFolders.map((folder) => (
-                          <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-white/10 focus:bg-white/10 pl-4">
+                          <SelectItem key={folder.id} value={folder.id} className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10 pl-4">
                             <span className="flex items-center gap-2">
-                              <Folder className="h-4 w-4 text-[#FFED00]" />
+                              <Folder className="h-4 w-4 text-blue-400" />
                               {folder.name}
                             </span>
                           </SelectItem>
@@ -4090,18 +4090,18 @@ function SourcesTab({
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="e.g., Q1 2026 Deals, Due Diligence, Market Research"
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50"
               />
             </div>
             <div>
               <Label className="text-white font-mono font-bold">Category</Label>
               <Select value={newFolderCategory} onValueChange={setNewFolderCategory}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#1a1a2e] border-white/20">
                   {FOLDER_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                    <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10">
                       {cat}
                     </SelectItem>
                   ))}
@@ -4127,7 +4127,7 @@ function SourcesTab({
                   }
                 }}
                 disabled={isCreatingFolder || !newFolderName.trim()}
-                className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50"
+                className="w-full border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold disabled:opacity-50"
                 variant="outline"
               >
                 {isCreatingFolder ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderPlus className="h-4 w-4 mr-2" />}
@@ -4155,7 +4155,7 @@ function SourcesTab({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs"
+                      className="border-blue-500/50 text-blue-400 hover:bg-blue-600/10 font-mono text-xs"
                       disabled={isSyncingCategoriesFromDrive}
                       onClick={async () => {
                         setIsSyncingCategoriesFromDrive(true);
@@ -4186,10 +4186,10 @@ function SourcesTab({
                         onClick={() => setExpandedRoot(isCatOpen ? null : cat)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-mono transition-all ${
                           isCatOpen
-                            ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00]"
+                            ? "border-blue-500 bg-blue-600/15 text-blue-400"
                             : catFolders.length === 0
                               ? "border-white/15 text-white/50 hover:border-white/30 hover:text-white/70"
-                              : "border-white/25 text-white/70 hover:border-[#FFED00]/50 hover:text-[#FFED00]"
+                              : "border-white/25 text-white/70 hover:border-blue-500/50 hover:text-blue-400"
                         }`}
                       >
                         <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${isCatOpen ? "rotate-90" : ""}`} />
@@ -4202,11 +4202,11 @@ function SourcesTab({
 
                 {/* Bulk selection bar — Move selected to category */}
                 {selectedFolderIds.size > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-[#FFED00]/30 bg-[#FFED00]/5">
-                    <span className="text-[11px] font-mono text-[#FFED00] tabular-nums">{selectedFolderIds.size} selected</span>
+                  <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-blue-500/30 bg-blue-600/5">
+                    <span className="text-[11px] font-mono text-blue-400 tabular-nums">{selectedFolderIds.size} selected</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs">
+                        <Button variant="outline" size="sm" className="border-blue-500/50 text-blue-400 hover:bg-blue-600/10 font-mono text-xs">
                           Move to…
                         </Button>
                       </DropdownMenuTrigger>
@@ -4254,7 +4254,7 @@ function SourcesTab({
                         <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
                           <button
                             type="button"
-                            className="text-[10px] font-mono text-[#FFED00]/80 hover:text-[#FFED00]"
+                            className="text-[10px] font-mono text-blue-400/80 hover:text-blue-400"
                             onClick={() => setSelectedFolderIds((prev) => {
                               const next = new Set(prev);
                               for (const f of catFolders) next.add(f.id);
@@ -4285,9 +4285,9 @@ function SourcesTab({
                               }}
                               className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-[11px] font-mono transition-all ${
                                 isRootOpen
-                                  ? "bg-[#FFED00]/10 text-[#FFED00]"
+                                  ? "bg-blue-600/10 text-blue-400"
                                   : selectedFolderId && folders.some((f) => f.id === selectedFolderId)
-                                    ? "bg-[#FFED00]/5 text-[#FFED00]/80"
+                                    ? "bg-blue-600/5 text-blue-400/80"
                                     : "text-white/80 hover:bg-white/5 hover:text-white"
                               }`}
                             >
@@ -4318,7 +4318,7 @@ function SourcesTab({
                                               return next;
                                             });
                                           }}
-                                          className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] h-3.5 w-3.5"
+                                          className="border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500 h-3.5 w-3.5"
                                         />
                                       </div>
                                       <button
@@ -4326,7 +4326,7 @@ function SourcesTab({
                                         onClick={() => setSelectedFolderId(folder.id)}
                                         className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-all truncate max-w-[280px] ${
                                           selectedFolderId === folder.id
-                                            ? "bg-[#FFED00]/15 text-[#FFED00] border border-[#FFED00]/40"
+                                            ? "bg-blue-600/15 text-blue-400 border border-blue-500/40"
                                             : "text-white/60 hover:text-white hover:bg-white/5"
                                         }`}
                                         title={folder.name}
@@ -4336,7 +4336,7 @@ function SourcesTab({
                                       </button>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                          <Button variant="ghost" size="icon" className="h-5 w-5 text-white/30 hover:text-white/60 hover:bg-white/10">
+                                          <Button variant="ghost" size="icon" className="h-5 w-5 text-white/30 hover:text-white/60 hover:bg-blue-500/100/100/10">
                                             <ChevronDown className="h-2.5 w-2.5" />
                                           </Button>
                                         </DropdownMenuTrigger>
@@ -4344,7 +4344,7 @@ function SourcesTab({
                                           {FOLDER_CATEGORIES.map((moveCat) => (
                                             <DropdownMenuItem
                                               key={moveCat}
-                                              className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-[#FFED00] font-bold" : "text-white/80"} focus:bg-white/10`}
+                                              className={`font-mono text-xs ${(folder.category || "Portfolio Companies") === moveCat ? "text-blue-400 font-bold" : "text-white/80"} focus:bg-white/10`}
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 if ((folder.category || "Portfolio Companies") === moveCat) return;
@@ -4388,7 +4388,7 @@ function SourcesTab({
           })()}
           {/* Confirm delete folder and contents */}
           <AlertDialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
-            <AlertDialogContent className="border-2 border-white/20 bg-slate-900 text-white">
+            <AlertDialogContent className="border border-white/10/20 bg-slate-900 text-white">
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-white font-mono">Delete folder and all its documents?</AlertDialogTitle>
                 <AlertDialogDescription className="text-white/80 font-mono text-sm">
@@ -4427,13 +4427,13 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Local Upload</CardTitle>
           <CardDescription className="text-white/70 font-mono">
             Upload files from your computer into Sources.
             {selectedFolderId !== "none" && (
-              <span className="ml-2 text-[#FFED00]">
+              <span className="ml-2 text-blue-400">
                 → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
@@ -4448,10 +4448,10 @@ function SourcesTab({
             accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls"
           />
           {uploadProgress && (
-            <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+            <div className="space-y-2 p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-white/80">
-                  Processing {uploadProgress.current}/{uploadProgress.total}: <span className="text-[#FFED00]">{uploadProgress.currentFile}</span>
+                  Processing {uploadProgress.current}/{uploadProgress.total}: <span className="text-blue-400">{uploadProgress.currentFile}</span>
                 </span>
                 <span className="text-xs font-mono text-white/50">
                   {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
@@ -4459,7 +4459,7 @@ function SourcesTab({
               </div>
               <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 />
               </div>
@@ -4483,13 +4483,13 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
           <CardDescription className="text-white/70 font-mono">
             Paste a Google Docs/Slides/Sheets link or choose from Drive.
             {selectedFolderId !== "none" && (
-              <span className="ml-2 text-[#FFED00]">
+              <span className="ml-2 text-blue-400">
                 → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
               </span>
             )}
@@ -4503,16 +4503,16 @@ function SourcesTab({
                 value={driveUrl}
                 onChange={(e) => setDriveUrl(e.target.value)}
                 placeholder="https://docs.google.com/document/d/..."
-                className="border-2 border-white bg-transparent text-white placeholder:text-white/50"
+                className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50"
               />
             </div>
             <div className="flex items-end">
               <div className="flex w-full flex-col gap-2">
-                <Button onClick={openDrivePicker} variant="outline" className="w-full border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                <Button onClick={openDrivePicker} variant="outline" className="w-full border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                   <Folder className="h-4 w-4 mr-2" />
                   Choose from Drive
                 </Button>
-                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50">
+                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50">
                   {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                   Import Drive
                 </Button>
@@ -4520,7 +4520,7 @@ function SourcesTab({
             </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-white/70 font-mono">
-            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]" />
+            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500" />
             Auto-extract and log decision after import
           </label>
           <p className="text-xs text-white/70 font-mono">
@@ -4530,10 +4530,10 @@ function SourcesTab({
       </Card>
 
       {/* ── Google Drive Portfolio Folder Sync ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Cloud className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            <Cloud className="h-5 w-5 inline mr-2 text-blue-400" />
             Google Drive Folder Sync
           </CardTitle>
           <CardDescription className="text-white/70 font-mono">
@@ -4547,9 +4547,9 @@ function SourcesTab({
               {/* Connected folders list */}
               <div className="space-y-2">
                 {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder", category: "Portfolio Companies" as const }]).map((folder) => (
-                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-[#FFED00]/30 bg-[#FFED00]/5 flex-wrap">
+                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-blue-500/30 bg-blue-600/5 flex-wrap">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <Folder className="h-5 w-5 text-[#FFED00] shrink-0" />
+                      <Folder className="h-5 w-5 text-blue-400 shrink-0" />
                       <div className="min-w-0">
                         <div className="font-mono font-bold text-white text-sm">{folder.name}</div>
                         <div className="text-[10px] text-white/40 font-mono truncate max-w-[200px]">{folder.id}</div>
@@ -4598,12 +4598,12 @@ function SourcesTab({
                           }
                         }}
                       >
-                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-white/20 bg-transparent text-white font-mono">
+                        <SelectTrigger className="w-[180px] h-8 text-[10px] border border-white/20 bg-white/[0.02] text-white font-mono">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#050505] border-2 border-white">
+                        <SelectContent className="bg-[#050505] border border-white/10">
                           {DRIVE_ROOT_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-white/10 focus:bg-white/10">
+                            <SelectItem key={cat} value={cat} className="text-white font-mono hover:bg-blue-500/100/100/10 focus:bg-white/10">
                               {cat}
                             </SelectItem>
                           ))}
@@ -4671,7 +4671,7 @@ function SourcesTab({
                     variant="outline"
                     size="sm"
                     onClick={connectDrivePortfolioFolder}
-                    className="border border-white/20 bg-transparent text-white/70 hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold text-[10px] h-7 px-2"
+                    className="border border-white/20 bg-white/[0.02] text-white/70 hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold text-[10px] h-7 px-2"
                   >
                     <FolderPlus className="h-3.5 w-3.5 mr-1" />
                     Add Folder
@@ -4680,7 +4680,7 @@ function SourcesTab({
                     size="sm"
                     onClick={() => syncGoogleDriveFolder()}
                     disabled={isSyncingDrive || !canImport}
-                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
+                    className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingDrive ? (
                       <>
@@ -4699,14 +4699,14 @@ function SourcesTab({
 
               {/* Sync progress */}
               {driveSyncProgress && (
-                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                <div className="space-y-2 p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-white/80">
                       {driveSyncProgress.phase}{" "}
                       {driveSyncProgress.total > 0 && (
                         <>
                           {driveSyncProgress.current}/{driveSyncProgress.total}:{" "}
-                          <span className="text-[#FFED00]">{driveSyncProgress.currentItem}</span>
+                          <span className="text-blue-400">{driveSyncProgress.currentItem}</span>
                         </>
                       )}
                     </span>
@@ -4719,7 +4719,7 @@ function SourcesTab({
                   {driveSyncProgress.total > 0 && (
                     <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${(driveSyncProgress.current / driveSyncProgress.total) * 100}%` }}
                       />
                     </div>
@@ -4732,7 +4732,7 @@ function SourcesTab({
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {driveSyncResults.map((r, i) => (
                     <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-white/70 px-2 py-1 rounded bg-white/5">
-                      <Building2 className="h-3 w-3 text-[#FFED00] flex-shrink-0" />
+                      <Building2 className="h-3 w-3 text-blue-400 flex-shrink-0" />
                       <span className="font-bold text-white/90">{r.companyName}</span>
                       {r.newFiles > 0 && <span className="text-emerald-400">+{r.newFiles} new</span>}
                       {r.updatedFiles > 0 && <span className="text-blue-400">{r.updatedFiles} updated</span>}
@@ -4752,7 +4752,7 @@ function SourcesTab({
               <Button
                 onClick={connectDrivePortfolioFolder}
                 disabled={!canImport}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50"
               >
                 <Folder className="h-4 w-4 mr-2" />
                 Connect Portfolio Folder
@@ -4766,10 +4766,10 @@ function SourcesTab({
       </Card>
 
       {/* ── Gmail Inbox Sync ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Mail className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            <Mail className="h-5 w-5 inline mr-2 text-blue-400" />
             Gmail Inbox Sync
           </CardTitle>
           <CardDescription className="text-white/70 font-mono">
@@ -4787,7 +4787,7 @@ function SourcesTab({
                     value={gmailQuery}
                     onChange={(e) => setGmailQuery(e.target.value)}
                     placeholder='e.g. from:founder@startup.com, subject:"pitch deck", has:attachment'
-                    className="border-2 border-white bg-transparent text-white placeholder:text-white/40 text-xs font-mono"
+                    className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/40 text-xs font-mono"
                   />
                   <p className="text-[10px] text-white/40 font-mono mt-1">Standard Gmail search operators. Leave blank to sync all inbox mail.</p>
                 </div>
@@ -4802,7 +4802,7 @@ function SourcesTab({
                       if (!isNaN(v) && v >= 1) setGmailMaxPerSync(v);
                       else if (e.target.value === "") setGmailMaxPerSync(50);
                     }}
-                    className="border-2 border-white bg-transparent text-white text-xs font-mono"
+                    className="border border-white/10 bg-white/[0.02] text-white text-xs font-mono"
                   />
                   <p className="text-[10px] text-white/40 font-mono mt-1">No limit — enter any number.</p>
                 </div>
@@ -4812,7 +4812,7 @@ function SourcesTab({
                   id="gmail-attachments"
                   checked={gmailIncludeAttachments}
                   onCheckedChange={(v) => setGmailIncludeAttachments(!!v)}
-                  className="border-white/50 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                  className="border-white/50 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500"
                 />
                 <Label htmlFor="gmail-attachments" className="text-white/70 font-mono text-xs cursor-pointer">
                   Process email attachments (PDFs, docs)
@@ -4821,7 +4821,7 @@ function SourcesTab({
               {/* Save config changes */}
               <Button
                 size="sm"
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold font-mono text-xs h-9 px-5 border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.4)] uppercase tracking-wider"
+                className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold font-mono text-xs h-9 px-5 border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.4)] uppercase tracking-wider"
                 onClick={async () => {
                   if (!activeEventId) return;
                   await supabase.from("sync_configurations")
@@ -4855,7 +4855,7 @@ function SourcesTab({
                     size="sm"
                     onClick={syncGmailInbox}
                     disabled={isSyncingGmail || !canImport}
-                    className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
+                    className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50 h-7 text-[10px] px-2"
                   >
                     {isSyncingGmail ? (
                       <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Syncing…</>
@@ -4868,7 +4868,7 @@ function SourcesTab({
 
               {/* Sync progress */}
               {gmailSyncProgress && (
-                <div className="space-y-2 p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                <div className="space-y-2 p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-white/80">
                       {gmailSyncProgress.currentItem}
@@ -4882,7 +4882,7 @@ function SourcesTab({
                   {gmailSyncProgress.total > 0 && (
                     <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-[#FFED00] h-2 rounded-full transition-all duration-500"
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${(gmailSyncProgress.current / gmailSyncProgress.total) * 100}%` }}
                       />
                     </div>
@@ -4917,7 +4917,7 @@ function SourcesTab({
               <Button
                 onClick={() => connectGmail()}
                 disabled={!canImport}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+                className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50"
               >
                 <Mail className="h-4 w-4 mr-2" />
                 Connect Gmail
@@ -4931,10 +4931,10 @@ function SourcesTab({
       </Card>
 
       {/* ── Company cards cleanup ── */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">
-            <Building2 className="h-5 w-5 inline mr-2 text-[#FFED00]" />
+            <Building2 className="h-5 w-5 inline mr-2 text-blue-400" />
             Company cards
           </CardTitle>
           <CardDescription className="text-white/70 font-mono">
@@ -4960,7 +4960,7 @@ function SourcesTab({
                 setIsDeletingCards(false);
               }
             }}
-            className="border border-white/20 bg-transparent text-white/70 hover:bg-white/10 font-mono text-[10px] h-8"
+            className="border border-white/20 bg-white/[0.02] text-white/70 hover:bg-blue-500/100/100/10 font-mono text-[10px] h-8"
           >
             {isDeletingCards ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
             Delete redundant cards
@@ -4984,7 +4984,7 @@ function SourcesTab({
                 setIsDeletingCards(false);
               }
             }}
-            className="border border-red-500/50 bg-transparent text-red-400 hover:bg-red-500/10 font-mono text-[10px] h-8"
+            className="border border-red-500/50 bg-white/[0.02] text-red-400 hover:bg-red-500/10 font-mono text-[10px] h-8"
           >
             {isDeletingCards ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
             Delete all cards
@@ -4992,8 +4992,8 @@ function SourcesTab({
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Tracked Sources</CardTitle>
           <CardDescription className="text-white/70 font-mono">{sources.length} items</CardDescription>
         </CardHeader>
@@ -5010,11 +5010,11 @@ function SourcesTab({
                 : null;
 
               return (
-                <div key={source.id} className="flex items-center justify-between gap-3 border-2 border-white rounded-md p-3 hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all bg-transparent">
+                <div key={source.id} className="flex items-center justify-between gap-3 border border-white/10 rounded-md p-3 hover:border-blue-500 hover:bg-blue-600/5 transition-all bg-white/[0.02]">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{source.source_type}</Badge>
-                      {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-transparent font-mono">{source.status}</Badge>}
+                      <Badge variant="outline" className="border-white text-white bg-white/[0.02] font-mono">{source.source_type}</Badge>
+                      {source.status !== "active" && <Badge variant="outline" className="border-white/50 text-white/50 bg-white/[0.02] font-mono">{source.status}</Badge>}
                     </div>
                     <div className="font-mono font-bold text-white">{source.title || "Untitled source"}</div>
                     {source.external_url && (
@@ -5027,7 +5027,7 @@ function SourcesTab({
                     )}
                     {relatedFolderName && (
                       <div className="text-xs text-white/70 font-mono">
-                        Folder: <span className="text-[#FFED00]">{relatedFolderName}</span>
+                        Folder: <span className="text-blue-400">{relatedFolderName}</span>
                       </div>
                     )}
                     {source.notes && (
@@ -5036,7 +5036,7 @@ function SourcesTab({
                     {source.tags && source.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {source.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                          <Badge key={tag} variant="outline" className="text-xs border-white text-white bg-white/[0.02] font-mono">
                             {tag}
                           </Badge>
                         ))}
@@ -5045,14 +5045,14 @@ function SourcesTab({
                   </div>
                   <div className="flex items-center gap-2">
                     {source.external_url && (
-                      <Button variant="outline" size="sm" asChild className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                      <Button variant="outline" size="sm" asChild className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                         <a href={source.external_url} target="_blank" rel="noreferrer">
                           <Link2 className="h-4 w-4 mr-1" />
                           Open
                         </a>
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteSource(source.id)} className="text-white/70 hover:text-white hover:bg-blue-500/100/100/10">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -5073,10 +5073,10 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
+        <DialogContent className="bg-[#050505] border border-white/10 text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <FolderPlus className="h-4 w-4 text-[#FFED00]" />
+              <FolderPlus className="h-4 w-4 text-blue-400" />
               Categorize &amp; Assign Folder
             </DialogTitle>
             <DialogDescription className="text-white/70 font-mono text-xs">
@@ -5098,7 +5098,7 @@ function SourcesTab({
 
             {/* Step 1: Category selector */}
             <div>
-              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+              <Label className="text-[10px] font-mono text-blue-400/80 uppercase tracking-wider mb-1.5 block">
                 Step 1 — Choose Category
               </Label>
               <div className="flex flex-wrap gap-2">
@@ -5111,7 +5111,7 @@ function SourcesTab({
                       onClick={() => setFolderDialogCategory(cat)}
                       className={`px-3 py-1.5 rounded-full text-xs font-mono border-2 transition-all ${
                         isActive
-                          ? "border-[#FFED00] bg-[#FFED00]/15 text-[#FFED00] font-bold shadow-[0_0_8px_rgba(255,237,0,0.25)]"
+                          ? "border-blue-500 bg-blue-600/15 text-blue-400 font-bold shadow-[0_0_8px_rgba(59,130,246,0.25)]"
                           : "border-white/30 text-white/70 hover:border-white/60 hover:text-white"
                       }`}
                     >
@@ -5124,7 +5124,7 @@ function SourcesTab({
 
             {/* Step 2: Folder selection */}
             <div>
-              <Label className="text-[10px] font-mono text-[#FFED00]/80 uppercase tracking-wider mb-1.5 block">
+              <Label className="text-[10px] font-mono text-blue-400/80 uppercase tracking-wider mb-1.5 block">
                 Step 2 — Select or Create Folder
               </Label>
 
@@ -5134,7 +5134,7 @@ function SourcesTab({
                   value={folderDialogNewName}
                   onChange={(e) => setFolderDialogNewName(e.target.value)}
                   placeholder={`New folder name (${folderDialogCategory})`}
-                  className="flex-1 border border-white/30 bg-transparent text-white text-xs placeholder:text-white/40 h-8"
+                  className="flex-1 border border-white/30 bg-white/[0.02] text-white text-xs placeholder:text-white/40 h-8"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && folderDialogNewName.trim()) {
                       e.preventDefault();
@@ -5152,7 +5152,7 @@ function SourcesTab({
                 <Button
                   size="sm"
                   disabled={!folderDialogNewName.trim()}
-                  className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold h-8 text-xs px-3"
+                  className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold h-8 text-xs px-3"
                   onClick={async () => {
                     if (!folderDialogNewName.trim()) return;
                     const folder = await onCreateFolder(folderDialogNewName.trim(), folderDialogCategory);
@@ -5183,12 +5183,12 @@ function SourcesTab({
                     {catFolders.map((folder) => (
                       <label
                         key={folder.id}
-                        className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white font-mono"
+                        className="flex items-center gap-2 text-xs border border-white/40 px-2 py-1.5 rounded-md cursor-pointer hover:bg-blue-600/5 hover:border-blue-500 transition-colors text-white font-mono"
                       >
                         <Checkbox
                           checked={folderAssignmentIds.includes(folder.id)}
                           onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
-                          className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                          className="border-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500"
                         />
                         <Folder className="h-3 w-3 text-white/70" />
                         <span className="flex-1">{folder.name}</span>
@@ -5215,12 +5215,12 @@ function SourcesTab({
                             {catFolders.map((folder) => (
                               <label
                                 key={folder.id}
-                                className="flex items-center gap-2 text-xs border border-white/20 px-2 py-1.5 rounded-md cursor-pointer hover:bg-[#FFED00]/5 hover:border-[#FFED00] transition-colors text-white/60 font-mono"
+                                className="flex items-center gap-2 text-xs border border-white/20 px-2 py-1.5 rounded-md cursor-pointer hover:bg-blue-600/5 hover:border-blue-500 transition-colors text-white/60 font-mono"
                               >
                                 <Checkbox
                                   checked={folderAssignmentIds.includes(folder.id)}
                                   onCheckedChange={(val) => toggleFolderAssignment(folder.id, val === true)}
-                                  className="border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                                  className="border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500"
                                 />
                                 <Folder className="h-3 w-3 text-white/40" />
                                 <span className="flex-1">{folder.name}</span>
@@ -5238,7 +5238,7 @@ function SourcesTab({
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+              className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
               onClick={() => {
                 setIsFolderDialogOpen(false);
                 setPendingFolderDocs([]);
@@ -5248,7 +5248,7 @@ function SourcesTab({
               Skip for now
             </Button>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)] disabled:opacity-50"
+              className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] disabled:opacity-50"
               disabled={isAssigningFolders || folderAssignmentIds.length === 0}
               onClick={assignFoldersToDocuments}
             >
@@ -5269,10 +5269,10 @@ function SourcesTab({
           }
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-md">
+        <DialogContent className="bg-[#050505] border border-white/10 text-white max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Folder className="h-4 w-4 text-[#FFED00]" />
+              <Folder className="h-4 w-4 text-blue-400" />
               Categorize Folders
             </DialogTitle>
             <DialogDescription className="text-white/70 font-mono text-xs">
@@ -5282,7 +5282,7 @@ function SourcesTab({
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {categoryPickerFolders.map((pf, idx) => (
               <div key={pf.id} className="flex items-center gap-3 border border-white/20 rounded-md px-3 py-2">
-                <Folder className="h-4 w-4 text-[#FFED00] shrink-0" />
+                <Folder className="h-4 w-4 text-blue-400 shrink-0" />
                 <span className="text-xs font-mono text-white flex-1 truncate">{pf.name}</span>
                 <Select
                   value={pf.category}
@@ -5290,12 +5290,12 @@ function SourcesTab({
                     setCategoryPickerFolders((prev) => prev.map((f, i) => i === idx ? { ...f, category: val } : f));
                   }}
                 >
-                  <SelectTrigger className="w-[180px] h-7 text-[10px] border-white/30 bg-transparent text-white">
+                  <SelectTrigger className="w-[180px] h-7 text-[10px] border-white/30 bg-white/[0.02] text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1a1a2e] border-white/20">
                     {FOLDER_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="text-white font-mono text-xs hover:bg-white/10 focus:bg-white/10">
+                      <SelectItem key={cat} value={cat} className="text-white font-mono text-xs hover:bg-blue-500/100/100/10 focus:bg-white/10">
                         {cat}
                       </SelectItem>
                     ))}
@@ -5307,7 +5307,7 @@ function SourcesTab({
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+              className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
               onClick={() => {
                 setCategoryPickerOpen(false);
                 setCategoryPickerFolders([]);
@@ -5316,7 +5316,7 @@ function SourcesTab({
               Skip
             </Button>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
               onClick={async () => {
                 await onFoldersCategoriesSaved?.(categoryPickerFolders.map((pf) => ({ id: pf.id, category: pf.category })));
                 toast({ title: "Categories saved", description: `Updated ${categoryPickerFolders.length} folder(s).` });
@@ -5337,10 +5337,10 @@ function SourcesTab({
           if (!open) setBatchReviewData(null);
         }}
       >
-        <DialogContent className="bg-[#050505] border-2 border-white text-white max-w-lg">
+        <DialogContent className="bg-[#050505] border border-white/10 text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[#FFED00]" />
+              <Sparkles className="h-4 w-4 text-blue-400" />
               Batch Extraction Summary
             </DialogTitle>
             <DialogDescription className="text-white/70 font-mono">
@@ -5351,7 +5351,7 @@ function SourcesTab({
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {batchReviewData?.map((item, i) => (
               <div key={i} className="flex items-center gap-3 p-2 rounded-md border border-white/10 bg-white/5">
-                <Building2 className="h-4 w-4 text-[#FFED00] flex-shrink-0" />
+                <Building2 className="h-4 w-4 text-blue-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-mono font-bold text-white truncate">{item.companyName}</div>
                 </div>
@@ -5369,7 +5369,7 @@ function SourcesTab({
               Switch to the Companies tab to review details and resolve conflicts.
             </p>
             <Button
-              className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00] transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.5)]"
+              className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
               onClick={() => setBatchReviewData(null)}
             >
               Got it
@@ -5584,8 +5584,8 @@ function DashboardTab({
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-            <Building2 className="h-5 w-5 text-[#FFED00]" />
+          <div className="p-2 border-2 border-blue-500 rounded-lg bg-white/[0.02]">
+            <Building2 className="h-5 w-5 text-blue-400" />
           </div>
           <div>
             <h2 className="text-lg font-mono font-black text-white uppercase tracking-tight">LP Dashboard</h2>
@@ -5593,11 +5593,11 @@ function DashboardTab({
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Building2 className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <Building2 className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{portfolioCount}</p>
@@ -5606,11 +5606,11 @@ function DashboardTab({
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Briefcase className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <Briefcase className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{fundCount}</p>
@@ -5619,11 +5619,11 @@ function DashboardTab({
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <FileText className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <FileText className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{documents.length}</p>
@@ -5632,11 +5632,11 @@ function DashboardTab({
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border-2 border-blue-500 rounded-lg bg-white/[0.02]">
+                  <Clock className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{lastUpdated}</p>
@@ -5646,10 +5646,10 @@ function DashboardTab({
             </CardContent>
           </Card>
         </div>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-[#FFED00]" />
+              <Building2 className="h-5 w-5 text-blue-400" />
               Portfolio Companies
             </CardTitle>
           </CardHeader>
@@ -5667,13 +5667,13 @@ function DashboardTab({
                           <Badge variant="outline" className="text-xs border-white/40 text-white/70">{card.company_properties.industry}</Badge>
                         )}
                         {card.company_properties?.funding_stage && (
-                          <Badge variant="outline" className="text-xs border-[#FFED00]/40 text-[#FFED00]">{card.company_properties.funding_stage}</Badge>
+                          <Badge variant="outline" className="text-xs border-blue-500/40 text-blue-400">{card.company_properties.funding_stage}</Badge>
                         )}
                       </div>
                     </div>
                     <div className="text-right">
                       {card.company_properties?.arr && (
-                        <div className="text-sm font-mono text-[#FFED00] font-bold">{card.company_properties.arr}</div>
+                        <div className="text-sm font-mono text-blue-400 font-bold">{card.company_properties.arr}</div>
                       )}
                       <div className="text-xs text-white/50 font-mono">{card.document_count} docs</div>
                     </div>
@@ -5691,11 +5691,11 @@ function DashboardTab({
     <div className="space-y-6">
       {/* Section switcher: Tasks (all) / Analytics (MD only) */}
       {isMD && (
-        <div className="flex items-center gap-1 border-b-2 border-white/20 pb-2">
+        <div className="flex items-center gap-1 border-b border-white/10/20 pb-2">
           <button
             onClick={() => setDashboardSection("tasks")}
             className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-              dashboardSection === "tasks" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+              dashboardSection === "tasks" ? "bg-blue-600/15 text-blue-400 border-b-2 border-blue-500" : "text-white/70 hover:text-white"
             }`}
           >
             <ListTodo className="h-4 w-4 inline mr-1.5 -mt-0.5" />
@@ -5704,7 +5704,7 @@ function DashboardTab({
           <button
             onClick={() => setDashboardSection("analytics")}
             className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-              dashboardSection === "analytics" ? "bg-[#FFED00]/15 text-[#FFED00] border-b-2 border-[#FFED00]" : "text-white/70 hover:text-white"
+              dashboardSection === "analytics" ? "bg-blue-600/15 text-blue-400 border-b-2 border-blue-500" : "text-white/70 hover:text-white"
             }`}
           >
             <BarChart3 className="h-4 w-4 inline mr-1.5 -mt-0.5" />
@@ -5723,11 +5723,11 @@ function DashboardTab({
       <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <ClipboardList className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <ClipboardList className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{stats.totalDecisions}</p>
@@ -5736,11 +5736,11 @@ function DashboardTab({
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <FileText className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <FileText className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{documents.length}</p>
@@ -5749,11 +5749,11 @@ function DashboardTab({
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Folder className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Folder className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{sources.length}</p>
@@ -5762,11 +5762,11 @@ function DashboardTab({
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <ListTodo className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border-2 border-blue-500 rounded-lg bg-white/[0.02]">
+                <ListTodo className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{isMD ? tasks.length : myTasks.length}</p>
@@ -5775,11 +5775,11 @@ function DashboardTab({
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Building2 className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Building2 className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{companyCards.length}</p>
@@ -5791,21 +5791,21 @@ function DashboardTab({
       </div>
 
       {/* Task hub */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white flex flex-row items-center justify-between gap-4 py-3">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10 flex flex-row items-center justify-between gap-4 py-3">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight flex items-center gap-2 text-base">
-            <ListTodo className="h-5 w-5 text-[#FFED00]" />
+            <ListTodo className="h-5 w-5 text-blue-400" />
             {isMD ? "All tasks" : "My tasks"}
           </CardTitle>
           <div className="flex items-center gap-3">
             {/* Segmented toggle for List / Gantt */}
-            <div className="flex items-center rounded-lg border-2 border-white/30 overflow-hidden">
+            <div className="flex items-center rounded-lg border border-white/10/30 overflow-hidden">
               <button
                 onClick={() => setViewMode("list")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
                   viewMode === "list"
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white/[0.02] text-white/60 hover:text-white hover:bg-blue-500/100/100/10"
                 }`}
               >
                 <ListTodo className="h-3.5 w-3.5" />
@@ -5816,8 +5816,8 @@ function DashboardTab({
                 onClick={() => setViewMode("gantt")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
                   viewMode === "gantt"
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/60 hover:text-white hover:bg-white/10"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white/[0.02] text-white/60 hover:text-white hover:bg-blue-500/100/100/10"
                 }`}
               >
                 <GanttChart className="h-3.5 w-3.5" />
@@ -5828,7 +5828,7 @@ function DashboardTab({
               <Button
                 size="sm"
                 onClick={() => setAddTaskOpen(true)}
-                className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-mono font-bold uppercase tracking-wider text-xs border-2 border-[#FFED00] transition-all hover:shadow-[0_0_16px_rgba(255,237,0,0.4)]"
+                className="bg-blue-600 text-white hover:bg-blue-600/80 font-mono font-bold uppercase tracking-wider text-xs border-2 border-blue-500 transition-all hover:shadow-[0_0_16px_rgba(59,130,246,0.4)]"
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Add task
@@ -5842,10 +5842,10 @@ function DashboardTab({
               <div>
                 <Label className="text-white font-mono text-xs uppercase tracking-wider">Assignee</Label>
                 <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="all" className="text-white">All</SelectItem>
                     {teamMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id} className="text-white">
@@ -5858,10 +5858,10 @@ function DashboardTab({
               <div>
                 <Label className="text-white font-mono text-xs uppercase tracking-wider">Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="border-2 border-white bg-transparent text-white mt-1">
+                  <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white mt-1">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#050505] border-2 border-white">
+                  <SelectContent className="bg-[#050505] border border-white/10">
                     <SelectItem value="all" className="text-white">All</SelectItem>
                     <SelectItem value="not_started" className="text-white">Not started</SelectItem>
                     <SelectItem value="in_progress" className="text-white">In progress</SelectItem>
@@ -5884,7 +5884,7 @@ function DashboardTab({
                       <button
                         key={w}
                         onClick={() => setGanttRange(w)}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttRange === w ? "bg-blue-600/20 text-blue-400 border border-blue-500" : "text-white/60 border border-white/20 hover:border-white/40"}`}
                       >
                         {w}w
                       </button>
@@ -5895,13 +5895,13 @@ function DashboardTab({
                       <span className="text-xs text-white/60 font-mono uppercase">Group:</span>
                       <button
                         onClick={() => setGanttGroupBy("none")}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "none" ? "bg-blue-600/20 text-blue-400 border border-blue-500" : "text-white/60 border border-white/20 hover:border-white/40"}`}
                       >
                         Flat
                       </button>
                       <button
                         onClick={() => setGanttGroupBy("assignee")}
-                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-[#FFED00]/20 text-[#FFED00] border border-[#FFED00]" : "text-white/60 border border-white/20 hover:border-white/40"}`}
+                        className={`px-2 py-1 rounded text-xs font-mono ${ganttGroupBy === "assignee" ? "bg-blue-600/20 text-blue-400 border border-blue-500" : "text-white/60 border border-white/20 hover:border-white/40"}`}
                       >
                         By Assignee
                       </button>
@@ -5912,7 +5912,7 @@ function DashboardTab({
                 <div className="flex items-center gap-3 flex-wrap">
                   {[
                     { label: "Not started", color: "#6b7280" },
-                    { label: "In progress", color: "#FFED00" },
+                    { label: "In progress", color: "#3b82f6" },
                     { label: "Done", color: "#22c55e" },
                     { label: "Cancelled", color: "#ef4444" },
                     { label: "Overdue", color: "#f97316" },
@@ -5952,7 +5952,7 @@ function DashboardTab({
                       if (task.status === "cancelled") return { bg: "#ef4444", border: "#dc2626", opacity: 0.5 };
                       if (isOverdue) return { bg: "#f97316", border: "#ea580c", opacity: 0.95 };
                       if (task.status === "done") return { bg: "#22c55e", border: "#16a34a", opacity: 0.9 };
-                      if (task.status === "in_progress") return { bg: "#FFED00", border: "#d4c800", opacity: 0.9 };
+                      if (task.status === "in_progress") return { bg: "#3b82f6", border: "#d4c800", opacity: 0.9 };
                       return { bg: "#6b7280", border: "#4b5563", opacity: 0.75 };
                     };
                     const renderRow = (task: Task) => {
@@ -5999,7 +5999,7 @@ function DashboardTab({
                               title={tooltipText}
                             >
                               {width > 8 && (
-                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold truncate px-1" style={{ color: bg === "#FFED00" ? "#000" : "#fff" }}>
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold truncate px-1" style={{ color: bg === "#3b82f6" ? "#000" : "#fff" }}>
                                   {task.title.length > 18 ? task.title.slice(0, 16) + ".." : task.title}
                                 </span>
                               )}
@@ -6018,7 +6018,7 @@ function DashboardTab({
                       }
                       return Array.from(grouped.entries()).map(([userId, groupTasks]) => (
                         <div key={userId} className="mb-3">
-                          <div className="text-xs font-mono text-[#FFED00] uppercase tracking-wider mb-1 border-b border-[#FFED00]/30 pb-1">
+                          <div className="text-xs font-mono text-blue-400 uppercase tracking-wider mb-1 border-b border-blue-500/30 pb-1">
                             {userId === "__unassigned__" ? "Unassigned" : displayName(userId)}
                           </div>
                           {groupTasks.map(renderRow)}
@@ -6043,7 +6043,7 @@ function DashboardTab({
                 filteredTasks.map((task) => {
                   const statusBadgeClass =
                     task.status === "done" ? "border-green-500/50 text-green-400 bg-green-500/10" :
-                    task.status === "in_progress" ? "border-[#FFED00]/50 text-[#FFED00] bg-[#FFED00]/10" :
+                    task.status === "in_progress" ? "border-blue-500/50 text-blue-400 bg-blue-600/10" :
                     task.status === "cancelled" ? "border-red-500/50 text-red-400 bg-red-500/10" :
                     "border-white/30 text-white/60 bg-white/5";
                   const statusLabel =
@@ -6097,10 +6097,10 @@ function DashboardTab({
 
       {/* Add task dialog (MD only) */}
       <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-        <DialogContent className="border-2 border-white bg-[#050505] text-white max-w-lg">
+        <DialogContent className="border border-white/10 bg-[#050505] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-mono font-black uppercase tracking-tight flex items-center gap-2">
-              <Plus className="h-5 w-5 text-[#FFED00]" />
+              <Plus className="h-5 w-5 text-blue-400" />
               New Task
             </DialogTitle>
             <DialogDescription className="text-white/60 font-mono text-xs">Create and assign a task to your team.</DialogDescription>
@@ -6109,7 +6109,7 @@ function DashboardTab({
             <div>
               <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Title *</Label>
               <Input
-                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
+                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono placeholder:text-white/30 focus:border-blue-500 transition-colors"
                 value={addTaskTitle}
                 onChange={(e) => setAddTaskTitle(e.target.value)}
                 placeholder="e.g. Review Q4 financials for TechCorp"
@@ -6119,7 +6119,7 @@ function DashboardTab({
               <div>
                 <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Assignee</Label>
                 <Select value={addTaskAssignee || "unassigned"} onValueChange={(v) => setAddTaskAssignee(v === "unassigned" ? "" : v)}>
-                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-blue-500">
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0a0a0a] border border-white/30">
@@ -6135,7 +6135,7 @@ function DashboardTab({
               <div>
                 <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Priority</Label>
                 <Select value={addTaskPriority} onValueChange={(v: "low" | "medium" | "high") => setAddTaskPriority(v)}>
-                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-[#FFED00]">
+                  <SelectTrigger className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono focus:border-blue-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0a0a0a] border border-white/30">
@@ -6151,7 +6151,7 @@ function DashboardTab({
                 <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Start Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskStartDate ? "text-white" : "text-white/40"}`}>
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-blue-500/100/100/10 hover:border-blue-500 ${addTaskStartDate ? "text-white" : "text-white/40"}`}>
                       <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
                       {addTaskStartDate ? format(new Date(addTaskStartDate), "MMM d, yyyy") : "Pick a date"}
                     </Button>
@@ -6163,13 +6163,13 @@ function DashboardTab({
                       onSelect={(date) => setAddTaskStartDate(date ? date.toISOString() : "")}
                       className="text-white"
                       classNames={{
-                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
+                        day_selected: "bg-blue-600 text-white hover:bg-blue-600 hover:text-black focus:bg-blue-600 focus:text-black",
                         day_today: "bg-white/10 text-white",
-                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-white/[0.02] p-0",
                         caption_label: "text-white font-mono font-bold text-sm",
                         head_cell: "text-white/50 font-mono text-xs w-9",
                         cell: "h-9 w-9 text-center text-sm p-0",
-                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-blue-500/100/100/10 rounded-md",
                         day_outside: "text-white/20",
                       }}
                     />
@@ -6180,7 +6180,7 @@ function DashboardTab({
                 <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Deadline</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-white/10 hover:border-[#FFED00] ${addTaskDeadline ? "text-white" : "text-white/40"}`}>
+                    <Button variant="outline" className={`w-full mt-1.5 justify-start text-left font-mono border border-white/30 bg-white/5 hover:bg-blue-500/100/100/10 hover:border-blue-500 ${addTaskDeadline ? "text-white" : "text-white/40"}`}>
                       <CalendarIcon className="mr-2 h-4 w-4 text-white/50" />
                       {addTaskDeadline ? format(new Date(addTaskDeadline), "MMM d, yyyy") : "Pick a date"}
                     </Button>
@@ -6192,13 +6192,13 @@ function DashboardTab({
                       onSelect={(date) => setAddTaskDeadline(date ? date.toISOString() : "")}
                       className="text-white"
                       classNames={{
-                        day_selected: "bg-[#FFED00] text-black hover:bg-[#FFED00] hover:text-black focus:bg-[#FFED00] focus:text-black",
+                        day_selected: "bg-blue-600 text-white hover:bg-blue-600 hover:text-black focus:bg-blue-600 focus:text-black",
                         day_today: "bg-white/10 text-white",
-                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-transparent p-0",
+                        nav_button: "text-white/60 hover:text-white border border-white/20 hover:border-white/40 h-7 w-7 bg-white/[0.02] p-0",
                         caption_label: "text-white font-mono font-bold text-sm",
                         head_cell: "text-white/50 font-mono text-xs w-9",
                         cell: "h-9 w-9 text-center text-sm p-0",
-                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-white/10 rounded-md",
+                        day: "h-9 w-9 p-0 font-mono text-white/80 hover:bg-blue-500/100/100/10 rounded-md",
                         day_outside: "text-white/20",
                       }}
                     />
@@ -6209,7 +6209,7 @@ function DashboardTab({
             <div>
               <Label className="text-white/80 font-mono text-xs uppercase tracking-wider">Description</Label>
               <Textarea
-                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono min-h-[80px] placeholder:text-white/30 focus:border-[#FFED00] transition-colors"
+                className="border border-white/30 bg-white/5 text-white mt-1.5 font-mono min-h-[80px] placeholder:text-white/30 focus:border-blue-500 transition-colors"
                 value={addTaskDescription}
                 onChange={(e) => setAddTaskDescription(e.target.value)}
                 placeholder="What needs to be done? Add details, context, links..."
@@ -6224,7 +6224,7 @@ function DashboardTab({
               >
                 Cancel
               </Button>
-              <Button onClick={handleCreateTask} disabled={addTaskSaving || !addTaskTitle.trim()} className="bg-[#FFED00] text-black font-bold font-mono hover:bg-[#FFED00]/80 transition-all hover:shadow-[0_0_20px_rgba(255,237,0,0.3)] disabled:opacity-40">
+              <Button onClick={handleCreateTask} disabled={addTaskSaving || !addTaskTitle.trim()} className="bg-blue-600 text-white font-bold font-mono hover:bg-blue-600/80 transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] disabled:opacity-40">
                 {addTaskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                 Create Task
               </Button>
@@ -6235,7 +6235,7 @@ function DashboardTab({
 
       {/* Delete task confirm (MD only) */}
       <AlertDialog open={!!taskToDelete} onOpenChange={(open) => !open && setTaskToDelete(null)}>
-        <AlertDialogContent className="border-2 border-white bg-[#050505] text-white">
+        <AlertDialogContent className="border border-white/10 bg-[#050505] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-mono font-black text-white">Delete task?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70 font-mono">
@@ -6243,7 +6243,7 @@ function DashboardTab({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-white text-white hover:bg-white/10">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-white text-white hover:bg-blue-500/100/100/10">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteTask}
               disabled={!!deletingTaskId}
@@ -6265,7 +6265,7 @@ function DashboardTab({
             const isOverdue = deadlineMs && deadlineMs < now && !isTerminal;
             const statusColor =
               t.status === "done" ? "text-green-400" :
-              t.status === "in_progress" ? "text-[#FFED00]" :
+              t.status === "in_progress" ? "text-blue-400" :
               t.status === "cancelled" ? "text-red-400" : "text-white/60";
             const statusLabel =
               t.status === "not_started" ? "Not started" :
@@ -6284,7 +6284,7 @@ function DashboardTab({
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge className={`font-mono text-xs ${
                       t.status === "done" ? "bg-green-500/15 text-green-400 border-green-500/30" :
-                      t.status === "in_progress" ? "bg-[#FFED00]/15 text-[#FFED00] border-[#FFED00]/30" :
+                      t.status === "in_progress" ? "bg-blue-600/15 text-blue-400 border-blue-500/30" :
                       t.status === "cancelled" ? "bg-red-500/15 text-red-400 border-red-500/30" :
                       "bg-white/5 text-white/60 border-white/20"
                     }`}>
@@ -6370,7 +6370,7 @@ function DashboardTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-[#FFED00]/50 text-[#FFED00] hover:bg-[#FFED00]/10 font-mono text-xs flex-1"
+                            className="border-blue-500/50 text-blue-400 hover:bg-blue-600/10 font-mono text-xs flex-1"
                             disabled={statusUpdatingId === t.id}
                             onClick={() => { handleUpdateStatus(t.id, "in_progress", statusNote[t.id] || undefined); setSelectedTask(null); }}
                           >
@@ -6420,8 +6420,8 @@ function DashboardTab({
 
       {/* Latest decision / document / source — keep for context */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Decision</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-white/70 font-mono">
@@ -6436,8 +6436,8 @@ function DashboardTab({
             )}
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Document</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-white/70 font-mono">
@@ -6448,8 +6448,8 @@ function DashboardTab({
             )}
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Latest Source</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-white/70 font-mono">
@@ -6542,10 +6542,10 @@ function OnboardingTab({
 
   return (
     <div className="space-y-6">
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-            <Sparkles className="h-5 w-5 text-[#FFED00]" />
+            <Sparkles className="h-5 w-5 text-blue-400" />
             Tier 2 VC Fund Onboarding
           </CardTitle>
           <CardDescription className="text-white/70 font-mono">
@@ -6555,22 +6555,22 @@ function OnboardingTab({
         </CardHeader>
         <CardContent className="space-y-4 text-white">
           {steps.map((step) => (
-            <div key={step.title} className="flex items-start justify-between gap-4 border-2 border-white rounded-md p-4 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
+            <div key={step.title} className="flex items-start justify-between gap-4 border border-white/10 rounded-md p-4 bg-white/[0.02] hover:border-blue-500 hover:bg-blue-600/5 transition-all">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   {step.status ? (
-                    <CheckCircle className="h-4 w-4 text-[#FFED00]" />
+                    <CheckCircle className="h-4 w-4 text-blue-400" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-white/50" />
                   )}
                   <span className="font-mono font-bold text-white">{step.title}</span>
-                  <Badge variant="outline" className={step.status ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono text-xs" : "border-white/50 text-white/50 bg-transparent font-mono text-xs"}>
+                  <Badge variant="outline" className={step.status ? "border-blue-500 text-blue-400 bg-white/[0.02] font-mono text-xs" : "border-white/50 text-white/50 bg-white/[0.02] font-mono text-xs"}>
                     {step.status ? "Complete" : "Pending"}
                   </Badge>
                 </div>
                 <p className="text-sm text-white/70 font-mono">{step.description}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={step.action} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+              <Button variant="outline" size="sm" onClick={step.action} className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold">
                 {step.actionLabel}
               </Button>
             </div>
@@ -6587,8 +6587,8 @@ function OnboardingTab({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Recommended Fund Data</CardTitle>
             <CardDescription className="text-white/70 font-mono">Prioritize these sources for strong answers.</CardDescription>
           </CardHeader>
@@ -6603,8 +6603,8 @@ function OnboardingTab({
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-white bg-transparent">
-          <CardHeader className="border-b-2 border-white">
+        <Card className="border border-white/10 bg-white/[0.02]">
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base text-white font-mono font-black uppercase tracking-tight">Sync Guidance</CardTitle>
             <CardDescription className="text-white/70 font-mono">Fastest path to a live knowledge base.</CardDescription>
           </CardHeader>
@@ -6718,8 +6718,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Filters</CardTitle>
           <CardDescription className="text-white/70 font-mono">Filter decisions by sector, stage, or partner</CardDescription>
         </CardHeader>
@@ -6728,10 +6728,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             <div>
               <Label className="text-white font-mono font-bold">Sector</Label>
               <Select value={selectedSector} onValueChange={setSelectedSector}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                   <SelectValue placeholder="All sectors" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
+                <SelectContent className="bg-[#050505] border border-white/10">
                   <SelectItem value="all" className="text-white">All sectors</SelectItem>
                   {sectors.map((sector) => (
                     <SelectItem key={sector} value={sector} className="text-white">
@@ -6744,10 +6744,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             <div>
               <Label className="text-white font-mono font-bold">Stage</Label>
               <Select value={selectedStage} onValueChange={setSelectedStage}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                   <SelectValue placeholder="All stages" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
+                <SelectContent className="bg-[#050505] border border-white/10">
                   <SelectItem value="all" className="text-white">All stages</SelectItem>
                   {stages.map((stage) => (
                     <SelectItem key={stage} value={stage} className="text-white">
@@ -6760,10 +6760,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             <div>
               <Label className="text-white font-mono font-bold">Partner</Label>
               <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                <SelectTrigger className="border-2 border-white bg-transparent text-white">
+                <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white">
                   <SelectValue placeholder="All partners" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#050505] border-2 border-white">
+                <SelectContent className="bg-[#050505] border border-white/10">
                   <SelectItem value="all" className="text-white">All partners</SelectItem>
                   {partners.map((partner) => (
                     <SelectItem key={partner} value={partner} className="text-white">
@@ -6784,7 +6784,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                   setSelectedStage("all");
                   setSelectedPartner("all");
                 }}
-                className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+                className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
               >
                 Clear filters ({filteredDecisions.length} decisions)
               </Button>
@@ -6795,11 +6795,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Target className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Target className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.totalDecisions}</p>
@@ -6808,11 +6808,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-[#FFED00] rounded-lg bg-transparent">
-                <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border-2 border-blue-500 rounded-lg bg-white/[0.02]">
+                <TrendingUp className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.positiveRate}%</p>
@@ -6821,11 +6821,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <BarChart3 className="h-5 w-5 text-blue-400" />
               </div>
               <div className="flex-1">
                 <p className="text-2xl font-mono font-black">{analytics.avgConfidence}%</p>
@@ -6837,7 +6837,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                         <span className="ml-1">ℹ️</span>
                       </p>
                     </TooltipTrigger>
-                    <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                    <TooltipContent className="bg-[#050505] border border-white/10 text-white">
                       <p className="max-w-xs font-mono">
                         Average confidence score (0-100) you assigned when logging decisions.
                         <br />
@@ -6850,11 +6850,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-4 text-white">
             <div className="flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                <Clock className="h-5 w-5 text-[#FFED00]" />
+              <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                <Clock className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-mono font-black">{analytics.avgDecisionVelocity}</p>
@@ -6867,11 +6867,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
       {hasEnoughData && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <Clock className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last7}</p>
@@ -6880,11 +6880,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last30}</p>
@@ -6893,11 +6893,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.last90}</p>
@@ -6906,11 +6906,11 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-2 border-white bg-transparent">
+          <Card className="border border-white/10 bg-white/[0.02]">
             <CardContent className="pt-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg bg-transparent">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                <div className="p-2 border border-white/10 rounded-lg bg-white/[0.02]">
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-mono font-black">{analytics.recencyStats.momentumPct}%</p>
@@ -6923,7 +6923,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
       )}
 
       {!hasEnoughData ? (
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="pt-6 text-white">
             <div className="text-center py-8">
               <AlertTriangle className="h-12 w-12 text-white/50 mx-auto mb-4" />
@@ -6940,10 +6940,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
         <>
           {/* ========== ADVANCED DECISION ANALYTICS ========== */}
           {adv && (
-          <Card className="border-2 border-[#FFED00]/50 bg-transparent">
-            <CardHeader className="border-b-2 border-white">
+          <Card className="border-2 border-blue-500/50 bg-white/[0.02]">
+            <CardHeader className="border-b border-white/10">
               <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                <Sparkles className="h-5 w-5 text-[#FFED00]" />
+                <Sparkles className="h-5 w-5 text-blue-400" />
                 Advanced Decision Analytics
               </CardTitle>
               <CardDescription className="text-white/70 font-mono">Insights, calibration, and focus recommendations</CardDescription>
@@ -6952,9 +6952,9 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
               {/* Advanced Insights KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {adv.bestSectorByRate && (
-                  <div className="p-3 rounded-lg border border-[#FFED00]/30 bg-[#FFED00]/5">
+                  <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">Best sector (rate)</p>
-                    <p className="font-mono font-bold text-[#FFED00]">{adv.bestSectorByRate.sector}</p>
+                    <p className="font-mono font-bold text-blue-400">{adv.bestSectorByRate.sector}</p>
                     <p className="text-xs font-mono text-white/80">{adv.bestSectorByRate.rate}% ({adv.bestSectorByRate.total} decisions)</p>
                   </div>
                 )}
@@ -6982,7 +6982,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 {adv.momDecisionsPct != null && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM volume change</p>
-                    <p className={`font-mono font-bold ${adv.momDecisionsPct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                    <p className={`font-mono font-bold ${adv.momDecisionsPct >= 0 ? "text-blue-400" : "text-orange-400"}`}>
                       {adv.momDecisionsPct >= 0 ? "+" : ""}{adv.momDecisionsPct}%
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
@@ -6991,7 +6991,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 {adv.momPositiveRatePct != null && (
                   <div className="p-3 rounded-lg border border-white/20 bg-white/5">
                     <p className="text-[10px] font-mono uppercase tracking-wider text-white/60">MoM positive rate</p>
-                    <p className={`font-mono font-bold ${adv.momPositiveRatePct >= 0 ? "text-[#FFED00]" : "text-orange-400"}`}>
+                    <p className={`font-mono font-bold ${adv.momPositiveRatePct >= 0 ? "text-blue-400" : "text-orange-400"}`}>
                       {adv.momPositiveRatePct >= 0 ? "+" : ""}{adv.momPositiveRatePct}pp
                     </p>
                     <p className="text-xs font-mono text-white/70">vs previous month</p>
@@ -7017,16 +7017,16 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
               {/* Confidence by outcome */}
               <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-white/20 bg-white/5">
-                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-[#FFED00]">{adv.confidenceWhenPositive ?? 0}%</strong></span>
+                <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when positive:</span> <strong className="text-blue-400">{adv.confidenceWhenPositive ?? 0}%</strong></span>
                 <span className="font-mono text-sm"><span className="text-white/60">Avg confidence when negative:</span> <strong className="text-white">{adv.confidenceWhenNegative ?? 0}%</strong></span>
                 <span className="font-mono text-sm"><span className="text-white/60">Pending:</span> <strong className="text-white">{adv.pendingPct ?? 0}%</strong> of decisions</span>
               </div>
 
               {/* Suggested focus */}
               {adv.suggestedFocus && (
-                <div className="p-3 rounded-lg border border-[#FFED00]/40 bg-[#FFED00]/10">
+                <div className="p-3 rounded-lg border border-blue-500/40 bg-blue-600/10">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mb-1">Suggested focus</p>
-                  <p className="font-mono font-bold text-[#FFED00]">{adv.suggestedFocus}</p>
+                  <p className="font-mono font-bold text-blue-400">{adv.suggestedFocus}</p>
                 </div>
               )}
 
@@ -7043,10 +7043,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
             const stages = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.stage))).sort();
             const sectors = Array.from(new Set(analytics.sectorStageMatrix.map((c) => c.sector))).sort();
             return (
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02]">
+                <CardHeader className="border-b border-white/10">
                   <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                    <BarChart3 className="h-5 w-5 text-blue-400" />
                     Sector × Stage Heatmap
                   </CardTitle>
                   <CardDescription className="text-white/70 font-mono">Decision volume and positive rate by sector and stage</CardDescription>
@@ -7095,10 +7095,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Sector Performance */}
           {analytics.sectorStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Sector Performance
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Decision breakdown by sector</CardDescription>
@@ -7111,7 +7111,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7123,10 +7123,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Stage Performance */}
           {analytics.stageStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02]">
+                <CardHeader className="border-b border-white/10">
                   <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <PieChart className="h-5 w-5 text-[#FFED00]" />
+                    <PieChart className="h-5 w-5 text-blue-400" />
                     Stage Distribution
                   </CardTitle>
                   <CardDescription className="text-white/70 font-mono">Decisions by funding stage</CardDescription>
@@ -7157,10 +7157,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02]">
+                <CardHeader className="border-b border-white/10">
                   <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                    <BarChart3 className="h-5 w-5 text-blue-400" />
                     Stage Conversion Rates
                   </CardTitle>
                   <CardDescription className="text-white/70 font-mono">
@@ -7172,7 +7172,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                             <span className="ml-1">ℹ️</span>
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                        <TooltipContent className="bg-[#050505] border border-white/10 text-white">
                           <p className="max-w-xs font-mono">
                             Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                             <br />
@@ -7191,7 +7191,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis stroke="#FFFFFF" />
                       <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                       <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                      <Bar dataKey="conversionRate" fill="#FFED00" name="Conversion Rate %" />
+                      <Bar dataKey="conversionRate" fill="#3b82f6" name="Conversion Rate %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -7201,10 +7201,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Performance */}
           {analytics.partnerStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Users className="h-5 w-5 text-[#FFED00]" />
+                  <Users className="h-5 w-5 text-blue-400" />
                   Partner Performance
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Decision metrics by partner</CardDescription>
@@ -7218,7 +7218,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis yAxisId="right" orientation="right" stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#FFED00" name="Total Decisions" />
+                    <Bar yAxisId="left" dataKey="totalDecisions" fill="#3b82f6" name="Total Decisions" />
                     <Bar yAxisId="right" dataKey="winRate" fill="#FFFFFF" name="Win Rate %" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7228,10 +7228,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Outcome Mix */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Partner Outcome Mix
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Outcome breakdown by partner (top 10)</CardDescription>
@@ -7244,7 +7244,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7255,10 +7255,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity by Partner */}
           {partnerOutcomeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                  <Clock className="h-5 w-5 text-blue-400" />
                   Decision Velocity by Partner
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Average decision cycle length (days)</CardDescription>
@@ -7271,7 +7271,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="avgDecisionVelocity" fill="#FFED00" name="Avg Days" />
+                    <Bar dataKey="avgDecisionVelocity" fill="#3b82f6" name="Avg Days" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7281,10 +7281,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
           {/* Outcome & Confidence */}
           {analytics.outcomeStats.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02]">
+                <CardHeader className="border-b border-white/10">
                   <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <PieChart className="h-5 w-5 text-[#FFED00]" />
+                    <PieChart className="h-5 w-5 text-blue-400" />
                     Outcome Mix
                   </CardTitle>
                   <CardDescription className="text-white/70 font-mono">Overall outcome distribution</CardDescription>
@@ -7301,7 +7301,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                         cy="50%"
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={90}
-                        fill="#FFED00"
+                        fill="#3b82f6"
                         dataKey="value"
                       >
                         {analytics.outcomeStats.map((entry, index) => (
@@ -7315,10 +7315,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-white bg-transparent">
-                <CardHeader className="border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02]">
+                <CardHeader className="border-b border-white/10">
                   <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                    <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                    <BarChart3 className="h-5 w-5 text-blue-400" />
                     Confidence by Outcome
                   </CardTitle>
                   <CardDescription className="text-white/70 font-mono">Average confidence score per outcome</CardDescription>
@@ -7331,7 +7331,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                       <YAxis stroke="#FFFFFF" />
                       <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                       <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                      <Bar dataKey="avgConfidence" fill="#FFED00" name="Avg Confidence %" />
+                      <Bar dataKey="avgConfidence" fill="#3b82f6" name="Avg Confidence %" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -7341,10 +7341,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence Distribution */}
           {analytics.confidenceBuckets.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Confidence Distribution
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Decision volume by confidence band</CardDescription>
@@ -7357,7 +7357,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7368,10 +7368,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Age Distribution */}
           {analytics.ageBuckets.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Decision Age Distribution
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Volume and outcome mix by decision age</CardDescription>
@@ -7384,7 +7384,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7395,10 +7395,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome by Stage */}
           {analytics.outcomeByStage.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Outcome by Stage
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Stage-level outcome mix</CardDescription>
@@ -7411,7 +7411,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7422,10 +7422,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Geo Focus */}
           {analytics.geoStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Geo Focus
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Decision volume by geography</CardDescription>
@@ -7438,7 +7438,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="total" fill="#FFED00" name="Total Decisions" />
+                    <Bar dataKey="total" fill="#3b82f6" name="Total Decisions" />
                     <Bar dataKey="avgConfidence" fill="#FFFFFF" name="Avg Confidence" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7448,10 +7448,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Time Series */}
           {analytics.timeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                   Decision Trends Over Time
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Monthly decision volume and outcomes</CardDescription>
@@ -7464,7 +7464,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="decisions" stroke="#FFED00" name="Total Decisions" />
+                    <Line type="monotone" dataKey="decisions" stroke="#3b82f6" name="Total Decisions" />
                     <Line type="monotone" dataKey="positive" stroke="#FFFFFF" name="Positive" />
                     <Line type="monotone" dataKey="negative" stroke="#FFFFFF" name="Negative" />
                     <Line type="monotone" dataKey="pending" stroke="#FFFFFF" name="Pending" />
@@ -7476,10 +7476,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Mix */}
           {analytics.actionTypeStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Action Type Mix
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Outcomes by decision action</CardDescription>
@@ -7492,7 +7492,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="positive" stackId="a" fill="#FFED00" name="Positive" />
+                    <Bar dataKey="positive" stackId="a" fill="#3b82f6" name="Positive" />
                     <Bar dataKey="negative" stackId="a" fill="#FFFFFF" name="Negative" />
                     <Bar dataKey="pending" stackId="a" fill="#FFFFFF" name="Pending" />
                   </BarChart>
@@ -7503,10 +7503,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Action Type Conversion Rate */}
           {actionConversionSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Action Type Conversion Rate
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Positive rate by action type</CardDescription>
@@ -7519,7 +7519,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="conversionRate" fill="#FFED00" name="Positive Rate %" />
+                    <Bar dataKey="conversionRate" fill="#3b82f6" name="Positive Rate %" />
                     <Bar dataKey="total" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7529,10 +7529,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Partner Win Rate */}
           {analytics.partnerStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <BarChart3 className="h-5 w-5 text-[#FFED00]" />
+                  <BarChart3 className="h-5 w-5 text-blue-400" />
                   Partner Win Rate
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Win rate by partner (top 10 by volume)</CardDescription>
@@ -7545,7 +7545,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="winRate" fill="#FFED00" name="Win Rate %" />
+                    <Bar dataKey="winRate" fill="#3b82f6" name="Win Rate %" />
                     <Bar dataKey="totalDecisions" fill="#FFFFFF" name="Decisions" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -7555,10 +7555,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Decision Velocity */}
           {analytics.decisionVelocity.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <Clock className="h-5 w-5 text-[#FFED00]" />
+                  <Clock className="h-5 w-5 text-blue-400" />
                   Decision Velocity Trend
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Average decision time over time</CardDescription>
@@ -7571,7 +7571,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="avgDays" stroke="#FFED00" name="Avg Days" />
+                    <Line type="monotone" dataKey="avgDays" stroke="#3b82f6" name="Avg Days" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7580,10 +7580,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Outcome Rate Trend */}
           {analytics.outcomeRateSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                   Positive Rate Trend
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Monthly positive rate across decisions</CardDescription>
@@ -7596,7 +7596,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#3b82f6" name="Positive Rate %" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7605,10 +7605,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Cumulative Decisions */}
           {analytics.cumulativeSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                   Cumulative Decisions
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">Total decisions over time</CardDescription>
@@ -7621,7 +7621,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#FFED00" name="Cumulative Decisions" />
+                    <Line type="monotone" dataKey="cumulativeDecisions" stroke="#3b82f6" name="Cumulative Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -7630,10 +7630,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Confidence vs Positive Rate */}
           {confidenceRateSeries.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-                  <TrendingUp className="h-5 w-5 text-[#FFED00]" />
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
                   Confidence vs Positive Rate
                 </CardTitle>
                 <CardDescription className="text-white/70 font-mono">How confidence bands correlate with outcomes</CardDescription>
@@ -7646,7 +7646,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     <YAxis stroke="#FFFFFF" />
                     <RechartsTooltip contentStyle={{ backgroundColor: "#050505", border: "2px solid #FFFFFF", color: "#FFFFFF" }} />
                     <Legend wrapperStyle={{ color: "#FFFFFF" }} />
-                    <Line type="monotone" dataKey="positiveRate" stroke="#FFED00" name="Positive Rate %" />
+                    <Line type="monotone" dataKey="positiveRate" stroke="#3b82f6" name="Positive Rate %" />
                     <Line type="monotone" dataKey="total" stroke="#FFFFFF" name="Decisions" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -7656,8 +7656,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Top Startups */}
           {analytics.startupStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Top Startups by Decision Volume</CardTitle>
                 <CardDescription className="text-white/70 font-mono">Most discussed companies and outcomes</CardDescription>
               </CardHeader>
@@ -7665,7 +7665,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b-2 border-white">
+                      <tr className="border-b border-white/10">
                         <th className="text-left p-2 text-white font-bold">Startup</th>
                         <th className="text-right p-2 text-white font-bold">Total</th>
                         <th className="text-right p-2 text-white font-bold">Positive</th>
@@ -7676,10 +7676,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     </thead>
                     <tbody>
                       {analytics.startupStats.slice(0, 10).map((startup) => (
-                        <tr key={startup.startupName} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                        <tr key={startup.startupName} className="border-b border-white/30 hover:bg-blue-600/5">
                           <td className="p-2 font-bold text-white">{startup.startupName}</td>
                           <td className="text-right p-2 text-white">{startup.total}</td>
-                          <td className="text-right p-2 text-[#FFED00]">{startup.positive}</td>
+                          <td className="text-right p-2 text-blue-400">{startup.positive}</td>
                           <td className="text-right p-2 text-white/50">{startup.negative}</td>
                           <td className="text-right p-2 text-white/70">{startup.pending}</td>
                           <td className="text-right p-2 text-white">{startup.avgConfidence}%</td>
@@ -7694,8 +7694,8 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
 
           {/* Sector Conversion Rates Table */}
           {analytics.sectorStats.length > 0 && (
-            <Card className="border-2 border-white bg-transparent">
-              <CardHeader className="border-b-2 border-white">
+            <Card className="border border-white/10 bg-white/[0.02]">
+              <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-white font-mono font-black uppercase tracking-tight">Sector Conversion Rates</CardTitle>
                 <CardDescription className="text-white/70 font-mono">
                   <TooltipProvider>
@@ -7706,7 +7706,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                           <span className="ml-1">ℹ️</span>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent className="bg-[#050505] border-2 border-white text-white">
+                      <TooltipContent className="bg-[#050505] border border-white/10 text-white">
                         <p className="max-w-xs font-mono">
                           Conversion Rate = (Positive Decisions / Total Decisions) × 100%
                           <br />
@@ -7721,7 +7721,7 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm font-mono">
                     <thead>
-                      <tr className="border-b-2 border-white">
+                      <tr className="border-b border-white/10">
                         <th className="text-left p-2 text-white font-bold">Sector</th>
                         <th className="text-right p-2 text-white font-bold">Total</th>
                         <th className="text-right p-2 text-white font-bold">Positive</th>
@@ -7733,10 +7733,10 @@ function DecisionEngineDashboardTab({ decisions }: { decisions: Decision[] }) {
                     </thead>
                     <tbody>
                       {analytics.sectorStats.map((sector) => (
-                        <tr key={sector.sector} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                        <tr key={sector.sector} className="border-b border-white/30 hover:bg-blue-600/5">
                           <td className="p-2 font-bold text-white">{sector.sector}</td>
                           <td className="text-right p-2 text-white">{sector.total}</td>
-                          <td className="text-right p-2 text-[#FFED00]">{sector.positive}</td>
+                          <td className="text-right p-2 text-blue-400">{sector.positive}</td>
                           <td className="text-right p-2 text-white/50">{sector.negative}</td>
                           <td className="text-right p-2 text-white/70">{sector.pending}</td>
                           <td className="text-right p-2 font-bold text-white">{sector.conversionRate}%</td>
@@ -12875,7 +12875,7 @@ export default function CIS() {
                     href={linkData.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
+                    className="text-blue-400 hover:text-blue-400/80 underline decoration-[#3b82f6]/50 hover:decoration-[#3b82f6] transition-colors"
                   >
                     {linkData.text}
                   </a>
@@ -12888,19 +12888,19 @@ export default function CIS() {
         }
         if (match[2]) {
           // ***bold italic***
-          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-[#FFED00]">{match[2]}</strong>);
+          parts.push(<strong key={`${keyPrefix}bi${i}`} className="font-bold italic text-blue-400">{match[2]}</strong>);
         } else if (match[3]) {
           // **bold**
-          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-[#FFED00]">{match[3]}</strong>);
+          parts.push(<strong key={`${keyPrefix}b${i}`} className="font-bold text-blue-400">{match[3]}</strong>);
         } else if (match[4]) {
           // *italic*
           parts.push(<em key={`${keyPrefix}i${i}`} className="italic text-white/90">{match[4]}</em>);
         } else if (match[5]) {
           // `code`
-          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-[#FFED00] font-mono">{match[5]}</code>);
+          parts.push(<code key={`${keyPrefix}c${i}`} className="bg-white/10 px-1.5 py-0.5 rounded text-xs text-blue-400 font-mono">{match[5]}</code>);
         } else if (match[6]) {
           // [1] source reference
-          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-[#FFED00]/20 text-[#FFED00] text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[6]}</span>);
+          parts.push(<span key={`${keyPrefix}r${i}`} className="inline-flex items-center justify-center bg-blue-600/20 text-blue-400 text-[10px] font-bold rounded-full w-4 h-4 mx-0.5 align-text-top">{match[6]}</span>);
         }
         lastIndex = match.index + match[0].length;
         i++;
@@ -12919,7 +12919,7 @@ export default function CIS() {
                   href={linkData.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#FFED00] hover:text-[#FFED00]/80 underline decoration-[#FFED00]/50 hover:decoration-[#FFED00] transition-colors"
+                  className="text-blue-400 hover:text-blue-400/80 underline decoration-[#3b82f6]/50 hover:decoration-[#3b82f6] transition-colors"
                 >
                   {linkData.text}
                 </a>
@@ -13050,13 +13050,13 @@ export default function CIS() {
           switch (block.type) {
             case "h1":
               return (
-                <h2 key={idx} className="text-base font-bold text-[#FFED00] font-mono mt-3 mb-1 border-b border-white/20 pb-1">
+                <h2 key={idx} className="text-base font-bold text-blue-400 font-mono mt-3 mb-1 border-b border-white/20 pb-1">
                   {renderInline(block.content, `h1-${idx}-`)}
                 </h2>
               );
             case "h2":
               return (
-                <h3 key={idx} className="text-sm font-bold text-[#FFED00] font-mono mt-3 mb-1">
+                <h3 key={idx} className="text-sm font-bold text-blue-400 font-mono mt-3 mb-1">
                   {renderInline(block.content, `h2-${idx}-`)}
                 </h3>
               );
@@ -13094,7 +13094,7 @@ export default function CIS() {
                       <thead>
                         <tr>
                           {head.map((cell, cidx) => (
-                            <th key={cidx} className="border border-white/30 px-3 py-2 text-left font-bold text-[#FFED00] bg-white/5">
+                            <th key={cidx} className="border border-white/30 px-3 py-2 text-left font-bold text-blue-400 bg-white/5">
                               {renderInline(cell, `th-${idx}-${cidx}-`)}
                             </th>
                           ))}
@@ -13137,10 +13137,10 @@ export default function CIS() {
 
       <div className="relative z-10 max-w-[1600px] mx-auto px-4 py-3 space-y-3">
         {/* Top navigation bar */}
-        <header className="flex items-center justify-between gap-4 border-b-2 border-white/20 pb-3 cis-fade-in">
+        <header className="flex items-center justify-between gap-4 border-b border-white/10/20 pb-3 cis-fade-in">
           <div className="flex items-center gap-6 min-w-0">
             <div className="flex items-center gap-2 shrink-0">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400">
                 <Brain className="h-5 w-5" />
               </span>
               <span className="font-bold text-white text-lg tracking-tight hidden sm:inline">CIS</span>
@@ -13150,7 +13150,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("chat")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "chat" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "chat" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Chat
@@ -13160,7 +13160,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("onboarding")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "onboarding" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "onboarding" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Onboarding
@@ -13169,7 +13169,7 @@ export default function CIS() {
               <button
                 onClick={() => setActiveTab("overview")}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "overview" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                  activeTab === "overview" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                 }`}
               >
                 Dashboard
@@ -13178,7 +13178,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("sources")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "sources" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "sources" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Sources
@@ -13188,7 +13188,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("decisions")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "decisions" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "decisions" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Decisions
@@ -13198,7 +13198,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("companies")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "companies" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "companies" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Companies
@@ -13208,7 +13208,7 @@ export default function CIS() {
                 <button
                   onClick={() => setActiveTab("connections")}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "connections" ? "bg-[#FFED00]/15 text-[#FFED00]" : "text-white/70 hover:text-white hover:bg-white/5"
+                    activeTab === "connections" ? "bg-blue-600/15 text-blue-400" : "text-white/70 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   Connections
@@ -13224,8 +13224,8 @@ export default function CIS() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 hover:border-[#FFED00]/30 text-white font-medium text-sm shrink-0 transition-all">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-xs font-bold">
+              <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-500/100/100/10 hover:border-blue-500/30 text-white font-medium text-sm shrink-0 transition-all">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600/20 text-blue-400 text-xs font-bold">
                   {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
                 </span>
                 <span className="max-w-[140px] truncate hidden sm:inline">{profile?.full_name || profile?.email || "Account"}</span>
@@ -13255,7 +13255,7 @@ export default function CIS() {
           <div className="w-64 flex-shrink-0 flex flex-col gap-4">
             {/* Chat Threads */}
             <div className="cis-surface p-4 sticky top-4 cis-fade-in-up cis-stagger-1 opacity-0 [animation-fill-mode:forwards]">
-                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b-2 border-white/20">
+                <div className="text-xs text-white/60 font-semibold uppercase tracking-wider mb-4 pb-2 border-b border-white/10/20">
                   Chat Threads
                 </div>
                 <div className="space-y-3">
@@ -13320,7 +13320,7 @@ export default function CIS() {
                       const allChecked = scopes.every((s) => s.checked);
                       setScopes((prev) => prev.map((s) => ({ ...s, checked: !allChecked })));
                     }}
-                    className="text-[10px] text-white/40 hover:text-[#FFED00] font-mono transition-colors shrink-0"
+                    className="text-[10px] text-white/40 hover:text-blue-400 font-mono transition-colors shrink-0"
                   >
                     {scopes.every((s) => s.checked) ? "Deselect All" : "Select All"}
                   </button>
@@ -13333,14 +13333,14 @@ export default function CIS() {
                         key={s.id}
                         className={`inline-flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono shrink-0 max-w-full min-w-0 ${
                           s.checked
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
+                            ? "border-blue-500/50 bg-blue-600/10 text-blue-400"
+                            : "border-white/20 bg-white/[0.02] text-white/60 hover:border-white/40 hover:text-white/80"
                         }`}
                       >
                         <Checkbox
                           checked={s.checked}
                           onCheckedChange={(val) => toggleScope(s.id, val === true)}
-                          className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                          className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500 shrink-0"
                         />
                         <span className="truncate">{s.label}</span>
                       </label>
@@ -13399,14 +13399,14 @@ export default function CIS() {
                                   )
                                 );
                               }}
-                              className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                              className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500 shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             />
-                            <span className={`text-[9px] font-mono uppercase tracking-wider ${catSomeChecked ? "text-[#FFED00]/70" : "text-white/40"} group-hover:text-[#FFED00]/80`}>
+                            <span className={`text-[9px] font-mono uppercase tracking-wider ${catSomeChecked ? "text-blue-400/70" : "text-white/40"} group-hover:text-blue-400/80`}>
                               {catName}
                             </span>
                             <span className="text-[8px] text-white/30">({catItems.length})</span>
-                            <span className="ml-auto shrink-0 text-white/30 group-hover:text-[#FFED00]/60">
+                            <span className="ml-auto shrink-0 text-white/30 group-hover:text-blue-400/60">
                               {isCatExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
                             </span>
                           </div>
@@ -13427,10 +13427,10 @@ export default function CIS() {
                                     <div
                                       className={`flex items-center gap-1 text-[10px] border px-1.5 py-0.5 rounded cursor-pointer transition-all font-mono ${
                                         allChecked
-                                          ? "border-[#FFED00]/50 bg-[#FFED00]/10 text-[#FFED00]"
+                                          ? "border-blue-500/50 bg-blue-600/10 text-blue-400"
                                           : someChecked
-                                            ? "border-[#FFED00]/30 bg-[#FFED00]/5 text-[#FFED00]/80"
-                                            : "border-white/20 bg-transparent text-white/60 hover:border-white/40 hover:text-white/80"
+                                            ? "border-blue-500/30 bg-blue-600/5 text-blue-400/80"
+                                            : "border-white/20 bg-white/[0.02] text-white/60 hover:border-white/40 hover:text-white/80"
                                       }`}
                                     >
                                       <Checkbox
@@ -13443,7 +13443,7 @@ export default function CIS() {
                                             )
                                           );
                                         }}
-                                        className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                                        className="h-2.5 w-2.5 border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500 shrink-0"
                                       />
                                       <Folder className="h-2.5 w-2.5 shrink-0" />
                                       <span className="truncate flex-1" onClick={() => {
@@ -13454,7 +13454,7 @@ export default function CIS() {
                                           )
                                         );
                                       }}>{groupName}</span>
-                                      {someChecked && <span className="text-[8px] text-[#FFED00]/60 shrink-0">{items.filter(i => i.checked).length}/{items.length}</span>}
+                                      {someChecked && <span className="text-[8px] text-blue-400/60 shrink-0">{items.filter(i => i.checked).length}/{items.length}</span>}
                                       {hasSubfolders && (
                                         <button
                                           type="button"
@@ -13467,7 +13467,7 @@ export default function CIS() {
                                               return next;
                                             });
                                           }}
-                                          className="p-0 shrink-0 text-white/40 hover:text-[#FFED00]"
+                                          className="p-0 shrink-0 text-white/40 hover:text-blue-400"
                                         >
                                           {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
                                         </button>
@@ -13482,14 +13482,14 @@ export default function CIS() {
                                               key={sub.id}
                                               className={`inline-flex items-center gap-1 text-[9px] border px-1 py-0.5 rounded cursor-pointer transition-all font-mono max-w-full min-w-0 ${
                                                 sub.checked
-                                                  ? "border-[#FFED00]/40 bg-[#FFED00]/5 text-[#FFED00]/90"
-                                                  : "border-white/10 bg-transparent text-white/50 hover:border-white/30 hover:text-white/70"
+                                                  ? "border-blue-500/40 bg-blue-600/5 text-blue-400/90"
+                                                  : "border-white/10 bg-white/[0.02] text-white/50 hover:border-white/30 hover:text-white/70"
                                               }`}
                                             >
                                               <Checkbox
                                                 checked={sub.checked}
                                                 onCheckedChange={(val) => toggleScope(sub.id, val === true)}
-                                                className="h-2 w-2 border-white/30 data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00] shrink-0"
+                                                className="h-2 w-2 border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500 shrink-0"
                                               />
                                               <span className="truncate">{subLabel}</span>
                                             </label>
@@ -13531,8 +13531,8 @@ export default function CIS() {
           {/* Chat Tab */}
           <TabsContent value="chat" className="overflow-hidden">
             {isDeveloper && (
-              <Card className="border-2 border-white bg-transparent mb-3">
-                <CardHeader className="pb-2 border-b-2 border-white">
+              <Card className="border border-white/10 bg-white/[0.02] mb-3">
+                <CardHeader className="pb-2 border-b border-white/10">
                   <CardTitle className="text-sm text-white font-mono font-black uppercase tracking-tight">Developer Cost Log</CardTitle>
                   <CardDescription className="text-xs text-white/70 font-mono">
                     Estimated Claude spend (local only).
@@ -13561,11 +13561,11 @@ export default function CIS() {
             )}
             {/* Chat Container — fills viewport, input at bottom of card */}
             <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)", minHeight: "600px" }}>
-              <Card className="flex-1 flex flex-col border-2 border-white/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
+              <Card className="flex-1 flex flex-col border border-white/10/20 bg-black/30 backdrop-blur-sm min-h-0 h-full overflow-hidden rounded-xl">
                 {/* Chat header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/15 bg-black/40 flex-shrink-0">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/10/15 bg-black/40 flex-shrink-0">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFED00]/15 text-[#FFED00]">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400">
                       <Brain className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -13581,12 +13581,12 @@ export default function CIS() {
                     </div>
                   </div>
                   {chatIsLoading && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFED00]/10 border border-[#FFED00]/25">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-600/10 border border-blue-500/25">
                       <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFED00] opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFED00]" />
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
                       </span>
-                      <span className="text-[11px] text-[#FFED00] font-mono font-semibold animate-pulse">Processing</span>
+                      <span className="text-[11px] text-blue-400 font-mono font-semibold animate-pulse">Processing</span>
                     </div>
                   )}
                 </div>
@@ -13594,7 +13594,7 @@ export default function CIS() {
                 {/* Messages area — scrollable, content aligned to bottom */}
                 <div 
                   ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto px-5 py-5 bg-transparent scroll-smooth flex flex-col"
+                  className="flex-1 overflow-y-auto px-5 py-5 bg-white/[0.02] scroll-smooth flex flex-col"
                 >
                   {/* Spacer pushes messages to bottom when few messages */}
                   <div className="flex-1" />
@@ -13602,8 +13602,8 @@ export default function CIS() {
                     <div className="flex items-center justify-center min-h-[300px]">
                       <div className="text-center space-y-4 max-w-md">
                         <div className="flex justify-center">
-                          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFED00]/10 border-2 border-[#FFED00]/20">
-                            <Brain className="h-8 w-8 text-[#FFED00]" />
+                          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600/10 border-2 border-blue-500/20">
+                            <Brain className="h-8 w-8 text-blue-400" />
                           </span>
                         </div>
                         <div className="text-xl font-bold text-white">Start a conversation</div>
@@ -13615,7 +13615,7 @@ export default function CIS() {
                             <button
                               key={suggestion}
                               onClick={() => { setInput(suggestion); }}
-                              className="text-xs px-3 py-1.5 rounded-full border border-white/20 text-white/60 hover:text-[#FFED00] hover:border-[#FFED00]/40 transition-all font-mono"
+                              className="text-xs px-3 py-1.5 rounded-full border border-white/20 text-white/60 hover:text-blue-400 hover:border-blue-500/40 transition-all font-mono"
                             >
                               {suggestion}
                             </button>
@@ -13634,14 +13634,14 @@ export default function CIS() {
                           style={{ animationDelay: `${Math.min(index, 5) * 50}ms` }}
                         >
                           {m.author === "assistant" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                              <Brain className="w-4 h-4 text-[#FFED00]" />
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mt-1">
+                              <Brain className="w-4 h-4 text-blue-400" />
                             </div>
                           )}
                           <div
                             className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                               m.author === "user"
-                                ? "bg-[#FFED00] text-black font-mono shadow-lg shadow-[#FFED00]/10"
+                                ? "bg-blue-600 text-white font-mono shadow-lg shadow-[#3b82f6]/10"
                                 : "bg-white/[0.04] border border-white/15 text-white font-mono backdrop-blur-sm"
                             }`}
                           >
@@ -13658,7 +13658,7 @@ export default function CIS() {
                                     <>
                                       {renderAssistantContent(cleanVerifiableCitationTags(m.text))}
                                       {m.isStreaming && (
-                                        <span className="inline-block w-2 h-5 ml-1 bg-[#FFED00] animate-pulse" />
+                                        <span className="inline-block w-2 h-5 ml-1 bg-blue-600 animate-pulse" />
                                       )}
                                     </>
                                   )}
@@ -13671,7 +13671,7 @@ export default function CIS() {
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-blue-500/100/100/10 hover:border-blue-500/40 hover:text-blue-400 font-mono transition-all"
                                         >
                                           <FileText className="h-3 w-3 mr-1.5" />
                                           Sources
@@ -13723,7 +13723,7 @@ export default function CIS() {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleLogDecisionFromChat(m.text)}
-                                      className="text-xs h-6 px-2 text-white/50 hover:text-[#FFED00] hover:bg-white/5 font-mono"
+                                      className="text-xs h-6 px-2 text-white/50 hover:text-blue-400 hover:bg-white/5 font-mono"
                                     >
                                       <Link2 className="h-3 w-3 mr-1" />
                                       Log Connection
@@ -13752,8 +13752,8 @@ export default function CIS() {
                             )}
                           </div>
                           {m.author === "user" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                              <svg className="w-4 h-4 text-[#FFED00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mt-1">
+                              <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                             </div>
@@ -13764,17 +13764,17 @@ export default function CIS() {
                       {/* Animated thinking indicator — shows while loading */}
                       {chatIsLoading && (
                         <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#FFED00]/15 border border-[#FFED00]/30 flex items-center justify-center mt-1">
-                            <Brain className="w-4 h-4 text-[#FFED00] animate-pulse" />
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mt-1">
+                            <Brain className="w-4 h-4 text-blue-400 animate-pulse" />
                           </div>
-                          <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white/[0.04] border border-[#FFED00]/20 text-white font-mono backdrop-blur-sm">
+                          <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white/[0.04] border border-blue-500/20 text-white font-mono backdrop-blur-sm">
                             <div className="flex items-center gap-3">
                               <div className="flex gap-1">
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "0ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "150ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-[#FFED00] animate-bounce" style={{ animationDelay: "300ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: "0ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: "150ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: "300ms" }} />
                               </div>
-                              <span className="text-sm text-[#FFED00]/80 font-semibold transition-all duration-500">
+                              <span className="text-sm text-blue-400/80 font-semibold transition-all duration-500">
                                 {chatLoadingStage}
                               </span>
                             </div>
@@ -13800,7 +13800,7 @@ export default function CIS() {
                           key={doc.id}
                           size="sm"
                           variant="outline"
-                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-white/10 hover:border-[#FFED00]/40 hover:text-[#FFED00] font-mono transition-all"
+                          className="text-[11px] h-auto py-1 px-2.5 border border-white/20 bg-white/[0.03] text-white/70 hover:bg-blue-500/100/100/10 hover:border-blue-500/40 hover:text-blue-400 font-mono transition-all"
                           onClick={() => handleOpenDocument(doc.id)}
                         >
                           {index + 1}. {doc.title || doc.file_name || "Untitled"}
@@ -13814,7 +13814,7 @@ export default function CIS() {
                 <div className="border-t-2 border-white/15 bg-black/50 backdrop-blur-md p-4 flex-shrink-0">
                   {editingMessageId && (
                     <div className="flex items-center gap-2 mb-2 px-1">
-                      <span className="text-xs font-mono text-[#FFED00]/90">Editing message</span>
+                      <span className="text-xs font-mono text-blue-400/90">Editing message</span>
                       <button
                         type="button"
                         onClick={() => { setEditingMessageId(null); setInput(""); }}
@@ -13830,7 +13830,7 @@ export default function CIS() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder={editingMessageId ? "Edit your question and press Enter to resend..." : "Ask a question about your portfolio..."}
-                        className="min-h-[52px] max-h-[180px] resize-none border-2 border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-[#FFED00]/50 focus:ring-1 focus:ring-[#FFED00]/20 transition-colors"
+                        className="min-h-[52px] max-h-[180px] resize-none border border-white/10/20 bg-white/[0.04] text-white placeholder:text-white/35 font-mono rounded-xl pr-4 focus:border-blue-500/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors"
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey && !(chatIsLoading || isClaudeLoading)) {
                             e.preventDefault();
@@ -13846,8 +13846,8 @@ export default function CIS() {
                       title={(chatIsLoading || isClaudeLoading) ? "Cancel" : "Send"}
                       className={`h-[52px] w-[52px] p-0 font-bold border-2 rounded-xl transition-all ${
                         (chatIsLoading || isClaudeLoading)
-                          ? "bg-white/[0.08] text-[#FFED00] border-white/30 hover:bg-white/[0.14] hover:border-[#FFED00]/50 hover:shadow-[0_0_20px_rgba(255,237,0,0.18)]"
-                          : "bg-[#FFED00] text-black hover:bg-[#FFED00]/90 border-[#FFED00] hover:shadow-[0_0_24px_rgba(255,237,0,0.4)]"
+                          ? "bg-white/[0.08] text-blue-400 border-white/30 hover:bg-white/[0.14] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.18)]"
+                          : "bg-blue-600 text-white hover:bg-blue-600/90 border-blue-500 hover:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
                       } disabled:opacity-40 disabled:hover:shadow-none`}
                     >
                       {(chatIsLoading || isClaudeLoading) ? (
@@ -13866,8 +13866,8 @@ export default function CIS() {
                         onClick={() => setWebSearchEnabled((prev) => !prev)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
                           webSearchEnabled
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                            ? "border-blue-500/50 bg-blue-600/15 text-blue-400"
+                            : "border-white/20 bg-white/[0.02] text-white/40 hover:border-white/40 hover:text-white/70"
                         }`}
                         title="Enable web search to find information about companies not in your documents"
                       >
@@ -13879,8 +13879,8 @@ export default function CIS() {
                         onClick={() => setMultiAgentEnabled((prev) => !prev)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
                           multiAgentEnabled
-                            ? "border-[#FFED00]/50 bg-[#FFED00]/15 text-[#FFED00]"
-                            : "border-white/20 bg-transparent text-white/40 hover:border-white/40 hover:text-white/70"
+                            ? "border-blue-500/50 bg-blue-600/15 text-blue-400"
+                            : "border-white/20 bg-white/[0.02] text-white/40 hover:border-white/40 hover:text-white/70"
                         }`}
                         title="Multi-Agent RAG: Orchestrator routes your query to Vector, Graph, KPI, and Web agents in parallel. When OFF, uses standard single-path RAG."
                       >
@@ -13890,7 +13890,7 @@ export default function CIS() {
                     </div>
                     <span className="text-[11px] text-white/40 font-mono">
                       {chatIsLoading ? (
-                        <span className="text-[#FFED00]/70 flex items-center gap-1.5">
+                        <span className="text-blue-400/70 flex items-center gap-1.5">
                           <Loader2 className="h-3 w-3 animate-spin" />
                           {chatLoadingStage}
                         </span>
@@ -14111,7 +14111,7 @@ export default function CIS() {
             />
             {/* AI Suggested Connections */}
             {(suggestionsLoading || aiSuggestions.length > 0) && (
-              <Card className="mt-4 border-2 border-[#6366f1] bg-transparent">
+              <Card className="mt-4 border-2 border-[#6366f1] bg-white/[0.02]">
                 <CardHeader className="pb-2 border-b-2 border-[#6366f1]">
                   <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-[#6366f1] flex items-center gap-2">
                     <Sparkles className="h-4 w-4" />
@@ -14128,7 +14128,7 @@ export default function CIS() {
                     aiSuggestions.map((s, idx) => (
                       <div
                         key={idx}
-                        className="p-3 border-2 border-white/20 rounded-md hover:border-[#6366f1] transition-all"
+                        className="p-3 border border-white/10/20 rounded-md hover:border-[#6366f1] transition-all"
                       >
                         <div className="flex items-center justify-between">
                           <div>
@@ -14138,7 +14138,7 @@ export default function CIS() {
                               <span>{s.target_company}</span>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs border-[#6366f1] text-[#6366f1] bg-transparent font-mono">
+                              <Badge variant="outline" className="text-xs border-[#6366f1] text-[#6366f1] bg-white/[0.02] font-mono">
                                 {s.connection_type}
                               </Badge>
                               <span className="text-xs text-white/50 font-mono">
@@ -14168,10 +14168,10 @@ export default function CIS() {
 
               {/* Account Tab */}
               <TabsContent value="account">
-                <Card className="border-2 border-white/20 bg-black/30 backdrop-blur-sm rounded-xl max-w-2xl">
-                  <CardHeader className="border-b-2 border-white/15 bg-black/40">
+                <Card className="border border-white/10/20 bg-black/30 backdrop-blur-sm rounded-xl max-w-2xl">
+                  <CardHeader className="border-b border-white/10/15 bg-black/40">
                     <CardTitle className="text-lg font-bold text-white flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFED00]/20 text-[#FFED00] text-lg font-bold">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600/20 text-blue-400 text-lg font-bold">
                         {(profile?.full_name || profile?.email || "U").charAt(0).toUpperCase()}
                       </span>
                       My Account
@@ -14189,7 +14189,7 @@ export default function CIS() {
                       </div>
                       <div className="flex items-center justify-between py-3 border-b border-white/10">
                         <span className="text-sm text-white/50 font-mono uppercase tracking-wider">Role</span>
-                        <Badge className="bg-[#FFED00]/20 text-[#FFED00] border-[#FFED00]/40 text-xs font-semibold">
+                        <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/40 text-xs font-semibold">
                           {profile?.role?.toUpperCase() || "MEMBER"}
                         </Badge>
                       </div>
@@ -14247,10 +14247,10 @@ export default function CIS() {
               <TabsContent value="extracted" className="mt-4">
                 {viewingDocument?.extracted_json ? (
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground mb-2">
+                    <div className="text-sm text-white/50 mb-2">
                       Structured data extracted by AI
                     </div>
-                    <pre className="p-4 bg-transparent border-2 border-white rounded-lg overflow-auto max-h-[500px] text-xs text-white font-mono">
+                    <pre className="p-4 bg-white/[0.02] border border-white/10 rounded-lg overflow-auto max-h-[500px] text-xs text-white font-mono">
                       {JSON.stringify(viewingDocument.extracted_json, null, 2)}
                     </pre>
                     <Button
@@ -14273,7 +14273,7 @@ export default function CIS() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-white/50">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No extracted JSON available</p>
                   </div>
@@ -14282,7 +14282,7 @@ export default function CIS() {
               <TabsContent value="raw" className="mt-4">
                 {viewingDocument?.raw_content ? (
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground mb-2">
+                    <div className="text-sm text-white/50 mb-2">
                       Original text content ({viewingDocument.raw_content.length} characters)
                     </div>
                     <pre className="p-4 bg-muted rounded-lg overflow-auto max-h-[500px] text-xs whitespace-pre-wrap">
@@ -14306,7 +14306,7 @@ export default function CIS() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-white/50">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No raw content stored</p>
                     {viewingDocument?.storage_path && (
@@ -14344,10 +14344,10 @@ export default function CIS() {
 
       {/* Log Decision Dialog - Create company connections from chat */}
       <Dialog open={logDecisionDialogOpen} onOpenChange={setLogDecisionDialogOpen}>
-        <DialogContent className="sm:max-w-lg bg-[#050505] border-2 border-white">
+        <DialogContent className="sm:max-w-lg bg-[#050505] border border-white/10">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-white font-mono font-black uppercase">
-              <Link2 className="h-5 w-5 text-[#FFED00]" />
+              <Link2 className="h-5 w-5 text-blue-400" />
               Log Decision / Connection
             </DialogTitle>
             <DialogDescription className="text-white/70 font-mono">
@@ -14510,7 +14510,7 @@ function LogDecisionForm({
             value={sourceCompany}
             onChange={(e) => setSourceCompany(e.target.value)}
             placeholder="e.g., Ridelink"
-            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+            className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50 font-mono"
           />
         </div>
         <div className="space-y-2">
@@ -14519,7 +14519,7 @@ function LogDecisionForm({
             value={targetCompany}
             onChange={(e) => setTargetCompany(e.target.value)}
             placeholder="e.g., Weego"
-            className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+            className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50 font-mono"
           />
         </div>
       </div>
@@ -14528,10 +14528,10 @@ function LogDecisionForm({
         <div className="space-y-2">
           <Label className="text-white font-mono font-bold">Source Document (optional)</Label>
           <Select value={sourceDocId} onValueChange={setSourceDocId}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+            <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white font-mono">
               <SelectValue placeholder="Link to document..." />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
+            <SelectContent className="bg-[#050505] border border-white/10">
               <SelectItem value="none" className="text-white font-mono">None</SelectItem>
               {documents.map((doc) => (
                 <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
@@ -14544,10 +14544,10 @@ function LogDecisionForm({
         <div className="space-y-2">
           <Label className="text-white font-mono font-bold">Target Document (optional)</Label>
           <Select value={targetDocId} onValueChange={setTargetDocId}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+            <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white font-mono">
               <SelectValue placeholder="Link to document..." />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
+            <SelectContent className="bg-[#050505] border border-white/10">
               <SelectItem value="none" className="text-white font-mono">None</SelectItem>
               {documents.filter((d) => d.id !== sourceDocId || sourceDocId === "none").map((doc) => (
                 <SelectItem key={doc.id} value={doc.id} className="text-white font-mono">
@@ -14563,10 +14563,10 @@ function LogDecisionForm({
         <div className="space-y-2">
           <Label className="text-white font-mono font-bold">Connection Type</Label>
           <Select value={connectionType} onValueChange={(v) => setConnectionType(v as ConnectionType)}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+            <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
+            <SelectContent className="bg-[#050505] border border-white/10">
               <SelectItem value="BD" className="text-white font-mono">
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -14575,7 +14575,7 @@ function LogDecisionForm({
               </SelectItem>
               <SelectItem value="INV" className="text-white font-mono">
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#FFED00]" />
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
                   INV (Investment)
                 </span>
               </SelectItem>
@@ -14603,10 +14603,10 @@ function LogDecisionForm({
         <div className="space-y-2">
           <Label className="text-white font-mono font-bold">Status</Label>
           <Select value={connectionStatus} onValueChange={(v) => setConnectionStatus(v as ConnectionStatus)}>
-            <SelectTrigger className="border-2 border-white bg-transparent text-white font-mono">
+            <SelectTrigger className="border border-white/10 bg-white/[0.02] text-white font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#050505] border-2 border-white">
+            <SelectContent className="bg-[#050505] border border-white/10">
               <SelectItem value="To Connect" className="text-white font-mono">
                 <span className="flex items-center gap-2">
                   <Clock className="h-3 w-3 text-yellow-500" />
@@ -14648,7 +14648,7 @@ function LogDecisionForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add any additional context..."
-          className="border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono min-h-[80px]"
+          className="border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50 font-mono min-h-[80px]"
         />
       </div>
 
@@ -14658,7 +14658,7 @@ function LogDecisionForm({
           <Textarea
             value={editableRationale}
             onChange={(e) => setEditableRationale(e.target.value)}
-            className="border-2 border-white/30 bg-white/5 text-white/80 placeholder:text-white/30 font-mono text-xs min-h-[80px] max-h-[150px]"
+            className="border border-white/10/30 bg-white/5 text-white/80 placeholder:text-white/30 font-mono text-xs min-h-[80px] max-h-[150px]"
             placeholder="Edit the AI rationale to capture your reasoning..."
           />
           <p className="text-[10px] text-white/40 font-mono">
@@ -14671,14 +14671,14 @@ function LogDecisionForm({
         <Button
           variant="outline"
           onClick={onCancel}
-          className="border-2 border-white bg-transparent text-white hover:bg-white/10 font-mono"
+          className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 font-mono"
         >
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
           disabled={isSubmitting || !sourceCompany.trim() || !targetCompany.trim()}
-          className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
+          className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500"
         >
           {isSubmitting ? (
             <>
@@ -14727,7 +14727,7 @@ function KanbanCard({
 
   return (
     <div
-      className="rounded-md border border-white/20 bg-[#050505] p-2.5 cursor-pointer hover:border-[#FFED00] transition-all group"
+      className="rounded-md border border-white/20 bg-[#050505] p-2.5 cursor-pointer hover:border-blue-500 transition-all group"
       onClick={() => setIsExpanded(!isExpanded)}
     >
       {/* Card Header */}
@@ -14743,7 +14743,7 @@ function KanbanCard({
         </div>
         <Badge
           variant="outline"
-          className="text-[9px] px-1 py-0 border-white/30 bg-transparent font-mono shrink-0"
+          className="text-[9px] px-1 py-0 border-white/30 bg-white/[0.02] font-mono shrink-0"
           style={{ color: CONNECTION_TYPE_COLORS[conn.connection_type], borderColor: CONNECTION_TYPE_COLORS[conn.connection_type] }}
         >
           {conn.connection_type}
@@ -14776,7 +14776,7 @@ function KanbanCard({
               .map((s) => (
                 <button
                   key={s}
-                  className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-white/20 hover:bg-white/10 transition-colors"
+                  className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-white/20 hover:bg-blue-500/100/100/10 transition-colors"
                   style={{ color: CONNECTION_STATUS_COLORS[s], borderColor: CONNECTION_STATUS_COLORS[s] + "60" }}
                   onClick={() => onUpdateStatus(conn.id, s)}
                 >
@@ -14913,15 +14913,15 @@ function CompaniesTab({
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* Filter pills */}
-          <div className="flex border-2 border-white rounded-md overflow-hidden">
+          <div className="flex border border-white/10 rounded-md overflow-hidden">
             {(["all", "company", "fund"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setFilterType(t)}
                 className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
                   filterType === t
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white hover:bg-white/10"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white/[0.02] text-white hover:bg-blue-500/100/100/10"
                 }`}
               >
                 {t === "all" ? `All (${companyCounts.total})` : t === "company" ? `Companies (${companyCounts.companies})` : `Funds (${companyCounts.funds})`}
@@ -14929,7 +14929,7 @@ function CompaniesTab({
             ))}
           </div>
           {/* Content filter */}
-          <div className="flex border-2 border-white/40 rounded-md overflow-hidden">
+          <div className="flex border border-white/10/40 rounded-md overflow-hidden">
             {([
               { key: "with_content" as const, label: `With Content (${companyCounts.withContent})` },
               { key: "with_docs" as const, label: `With Docs (${companyCounts.withDocs})` },
@@ -14940,8 +14940,8 @@ function CompaniesTab({
                 onClick={() => setContentFilter(key)}
                 className={`px-3 py-1.5 text-xs font-mono font-bold transition-colors ${
                   contentFilter === key
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white/70 hover:bg-white/10"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white/[0.02] text-white/70 hover:bg-blue-500/100/100/10"
                 }`}
               >
                 {label}
@@ -14949,15 +14949,15 @@ function CompaniesTab({
             ))}
           </div>
           {/* View toggle */}
-          <div className="flex border-2 border-white rounded-md overflow-hidden">
+          <div className="flex border border-white/10 rounded-md overflow-hidden">
             {(["cards", "table"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setViewMode(v)}
                 className={`px-3 py-1.5 text-xs font-mono font-bold uppercase transition-colors ${
                   viewMode === v
-                    ? "bg-[#FFED00] text-black"
-                    : "bg-transparent text-white hover:bg-white/10"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white/[0.02] text-white hover:bg-blue-500/100/100/10"
                 }`}
               >
                 {v === "cards" ? "Cards" : "Table"}
@@ -14968,12 +14968,12 @@ function CompaniesTab({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search..."
-            className="w-48 border-2 border-white bg-transparent text-white placeholder:text-white/50 font-mono"
+            className="w-48 border border-white/10 bg-white/[0.02] text-white placeholder:text-white/50 font-mono"
           />
           <Button
             onClick={onNavigateToConnections}
             variant="outline"
-            className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold"
+            className="border border-white/10 bg-white/[0.02] text-white hover:bg-blue-500/100/100/10 hover:border-blue-500 hover:text-blue-400 font-bold"
           >
             <Link2 className="h-4 w-4 mr-2" />
             Connections
@@ -14983,7 +14983,7 @@ function CompaniesTab({
 
       {/* Content */}
       {filteredCards.length === 0 ? (
-        <Card className="border-2 border-white bg-transparent">
+        <Card className="border border-white/10 bg-white/[0.02]">
           <CardContent className="p-12 text-center">
             <Building2 className="h-16 w-16 mx-auto mb-4 text-white/30" />
             <p className="text-white/70 font-mono font-bold mb-2">
@@ -14998,11 +14998,11 @@ function CompaniesTab({
         </Card>
       ) : viewMode === "table" ? (
         /* ── TABLE VIEW ── */
-        <Card className="border-2 border-white bg-transparent overflow-hidden">
+        <Card className="border border-white/10 bg-white/[0.02] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm font-mono">
               <thead>
-                <tr className="border-b-2 border-white/30 bg-white/5">
+                <tr className="border-b border-white/10/30 bg-white/5">
                   <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Name</th>
                   <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Type</th>
                   <th className="text-left p-3 text-white/70 font-bold uppercase text-xs">Industry</th>
@@ -15117,7 +15117,7 @@ function EditableField({
             onBlur={() => { onSave(draft); setEditing(false); }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
             placeholder={placeholder}
-            className="min-h-[56px] text-xs font-mono border-[#FFED00] bg-black/50 text-white resize-none"
+            className="min-h-[56px] text-xs font-mono border-blue-500 bg-black/50 text-white resize-none"
           />
         ) : (
           <Input
@@ -15130,7 +15130,7 @@ function EditableField({
               if (e.key === "Escape") { setDraft(value); setEditing(false); }
             }}
             placeholder={placeholder}
-            className="h-7 text-xs font-mono border-[#FFED00] bg-black/50 text-white"
+            className="h-7 text-xs font-mono border-blue-500 bg-black/50 text-white"
           />
         )}
       </div>
@@ -15147,10 +15147,10 @@ function EditableField({
       </div>
       <div className="flex items-center gap-1.5 mt-0.5">
         {Icon && <Icon className="h-3 w-3 text-white/40 flex-shrink-0" />}
-        <span className={`text-xs font-mono ${value ? "text-white/80" : "text-white/30 italic"} group-hover:text-[#FFED00] transition-colors`}>
+        <span className={`text-xs font-mono ${value ? "text-white/80" : "text-white/30 italic"} group-hover:text-blue-400 transition-colors`}>
           {value || placeholder}
         </span>
-        <Pencil className="h-2.5 w-2.5 text-white/20 group-hover:text-[#FFED00] ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <Pencil className="h-2.5 w-2.5 text-white/20 group-hover:text-blue-400 ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     </button>
   );
@@ -15217,7 +15217,7 @@ function CompanyCard({
     "growth": "#ec4899",
   };
   const stageKey = (props.funding_stage || "").toLowerCase();
-  const stageColor = stageColors[stageKey] || "#FFED00";
+  const stageColor = stageColors[stageKey] || "#3b82f6";
   const typeColor = isFund ? "#60a5fa" : "#34d399";
 
   // Parse founders from JSONB
@@ -15268,8 +15268,8 @@ function CompanyCard({
   const autoFilledCount = Object.keys(propertySources).length;
 
   return (
-    <Card className={`border-2 bg-transparent transition-all cursor-pointer ${
-      isExpanded ? "border-[#FFED00] col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-[#FFED00]"
+    <Card className={`border-2 bg-white/[0.02] transition-all cursor-pointer ${
+      isExpanded ? "border-blue-500 col-span-1 md:col-span-2 xl:col-span-2" : "border-white/60 hover:border-blue-500"
     }`}>
       {/* ── A. Header: Identity ── */}
       <CardHeader className="pb-2 border-b border-white/20" onClick={onToggleExpand}>
@@ -15336,7 +15336,7 @@ function CompanyCard({
               </Badge>
             )}
             {isFund && chequeSize && (
-              <Badge className="text-[10px] font-mono font-bold border-0 px-2 py-0.5 bg-blue-500/20 text-blue-400">
+              <Badge className="text-[10px] font-mono font-bold border-0 px-2 py-0.5 bg-blue-500/100/20 text-blue-400">
                 {chequeSize}
               </Badge>
             )}
@@ -15365,7 +15365,7 @@ function CompanyCard({
               <div className="flex flex-wrap gap-1">
                 <Target className="h-3 w-3 text-white/40 mt-0.5 flex-shrink-0" />
                 {industryPrefs.slice(0, 5).map((v) => (
-                  <Badge key={v} variant="outline" className="text-[9px] font-mono text-[#FFED00]/80 border-[#FFED00]/30 px-1.5 py-0">
+                  <Badge key={v} variant="outline" className="text-[9px] font-mono text-blue-400/80 border-blue-500/30 px-1.5 py-0">
                     {v}
                   </Badge>
                 ))}
@@ -15391,7 +15391,7 @@ function CompanyCard({
               { val: card.relationship_count || 0, label: "Rels", icon: Users },
             ].map(({ val, label, icon: Ic }) => (
               <div key={label}>
-                <div className="text-lg font-mono font-black text-[#FFED00]">{val}</div>
+                <div className="text-lg font-mono font-black text-blue-400">{val}</div>
                 <div className="flex items-center justify-center gap-1">
                   <Ic className="h-2.5 w-2.5 text-white/40" />
                   <span className="text-[10px] text-white/50 font-mono">{label}</span>
@@ -15408,7 +15408,7 @@ function CompanyCard({
             {isFund ? (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <DollarSign className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Fund Details</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
@@ -15429,7 +15429,7 @@ function CompanyCard({
             ) : (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <DollarSign className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <DollarSign className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Investment Snapshot</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
@@ -15451,7 +15451,7 @@ function CompanyCard({
             {/* C. Market & Product */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
+                <Target className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Market & Product</span>
               </div>
               <div className="space-y-2 pl-1">
@@ -15470,7 +15470,7 @@ function CompanyCard({
             {/* Business Model & GTM */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <ShoppingCart className="h-3.5 w-3.5 text-[#FFED00]" />
+                <ShoppingCart className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Business Model & GTM</span>
               </div>
               <div className="space-y-2 pl-1">
@@ -15485,7 +15485,7 @@ function CompanyCard({
             {(props.cac || props.ltv || props.ltv_cac_ratio || props.gross_margin || props.net_margin || props.churn_rate || props.payback_period) ? (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Percent className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <Percent className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Unit Economics</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
@@ -15517,7 +15517,7 @@ function CompanyCard({
             {/* Traction */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Zap className="h-3.5 w-3.5 text-[#FFED00]" />
+                <Zap className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Traction</span>
               </div>
               <div className="space-y-2 pl-1">
@@ -15533,7 +15533,7 @@ function CompanyCard({
             {/* Competitors */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-[#FFED00]" />
+                <Target className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Competitors</span>
               </div>
               {competitors.length > 0 ? (
@@ -15555,7 +15555,7 @@ function CompanyCard({
             {/* D. Team / Founders */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Users className="h-3.5 w-3.5 text-[#FFED00]" />
+                <Users className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Team</span>
                 {props.team_size && <span className="text-[9px] font-mono text-white/40">({props.team_size} employees)</span>}
               </div>
@@ -15592,7 +15592,7 @@ function CompanyCard({
             {geoMarkets.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <Globe className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Target Markets</span>
                 </div>
                 <div className="flex flex-wrap gap-1 pl-1">
@@ -15607,7 +15607,7 @@ function CompanyCard({
             {keyPartnerships.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Handshake className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <Handshake className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Key Partnerships</span>
                 </div>
                 <div className="flex flex-wrap gap-1 pl-1">
@@ -15622,7 +15622,7 @@ function CompanyCard({
             {props.awards_recognition && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Trophy className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <Trophy className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Awards & Recognition</span>
                 </div>
                 <p className="text-xs font-mono text-white/60 pl-1">{props.awards_recognition}</p>
@@ -15635,7 +15635,7 @@ function CompanyCard({
             {/* Contact & Social */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Globe className="h-3.5 w-3.5 text-[#FFED00]" />
+                <Globe className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">Contact & Social</span>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-1">
@@ -15650,7 +15650,7 @@ function CompanyCard({
               {(props.website || props.linkedin_url || props.twitter_url || props.email) && (
                 <div className="flex items-center gap-3 mt-2 pl-1">
                   {props.website && (
-                    <a href={props.website.startsWith("http") ? props.website : `https://${props.website}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-[#FFED00] transition-colors" title={props.website}>
+                    <a href={props.website.startsWith("http") ? props.website : `https://${props.website}`} target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-blue-400 transition-colors" title={props.website}>
                       <Globe className="h-4 w-4" />
                     </a>
                   )}
@@ -15734,7 +15734,7 @@ function CompanyCard({
             {/* Documents List */}
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <FileText className="h-3.5 w-3.5 text-[#FFED00]" />
+                <FileText className="h-3.5 w-3.5 text-blue-400" />
                 <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
                   Source Documents ({companyDocs.length})
                 </span>
@@ -15745,7 +15745,7 @@ function CompanyCard({
                     <button
                       key={doc.id}
                       onClick={(e) => { e.stopPropagation(); onOpenDocument(doc.id); }}
-                      className="w-full text-left text-xs font-mono text-white/70 hover:text-[#FFED00] hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
+                      className="w-full text-left text-xs font-mono text-white/70 hover:text-blue-400 hover:bg-white/5 px-2 py-1 rounded transition-colors truncate"
                       title={doc.title || "Untitled"}
                     >
                       <FileText className="h-3 w-3 inline mr-1.5" />
@@ -15762,7 +15762,7 @@ function CompanyCard({
             {companyConnections.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Link2 className="h-3.5 w-3.5 text-[#FFED00]" />
+                  <Link2 className="h-3.5 w-3.5 text-blue-400" />
                   <span className="text-xs font-mono font-black text-white uppercase tracking-wider">
                     Connections ({companyConnections.length})
                   </span>
@@ -15777,7 +15777,7 @@ function CompanyCard({
                       <div key={conn.id} className="text-xs font-mono text-white/60 px-2 py-1 flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CONNECTION_STATUS_COLORS[conn.connection_status] }} />
                         <span className="truncate flex-1">{other}</span>
-                        <Badge variant="outline" className="text-[9px] border-white/20 text-white/40 bg-transparent py-0">
+                        <Badge variant="outline" className="text-[9px] border-white/20 text-white/40 bg-white/[0.02] py-0">
                           {conn.connection_type} · {conn.connection_status}
                         </Badge>
                       </div>
@@ -15795,7 +15795,7 @@ function CompanyCard({
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {(card.related_companies || []).map((name, idx) => (
-                    <Badge key={idx} variant="outline" className="text-[10px] border-white/20 text-white/60 bg-transparent font-mono">
+                    <Badge key={idx} variant="outline" className="text-[10px] border-white/20 text-white/60 bg-white/[0.02] font-mono">
                       {name}
                     </Badge>
                   ))}
@@ -15830,7 +15830,7 @@ function CompanyCard({
 // Connections Graph Tab Component
 const CONNECTION_TYPE_COLORS: Record<ConnectionType, string> = {
   BD: "#22c55e",        // green
-  INV: "#FFED00",       // yellow (CIS brand)
+  INV: "#3b82f6",       // yellow (CIS brand)
   Knowledge: "#6366f1", // indigo
   Partnership: "#a855f7", // purple
   Portfolio: "#06b6d4",  // cyan
@@ -15938,7 +15938,7 @@ function ConnectionsGraphTab({
               <Button
                 type="button"
                 variant="outline"
-                className="border-2 border-white/40 text-white hover:bg-white/10 font-bold"
+                className="border border-white/10/40 text-white hover:bg-blue-500/100/100/10 font-bold"
                 onClick={() => document.getElementById("connections-file-input")?.click()}
               >
                 <Upload className="h-4 w-4 mr-2" />
@@ -15958,7 +15958,7 @@ function ConnectionsGraphTab({
           )}
           <Button
             onClick={onAddConnection}
-            className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]"
+            className="bg-blue-600 text-white hover:bg-blue-600/80 font-bold border-2 border-blue-500"
           >
             <Link2 className="h-4 w-4 mr-2" />
             Add Connection
@@ -15969,7 +15969,7 @@ function ConnectionsGraphTab({
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
-          <Card key={status} className="border-2 border-white bg-transparent">
+          <Card key={status} className="border border-white/10 bg-white/[0.02]">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div 
@@ -15987,8 +15987,8 @@ function ConnectionsGraphTab({
       </div>
 
       {/* Connection Type Legend */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="pb-2 border-b border-white/10">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
             Connection Types
           </CardTitle>
@@ -16006,8 +16006,8 @@ function ConnectionsGraphTab({
       </Card>
 
       {/* Visual Graph Placeholder */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="pb-2 border-b border-white/10">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
             Network Graph
           </CardTitle>
@@ -16086,7 +16086,7 @@ function ConnectionsGraphTab({
                         cy={y}
                         r="30"
                         fill={statusColor}
-                        stroke="#FFED00"
+                        stroke="#3b82f6"
                         strokeWidth="2"
                         opacity="0.8"
                       />
@@ -16112,7 +16112,7 @@ function ConnectionsGraphTab({
 
       {/* Pending Reviews Section — disabled for now (auto-extraction was wrong); re-enable when fixed */}
       {false && pendingReviews.length > 0 && (
-        <Card className="border-2 border-[#eab308] bg-transparent">
+        <Card className="border-2 border-[#eab308] bg-white/[0.02]">
           <CardHeader className="pb-2 border-b-2 border-[#eab308]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -16178,7 +16178,7 @@ function ConnectionsGraphTab({
                         <span>{targetName}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs border-[#eab308] text-[#eab308] bg-transparent font-mono">
+                        <Badge variant="outline" className="text-xs border-[#eab308] text-[#eab308] bg-white/[0.02] font-mono">
                           {connectionType}
                         </Badge>
                         {review.properties?.reasoning && (
@@ -16226,8 +16226,8 @@ function ConnectionsGraphTab({
       )}
 
       {/* Kanban Board — Drag connections between columns by clicking status */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="pb-2 border-b border-white/10">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
             Connections Pipeline (Kanban)
           </CardTitle>
@@ -16248,7 +16248,7 @@ function ConnectionsGraphTab({
                 return (
                   <div
                     key={status}
-                    className="flex flex-col rounded-lg border-2 border-white/20 bg-white/5 min-h-[250px]"
+                    className="flex flex-col rounded-lg border border-white/10/20 bg-white/5 min-h-[250px]"
                   >
                     {/* Column Header */}
                     <div
@@ -16264,7 +16264,7 @@ function ConnectionsGraphTab({
                           {status}
                         </span>
                       </div>
-                      <Badge variant="outline" className="text-[10px] border-white/40 text-white/60 bg-transparent font-mono">
+                      <Badge variant="outline" className="text-[10px] border-white/40 text-white/60 bg-white/[0.02] font-mono">
                         {columnConnections.length}
                       </Badge>
                     </div>
@@ -16293,8 +16293,8 @@ function ConnectionsGraphTab({
       </Card>
 
       {/* All Connections List (detail view) */}
-      <Card className="border-2 border-white bg-transparent">
-        <CardHeader className="pb-2 border-b-2 border-white">
+      <Card className="border border-white/10 bg-white/[0.02]">
+        <CardHeader className="pb-2 border-b border-white/10">
           <CardTitle className="text-sm font-mono font-black uppercase tracking-tight text-white">
             All Connections (Detail View)
           </CardTitle>
@@ -16308,7 +16308,7 @@ function ConnectionsGraphTab({
             connections.map((conn) => (
               <div
                 key={conn.id}
-                className="flex items-center justify-between gap-4 p-3 border-2 border-white rounded-md hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all"
+                className="flex items-center justify-between gap-4 p-3 border border-white/10 rounded-md hover:border-blue-500 hover:bg-blue-600/5 transition-all"
               >
                 <div className="flex items-center gap-3 flex-1">
                   <div
@@ -16322,7 +16322,7 @@ function ConnectionsGraphTab({
                       <span>{conn.target_company_name}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs border-white text-white bg-transparent font-mono">
+                      <Badge variant="outline" className="text-xs border-white text-white bg-white/[0.02] font-mono">
                         {conn.connection_type}
                       </Badge>
                       {conn.ai_reasoning && (
@@ -16343,10 +16343,10 @@ function ConnectionsGraphTab({
                     value={conn.connection_status}
                     onValueChange={(v) => onUpdateStatus(conn.id, v as ConnectionStatus)}
                   >
-                    <SelectTrigger className="w-[140px] border-2 border-white bg-transparent text-white font-mono text-xs h-8">
+                    <SelectTrigger className="w-[140px] border border-white/10 bg-white/[0.02] text-white font-mono text-xs h-8">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#050505] border-2 border-white">
+                    <SelectContent className="bg-[#050505] border border-white/10">
                       {(["To Connect", "In Progress", "Connected", "Rejected", "Completed"] as ConnectionStatus[]).map((status) => (
                         <SelectItem key={status} value={status} className="text-white font-mono text-xs">
                           <span className="flex items-center gap-2">

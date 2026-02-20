@@ -74,8 +74,8 @@ export function OrbitStatsSection() {
         style={{
           transform: `translateY(${parallaxOffset1}px)`,
           backgroundImage: `
-            linear-gradient(rgba(255, 237, 0, 0.1) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 237, 0, 0.1) 1px, transparent 1px)
+            linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
           `,
           backgroundSize: "50px 50px",
           animation: "gridPulse 4s ease-in-out infinite",
@@ -90,7 +90,7 @@ export function OrbitStatsSection() {
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
-            className="absolute rounded-full bg-[#FFED00] opacity-20 blur-sm"
+            className="absolute rounded-full bg-[#3b82f6] opacity-20 blur-sm"
             style={{
               width: `${Math.random() * 4 + 2}px`,
               height: `${Math.random() * 4 + 2}px`,
@@ -108,9 +108,9 @@ export function OrbitStatsSection() {
         className="absolute inset-0 overflow-hidden"
         style={{ transform: `translateY(${parallaxOffset3}px)` }}
       >
-        <div className="absolute top-20 left-10 h-64 w-64 rounded-full bg-[#FFED00] opacity-5 blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 h-96 w-96 rounded-full bg-[#FFED00] opacity-5 blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute top-1/2 left-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#FFED00] opacity-5 blur-3xl animate-pulse" style={{ animationDelay: "2s" }} />
+        <div className="absolute top-20 left-10 h-64 w-64 rounded-full bg-[#3b82f6] opacity-5 blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 h-96 w-96 rounded-full bg-[#3b82f6] opacity-5 blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+        <div className="absolute top-1/2 left-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#3b82f6] opacity-5 blur-3xl animate-pulse" style={{ animationDelay: "2s" }} />
       </div>
 
       {/* Main Content */}
@@ -129,19 +129,19 @@ export function OrbitStatsSection() {
             <h2 className="orbit-stat-heading max-w-xl animate-slide-up">
               An{" "}
               <span className="orbit-accent-text relative inline-block">
-                <span className="absolute inset-0 bg-[#FFED00] opacity-20 blur-xl" />
+                <span className="absolute inset-0 bg-[#3b82f6] opacity-20 blur-xl" />
                 EMERGING
               </span>{" "}
               market signal stack for{" "}
               <span className="orbit-accent-text relative inline-block">
-                <span className="absolute inset-0 bg-[#FFED00] opacity-20 blur-xl" />
+                <span className="absolute inset-0 bg-[#3b82f6] opacity-20 blur-xl" />
                 FRONTIER
               </span>{" "}
               capital.
             </h2>
           </div>
           <button className="orbit-accent-button group relative overflow-hidden">
-            <span className="absolute inset-0 bg-[#FFED00] opacity-0 transition-opacity duration-300 group-hover:opacity-20" />
+            <span className="absolute inset-0 bg-[#3b82f6] opacity-0 transition-opacity duration-300 group-hover:opacity-20" />
             <span className="orbit-accent-text relative z-10">ALL NEWS</span>
             <span className="orbit-accent-text relative z-10 transition-transform duration-150 group-hover:translate-x-1">
               →
@@ -154,7 +154,7 @@ export function OrbitStatsSection() {
           {stats.map((stat, index) => (
             <div
               key={stat.label}
-              className="group relative flex min-h-[170px] flex-col justify-between border-2 border-white px-6 py-5 transition-all duration-500 hover:border-[#FFED00] hover:shadow-[0_0_30px_rgba(255,237,0,0.3)]"
+              className="group relative flex min-h-[170px] flex-col justify-between border-2 border-white px-6 py-5 transition-all duration-500 hover:border-[#3b82f6] hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
               style={{
                 transform: `translateY(${scrollY * (0.02 + index * 0.01)}px)`,
                 opacity: isVisible ? 1 : 0,
@@ -162,19 +162,19 @@ export function OrbitStatsSection() {
               }}
             >
               {/* Glow effect on hover */}
-              <div className="absolute inset-0 bg-[#FFED00] opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-10" />
+              <div className="absolute inset-0 bg-[#3b82f6] opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-10" />
               
               <div className="relative z-10 flex items-center justify-between">
                 <span className="orbit-stat-label underline decoration-2 underline-offset-4">
                   {stat.label}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-white/70">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#FFED00]" />
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#3b82f6]" />
                   LIVE
                 </span>
               </div>
               <div className="relative z-10 space-y-3">
-                <div className="orbit-stat-number group-hover:text-[#FFED00] transition-colors duration-300">
+                <div className="orbit-stat-number group-hover:text-[#3b82f6] transition-colors duration-300">
                   {stat.value}
                 </div>
                 <p className="orbit-stat-title">{stat.title}</p>
@@ -185,7 +185,7 @@ export function OrbitStatsSection() {
 
         {/* Cookie Banner with Parallax */}
         <div
-          className="mt-10 border-2 border-white px-4 py-3 transition-all duration-300 hover:border-[#FFED00]"
+          className="mt-10 border-2 border-white px-4 py-3 transition-all duration-300 hover:border-[#3b82f6]"
           style={{
             transform: `translateY(${scrollY * 0.03}px)`,
             opacity: isVisible ? 1 : 0,
@@ -198,7 +198,7 @@ export function OrbitStatsSection() {
               This terminal uses cookies for analytics and session continuity.
             </span>
             <button className="orbit-accent-button relative overflow-hidden px-3 py-2 text-xs group">
-              <span className="absolute inset-0 bg-[#FFED00] opacity-0 transition-opacity duration-300 group-hover:opacity-20" />
+              <span className="absolute inset-0 bg-[#3b82f6] opacity-0 transition-opacity duration-300 group-hover:opacity-20" />
               <span className="relative z-10">ACCEPT →</span>
             </button>
           </div>

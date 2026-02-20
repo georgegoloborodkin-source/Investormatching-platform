@@ -77,7 +77,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <Building2 className="h-5 w-5 text-[#FFED00]" />
+              <Building2 className="h-5 w-5 text-[#3b82f6]" />
               Startup Meeting Overview
             </CardTitle>
           </CardHeader>
@@ -93,7 +93,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
               </TableHeader>
               <TableBody>
                 {startupMeetingCounts.map((startup) => (
-                  <TableRow key={startup.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                  <TableRow key={startup.id} className="border-b border-white/30 hover:bg-[#3b82f6]/5">
                     <TableCell className="text-white">
                       <div>
                         <div className="font-mono font-bold">{startup.companyName}</div>
@@ -104,7 +104,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                       <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{startup.totalMeetings}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                      <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                         {startup.completedMeetings}
                       </Badge>
                     </TableCell>
@@ -122,7 +122,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <Users className="h-5 w-5 text-[#FFED00]" />
+              <Users className="h-5 w-5 text-[#3b82f6]" />
               Investor Meeting Overview
             </CardTitle>
           </CardHeader>
@@ -138,7 +138,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
               </TableHeader>
               <TableBody>
                 {investorMeetingCounts.map((investor) => (
-                  <TableRow key={investor.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                  <TableRow key={investor.id} className="border-b border-white/30 hover:bg-[#3b82f6]/5">
                     <TableCell className="text-white">
                       <div>
                         <div className="font-mono font-bold">{investor.firmName}</div>
@@ -148,7 +148,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                         <div className="text-sm text-white/70 font-mono">
                           {investor.totalSlots} total slots
                           {investor.tableNumber && (
-                            <span className="ml-2 px-1.5 py-0.5 border border-[#FFED00] text-[#FFED00] bg-transparent text-xs rounded font-mono">
+                            <span className="ml-2 px-1.5 py-0.5 border border-[#3b82f6] text-[#3b82f6] bg-transparent text-xs rounded font-mono">
                               Table {investor.tableNumber}
                             </span>
                           )}
@@ -159,12 +159,12 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                       <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{investor.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className={investor.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
+                      <Badge variant="outline" className={investor.slotsAvailable > 0 ? "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {investor.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                      <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                         {investor.completedMeetings}
                       </Badge>
                     </TableCell>
@@ -179,7 +179,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <GraduationCap className="h-5 w-5 text-[#FFED00]" />
+              <GraduationCap className="h-5 w-5 text-[#3b82f6]" />
               Mentor Meeting Overview
             </CardTitle>
           </CardHeader>
@@ -195,7 +195,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
               </TableHeader>
               <TableBody>
                 {mentorMeetingCounts.map((mentor) => (
-                  <TableRow key={mentor.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                  <TableRow key={mentor.id} className="border-b border-white/30 hover:bg-[#3b82f6]/5">
                     <TableCell className="text-white">
                       <div>
                         <div className="font-mono font-bold">{mentor.fullName}</div>
@@ -208,12 +208,12 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                       <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{mentor.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className={mentor.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
+                      <Badge variant="outline" className={mentor.slotsAvailable > 0 ? "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {mentor.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                      <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                         {mentor.completedMeetings}
                       </Badge>
                     </TableCell>
@@ -228,7 +228,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
         <Card className="border-2 border-white bg-transparent">
           <CardHeader className="border-b-2 border-white">
             <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-              <BriefcaseBusiness className="h-5 w-5 text-[#FFED00]" />
+              <BriefcaseBusiness className="h-5 w-5 text-[#3b82f6]" />
               Corporate Meeting Overview
             </CardTitle>
           </CardHeader>
@@ -244,7 +244,7 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
               </TableHeader>
               <TableBody>
                 {corporateMeetingCounts.map((corp) => (
-                  <TableRow key={corp.id} className="border-b border-white/30 hover:bg-[#FFED00]/5">
+                  <TableRow key={corp.id} className="border-b border-white/30 hover:bg-[#3b82f6]/5">
                     <TableCell className="text-white">
                       <div>
                         <div className="font-mono font-bold">{corp.firmName}</div>
@@ -260,12 +260,12 @@ export function MeetingVisibilityTable({ startups, investors, mentors, corporate
                       <Badge variant="outline" className="border-white text-white bg-transparent font-mono">{corp.slotsUsed}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className={corp.slotsAvailable > 0 ? "border-[#FFED00] text-[#FFED00] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
+                      <Badge variant="outline" className={corp.slotsAvailable > 0 ? "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono" : "border-white/50 text-white/50 bg-transparent font-mono"}>
                         {corp.slotsAvailable}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                      <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                         {corp.completedMeetings}
                       </Badge>
                     </TableCell>

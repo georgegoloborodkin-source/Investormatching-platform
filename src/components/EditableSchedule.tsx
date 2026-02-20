@@ -281,7 +281,7 @@ export function EditableSchedule({
             View meetings by time slot. Each card shows which team member needs to call which startup.
           </p>
         </div>
-        <Button variant="outline" onClick={autoFixConflicts} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+        <Button variant="outline" onClick={autoFixConflicts} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
           Auto-fix conflicts
         </Button>
       </div>
@@ -289,7 +289,7 @@ export function EditableSchedule({
       <Card className="border-2 border-white bg-transparent">
         <CardHeader className="border-b-2 border-white">
           <CardTitle className="flex items-center gap-2 text-white font-mono font-black uppercase tracking-tight">
-            <Phone className="h-5 w-5 text-[#FFED00]" />
+            <Phone className="h-5 w-5 text-[#3b82f6]" />
             Call Sheet (by investment member)
           </CardTitle>
         </CardHeader>
@@ -312,10 +312,10 @@ export function EditableSchedule({
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50">
+              <Button variant="outline" onClick={exportCallSheetCsv} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
                 Export CSV
               </Button>
-              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold disabled:opacity-50">
+              <Button variant="outline" onClick={exportCallSheetIcs} disabled={!memberFocus} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold disabled:opacity-50">
                 Export .ics
               </Button>
             </div>
@@ -331,7 +331,7 @@ export function EditableSchedule({
                     const slot = timeSlots.find((t) => t.label === m.timeSlot);
                     const inv = investors.find((i) => i.id === m.investorId);
                     return (
-                      <div key={m.id} className="flex items-center justify-between text-sm border-2 border-white rounded-md px-3 py-2 bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
+                      <div key={m.id} className="flex items-center justify-between text-sm border-2 border-white rounded-md px-3 py-2 bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
                         <div className="text-white/70 font-mono">
                           {slot ? `${slot.startTime}-${slot.endTime}` : m.slotTime} • {m.timeSlot}
                         </div>
@@ -359,13 +359,13 @@ export function EditableSchedule({
               <CardHeader className="pb-3 border-b-2 border-white">
                 <CardTitle className="text-lg flex items-center gap-3 text-white">
                   <div className="flex items-center gap-2 bg-transparent border-2 border-white px-3 py-1.5 rounded-lg">
-                    <Clock className="h-5 w-5 text-[#FFED00]" />
+                    <Clock className="h-5 w-5 text-[#3b82f6]" />
                     <span className="font-mono font-bold text-white">{timeSlot.startTime} - {timeSlot.endTime}</span>
                   </div>
                   <span className="text-white/70 font-mono">({timeSlot.label})</span>
                   <div className="ml-auto flex items-center gap-3">
                     {conflictBySlot[timeSlot.label] > 0 && (
-                      <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                      <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                         {conflictBySlot[timeSlot.label]} conflict{conflictBySlot[timeSlot.label] !== 1 ? "s" : ""}
                       </Badge>
                     )}
@@ -374,12 +374,12 @@ export function EditableSchedule({
                       <Switch
                         checked={!!timeSlot.isDone}
                         onCheckedChange={(checked) => handleToggleSlotDone(timeSlot.id, checked)}
-                        className="data-[state=checked]:bg-[#FFED00]"
+                        className="data-[state=checked]:bg-[#3b82f6]"
                       />
                     </div>
                     <Badge 
                       variant="outline"
-                      className={timeSlot.isDone ? "border-white/50 text-white/50 bg-transparent font-mono" : "border-[#FFED00] text-[#FFED00] bg-transparent font-mono"}
+                      className={timeSlot.isDone ? "border-white/50 text-white/50 bg-transparent font-mono" : "border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono"}
                     >
                       {timeSlot.isDone ? "Completed" : `${slotMatches.length} call${slotMatches.length !== 1 ? 's' : ''}`}
                     </Badge>
@@ -404,10 +404,10 @@ export function EditableSchedule({
                         key={match.id}
                         className={`p-4 border-2 rounded-lg transition-all ${
                           match.completed 
-                            ? 'bg-transparent border-[#FFED00]/50 opacity-75' 
+                            ? 'bg-transparent border-[#3b82f6]/50 opacity-75' 
                             : match.locked
-                            ? 'bg-transparent border-[#FFED00]'
-                            : 'bg-transparent border-white hover:border-[#FFED00] hover:bg-[#FFED00]/5'
+                            ? 'bg-transparent border-[#3b82f6]'
+                            : 'bg-transparent border-white hover:border-[#3b82f6] hover:bg-[#3b82f6]/5'
                         }`}
                       >
                         {isEditing ? (
@@ -470,11 +470,11 @@ export function EditableSchedule({
                             </div>
                             
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleSaveEdit} className="bg-[#FFED00] text-black hover:bg-[#FFED00]/80 font-bold border-2 border-[#FFED00]">
+                              <Button size="sm" onClick={handleSaveEdit} className="bg-[#3b82f6] text-black hover:bg-[#3b82f6]/80 font-bold border-2 border-[#3b82f6]">
                                 <Save className="h-4 w-4 mr-2" />
                                 Save
                               </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#FFED00] hover:text-[#FFED00] font-bold">
+                              <Button size="sm" variant="outline" onClick={handleCancelEdit} className="border-2 border-white bg-transparent text-white hover:bg-white/10 hover:border-[#3b82f6] hover:text-[#3b82f6] font-bold">
                                 <X className="h-4 w-4 mr-2" />
                                 Cancel
                               </Button>
@@ -483,10 +483,10 @@ export function EditableSchedule({
                         ) : (
                           <div className="space-y-3">
                             {/* Investment Team Member Call Info - Prominent */}
-                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#FFED00] transition-all">
+                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#3b82f6] transition-all">
                               <div className="flex items-center gap-2 mb-2">
-                                <Phone className="h-4 w-4 text-[#FFED00]" />
-                                <span className="text-xs font-mono font-bold text-[#FFED00] uppercase tracking-wide">Call Assignment</span>
+                                <Phone className="h-4 w-4 text-[#3b82f6]" />
+                                <span className="text-xs font-mono font-bold text-[#3b82f6] uppercase tracking-wide">Call Assignment</span>
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
@@ -496,7 +496,7 @@ export function EditableSchedule({
                                 <div className="text-sm text-white/70 font-mono pl-6">
                                   from <span className="font-bold">{investor?.firmName || 'Unknown Firm'}</span>
                                   {investor?.tableNumber && (
-                                    <span className="ml-2 px-2 py-0.5 border border-[#FFED00] text-[#FFED00] bg-transparent text-xs rounded font-mono font-bold">
+                                    <span className="ml-2 px-2 py-0.5 border border-[#3b82f6] text-[#3b82f6] bg-transparent text-xs rounded font-mono font-bold">
                                       Table {investor.tableNumber}
                                     </span>
                                   )}
@@ -505,7 +505,7 @@ export function EditableSchedule({
                             </div>
 
                             {/* Startup to Call */}
-                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#FFED00] transition-all">
+                            <div className="bg-transparent border-2 border-white p-3 rounded-lg hover:border-[#3b82f6] transition-all">
                               <div className="text-xs font-mono font-bold text-white/70 uppercase tracking-wide mb-1">Startup to Call</div>
                               <div className="font-mono font-black text-lg text-white">
                                 {match.startupName}
@@ -520,17 +520,17 @@ export function EditableSchedule({
 
                             <div className="flex items-start justify-between pt-2 border-t border-white/30">
                               <div className="flex gap-2 flex-wrap">
-                                <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                                <Badge variant="outline" className="text-xs border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                                   Match Score: {match.compatibilityScore}%
                                 </Badge>
                                 {match.locked && (
-                                  <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                                  <Badge variant="outline" className="text-xs border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                                     <Lock className="h-3 w-3 mr-1" />
                                     Locked
                                   </Badge>
                                 )}
                                 {match.completed && (
-                                  <Badge variant="outline" className="text-xs border-[#FFED00] text-[#FFED00] bg-transparent font-mono">
+                                  <Badge variant="outline" className="text-xs border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">
                                     <CheckCircle className="h-3 w-3 mr-1" />
                                     Completed
                                   </Badge>
@@ -541,7 +541,7 @@ export function EditableSchedule({
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => onToggleCompleted(match.id)}
-                                  className={match.completed ? "text-[#FFED00] hover:bg-white/10" : "text-white hover:text-[#FFED00] hover:bg-white/10"}
+                                  className={match.completed ? "text-[#3b82f6] hover:bg-white/10" : "text-white hover:text-[#3b82f6] hover:bg-white/10"}
                                 >
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>

@@ -64,7 +64,7 @@ export function SimpleMatchingTable({
     });
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'border-[#FFED00] text-[#FFED00] bg-transparent';
+    if (score >= 80) return 'border-[#3b82f6] text-[#3b82f6] bg-transparent';
     if (score >= 60) return 'border-white text-white bg-transparent';
     if (score >= 40) return 'border-white/70 text-white/70 bg-transparent';
     return 'border-white/50 text-white/50 bg-transparent';
@@ -145,7 +145,7 @@ export function SimpleMatchingTable({
               <Checkbox
                 checked={showCompleted}
                 onCheckedChange={(checked) => setShowCompleted(checked === true)}
-                className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                className="border-white data-[state=checked]:bg-[#3b82f6] data-[state=checked]:border-[#3b82f6]"
               />
               Show completed
             </label>
@@ -162,30 +162,30 @@ export function SimpleMatchingTable({
             <tr>
               <th className="text-left p-3 w-12 text-white font-mono font-bold">Done</th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
+                className="text-left p-3 cursor-pointer hover:bg-[#3b82f6]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('startupName')}
               >
                 <div className="flex items-center gap-1">
                   Startup
-                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
+                  <ArrowUpDown className="h-3 w-3 text-[#3b82f6]" />
                 </div>
               </th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
+                className="text-left p-3 cursor-pointer hover:bg-[#3b82f6]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('targetName')}
               >
                 <div className="flex items-center gap-1">
                   Partner
-                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
+                  <ArrowUpDown className="h-3 w-3 text-[#3b82f6]" />
                 </div>
               </th>
               <th 
-                className="text-left p-3 cursor-pointer hover:bg-[#FFED00]/10 transition-colors text-white font-mono font-bold"
+                className="text-left p-3 cursor-pointer hover:bg-[#3b82f6]/10 transition-colors text-white font-mono font-bold"
                 onClick={() => handleSort('compatibilityScore')}
               >
                 <div className="flex items-center gap-1">
                   Score
-                  <ArrowUpDown className="h-3 w-3 text-[#FFED00]" />
+                  <ArrowUpDown className="h-3 w-3 text-[#3b82f6]" />
                 </div>
               </th>
               <th className="text-left p-3 text-white font-mono font-bold">Lock</th>
@@ -200,7 +200,7 @@ export function SimpleMatchingTable({
               return (
                 <tr 
                   key={match.id} 
-                  className={`border-b border-white/30 hover:bg-[#FFED00]/5 transition-colors ${
+                  className={`border-b border-white/30 hover:bg-[#3b82f6]/5 transition-colors ${
                     match.completed ? 'opacity-60' : ''
                   } ${isTargetUnavailable ? 'bg-white/5' : ''}`}
                 >
@@ -209,7 +209,7 @@ export function SimpleMatchingTable({
                       checked={match.completed}
                       onCheckedChange={() => onToggleCompleted(match.id)}
                       disabled={isTargetUnavailable}
-                      className="border-white data-[state=checked]:bg-[#FFED00] data-[state=checked]:border-[#FFED00]"
+                      className="border-white data-[state=checked]:bg-[#3b82f6] data-[state=checked]:border-[#3b82f6]"
                     />
                   </td>
                   <td className="p-3">
@@ -255,10 +255,10 @@ export function SimpleMatchingTable({
                       variant="ghost"
                       size="sm"
                       onClick={() => onToggleLocked(match.id)}
-                      className="h-8 w-8 p-0 text-white hover:text-[#FFED00] hover:bg-white/10"
+                      className="h-8 w-8 p-0 text-white hover:text-[#3b82f6] hover:bg-white/10"
                     >
                       {match.locked ? (
-                        <Lock className="h-4 w-4 text-[#FFED00]" />
+                        <Lock className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
                         <Unlock className="h-4 w-4 text-white/50" />
                       )}

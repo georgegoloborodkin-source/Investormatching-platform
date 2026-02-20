@@ -124,21 +124,21 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
       <CardContent className="space-y-4 text-white">
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline" className="border-white text-white bg-transparent">{matches.length} matches</Badge>
-          <Badge variant={startupsWithZero.length === 0 ? "outline" : "outline"} className={startupsWithZero.length === 0 ? "border-white text-white bg-transparent" : "border-[#FFED00] text-[#FFED00] bg-transparent"}>
+          <Badge variant={startupsWithZero.length === 0 ? "outline" : "outline"} className={startupsWithZero.length === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
             {startupsWithZero.length} startups with 0 meetings
           </Badge>
           {hasInvestorsAvailable && (
-            <Badge variant="outline" className={startupsNoInvestor === 0 ? "border-white text-white bg-transparent" : "border-[#FFED00] text-[#FFED00] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoInvestor === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoInvestor} without investor
             </Badge>
           )}
           {hasMentorsAvailable && (
-            <Badge variant="outline" className={startupsNoMentor === 0 ? "border-white text-white bg-transparent" : "border-[#FFED00] text-[#FFED00] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoMentor === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoMentor} without mentor
             </Badge>
           )}
           {hasCorporatesAvailable && (
-            <Badge variant="outline" className={startupsNoCorporate === 0 ? "border-white text-white bg-transparent" : "border-[#FFED00] text-[#FFED00] bg-transparent"}>
+            <Badge variant="outline" className={startupsNoCorporate === 0 ? "border-white text-white bg-transparent" : "border-[#3b82f6] text-[#3b82f6] bg-transparent"}>
               {startupsNoCorporate} without corporate
             </Badge>
           )}
@@ -147,42 +147,42 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
         {/* Per-startup resource breakdown */}
         <div className="space-y-2">
           <div className="font-mono font-bold text-white flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-[#FFED00]" />
+            <AlertCircle className="h-4 w-4 text-[#3b82f6]" />
             Resource Coverage by Startup
           </div>
           <div className="grid gap-2">
             {startupStatuses.map((s) => (
-              <div key={s.name} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#FFED00] hover:bg-[#FFED00]/5 transition-all">
+              <div key={s.name} className="flex items-center justify-between p-3 border-2 border-white rounded-lg bg-transparent hover:border-[#3b82f6] hover:bg-[#3b82f6]/5 transition-all">
                 <span className="font-mono font-bold text-sm text-white">{s.name}</span>
                 <div className="flex items-center gap-3">
                   {hasInvestorsAvailable && (
                     <div className="flex items-center gap-1 text-xs">
                       {s.hasInvestor ? (
-                        <CheckCircle2 className="h-4 w-4 text-[#FFED00]" />
+                        <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
                         <XCircle className="h-4 w-4 text-white/50" />
                       )}
-                      <span className={s.hasInvestor ? "text-[#FFED00] font-mono" : "text-white/50 font-mono"}>Investor</span>
+                      <span className={s.hasInvestor ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Investor</span>
                     </div>
                   )}
                   {hasMentorsAvailable && (
                     <div className="flex items-center gap-1 text-xs">
                       {s.hasMentor ? (
-                        <CheckCircle2 className="h-4 w-4 text-[#FFED00]" />
+                        <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
                         <XCircle className="h-4 w-4 text-white/50" />
                       )}
-                      <span className={s.hasMentor ? "text-[#FFED00] font-mono" : "text-white/50 font-mono"}>Mentor</span>
+                      <span className={s.hasMentor ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Mentor</span>
                     </div>
                   )}
                   {hasCorporatesAvailable && (
                     <div className="flex items-center gap-1 text-xs">
                       {s.hasCorporate ? (
-                        <CheckCircle2 className="h-4 w-4 text-[#FFED00]" />
+                        <CheckCircle2 className="h-4 w-4 text-[#3b82f6]" />
                       ) : (
                         <XCircle className="h-4 w-4 text-white/50" />
                       )}
-                      <span className={s.hasCorporate ? "text-[#FFED00] font-mono" : "text-white/50 font-mono"}>Corporate</span>
+                      <span className={s.hasCorporate ? "text-[#3b82f6] font-mono" : "text-white/50 font-mono"}>Corporate</span>
                     </div>
                   )}
                   <Badge variant="outline" className="ml-2 border-white text-white bg-transparent font-mono">{s.totalMatches} total</Badge>
@@ -206,9 +206,9 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
             <div className="font-mono font-bold text-white">Unused investor slots</div>
             <div className="space-y-1">
               {investorsWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#FFED00] transition-all">
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
                   <span className="text-white/70 font-mono">{x.label}</span>
-                  <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{x.unused} unused</Badge>
+                  <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {investorsWithUnusedSlots.length > 8 && (
@@ -225,9 +225,9 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
             <div className="font-mono font-bold text-white">Unused mentor slots</div>
             <div className="space-y-1">
               {mentorsWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#FFED00] transition-all">
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
                   <span className="text-white/70 font-mono">{x.label}</span>
-                  <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{x.unused} unused</Badge>
+                  <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {mentorsWithUnusedSlots.length > 8 && (
@@ -244,9 +244,9 @@ export function CoverageReport({ startups, investors, mentors, corporates, match
             <div className="font-mono font-bold text-white">Unused corporate slots</div>
             <div className="space-y-1">
               {corporatesWithUnusedSlots.slice(0, 8).map((x) => (
-                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#FFED00] transition-all">
+                <div key={x.label} className="flex items-center justify-between text-sm border-2 border-white p-2 rounded-lg bg-transparent hover:border-[#3b82f6] transition-all">
                   <span className="text-white/70 font-mono">{x.label}</span>
-                  <Badge variant="outline" className="border-[#FFED00] text-[#FFED00] bg-transparent font-mono">{x.unused} unused</Badge>
+                  <Badge variant="outline" className="border-[#3b82f6] text-[#3b82f6] bg-transparent font-mono">{x.unused} unused</Badge>
                 </div>
               ))}
               {corporatesWithUnusedSlots.length > 8 && (
