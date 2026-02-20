@@ -7437,21 +7437,41 @@ def _parse_email_addresses(raw: str) -> List[str]:
 
 
 def _extract_body_from_parts(parts: List[dict], prefer_plain: bool = True) -> Tuple[str, str]:
-    """Recursively walk MIME parts and return (plain_text, html_text)."""
-    plain, html = "", ""
+    """Recursively walk MIME parts and return (plain_text, html_text).
+    Concatenates all text parts found, not just the first one."""
+    plain_parts: List[str] = []
+    html_parts: List[str] = []
+    
     for part in parts:
         mime = part.get("mimeType", "")
         body_data = part.get("body", {}).get("data", "")
         nested = part.get("parts", [])
 
         if nested:
+            # Recursively extract from nested parts
             p, h = _extract_body_from_parts(nested, prefer_plain)
-            if p: plain = p
-            if h: html = h
+            if p:
+                plain_parts.append(p)
+            if h:
+                html_parts.append(h)
         elif mime == "text/plain" and body_data:
-            plain = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+            try:
+                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+                if decoded.strip():
+                    plain_parts.append(decoded)
+            except Exception as e:
+                print(f"[Gmail] Failed to decode plain text part: {e}")
         elif mime == "text/html" and body_data:
-            html = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+            try:
+                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+                if decoded.strip():
+                    html_parts.append(decoded)
+            except Exception as e:
+                print(f"[Gmail] Failed to decode HTML part: {e}")
+    
+    # Concatenate all parts with double newline separator
+    plain = "\n\n".join(plain_parts) if plain_parts else ""
+    html = "\n\n".join(html_parts) if html_parts else ""
     return plain, html
 
 
@@ -7545,15 +7565,25 @@ async def gmail_get_message(request: GmailGetMessageRequest):
         body_plain, body_html = _extract_body_from_parts(parts)
         attachments = _extract_attachments_meta(parts)
     else:
+        # Single-part message (no nested parts)
         body_data = payload.get("body", {}).get("data", "")
         mime = payload.get("mimeType", "")
         if body_data:
-            decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
-            body_plain = decoded if mime == "text/plain" else ""
-            body_html = decoded if mime == "text/html" else ""
+            try:
+                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+                body_plain = decoded if mime == "text/plain" else ""
+                body_html = decoded if mime == "text/html" else ""
+            except Exception as e:
+                print(f"[Gmail] Failed to decode single-part body: {e}")
+                body_plain, body_html = "", ""
         else:
             body_plain, body_html = "", ""
         attachments = []
+    
+    # Log extraction results for debugging
+    if not body_plain and not body_html:
+        print(f"[Gmail] WARNING: No body extracted for message {msg.get('id', 'unknown')}")
+        print(f"[Gmail] Payload structure: has_parts={bool(parts)}, mimeType={payload.get('mimeType', 'none')}")
 
     return GmailGetMessageResponse(
         id=msg["id"],
@@ -7608,6 +7638,10 @@ async def ingest_gmail(request: GmailIngestRequest):
     body = msg.body_text
     if not body.strip() and msg.body_html:
         body = _strip_html(msg.body_html)
+    
+    # If still no body, log warning
+    if not body.strip():
+        print(f"[Gmail] WARNING: Empty body for message {msg.id}, subject: {msg.subject}")
 
     subject = msg.subject or "(no subject)"
     sender = msg.sender or "unknown"
@@ -7619,6 +7653,9 @@ async def ingest_gmail(request: GmailIngestRequest):
     header_block += f"Date: {date_str}\nSubject: {subject}\n"
 
     content = f"{header_block}\n{body}"
+    
+    # Log content length for debugging
+    print(f"[Gmail] Ingested message {msg.id}: content_length={len(content)}, body_length={len(body)}, attachments={len(msg.attachments)}")
     title = f"[Email] {subject}"
 
     return GmailIngestResponse(
