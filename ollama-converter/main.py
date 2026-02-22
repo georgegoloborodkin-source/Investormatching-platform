@@ -4594,12 +4594,18 @@ DRAFT ANSWER:
 {request.draft_answer}
 
 TASK: Analyze the draft and decide:
-1. Is the answer complete and well-supported by the context?
+1. Is the answer complete and well-supported by the context? 
 2. Are there specific facts, metrics, or relationships that are mentioned but lack supporting data?
 3. If data is missing, what specific follow-up search queries would fill the gaps?
 
 OUTPUT ONLY valid JSON:
-{{"needs_more_data": bool, "missing_data_types": ["vector" | "graph" | "kpis"], "follow_up_queries": ["specific search query 1", "specific search query 2"], "reasoning": "one paragraph explaining what is missing and why", "confidence": float_0_to_1}}
+{{
+  "needs_more_data": bool,
+  "missing_data_types": ["vector" | "graph" | "kpis"],
+  "follow_up_queries": ["specific search query 1", "specific search query 2"],
+  "reasoning": "one paragraph explaining what's missing and why",
+  "confidence": float 0.0-1.0 (how confident you are the draft fully answers the question)
+}}
 
 RULES:
 - If confidence >= 0.85 OR this is the final iteration, set needs_more_data to false
@@ -4632,6 +4638,7 @@ RULES:
                     reasoning="Could not parse reflection output",
                 )
 
+        # Force stop if at max iterations
         if request.iteration + 1 >= request.max_iterations:
             data["needs_more_data"] = False
 
@@ -4705,12 +4712,12 @@ REFINEMENT RULES:
 
     async def generate():
         try:
-            yield f"data: {json.dumps({'status': 'Refining answer with additional context...'})}" + "\n\n"
+            yield f"data: {json.dumps({'status': 'Refining answer with additional context...'})}\n\n"
             async for chunk in stream_anthropic_answer(prompt, question=request.question):
-                yield f"data: {chunk}" + "\n\n"
+                yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f'data: {{"error": "{str(e)[:200]}"}}' + "\n\n"
+            yield f'data: {{"error": "{str(e)[:200]}"}}\n\n'
 
     return StreamingResponse(
         generate(),
@@ -4743,8 +4750,18 @@ class ColBERTRerankResponse(BaseModel):
 async def colbert_rerank(request: ColBERTRerankRequest):
     """
     ColBERT-style Late Interaction Reranking.
-    Computes token-level embeddings for query and documents, then uses MaxSim
-    scoring for fine-grained relevance matching, combined with Voyage reranker.
+    
+    Instead of a single embedding per document, this computes token-level
+    embeddings for both query and documents, then uses MaxSim (maximum
+    similarity) scoring for fine-grained relevance matching.
+    
+    Flow:
+    1. Embed query tokens individually (each word/subword gets its own vector)
+    2. Embed document tokens individually  
+    3. For each query token, find its max similarity across all doc tokens
+    4. Sum the MaxSim scores = final ColBERT score
+    
+    This captures partial matches that dense single-vector retrieval misses.
     """
     if not request.documents:
         return ColBERTRerankResponse(results=[])
@@ -4753,6 +4770,10 @@ async def colbert_rerank(request: ColBERTRerankRequest):
     if not query:
         return ColBERTRerankResponse(results=[])
 
+    # Strategy: Use Voyage reranker as the cross-encoder backbone (it already
+    # does token-level attention internally), then augment with our own
+    # token-level similarity signal for late-interaction scoring.
+    
     try:
         # Phase 1: Cross-encoder reranking via Voyage rerank-2.5
         voyage_results = await rerank_with_voyage(
@@ -4760,26 +4781,31 @@ async def colbert_rerank(request: ColBERTRerankRequest):
             documents=request.documents,
             top_k=min(request.top_k * 2, len(request.documents)),
         )
-
+        
         # Phase 2: Token-level late-interaction scoring
+        # Split query into tokens, embed each, compute MaxSim against doc chunks
         query_tokens = _tokenize_for_colbert(query)
+        
+        # Embed query tokens as a batch
         query_token_embeddings = await _batch_embed_tokens(query_tokens)
-
+        
         scored_results = []
         for vr in voyage_results:
             doc_idx = vr.get("index", 0)
             doc_text = request.documents[doc_idx] if doc_idx < len(request.documents) else ""
             voyage_score = vr.get("relevance_score", 0.0)
-
-            doc_tokens = _tokenize_for_colbert(doc_text[:1000])
+            
+            # Compute token-level MaxSim score
+            doc_tokens = _tokenize_for_colbert(doc_text[:1000])  # Cap doc length
             if doc_tokens and query_token_embeddings:
                 doc_token_embeddings = await _batch_embed_tokens(doc_tokens)
                 maxsim_score = _compute_maxsim(query_token_embeddings, doc_token_embeddings)
             else:
                 maxsim_score = 0.0
-
+            
+            # Combine: weighted fusion of cross-encoder + late-interaction
             combined_score = 0.6 * voyage_score + 0.4 * maxsim_score
-
+            
             scored_results.append({
                 "index": doc_idx,
                 "doc_id": request.doc_ids[doc_idx] if doc_idx < len(request.doc_ids) else "",
@@ -4788,14 +4814,16 @@ async def colbert_rerank(request: ColBERTRerankRequest):
                 "maxsim_score": round(maxsim_score, 4),
                 "document": doc_text[:200],
             })
-
+        
+        # Sort by combined score, take top_k
         scored_results.sort(key=lambda x: x["relevance_score"], reverse=True)
         scored_results = scored_results[:request.top_k]
-
+        
         return ColBERTRerankResponse(results=scored_results, method="colbert_late_interaction")
-
+        
     except Exception as e:
         print(f"[COLBERT-RERANK] Error in late-interaction: {e}, falling back to Voyage only")
+        # Fallback: just use Voyage reranker scores
         try:
             fallback = await rerank_with_voyage(
                 query=query,
@@ -4819,15 +4847,21 @@ async def colbert_rerank(request: ColBERTRerankRequest):
 
 
 def _tokenize_for_colbert(text: str) -> List[str]:
-    """Tokenize text into meaningful chunks for ColBERT late interaction."""
+    """
+    Tokenize text into meaningful chunks for ColBERT late interaction.
+    Uses word-level + bigram tokens for richer representation.
+    """
     text = text.strip()
     if not text:
         return []
-
+    
+    # Clean and split into words
     words = re.findall(r'\b\w+\b', text.lower())
     if not words:
         return []
-
+    
+    tokens = []
+    # Individual words (skip very common stop words for efficiency)
     stop_words = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
                   "being", "have", "has", "had", "do", "does", "did", "will",
                   "would", "could", "should", "may", "might", "shall", "can",
@@ -4835,27 +4869,34 @@ def _tokenize_for_colbert(text: str) -> List[str]:
                   "as", "into", "through", "during", "before", "after", "and",
                   "but", "or", "not", "no", "so", "if", "than", "too", "very",
                   "just", "about", "it", "its", "this", "that", "these", "those"}
-
+    
     meaningful_words = [w for w in words if w not in stop_words and len(w) > 1]
-    tokens = meaningful_words[:30]
-
-    for i in range(min(len(meaningful_words) - 1, 15)):
+    tokens.extend(meaningful_words[:30])  # Cap at 30 word tokens
+    
+    # Add bigrams for phrase-level matching
+    for i in range(len(meaningful_words) - 1):
+        if i >= 15:
+            break
         tokens.append(f"{meaningful_words[i]} {meaningful_words[i+1]}")
-
+    
     return tokens
 
 
 async def _batch_embed_tokens(tokens: List[str]) -> List[List[float]]:
-    """Embed a batch of tokens using Voyage API's batch endpoint."""
+    """
+    Embed a batch of tokens using Voyage API's batch endpoint.
+    Returns a list of embedding vectors, one per token.
+    """
     if not tokens or not VOYAGE_API_KEY:
         return []
-
+    
+    # Voyage supports batch embedding
     payload = {
         "model": VOYAGE_EMBEDDING_MODEL,
-        "input": tokens[:50],
+        "input": tokens[:50],  # Cap batch size
         "input_type": "query",
     }
-
+    
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -4866,11 +4907,11 @@ async def _batch_embed_tokens(tokens: List[str]) -> List[List[float]]:
                 },
                 json=payload,
             )
-
+            
             if response.status_code >= 400:
                 print(f"[COLBERT] Batch embed error: {response.status_code}")
                 return []
-
+            
             data = response.json() or {}
             embeddings = []
             for item in data.get("data", []):
@@ -4887,13 +4928,16 @@ def _compute_maxsim(
     query_embeddings: List[List[float]],
     doc_embeddings: List[List[float]],
 ) -> float:
-    """Compute ColBERT MaxSim score: for each query token, find max cosine
-    similarity with any document token, then average across query tokens."""
+    """
+    Compute ColBERT MaxSim score: for each query token embedding,
+    find max cosine similarity with any document token embedding,
+    then average across query tokens.
+    """
     if not query_embeddings or not doc_embeddings:
         return 0.0
-
+    
     import math
-
+    
     def cosine_sim(a: List[float], b: List[float]) -> float:
         dot = sum(x * y for x, y in zip(a, b))
         norm_a = math.sqrt(sum(x * x for x in a))
@@ -4901,12 +4945,12 @@ def _compute_maxsim(
         if norm_a < 1e-9 or norm_b < 1e-9:
             return 0.0
         return dot / (norm_a * norm_b)
-
+    
     total_maxsim = 0.0
     for q_emb in query_embeddings:
         max_sim = max(cosine_sim(q_emb, d_emb) for d_emb in doc_embeddings)
         total_maxsim += max_sim
-
+    
     return total_maxsim / len(query_embeddings)
 
 
@@ -7437,41 +7481,21 @@ def _parse_email_addresses(raw: str) -> List[str]:
 
 
 def _extract_body_from_parts(parts: List[dict], prefer_plain: bool = True) -> Tuple[str, str]:
-    """Recursively walk MIME parts and return (plain_text, html_text).
-    Concatenates all text parts found, not just the first one."""
-    plain_parts: List[str] = []
-    html_parts: List[str] = []
-    
+    """Recursively walk MIME parts and return (plain_text, html_text)."""
+    plain, html = "", ""
     for part in parts:
         mime = part.get("mimeType", "")
         body_data = part.get("body", {}).get("data", "")
         nested = part.get("parts", [])
 
         if nested:
-            # Recursively extract from nested parts
             p, h = _extract_body_from_parts(nested, prefer_plain)
-            if p:
-                plain_parts.append(p)
-            if h:
-                html_parts.append(h)
+            if p: plain = p
+            if h: html = h
         elif mime == "text/plain" and body_data:
-            try:
-                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
-                if decoded.strip():
-                    plain_parts.append(decoded)
-            except Exception as e:
-                print(f"[Gmail] Failed to decode plain text part: {e}")
+            plain = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
         elif mime == "text/html" and body_data:
-            try:
-                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
-                if decoded.strip():
-                    html_parts.append(decoded)
-            except Exception as e:
-                print(f"[Gmail] Failed to decode HTML part: {e}")
-    
-    # Concatenate all parts with double newline separator
-    plain = "\n\n".join(plain_parts) if plain_parts else ""
-    html = "\n\n".join(html_parts) if html_parts else ""
+            html = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
     return plain, html
 
 
@@ -7565,25 +7589,15 @@ async def gmail_get_message(request: GmailGetMessageRequest):
         body_plain, body_html = _extract_body_from_parts(parts)
         attachments = _extract_attachments_meta(parts)
     else:
-        # Single-part message (no nested parts)
         body_data = payload.get("body", {}).get("data", "")
         mime = payload.get("mimeType", "")
         if body_data:
-            try:
-                decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
-                body_plain = decoded if mime == "text/plain" else ""
-                body_html = decoded if mime == "text/html" else ""
-            except Exception as e:
-                print(f"[Gmail] Failed to decode single-part body: {e}")
-                body_plain, body_html = "", ""
+            decoded = base64.urlsafe_b64decode(body_data + "==").decode("utf-8", errors="replace")
+            body_plain = decoded if mime == "text/plain" else ""
+            body_html = decoded if mime == "text/html" else ""
         else:
             body_plain, body_html = "", ""
         attachments = []
-    
-    # Log extraction results for debugging
-    if not body_plain and not body_html:
-        print(f"[Gmail] WARNING: No body extracted for message {msg.get('id', 'unknown')}")
-        print(f"[Gmail] Payload structure: has_parts={bool(parts)}, mimeType={payload.get('mimeType', 'none')}")
 
     return GmailGetMessageResponse(
         id=msg["id"],
@@ -7638,10 +7652,6 @@ async def ingest_gmail(request: GmailIngestRequest):
     body = msg.body_text
     if not body.strip() and msg.body_html:
         body = _strip_html(msg.body_html)
-    
-    # If still no body, log warning
-    if not body.strip():
-        print(f"[Gmail] WARNING: Empty body for message {msg.id}, subject: {msg.subject}")
 
     subject = msg.subject or "(no subject)"
     sender = msg.sender or "unknown"
@@ -7653,9 +7663,6 @@ async def ingest_gmail(request: GmailIngestRequest):
     header_block += f"Date: {date_str}\nSubject: {subject}\n"
 
     content = f"{header_block}\n{body}"
-    
-    # Log content length for debugging
-    print(f"[Gmail] Ingested message {msg.id}: content_length={len(content)}, body_length={len(body)}, attachments={len(msg.attachments)}")
     title = f"[Email] {subject}"
 
     return GmailIngestResponse(
@@ -7845,1440 +7852,3 @@ async def startup_event():
         print(f"   OpenAI API Key: {'✅ Set' if OPENAI_API_KEY else '❌ NOT SET'}")
     print(f"   Embedding Dimensions: {EMBEDDING_DIM}")
     print(f"🔄 RERANKING:")
-    print(f"   Voyage Model: {VOYAGE_RERANK_MODEL}")
-    print(f"   Cohere Fallback Model: {RERANK_MODEL}")
-    print(f"   Voyage API Key: {'✅ Set' if VOYAGE_API_KEY else '❌ NOT SET'}")
-    print(f"   Cohere API Key: {'✅ Set' if COHERE_API_KEY else '❌ NOT SET'}")
-    print(f"🤖 CLAUDE:")
-    print(f"   Model: {ANTHROPIC_MODEL}")
-    print(f"   API Key: {'✅ Set' if ANTHROPIC_API_KEY else '❌ NOT SET'}")
-    print(f"   Fallback chain: {ANTHROPIC_MODEL_FALLBACKS}")
-    print(f"📄 PDF INGESTION:")
-    print(f"   Strategy: Claude-native document blocks → PyMuPDF → PyPDF2 → pdfplumber")
-    print(f"   Max pages: {MAX_PDF_PAGES}")
-    print(f"🔗 NEW V2 ENDPOINTS:")
-    print(f"   /contextualize-chunk  — Contextual Retrieval headers")
-    print(f"   /graphrag/retrieve    — LazyGraphRAG retrieval pipeline")
-    print(f"   /ingest/document-stream — SSE streaming document ingestion")
-    print(f"   /web-search           — DuckDuckGo web search (legacy fallback)")
-    print(f"   🌐 Native web search — Anthropic web_search_20250305 (in /ask, /ask/stream)")
-    print("=" * 60)
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  AGENTIC RAG — Backend retrieval with Claude tool orchestration
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# ---------------------------------------------------------------------------
-#  Tool definitions (JSON schemas passed to Claude)
-# ---------------------------------------------------------------------------
-
-AGENT_TOOLS = [
-    {
-        "name": "search_portfolio",
-        "description": (
-            "Search portfolio companies by structured metadata filters. "
-            "Use this for questions about company counts, locations, sectors, funding stages, or listing companies. "
-            "Examples: 'companies in Bangladesh', 'B2B SaaS preseed companies', 'how many companies in Africa', "
-            "'list all fintech portfolio companies'. Returns matching company names and properties."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "country": {
-                    "type": "string",
-                    "description": "Filter by country or location (e.g. 'bangladesh', 'morocco', 'egypt'). Searches across country, headquarters, location, and geo fields.",
-                },
-                "sector": {
-                    "type": "string",
-                    "description": "Filter by industry/sector (e.g. 'fintech', 'saas', 'b2b', 'healthtech', 'edtech').",
-                },
-                "stage": {
-                    "type": "string",
-                    "description": "Filter by funding stage (e.g. 'pre-seed', 'seed', 'series a', 'series b').",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Search by company name (partial match). Use when looking for a specific company.",
-                },
-                "business_model": {
-                    "type": "string",
-                    "description": "Filter by business model (e.g. 'b2b', 'b2c', 'marketplace', 'saas').",
-                },
-                "list_all": {
-                    "type": "boolean",
-                    "description": "If true, return ALL portfolio companies (use for 'list all companies', 'how many total companies'). Default false.",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "search_documents",
-        "description": (
-            "Semantic search across all uploaded documents (pitch decks, memos, meeting notes, reports). "
-            "Use this for questions about specific content mentioned in documents. "
-            "Examples: 'what is Chari's revenue model', 'tell me about the pitch deck for XYZ', "
-            "'what were the meeting notes about'. Returns relevant text chunks with document titles."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query — should be a clear description of the information you're looking for.",
-                },
-                "company_name": {
-                    "type": "string",
-                    "description": "Optional: limit search to documents about this specific company.",
-                },
-                "top_k": {
-                    "type": "integer",
-                    "description": "Number of results to return (default 10, max 20).",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "get_company_details",
-        "description": (
-            "Get detailed information about a specific portfolio company including all properties, "
-            "KPI summaries, document count, and relationships. "
-            "Use this when user asks specifically about one company: 'tell me about Chari', "
-            "'what is Company X's valuation', 'who are the founders of Y'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "company_name": {
-                    "type": "string",
-                    "description": "The exact or approximate company name to look up.",
-                },
-            },
-            "required": ["company_name"],
-        },
-    },
-    {
-        "name": "search_knowledge_graph",
-        "description": (
-            "Search the knowledge graph for entities and their relationships. "
-            "Use this for questions about connections, investors, founders, competitors, partnerships. "
-            "Examples: 'who invested in Company X', 'what companies are competitors of Y', "
-            "'find connections between A and B', 'who are the founders of Z'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "entity_name": {
-                    "type": "string",
-                    "description": "Name of the entity to search for.",
-                },
-                "entity_type": {
-                    "type": "string",
-                    "description": "Entity type filter: 'company', 'person', 'fund', 'round', 'sector', 'location'. Leave empty to search all types.",
-                },
-                "relationship_type": {
-                    "type": "string",
-                    "description": "Filter by relationship: 'founded', 'works_at', 'invested_in', 'raised', 'led_round', 'partner_of', 'competitor_of', 'acquired', 'operates_in', 'located_in', 'board_member'.",
-                },
-                "max_depth": {
-                    "type": "integer",
-                    "description": "Max traversal depth (1-3, default 1).",
-                },
-            },
-            "required": ["entity_name"],
-        },
-    },
-]
-
-# ---------------------------------------------------------------------------
-#  Tool execution handlers
-# ---------------------------------------------------------------------------
-
-_SECTOR_SYNONYMS: dict[str, set[str]] = {
-    "saas": {"saas", "software-as-a-service", "software as a service", "cloud software", "subscription software"},
-    "fintech": {"fintech", "financial technology", "financial services", "payments", "neobank", "insurtech", "lending", "banking"},
-    "edtech": {"edtech", "education technology", "elearning", "e-learning", "learning platform"},
-    "healthtech": {"healthtech", "health technology", "healthcare", "medtech", "digital health", "telehealth", "telemedicine"},
-    "agtech": {"agtech", "agritech", "agriculture technology", "farming", "agricultural"},
-    "climate": {"climate", "climate tech", "cleantech", "sustainability", "green tech", "renewable"},
-    "logistics": {"logistics", "supply chain", "shipping", "delivery", "freight", "last mile"},
-    "marketplace": {"marketplace", "platform", "two-sided", "multi-sided"},
-    "ecommerce": {"ecommerce", "e-commerce", "online retail", "d2c", "direct to consumer"},
-    "ai": {"ai", "artificial intelligence", "machine learning", "ml", "deep learning", "nlp", "computer vision", "genai"},
-    "proptech": {"proptech", "property technology", "real estate tech", "real estate"},
-}
-_MODEL_SYNONYMS: dict[str, set[str]] = {
-    "b2b": {"b2b", "business-to-business", "business to business", "enterprise"},
-    "b2c": {"b2c", "business-to-consumer", "business to consumer", "consumer"},
-    "b2b2c": {"b2b2c", "b2b2c model"},
-    "saas": {"saas", "software-as-a-service", "software as a service", "subscription", "recurring revenue"},
-    "marketplace": {"marketplace", "platform", "two-sided marketplace"},
-}
-
-def _expand_synonyms(term: str, synonym_map: dict[str, set[str]]) -> set[str]:
-    """Return the term plus any synonyms from the map."""
-    term_lower = term.lower().strip()
-    expanded = {term_lower}
-    for canonical, syns in synonym_map.items():
-        if term_lower in syns or term_lower == canonical:
-            expanded |= syns
-    return expanded
-
-
-import re as _re
-
-_CORPORATE_SUFFIXES_RE = _re.compile(
-    r"""(?:\s+|[.,])*\b(?:
-        technologies|technology|tech|
-        pte\.?|ltd\.?|limited|inc\.?|incorporated|
-        corp\.?|corporation|plc\.?|gmbh|
-        co\.?|company|group|holdings|
-        solutions|services|ventures|capital|partners|
-        llc\.?|llp\.?|lp\.?|
-        sa|s\.a\.?|ag|bv|nv|
-        pvt\.?|private
-    )\b[.,\s]*""",
-    _re.IGNORECASE | _re.VERBOSE,
-)
-
-# Patterns that indicate the entity name is a document title, not a company name
-# e.g. "[Chari] GPT Demo Day", "Template for Chari Side Letter", "V1 . Chari"
-_BRACKET_PREFIX_RE = _re.compile(r"^\[([^\]]+)\]")  # [CompanyName] ...
-_VERSION_PREFIX_RE = _re.compile(r"^v\d+\.?\s*\.?\s*", _re.IGNORECASE)  # V1 . , V2.
-_DOCUMENT_TITLE_JUNK = _re.compile(
-    r"\b(?:template|draft|final|copy|summary|report|update|email|"
-    r"memo|letter|deck|pitch|presentation|agenda|minutes|notes|"
-    r"side letter|spa|sha|ssa|term sheet|nda|mou|loi|"
-    r"weekly|monthly|quarterly|annual|demo day|gpt)\b",
-    _re.IGNORECASE,
-)
-
-
-def _extract_core_company_name(name: str) -> str:
-    """
-    Extract the actual company name from entity names that might be document titles.
-    Then strip corporate suffixes to get a canonical 'core' name.
-
-    Examples:
-        'Chhaya Technologies PTE. LTD.'          → 'chhaya'
-        '[Chari] GPT Demo Day'                   → 'chari'
-        'Template for Chari Side Letter to Chari SPA' → 'chari'
-        'V1 . Chari'                             → 'chari'
-        '[Chari] Orbit Weekly Update Email Template'  → 'chari'
-        'Watawaste Co. Ltd'                      → 'watawaste'
-    """
-    if not name:
-        return ""
-    s = name.strip()
-
-    # 1) If name starts with [Something], extract the bracket content as the company name
-    bracket_match = _BRACKET_PREFIX_RE.match(s)
-    if bracket_match:
-        s = bracket_match.group(1).strip()
-
-    # 2) Strip "V1 .", "V2." etc. prefix
-    s = _VERSION_PREFIX_RE.sub("", s).strip()
-
-    # 3) Strip "Copy of " prefix
-    if s.lower().startswith("copy of "):
-        s = s[8:].strip()
-
-    # 4) Lowercase for remaining processing
-    s = s.lower()
-
-    # 5) Strip corporate suffixes
-    s = _CORPORATE_SUFFIXES_RE.sub(" ", s)
-
-    # 6) Strip document-title junk words
-    s = _DOCUMENT_TITLE_JUNK.sub(" ", s)
-
-    # 7) Clean up punctuation and whitespace
-    s = _re.sub(r"[.,():\[\]{}\"'`/\\|_\-]+", " ", s)
-    s = _re.sub(r"\b(for|to|of|the|a|an|and|or|in|on|at|by|from|with)\b", " ", s)
-    s = " ".join(s.split()).strip()
-
-    return s
-
-
-# ---------------------------------------------------------------------------
-#  DB-level scope helpers — single RPC call to resolve folder_ids → IDs
-# ---------------------------------------------------------------------------
-
-async def _resolve_scoped_entity_ids(sb, event_id: str, folder_ids: list[str]) -> set[str] | None:
-    """Call resolve_scoped_entity_ids RPC to get entity IDs that have docs in the selected folders.
-    Returns None if RPC fails (caller should fall back to unscoped)."""
-    try:
-        result = sb.rpc("resolve_scoped_entity_ids", {
-            "p_event_id": event_id,
-            "p_folder_ids": folder_ids,
-        }).execute()
-        ids = result.data if result.data else []
-        if isinstance(ids, list):
-            return set(str(i) for i in ids)
-        return set()
-    except Exception as e:
-        print(f"[SCOPE] resolve_scoped_entity_ids RPC failed: {e}")
-        return None
-
-
-async def _resolve_scoped_doc_ids(sb, event_id: str, folder_ids: list[str]) -> set[str] | None:
-    """Call resolve_scoped_document_ids RPC to get document IDs in the selected folders.
-    Returns None if RPC fails (caller should fall back to unscoped)."""
-    try:
-        result = sb.rpc("resolve_scoped_document_ids", {
-            "p_event_id": event_id,
-            "p_folder_ids": folder_ids,
-        }).execute()
-        ids = result.data if result.data else []
-        if isinstance(ids, list):
-            return set(str(i) for i in ids)
-        return set()
-    except Exception as e:
-        print(f"[SCOPE] resolve_scoped_document_ids RPC failed: {e}")
-        return None
-
-
-async def _agent_search_portfolio(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
-    """Search portfolio companies via SQL on kg_entities with JSONB filters and synonym expansion."""
-    sb = get_supabase()
-    country = (tool_input.get("country") or "").strip().lower()
-    sector = (tool_input.get("sector") or "").strip().lower()
-    stage = (tool_input.get("stage") or "").strip().lower()
-    name = (tool_input.get("name") or "").strip().lower()
-    biz_model = (tool_input.get("business_model") or "").strip().lower()
-    list_all = tool_input.get("list_all", False)
-
-    sector_terms = _expand_synonyms(sector, _SECTOR_SYNONYMS) if sector else set()
-    model_terms = _expand_synonyms(biz_model, _MODEL_SYNONYMS) if biz_model else set()
-
-    # ── DB-level scope: resolve allowed entity IDs, then query ONLY those (faster) ──
-    allowed_entity_ids: set[str] | None = None
-    if folder_ids:
-        allowed_entity_ids = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
-        if allowed_entity_ids is not None:
-            print(f"[AGENT] DB scope: {len(allowed_entity_ids)} entities in {len(folder_ids)} folders")
-            if not allowed_entity_ids:
-                return "SCOPE_EMPTY: No portfolio companies exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge."
-
-    # When scope is set, fetch ONLY in-scope entities (much faster than fetch-all-then-filter)
-    query = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company")
-    if allowed_entity_ids is not None:
-        # Supabase .in_() works with list; batch if > 500 to avoid URL length limits
-        id_list = list(allowed_entity_ids)
-        if len(id_list) > 500:
-            raw_rows = []
-            for i in range(0, len(id_list), 500):
-                batch = id_list[i : i + 500]
-                r = sb.table("kg_entities").select("id, name, normalized_name, properties").eq("event_id", event_id).eq("entity_type", "company").in_("id", batch).execute()
-                raw_rows.extend(r.data or [])
-        else:
-            result = query.in_("id", id_list).execute()
-            raw_rows = result.data or []
-    else:
-        result = query.execute()
-        raw_rows = result.data or []
-
-    if not raw_rows:
-        return "No portfolio companies found in the database."
-
-    # ── Deduplicate: keep the richest entity per core company name ──
-    best_by_core: dict[str, dict] = {}
-    for row in raw_rows:
-        raw_name = row.get("normalized_name") or row.get("name", "")
-        core = _extract_core_company_name(raw_name)
-        if not core:
-            continue
-        props = row.get("properties") or {}
-        richness = len(json.dumps(props))
-        prev = best_by_core.get(core)
-        if prev is None or richness > prev["_richness"]:
-            best_by_core[core] = {**row, "_richness": richness}
-    rows = sorted(best_by_core.values(), key=lambda r: (r.get("name") or "").lower())
-    if allowed_entity_ids is not None:
-        print(f"[AGENT] Scope: fetched {len(raw_rows)} entities, {len(rows)} after dedup")
-
-    def _field_text(props: dict, keys: list[str]) -> str:
-        return " ".join(str(props.get(f, "")) for f in keys).lower()
-
-    def _any_term_in(terms: set[str], text: str) -> bool:
-        return any(t in text for t in terms)
-
-    def matches(row) -> bool:
-        if list_all:
-            return True
-        props = row.get("properties") or {}
-        text_blob = json.dumps(props).lower()
-        company_name_lower = (row.get("name") or "").lower()
-
-        if name and name not in company_name_lower and name not in text_blob:
-            return False
-
-        if country:
-            geo_text = _field_text(props, [
-                "country", "headquarters", "location", "hq",
-                "geo_focus", "geo_markets", "geography", "region", "regions",
-            ])
-            if country not in geo_text and country not in text_blob:
-                return False
-
-        if sector_terms:
-            sector_text = _field_text(props, [
-                "industry", "sector", "vertical", "category",
-            ])
-            bio = str(props.get("bio", "")).lower()
-            combined = sector_text + " " + bio
-            if not _any_term_in(sector_terms, combined) and not _any_term_in(sector_terms, text_blob):
-                return False
-
-        if stage:
-            stage_text = _field_text(props, [
-                "funding_stage", "stage", "round", "funding_round",
-            ])
-            if stage not in stage_text and stage not in text_blob:
-                return False
-
-        if model_terms:
-            model_text = _field_text(props, [
-                "business_model", "model", "revenue_model",
-            ])
-            bio = str(props.get("bio", "")).lower()
-            combined = model_text + " " + bio
-            if not _any_term_in(model_terms, combined) and not _any_term_in(model_terms, text_blob):
-                return False
-
-        return True
-
-    matched = [r for r in rows if matches(r)]
-    # Deterministic sort: by name alphabetically so results are always consistent
-    matched.sort(key=lambda r: (r.get("name") or "").lower())
-
-    if not matched:
-        all_names = ", ".join(sorted(r.get("name", "?") for r in rows[:50]))
-        return f"No companies matched the filters. Total portfolio: {len(rows)} companies. Names: {all_names}"
-
-    lines = [f"Found {len(matched)} matching companies (out of {len(rows)} total in portfolio):\n"]
-    for r in matched:
-        props = r.get("properties") or {}
-        parts = [f"- **{r.get('name', '?')}**"]
-        for key in ["industry", "sector", "funding_stage", "headquarters", "country", "location",
-                     "business_model", "revenue_model", "bio"]:
-            val = props.get(key)
-            if val:
-                label = key.replace("_", " ").title()
-                display = str(val)[:250] if key == "bio" else str(val)
-                parts.append(f"  {label}: {display}")
-        geo = props.get("geo_focus") or props.get("geo_markets") or props.get("geography")
-        if geo:
-            if isinstance(geo, list):
-                parts.append(f"  Geo Focus: {', '.join(str(g) for g in geo)}")
-            else:
-                parts.append(f"  Geo Focus: {geo}")
-        lines.append("\n".join(parts))
-
-    return "\n\n".join(lines)
-
-
-async def _agent_search_documents(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> tuple[str, list[dict]]:
-    """Semantic search via VoyageAI embedding + match_document_chunks RPC. Returns (text, source_docs)."""
-    sb = get_supabase()
-    query_text = (tool_input.get("query") or "").strip()
-    company_name = (tool_input.get("company_name") or "").strip()
-    top_k = min(tool_input.get("top_k", 10), 20)
-
-    if not query_text:
-        return "Error: 'query' is required for document search.", []
-
-    # Generate embedding using the same provider as the rest of the system
-    try:
-        if EMBEDDINGS_PROVIDER == "voyage":
-            embedding = await generate_embedding_voyage(query_text, "query")
-        elif EMBEDDINGS_PROVIDER == "openai":
-            embedding = await generate_embedding_openai(query_text)
-        else:
-            embedding = await generate_embedding_ollama(query_text)
-    except Exception as e:
-        return f"Error generating embedding: {str(e)}", []
-
-    # When scope is set: resolve doc IDs first, then vector-search ONLY those chunks (faster)
-    chunks: list = []
-    if folder_ids:
-        scoped_doc_ids = await _resolve_scoped_doc_ids(sb, event_id, folder_ids)
-        if scoped_doc_ids is not None:
-            if not scoped_doc_ids:
-                return f"SCOPE_EMPTY: No documents matching '{query_text}' exist in the selected folders. Tell the user this topic is outside their current knowledge scope. Do NOT answer from your own knowledge.", []
-            doc_id_list = list(scoped_doc_ids)
-            print(f"[AGENT] Scope: {len(doc_id_list)} docs in {len(folder_ids)} folders — vector search only on these")
-            try:
-                result = sb.rpc("match_document_chunks_by_doc_ids", {
-                    "query_embedding": embedding,
-                    "match_count": top_k,
-                    "filter_event_id": event_id,
-                    "filter_document_ids": doc_id_list,
-                }).execute()
-                chunks = result.data or []
-            except Exception as e:
-                if "match_document_chunks_by_doc_ids" in str(e):
-                    # Migration not applied — fall back to folder-scoped RPC
-                    result = sb.rpc("match_document_chunks_scoped", {
-                        "query_embedding": embedding,
-                        "match_count": top_k,
-                        "filter_event_id": event_id,
-                        "filter_folder_ids": folder_ids,
-                    }).execute()
-                    chunks = result.data or []
-                else:
-                    return f"Error in semantic search: {str(e)}", []
-    if not folder_ids:
-        try:
-            result = sb.rpc("match_document_chunks", {
-                "query_embedding": embedding,
-                "match_count": top_k,
-                "filter_event_id": event_id,
-            }).execute()
-            chunks = result.data or []
-        except Exception as e:
-            return f"Error in semantic search: {str(e)}", []
-
-    if not chunks:
-        scope_msg = " within the selected knowledge scope" if folder_ids else ""
-        return f"No documents found matching '{query_text}'{scope_msg}.", []
-
-    # Fetch document metadata for all chunks (title, file_name, folder_id)
-    doc_ids = list(set(c.get("document_id", "") for c in chunks if c.get("document_id")))
-    doc_map: dict = {}
-    if doc_ids:
-        try:
-            docs_result = sb.table("documents").select("id, title, file_name, folder_id").in_("id", doc_ids).execute()
-            doc_map = {d["id"]: d for d in (docs_result.data or [])}
-        except Exception:
-            pass
-
-    # If company_name filter, further restrict by document title
-    if company_name:
-        company_lower = company_name.lower()
-        filtered_chunks = []
-        for c in chunks:
-            doc = doc_map.get(c.get("document_id", ""), {})
-            title = (doc.get("title") or doc.get("file_name") or "").lower()
-            if company_lower in title:
-                filtered_chunks.append(c)
-        if filtered_chunks:
-            chunks = filtered_chunks
-
-    # ── Reranking: use Voyage cross-encoder to re-score chunks ──
-    if len(chunks) > 1:
-        try:
-            chunk_texts = []
-            for c in chunks:
-                doc = doc_map.get(c.get("document_id", ""), {})
-                title = doc.get("title") or doc.get("file_name") or ""
-                text = c.get("parent_text") or c.get("chunk_text") or ""
-                chunk_texts.append(f"{title}\n{text[:3000]}")
-            reranked = await rerank_with_voyage(query_text, chunk_texts, top_k=min(top_k, len(chunks)))
-            if reranked:
-                reranked_chunks = []
-                for r in reranked:
-                    idx = r["index"]
-                    if 0 <= idx < len(chunks):
-                        chunk = dict(chunks[idx])
-                        chunk["rerank_score"] = r["relevance_score"]
-                        reranked_chunks.append(chunk)
-                chunks = reranked_chunks
-                print(f"[AGENT] Reranked {len(chunks)} chunks, top score: {chunks[0].get('rerank_score', 0):.3f}")
-        except Exception as e:
-            print(f"[AGENT] Reranking failed (using original order): {e}")
-
-    lines = [f"Found {len(chunks)} relevant document chunks:\n"]
-    source_docs: list[dict] = []
-    seen_ids: set[str] = set()
-    for i, chunk in enumerate(chunks, 1):
-        doc = doc_map.get(chunk.get("document_id", ""), {})
-        doc_id = chunk.get("document_id", "")
-        title = doc.get("title") or doc.get("file_name") or "Unknown document"
-        similarity = chunk.get("similarity", 0)
-        rerank_score = chunk.get("rerank_score")
-        text = chunk.get("parent_text") or chunk.get("chunk_text") or ""
-        text = text[:1500]
-        score_str = f"rerank: {rerank_score:.2f}" if rerank_score is not None else f"relevance: {similarity:.2f}"
-        lines.append(f"[{i}] **{title}** ({score_str})\n{text}")
-        if doc_id and doc_id not in seen_ids:
-            seen_ids.add(doc_id)
-            source_docs.append({"id": doc_id, "title": title})
-
-    return "\n\n".join(lines), source_docs
-
-
-async def _agent_get_company_details(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
-    """Get detailed company card via kg_find_entity + get_company_card RPCs."""
-    sb = get_supabase()
-    company_name = (tool_input.get("company_name") or "").strip()
-
-    if not company_name:
-        return "Error: 'company_name' is required."
-
-    # Find entity by name
-    try:
-        find_result = sb.rpc("kg_find_entity", {
-            "search_name": company_name,
-            "filter_event_id": event_id,
-        }).execute()
-    except Exception as e:
-        return f"Error finding entity: {str(e)}"
-
-    entities = find_result.data or []
-    if not entities:
-        # Fallback: try direct table search
-        try:
-            fallback = sb.table("kg_entities") \
-                .select("id, name, normalized_name, properties") \
-                .eq("event_id", event_id) \
-                .eq("entity_type", "company") \
-                .ilike("normalized_name", f"%{company_name.lower()}%") \
-                .limit(10) \
-                .execute()
-            entities = fallback.data or []
-        except Exception:
-            pass
-
-    if not entities:
-        return f"No company found matching '{company_name}'. Try searching the portfolio with search_portfolio tool."
-
-    # ── Deduplicate: pick the richest entity when multiple share the same core name ──
-    if len(entities) > 1:
-        best_by_core: dict[str, dict] = {}
-        for ent in entities:
-            raw_name = ent.get("normalized_name") or ent.get("name", "")
-            core = _extract_core_company_name(raw_name)
-            if not core:
-                core = raw_name.strip().lower()
-            richness = len(json.dumps(ent.get("properties") or {}))
-            if core not in best_by_core or richness > best_by_core[core]["_r"]:
-                best_by_core[core] = {**ent, "_r": richness}
-        entities = [v for v in best_by_core.values()]
-
-    # ── DB-level scope: resolve allowed entity IDs via single RPC call ──
-    if folder_ids:
-        allowed = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
-        if allowed is not None:
-            entities = [e for e in entities if e.get("id") in allowed]
-            if not entities:
-                return f"SCOPE_EMPTY: '{company_name}' is not in the selected folders. Tell the user this company is outside their current knowledge scope. Do NOT answer from your own knowledge."
-
-    entity = entities[0]
-    entity_id = entity.get("id")
-
-    # Get full company card
-    try:
-        card_result = sb.rpc("get_company_card", {
-            "p_company_entity_id": entity_id,
-            "p_filter_event_id": event_id,
-        }).execute()
-    except Exception as e:
-        # If RPC fails, fall back to entity properties
-        props = entity.get("properties") or {}
-        lines = [f"**{entity.get('name', company_name)}**\n"]
-        for k, v in props.items():
-            if v and k not in ("auto_created", "source", "property_sources"):
-                lines.append(f"- {k.replace('_', ' ').title()}: {str(v)[:300]}")
-        return "\n".join(lines)
-
-    cards = card_result.data or []
-    if not cards:
-        props = entity.get("properties") or {}
-        lines = [f"**{entity.get('name', company_name)}**\n"]
-        for k, v in props.items():
-            if v and k not in ("auto_created", "source", "property_sources"):
-                lines.append(f"- {k.replace('_', ' ').title()}: {str(v)[:300]}")
-        return "\n".join(lines)
-
-    card = cards[0]
-    props = card.get("company_properties") or {}
-    lines = [f"**{card.get('company_name', company_name)}** — Detailed Company Card\n"]
-
-    for key in ["industry", "funding_stage", "business_model", "headquarters", "country",
-                 "location", "bio", "website", "linkedin_url", "email", "phone",
-                 "founded_year", "team_size", "amount_seeking", "valuation",
-                 "arr", "mrr", "burn_rate", "runway_months",
-                 "problem", "solution", "tam", "competitive_edge"]:
-        val = props.get(key)
-        if val:
-            label = key.replace("_", " ").title()
-            display = str(val)[:500] if key in ("bio", "problem", "solution", "tam", "competitive_edge") else str(val)
-            lines.append(f"- **{label}**: {display}")
-
-    geo = props.get("geo_focus") or props.get("geo_markets")
-    if geo:
-        lines.append(f"- **Geo Focus**: {', '.join(geo) if isinstance(geo, list) else geo}")
-
-    founders = props.get("founders")
-    if founders and isinstance(founders, list):
-        founder_strs = []
-        for f in founders:
-            if isinstance(f, dict):
-                founder_strs.append(f"{f.get('name', '?')} ({f.get('role', 'founder')})")
-            else:
-                founder_strs.append(str(f))
-        lines.append(f"- **Founders**: {', '.join(founder_strs)}")
-
-    doc_count = card.get("document_count", 0)
-    rel_count = card.get("relationship_count", 0)
-    kpi_count = card.get("kpi_count", 0)
-    related = card.get("related_companies") or []
-
-    lines.append(f"\n**Stats**: {doc_count} documents, {kpi_count} KPIs, {rel_count} relationships")
-    if related:
-        lines.append(f"**Related Companies**: {', '.join(related[:10])}")
-
-    kpi_summary = card.get("kpi_summary")
-    if kpi_summary and isinstance(kpi_summary, (dict, list)):
-        lines.append(f"**KPI Summary**: {json.dumps(kpi_summary, default=str)[:500]}")
-
-    return "\n".join(lines)
-
-
-async def _agent_search_knowledge_graph(tool_input: dict, event_id: str, folder_ids: list[str] | None = None) -> str:
-    """Search knowledge graph entities and relationships."""
-    sb = get_supabase()
-    entity_name = (tool_input.get("entity_name") or "").strip()
-    entity_type = (tool_input.get("entity_type") or "").strip()
-    relationship_type = (tool_input.get("relationship_type") or "").strip()
-    max_depth = min(tool_input.get("max_depth", 1), 3)
-
-    if not entity_name:
-        return "Error: 'entity_name' is required."
-
-    # Find entity
-    try:
-        find_result = sb.rpc("kg_find_entity", {
-            "search_name": entity_name,
-            "filter_event_id": event_id,
-        }).execute()
-    except Exception as e:
-        return f"Error finding entity: {str(e)}"
-
-    entities = find_result.data or []
-
-    if entity_type:
-        entities = [e for e in entities if (e.get("entity_type") or "").lower() == entity_type.lower()]
-
-    # ── DB-level scope: resolve allowed entity IDs via single RPC call ──
-    if folder_ids and entities:
-        allowed = await _resolve_scoped_entity_ids(sb, event_id, folder_ids)
-        if allowed is not None:
-            entities = [e for e in entities if e.get("id") in allowed]
-            if not entities:
-                return f"SCOPE_EMPTY: '{entity_name}' is not in the selected folders. Tell the user this entity is outside their current knowledge scope. Do NOT answer from your own knowledge."
-
-    if not entities:
-        return f"No entity found matching '{entity_name}'" + (f" (type: {entity_type})" if entity_type else "")
-
-    lines = [f"Found {len(entities)} entity/entities matching '{entity_name}':\n"]
-
-    for entity in entities[:5]:
-        eid = entity.get("id")
-        ename = entity.get("name", "?")
-        etype = entity.get("entity_type", "?")
-        props = entity.get("properties") or {}
-        lines.append(f"### {ename} ({etype})")
-        for k, v in list(props.items())[:10]:
-            if v and k not in ("auto_created", "source", "property_sources"):
-                lines.append(f"  - {k}: {str(v)[:200]}")
-
-        # Get neighbors
-        try:
-            neighbors_result = sb.rpc("kg_neighbors", {
-                "entity_id": eid,
-                "max_depth": max_depth,
-            }).execute()
-            neighbors = neighbors_result.data or []
-        except Exception:
-            neighbors = []
-
-        if relationship_type:
-            neighbors = [n for n in neighbors if (n.get("relation_type") or "").lower() == relationship_type.lower()]
-
-        if neighbors:
-            lines.append(f"  **Relationships** ({len(neighbors)}):")
-            for n in neighbors[:15]:
-                direction = n.get("direction", "?")
-                rel_type = n.get("relation_type", "?")
-                neighbor_name = n.get("entity_name", "?")
-                neighbor_type = n.get("entity_type", "?")
-                arrow = "→" if direction == "outgoing" else "←"
-                lines.append(f"    {arrow} {rel_type} — {neighbor_name} ({neighbor_type})")
-        else:
-            lines.append("  No relationships found.")
-
-    return "\n".join(lines)
-
-
-async def _execute_agent_tool(
-    tool_name: str,
-    tool_input: dict,
-    event_id: str,
-    folder_ids: list[str] | None = None,
-    agent_sources: list | None = None,
-) -> str:
-    """Dispatch tool calls to the correct handler. Optionally appends source_docs from search_documents to agent_sources."""
-    try:
-        if tool_name == "search_portfolio":
-            return await _agent_search_portfolio(tool_input, event_id, folder_ids)
-        elif tool_name == "search_documents":
-            text, source_docs = await _agent_search_documents(tool_input, event_id, folder_ids)
-            if agent_sources is not None and source_docs:
-                seen = {d["id"] for d in agent_sources}
-                for d in source_docs:
-                    if d.get("id") and d["id"] not in seen:
-                        seen.add(d["id"])
-                        agent_sources.append({"id": d["id"], "title": d.get("title") or "Document"})
-            return text
-        elif tool_name == "get_company_details":
-            return await _agent_get_company_details(tool_input, event_id, folder_ids)
-        elif tool_name == "search_knowledge_graph":
-            return await _agent_search_knowledge_graph(tool_input, event_id, folder_ids)
-        else:
-            return f"Unknown tool: {tool_name}"
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"Tool error ({tool_name}): {str(e)[:300]}"
-
-
-# ---------------------------------------------------------------------------
-#  Agent system prompt
-# ---------------------------------------------------------------------------
-
-AGENT_SYSTEM_PROMPT = """You are Orbit AI, a VC portfolio intelligence assistant for a venture capital firm.
-
-You have access to tools that let you search the firm's portfolio database, documents, and knowledge graph.
-ALWAYS use your tools to find information before answering. Never guess or say "I don't have access" without searching first.
-
-## Tool Selection Rules
-
-1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage/business model):
-   → Use `search_portfolio` with the right filters.
-   Examples: "how many companies in Bangladesh" → search_portfolio(country="bangladesh")
-   "list all B2B SaaS preseed companies" → search_portfolio(business_model="b2b saas", stage="pre-seed")
-   "which companies are in fintech" → search_portfolio(sector="fintech")
-   "tell me all portfolio companies" → search_portfolio(list_all=true)
-
-2. **Document content questions** (pitch details, meeting notes, financials, specific content):
-   → Use `search_documents` with a clear, specific query.
-   Examples: "what is Chari's revenue model" → search_documents(query="revenue model", company_name="Chari")
-
-3. **Specific company deep-dives** (detailed info about one company):
-   → Use `get_company_details` per company. Only call `search_documents` afterwards if the company card lacks the specific info the user asked about.
-
-4. **Relationship questions** (investors, founders, competitors, connections):
-   → Use `search_knowledge_graph` per entity.
-
-5. **Comparison questions** (compare 2-3 companies):
-   → Call `get_company_details` for each company IN PARALLEL (all in one tool-use turn). Then answer from the results.
-
-## VERIFIABLE CITATIONS (CRITICAL — Click-to-Source)
-
-Every fact, number, or claim you state MUST be backed by a citation. Use this format:
-
-- When you get results from `search_documents`, each chunk has a tag like `[doc_id:UUID|chunk:N|file:name.pdf]`.
-- In your answer, cite the source inline using: `[[Source: Document Title | doc_id:UUID | chunk:N]]`
-- Example: "Chari's ARR is $1.2M [[Source: Chari Pitch Deck Q3 2025.pdf | doc_id:abc-123 | chunk:3]]"
-- For portfolio/company card data, cite as: `[[Source: Company Card — Company Name]]`
-- For knowledge graph data, cite as: `[[Source: Knowledge Graph — Entity Name]]`
-- NEVER state a number, revenue figure, metric, or financial claim without a citation.
-- If you cannot cite a source, explicitly say "I could not verify this from the available documents."
-
-## CONSISTENCY RULES (CRITICAL)
-
-- **Be EXHAUSTIVE**: When the user asks "list ALL companies matching X", you MUST present ALL results from the tool. Do NOT cherry-pick, summarize, or omit any results. If search_portfolio returns 8 companies, list ALL 8.
-- **Answer ONLY from tool results**: NEVER add companies, data, or facts that are not in the tool output. If a company was NOT in the search results, do NOT mention it. Do NOT hallucinate or recall companies from previous conversations.
-- **Be DETERMINISTIC**: Given the same question, your answer must contain the same companies. Only report what the tools return. If a company appeared in a PREVIOUS conversation turn but NOT in the current search results, do NOT include it.
-- **Acknowledge limitations**: If a filter (like "Sanabil fund" or "2+ founders") cannot be verified from the data returned, say so explicitly. Do NOT guess.
-- **When data is incomplete**: Say "Based on available data, I found X companies matching the criteria. Note: [specific field] data may be incomplete for some companies."
-
-## Other Rules
-
-- **Prefer fewer, broader searches** over many narrow ones. One good search > three redundant ones.
-- When search_portfolio returns results, answer directly from those results. Do NOT then call get_company_details for every company — only do that if the user asked for deep details.
-- ALWAYS search before claiming data is unavailable.
-- Be precise with numbers — if search_portfolio returns 3 companies, say "3 companies", not "a few".
-- Keep responses well-structured with clear formatting (use headers, tables, bullet points).
-- When listing companies, include key details (sector, stage, country, business model) for each.
-"""
-
-MAX_AGENT_ITERATIONS = 4
-
-# ---------------------------------------------------------------------------
-#  Verifiable RAG: extract cited sources from agent answer
-# ---------------------------------------------------------------------------
-
-import re as _re
-
-_SOURCE_CITATION_RE = _re.compile(
-    r"\[\[Source:\s*(.+?)\s*\|\s*doc_id:([a-f0-9\-]+)\s*\|\s*chunk:(\d+)\]\]",
-    _re.IGNORECASE,
-)
-_SOURCE_CARD_RE = _re.compile(
-    r"\[\[Source:\s*Company Card\s*[—–-]\s*(.+?)\]\]",
-    _re.IGNORECASE,
-)
-_SOURCE_KG_RE = _re.compile(
-    r"\[\[Source:\s*Knowledge Graph\s*[—–-]\s*(.+?)\]\]",
-    _re.IGNORECASE,
-)
-
-
-def extract_verifiable_sources(answer_text: str) -> list[dict]:
-    """Parse [[Source: ...]] citations from the agent answer text.
-    Returns a list of dicts: {type, title, doc_id?, chunk?, entity_name?}
-    """
-    sources: list[dict] = []
-    seen: set[str] = set()
-
-    for m in _SOURCE_CITATION_RE.finditer(answer_text):
-        title, doc_id, chunk = m.group(1).strip(), m.group(2).strip(), int(m.group(3))
-        key = f"doc:{doc_id}:{chunk}"
-        if key not in seen:
-            seen.add(key)
-            sources.append({"type": "document", "title": title, "doc_id": doc_id, "chunk": chunk})
-
-    for m in _SOURCE_CARD_RE.finditer(answer_text):
-        name = m.group(1).strip()
-        key = f"card:{name}"
-        if key not in seen:
-            seen.add(key)
-            sources.append({"type": "company_card", "title": f"Company Card — {name}", "entity_name": name})
-
-    for m in _SOURCE_KG_RE.finditer(answer_text):
-        name = m.group(1).strip()
-        key = f"kg:{name}"
-        if key not in seen:
-            seen.add(key)
-            sources.append({"type": "knowledge_graph", "title": f"Knowledge Graph — {name}", "entity_name": name})
-
-    return sources
-
-
-def clean_citations_for_display(answer_text: str) -> str:
-    """Replace verbose [[Source: ...]] tags with compact clickable markers for frontend."""
-    counter = {"n": 0}
-    source_map: dict[str, int] = {}
-
-    def _replace(m: _re.Match) -> str:
-        full = m.group(0)
-        if full not in source_map:
-            counter["n"] += 1
-            source_map[full] = counter["n"]
-        n = source_map[full]
-        return f"[Source {n}]"
-
-    text = _SOURCE_CITATION_RE.sub(_replace, answer_text)
-    text = _SOURCE_CARD_RE.sub(_replace, text)
-    text = _SOURCE_KG_RE.sub(_replace, text)
-    return text
-
-
-# ---------------------------------------------------------------------------
-#  Devil's Advocate Agent (Critic) — finds risks & red flags
-# ---------------------------------------------------------------------------
-
-DEVILS_ADVOCATE_PROMPT = """You are the Devil's Advocate — a rigorous, skeptical VC risk analyst.
-
-You will receive an AI-generated analysis about a startup or portfolio company.
-Your job is to find RED FLAGS, risks, and weaknesses that the analysis missed or glossed over.
-
-## Rules:
-1. Focus ONLY on the data provided. Do NOT hallucinate or invent risks that are not supported by the facts.
-2. Look for these specific risk categories:
-   - **Financial risks**: Unsustainable burn rate, runway concerns, revenue declining, metrics not adding up
-   - **Market risks**: Small TAM, saturated market, regulatory risks, geopolitical risks
-   - **Team risks**: Missing key roles, founder concentration risk, team too small for ambition
-   - **Business model risks**: Unit economics unclear, customer concentration, no moat
-   - **Competitive risks**: Strong incumbents, low barriers to entry
-   - **Data gaps**: Important information that is MISSING from the analysis (e.g., no financials, no TAM)
-3. Be concise. Each red flag should be 1-2 sentences max.
-4. If there are genuinely no red flags, say so honestly. Do NOT fabricate risks.
-5. Rate overall risk: LOW / MEDIUM / HIGH
-
-## Output Format:
-🚩 **RED FLAGS**
-
-1. **[Category]**: [Risk description]
-2. **[Category]**: [Risk description]
-...
-
-**Overall Risk Level**: [LOW/MEDIUM/HIGH]
-**Key Concern**: [One sentence summary of the biggest risk]
-"""
-
-
-async def run_devils_advocate(
-    answer_text: str,
-    tool_results_text: str,
-    question: str,
-    model_name: str = "claude-sonnet-4-20250514",
-) -> str | None:
-    """Run the Devil's Advocate critic on the agent's answer. Returns critic text or None if unavailable."""
-    if not _anthropic_sdk_available:
-        return None
-
-    # Only run critic for substantive answers (not short/empty/scope-empty)
-    if len(answer_text) < 100 or "SCOPE_EMPTY" in answer_text:
-        return None
-
-    # Only run for questions that involve company analysis, not simple lists
-    analysis_keywords = ["tell", "about", "analyze", "details", "revenue", "financials",
-                         "risk", "deep dive", "due diligence", "compare", "valuation",
-                         "burn", "runway", "team", "model", "pitch"]
-    q_lower = question.lower()
-    if not any(kw in q_lower for kw in analysis_keywords):
-        return None
-
-    try:
-        client = _get_anthropic_async_client()
-        critic_input = (
-            f"## User Question:\n{question}\n\n"
-            f"## Agent's Answer:\n{answer_text}\n\n"
-            f"## Raw Tool Data (for verification):\n{tool_results_text[:4000]}"
-        )
-        response = await client.messages.create(
-            model=model_name,
-            max_tokens=1000,
-            temperature=0.2,
-            system=DEVILS_ADVOCATE_PROMPT,
-            messages=[{"role": "user", "content": critic_input}],
-        )
-        critic_text = ""
-        for block in response.content:
-            if hasattr(block, "text"):
-                critic_text += block.text
-        return critic_text.strip() if critic_text.strip() else None
-    except Exception as e:
-        print(f"[CRITIC] Devil's Advocate failed: {e}")
-        return None
-
-
-# ---------------------------------------------------------------------------
-#  Agent request model
-# ---------------------------------------------------------------------------
-
-class AgentAskRequest(BaseModel):
-    question: str
-    event_id: str
-    previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
-    web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
-    folder_ids: List[str] = Field(default_factory=list, alias="folderIds")
-    model_config = {"populate_by_name": True}
-
-
-# ---------------------------------------------------------------------------
-#  Streaming agent endpoint
-# ---------------------------------------------------------------------------
-
-@app.post("/ask/agent/stream")
-async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends(get_auth_context)):
-    """
-    Agentic RAG endpoint — Claude decides which tools to call, executes them,
-    and generates a final answer. Streams SSE events for real-time UI updates.
-    """
-    try:
-        question = (request.question or "").strip()
-        if not question:
-            raise HTTPException(status_code=400, detail="question is required.")
-
-        event_id = (request.event_id or "").strip()
-        if not event_id:
-            raise HTTPException(status_code=400, detail="event_id is required.")
-
-        folder_ids = request.folder_ids or []
-        if folder_ids:
-            print(f"[AGENT] Knowledge scope: {len(folder_ids)} folders selected")
-
-        # Resolve question using chat history (pronoun resolution etc.)
-        resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
-        print(f"[AGENT] Question: {question}")
-        print(f"[AGENT] Resolved: {resolved_question}")
-
-        # Build messages with chat history context
-        # When scope is active, use less history (reduces noise from unrelated prior topics)
-        history_limit = 4 if folder_ids else 10
-        messages: List[dict] = []
-        for msg in (request.previous_messages or [])[-history_limit:]:
-            messages.append({"role": msg.role, "content": msg.content})
-        messages.append({"role": "user", "content": resolved_question})
-
-        # Build tools list
-        tools = list(AGENT_TOOLS)
-        if request.web_search_enabled:
-            tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
-
-        # Choose model — when scope is narrow, use fewer tokens for faster response
-        is_comp = is_comprehensive_question(question)
-        if folder_ids:
-            max_tokens = min(ASK_MAX_TOKENS, 2000)  # scoped answers should be concise
-        else:
-            max_tokens = 8000 if is_comp else ASK_MAX_TOKENS
-
-        async def generate():
-            try:
-                yield f"data: {json.dumps({'ping': True})}\n\n"
-                yield f"data: {json.dumps({'status': 'Analyzing your question...'})}\n\n"
-
-                if not _anthropic_sdk_available:
-                    yield f"data: {json.dumps({'error': 'Anthropic SDK not available'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                client = _get_anthropic_async_client()
-                current_messages = list(messages)
-                model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
-                all_tool_results_text = ""
-                agent_sources: list[dict] = []  # Documents cited by search_documents for Sources strip
-
-                system_prompt = AGENT_SYSTEM_PROMPT
-                max_iterations = MAX_AGENT_ITERATIONS
-                if folder_ids:
-                    max_iterations = 2  # scope is narrow → 1 tool call + answer is enough
-                    system_prompt += (
-                        "\n\n## KNOWLEDGE SCOPE IS ACTIVE — STRICT MODE\n"
-                        "The user narrowed the search to specific folders. All tools filter at the database level — "
-                        "they ONLY return data from those folders.\n\n"
-                        "YOU MUST FOLLOW THESE RULES:\n"
-                        "1. ONLY answer the user's CURRENT question. Do NOT bring up companies or topics from earlier chat messages.\n"
-                        "2. If a tool returns SCOPE_EMPTY or no results, respond with ONLY: "
-                        "\"[Name] is not in your current knowledge scope. Please add that folder to Knowledge Scope or clear the scope.\" — NOTHING ELSE.\n"
-                        "3. Do NOT speculate, suggest partnerships, recommend actions, or use your own knowledge.\n"
-                        "4. Do NOT mention companies that were NOT returned by the tools in this turn.\n"
-                        "5. Keep answers SHORT. Only state facts from tool results. No filler."
-                    )
-                for iteration in range(max_iterations):
-                    print(f"[AGENT] Iteration {iteration + 1}/{MAX_AGENT_ITERATIONS}")
-
-                    try:
-                        response = await client.messages.create(
-                            model=model_name,
-                            max_tokens=max_tokens,
-                            temperature=0.1,
-                            system=system_prompt,
-                            messages=current_messages,
-                            tools=tools,
-                        )
-                    except anthropic.NotFoundError:
-                        # Try fallback model
-                        for fallback in ANTHROPIC_MODEL_FALLBACKS[1:]:
-                            try:
-                                response = await client.messages.create(
-                                    model=fallback,
-                                    max_tokens=max_tokens,
-                                    temperature=0.1,
-                                    system=system_prompt,
-                                    messages=current_messages,
-                                    tools=tools,
-                                )
-                                model_name = fallback
-                                break
-                            except Exception:
-                                continue
-                        else:
-                            yield f"data: {json.dumps({'error': 'All models failed'})}\n\n"
-                            yield "data: [DONE]\n\n"
-                            return
-
-                    # Collect tool calls and text from response
-                    tool_calls = []
-                    text_parts = []
-                    web_search_citations: Dict[str, str] = {}
-
-                    for block in response.content:
-                        if block.type == "text":
-                            text_parts.append(block.text)
-                        elif block.type == "tool_use":
-                            tool_calls.append(block)
-                        elif block.type == "server_tool_use":
-                            yield f"data: {json.dumps({'status': '🌐 Searching the web...'})}\n\n"
-                        elif block.type == "web_search_tool_result":
-                            result_content = getattr(block, "content", [])
-                            if isinstance(result_content, list):
-                                for item in result_content:
-                                    if hasattr(item, "type") and getattr(item, "type", "") == "web_search_result":
-                                        url = getattr(item, "url", "")
-                                        title = getattr(item, "title", "")
-                                        if url:
-                                            web_search_citations[url] = title
-
-                    # If no tool calls, send the final answer
-                    if not tool_calls:
-                        full_text = "\n".join(text_parts)
-                        if full_text:
-                            chunk_size = 80
-                            for i in range(0, len(full_text), chunk_size):
-                                yield f"data: {json.dumps({'text': full_text[i:i+chunk_size]})}\n\n"
-                                await asyncio.sleep(0)
-                        if web_search_citations:
-                            sources_text = "\n\n**Web Sources:**"
-                            for i, (url, title) in enumerate(web_search_citations.items(), 1):
-                                sources_text += f"\n[{i}] [{title}]({url})"
-                            yield f"data: {json.dumps({'text': sources_text})}\n\n"
-                        if agent_sources:
-                            yield f"data: {json.dumps({'source_docs': agent_sources})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-
-                    # Execute tool calls
-                    tool_names = [tc.name for tc in tool_calls]
-                    tool_label = ", ".join(tool_names)
-                    yield f"data: {json.dumps({'status': f'Searching: {tool_label}...'})}\n\n"
-                    print(f"[AGENT] Tool calls: {tool_names}")
-
-                    # Build assistant message with all content blocks
-                    assistant_content = []
-                    for block in response.content:
-                        if block.type == "text":
-                            assistant_content.append({"type": "text", "text": block.text})
-                        elif block.type == "tool_use":
-                            assistant_content.append({
-                                "type": "tool_use",
-                                "id": block.id,
-                                "name": block.name,
-                                "input": block.input,
-                            })
-
-                    current_messages.append({"role": "assistant", "content": assistant_content})
-
-                    # Execute each tool and collect results
-                    tool_results = []
-                    for tc in tool_calls:
-                        print(f"[AGENT] Executing {tc.name} with {json.dumps(tc.input)[:200]}")
-                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id, folder_ids or None, agent_sources)
-                        print(f"[AGENT] Result from {tc.name}: {result_text[:200]}...")
-                        all_tool_results_text += f"\n--- {tc.name} ---\n{result_text}\n"
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tc.id,
-                            "content": result_text,
-                        })
-
-                    current_messages.append({"role": "user", "content": tool_results})
-
-                # If we exhausted iterations, do a final streaming call (buffer for verifiable sources + critic)
-                yield f"data: {json.dumps({'status': 'Generating final answer...'})}\n\n"
-                final_answer_buffer: list[str] = []
-                try:
-                    async with client.messages.stream(
-                        model=model_name,
-                        max_tokens=max_tokens,
-                        temperature=0.1,
-                        system=system_prompt,
-                        messages=current_messages,
-                    ) as final_stream:
-                        async for event in final_stream:
-                            if event.type == "content_block_delta" and hasattr(event.delta, "type"):
-                                if event.delta.type == "text_delta" and hasattr(event.delta, "text"):
-                                    delta = event.delta.text
-                                    final_answer_buffer.append(delta)
-                                    yield f"data: {json.dumps({'text': delta})}\n\n"
-                except Exception as e:
-                    yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
-
-                full_final_text = "".join(final_answer_buffer)
-                if agent_sources:
-                    yield f"data: {json.dumps({'source_docs': agent_sources})}\n\n"
-                yield "data: [DONE]\n\n"
-
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                yield f"data: {json.dumps({'error': f'Agent error: {str(e)[:300]}'})}\n\n"
-                yield "data: [DONE]\n\n"
-
-        return StreamingResponse(
-            generate(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)[:200]}")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  KG cleanup — delete redundant or all entity cards
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class KgDeleteRedundantRequest(BaseModel):
-    event_id: str
-
-
-class KgDeleteAllRequest(BaseModel):
-    event_id: str
-    entity_types: List[str] = Field(default_factory=lambda: ["company", "fund"], alias="entityTypes")
-    model_config = {"populate_by_name": True}
-
-
-@app.post("/kg/delete-redundant")
-async def kg_delete_redundant(request: KgDeleteRedundantRequest, auth: AuthContext = Depends(get_auth_context)):
-    """
-    Delete redundant entity cards: keep one per core company name (the one with
-    most documents, then richest properties). Reassign documents from deleted
-    entities to the kept entity, then delete edges and redundant entities.
-    """
-    sb = get_supabase()
-    event_id = (request.event_id or "").strip()
-    if not event_id:
-        raise HTTPException(status_code=400, detail="event_id is required.")
-
-    try:
-        result = (
-            sb.table("kg_entities")
-            .select("id, name, normalized_name, properties")
-            .eq("event_id", event_id)
-            .in_("entity_type", ["company", "fund"])
-            .execute()
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
-
-    rows = result.data or []
-    if not rows:
-        return {"deleted": 0, "message": "No entity cards to clean."}
-
-    # Document count per entity
-    entity_ids = [r["id"] for r in rows if r.get("id")]
-    doc_count: Dict[str, int] = {eid: 0 for eid in entity_ids}
-    for i in range(0, len(entity_ids), 25):
-        batch = entity_ids[i : i + 25]
-        doc_res = sb.table("documents").select("company_entity_id").in_("company_entity_id", batch).execute()
-        for d in (doc_res.data or []):
-            eid = d.get("company_entity_id")
-            if eid:
-                doc_count[eid] = doc_count.get(eid, 0) + 1
-
-    # Group by core name, keep best per group
-    best_by_core: Dict[str, dict] = {}
-    for row in rows:
-        core = _extract_core_company_name(row.get("normalized_name") or row.get("name", ""))
-        if not core:
-            continue
-        richness = len(json.dumps(row.get("properties") or {}))
-        count = doc_count.get(row["id"], 0)
-        prev = best_by_core.get(core)
-        if prev is None or count > prev["_doc_count"] or (count == prev["_doc_count"] and richness > prev["_richness"]):
-            best_by_core[core] = {**row, "_doc_count": count, "_richness": richness}
-
-    kept_ids = {v["id"] for v in best_by_core.values()}
-    to_delete = [r for r in rows if r.get("id") and r["id"] not in kept_ids]
-    if not to_delete:
-        return {"deleted": 0, "message": "No redundant cards to delete."}
-
-    deleted_ids = [r["id"] for r in to_delete]
-    # Map deleted entity id -> kept entity id (same core name)
-    core_to_kept = {_extract_core_company_name(v.get("normalized_name") or v.get("name", "")): v["id"] for v in best_by_core.values()}
-
-    for row in to_delete:
-        kept_id = core_to_kept.get(_extract_core_company_name(row.get("normalized_name") or row.get("name", "")))
-        if not kept_id:
-            continue
-        try:
-            sb.table("documents").update({"company_entity_id": kept_id}).eq("company_entity_id", row["id"]).execute()
-        except Exception as e:
-            print(f"[KG] Reassign docs for {row['id']}: {e}")
-
-    for eid in deleted_ids:
-        try:
-            sb.table("kg_edges").delete().eq("source_entity_id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete edges source {eid}: {e}")
-        try:
-            sb.table("kg_edges").delete().eq("target_entity_id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete edges target {eid}: {e}")
-        try:
-            sb.table("kg_entities").delete().eq("id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete entity {eid}: {e}")
-
-    return {"deleted": len(deleted_ids), "message": f"Deleted {len(deleted_ids)} redundant entity cards."}
-
-
-@app.post("/kg/delete-all")
-async def kg_delete_all(request: KgDeleteAllRequest, auth: AuthContext = Depends(get_auth_context)):
-    """Delete all entity cards of the given types for the event. Unlink documents and remove edges."""
-    sb = get_supabase()
-    event_id = (request.event_id or "").strip()
-    if not event_id:
-        raise HTTPException(status_code=400, detail="event_id is required.")
-    types = request.entity_types or ["company", "fund"]
-
-    try:
-        result = sb.table("kg_entities").select("id").eq("event_id", event_id).in_("entity_type", types).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
-
-    rows = result.data or []
-    entity_ids = [r["id"] for r in rows if r.get("id")]
-    if not entity_ids:
-        return {"deleted": 0, "message": "No entity cards to delete."}
-
-    for eid in entity_ids:
-        try:
-            sb.table("documents").update({"company_entity_id": None}).eq("company_entity_id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Unlink docs for {eid}: {e}")
-        try:
-            sb.table("kg_edges").delete().eq("source_entity_id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete edges source {eid}: {e}")
-        try:
-            sb.table("kg_edges").delete().eq("target_entity_id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete edges target {eid}: {e}")
-        try:
-            sb.table("kg_entities").delete().eq("id", eid).execute()
-        except Exception as e:
-            print(f"[KG] Delete entity {eid}: {e}")
-
-    return {"deleted": len(entity_ids), "message": f"Deleted all {len(entity_ids)} entity cards."}
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-
-if __name__ == "__main__":
-    import uvicorn
-
-    # ---------- Detect optional high-performance packages ----------
-    loop_impl = "auto"
-    try:
-        import uvloop  # noqa: F401
-        loop_impl = "uvloop"
-        print("✅ uvloop available — high-performance event loop")
-    except ImportError:
-        print("⚠️  uvloop not installed — using default asyncio event loop")
-
-    http_impl = "auto"
-    try:
-        import httptools  # noqa: F401
-        http_impl = "httptools"
-        print("✅ httptools available — fast HTTP parsing")
-    except ImportError:
-        print("⚠️  httptools not installed — using h11 HTTP parser")
-
-    port = int(os.environ.get("PORT", os.environ.get("OLLAMA_CONVERTER_PORT", "8000")))
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        loop=loop_impl,
-        http=http_impl,
-    )
-
