@@ -7852,3 +7852,10 @@ async def startup_event():
         print(f"   OpenAI API Key: {'✅ Set' if OPENAI_API_KEY else '❌ NOT SET'}")
     print(f"   Embedding Dimensions: {EMBEDDING_DIM}")
     print(f"🔄 RERANKING:")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "10000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
