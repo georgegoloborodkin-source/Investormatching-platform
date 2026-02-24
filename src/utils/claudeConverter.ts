@@ -212,7 +212,6 @@ export async function extractWithClaude(
       costEstimate: `$${totalCost.toFixed(4)} (Input: $${inputCost.toFixed(4)}, Output: $${outputCost.toFixed(4)})`,
     };
   } catch (error) {
-    console.error('Claude extraction error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

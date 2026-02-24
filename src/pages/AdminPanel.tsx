@@ -73,7 +73,6 @@ export default function AdminPanel() {
 
       setFundCodes((data as FundCode[]) || []);
     } catch (err: any) {
-      console.error("Error loading fund codes:", err);
       toast({
         title: "Failed to load fund codes",
         description: err.message || "Please try again.",
@@ -120,7 +119,6 @@ export default function AdminPanel() {
       // Reload codes
       await loadFundCodes();
     } catch (err: any) {
-      console.error("Error creating fund code:", err);
       toast({
         title: "Failed to create fund code",
         description: err.message || "Please try again.",
@@ -188,7 +186,7 @@ export default function AdminPanel() {
             <div className="space-y-2">
               <Label className="text-slate-300">Fund Name *</Label>
               <Input
-                placeholder="e.g., VentureOS Fund"
+                placeholder="e.g., My Organization"
                 value={fundName}
                 onChange={(e) => setFundName(e.target.value)}
                 disabled={isCreating}

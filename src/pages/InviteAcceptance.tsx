@@ -89,7 +89,6 @@ export default function InviteAcceptance() {
         expires_at: data.expires_at,
       });
     } catch (err: any) {
-      console.error("Error loading invitation:", err);
       setError(err.message || "Failed to load invitation");
     } finally {
       setLoading(false);
@@ -126,7 +125,6 @@ export default function InviteAcceptance() {
       // Redirect to CIS
       navigate("/cis");
     } catch (err: any) {
-      console.error("Error accepting invitation:", err);
       toast({
         title: "Failed to accept invitation",
         description: err.message || "Please try again.",

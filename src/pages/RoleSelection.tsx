@@ -81,7 +81,6 @@ export default function RoleSelection() {
       setCodeEntryRole(role);
       setStep("code_entry");
     } catch (error: any) {
-      console.error("Error updating role:", error);
       toast({
         title: "Failed to update role",
         description: error.message || "Please try again.",
@@ -142,7 +141,6 @@ export default function RoleSelection() {
         navigate("/cis");
       }
     } catch (error: any) {
-      console.error("Error joining fund:", error);
       const msg = error?.message || error?.details || (typeof error === "string" ? error : "Invalid or inactive code. If you're a Managing Partner, use the fund code from admin. If you're a team member, use the invitation code from your MD.");
       toast({
         title: "Failed to join fund",
@@ -258,7 +256,7 @@ export default function RoleSelection() {
     <div className="flex items-center justify-center min-h-screen p-4 page-content">
       <Card className={cardClass}>
         <CardHeader className={cardHeaderClass}>
-          <CardTitle className="text-2xl font-bold text-white">Welcome to VentureOS</CardTitle>
+          <CardTitle className="text-2xl font-bold text-white">Welcome to Platform</CardTitle>
           <CardDescription className="text-slate-400 text-base mt-1">
             Choose your role to get started
           </CardDescription>

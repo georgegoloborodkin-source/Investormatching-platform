@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Index from "./pages/Index";
 import CIS from "./pages/CIS";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
@@ -71,14 +70,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/matchmaking"
-              element={
-                <ProtectedRoute requireAuth>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/matchmaking" element={<Navigate to="/cis" replace />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { InvestorAvailability } from "@/components/InvestorAvailability";
 import { Loader2, Save, LogOut, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -51,7 +50,6 @@ export default function Profile() {
           setActiveEventId(data[0].id);
         }
       } catch (error: any) {
-        console.error("Error loading events:", error);
         toast({
           title: "Error loading events",
           description: error.message,
@@ -251,48 +249,6 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {profile.role === 'investor' && (
-            <Card className="border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-slate-700/60 bg-slate-800/30">
-                <CardTitle className="text-slate-900 font-semibold">Time Slot Availability</CardTitle>
-                <CardDescription className="text-slate-400 text-sm">
-                  Set which time slots you're available for meetings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {events.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <p>No active events found.</p>
-                    <p className="text-sm mt-2">
-                      Contact your organizer to create an event.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {events.length > 1 && (
-                      <div className="space-y-2">
-                        <Label className="text-slate-300">Select Event</Label>
-                        <select
-                          className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-slate-900"
-                          value={activeEventId || ""}
-                          onChange={(e) => setActiveEventId(e.target.value)}
-                        >
-                          {events.map((event) => (
-                            <option key={event.id} value={event.id}>
-                              {event.name} {event.date ? `(${new Date(event.date).toLocaleDateString()})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    {activeEventId && (
-                      <InvestorAvailability eventId={activeEventId} />
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

@@ -64,7 +64,6 @@ export function TeamMembersList() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Supabase error loading team members:", error);
         setTeamMembers([]);
         // Defer toast to avoid render issues
         setTimeout(() => {
@@ -79,7 +78,6 @@ export function TeamMembersList() {
 
       setTeamMembers((data as TeamMember[]) || []);
     } catch (err: any) {
-      console.error("Unexpected error loading team members:", err);
       setTeamMembers([]);
       setTimeout(() => {
         toast({
@@ -122,7 +120,6 @@ export function TeamMembersList() {
       setShowRemoveDialog(false);
       setMemberToRemove(null);
     } catch (err: any) {
-      console.error("Error removing team member:", err);
       toast({
         title: "Failed to remove team member",
         description: err.message || "Please try again. If the issue persists, check your permissions.",

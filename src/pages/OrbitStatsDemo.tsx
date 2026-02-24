@@ -63,11 +63,11 @@ export default function OrbitStatsDemo() {
       title: "Intelligence Layer",
       status: "In Progress",
       features: [
-        "Graph Relationships (Companies ↔ Syndicates ↔ Investors)",
+        "Graph Relationships (Companies ↔ Partners ↔ Connections)",
         "Pattern Detection & Predictive Analytics",
         "Advanced Decision Engine with ML",
         "Portfolio Intelligence & Cross-Company Learning",
-        "Automated Deal Flow Scoring",
+        "Automated Pipeline Scoring",
       ],
     },
     {
@@ -89,7 +89,7 @@ export default function OrbitStatsDemo() {
       icon: Brain,
       title: "AI Intelligence",
       description:
-        "Claude-powered document extraction and semantic search across your entire deal flow. Ask questions in natural language and get comprehensive answers.",
+        "Claude-powered document extraction and semantic search. Ask questions in natural language and get comprehensive answers.",
     },
     {
       icon: Target,
@@ -128,19 +128,19 @@ export default function OrbitStatsDemo() {
       icon: Database,
       title: "The Problem",
       description:
-        "VC teams drown in documents, lose context across deals, and make decisions without historical data. Information lives in silos—email threads, Google Drive folders, ClickUp tasks—never connecting.",
+        "Teams drown in documents, lose context across deals, and make decisions without historical data. Information lives in silos—email threads, Google Drive folders, ClickUp tasks—never connecting.",
     },
     {
       icon: Brain,
       title: "Our Solution",
       description:
-        "VentureOS is the signal stack that unifies your deal flow. AI extracts intelligence from every document, tracks every decision, and surfaces patterns you'd never see manually.",
+        "Platform is the signal stack that unifies your workflow. AI extracts intelligence from every document, tracks every decision, and surfaces patterns you'd never see manually.",
     },
     {
       icon: Rocket,
       title: "The Impact",
       description:
-        "Faster decisions. Better outcomes. Teams that learn from every deal. We turn your deal flow into a competitive advantage through intelligence, not just data.",
+        "Faster decisions. Better outcomes. Teams that learn from every deal. We turn your workflow into a competitive advantage through intelligence, not just data.",
     },
   ];
 
@@ -180,8 +180,7 @@ export default function OrbitStatsDemo() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200/5 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
-            <span className="text-xl">Venture</span>
-            <span className="text-xl text-amber-400">OS</span>
+            Platform
           </Link>
           <nav className="flex items-center gap-2">
             <Link
@@ -230,17 +229,14 @@ export default function OrbitStatsDemo() {
             className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 mb-3 animate-fade-in-up"
             style={{ animationDelay: "0.2s", animationFillMode: "both" }}
           >
-            Venture
-            <span className="block text-amber-400 mt-1 drop-shadow-[0_0_30px_rgba(245,158,11,0.3)]">
-              OS
-            </span>
+            Platform
           </h1>
 
           <p
             className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up"
             style={{ animationDelay: "0.35s", animationFillMode: "both" }}
           >
-            We transform your deal flow into intelligence. Every document, every decision, every
+            Every document, every decision, every
             pattern—unified and searchable.
           </p>
 
@@ -337,7 +333,7 @@ export default function OrbitStatsDemo() {
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">
               Platform capabilities that transform
               <br />
-              <span className="text-slate-400 font-medium">how VC teams operate</span>
+              <span className="text-slate-400 font-medium">how teams operate</span>
             </h2>
           </div>
 
@@ -389,7 +385,7 @@ export default function OrbitStatsDemo() {
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">
               Our vision for the future
               <br />
-              <span className="text-slate-400 font-medium">of VC operations</span>
+              <span className="text-slate-400 font-medium">of operations</span>
             </h2>
           </div>
 
@@ -455,10 +451,10 @@ export default function OrbitStatsDemo() {
             <Sparkles className="h-7 w-7" />
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 tracking-tight">
-            Ready to transform your deal flow?
+            Ready to get started?
           </h2>
           <p className="text-slate-400 text-lg mb-8 max-w-xl mx-auto">
-            Join forward-thinking VC teams who are already using VentureOS to make faster,
+            Join forward-thinking teams who are already using Platform to make faster,
             data-driven decisions.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

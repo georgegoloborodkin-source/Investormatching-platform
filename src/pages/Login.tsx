@@ -31,8 +31,7 @@ export default function Login() {
             Back to home
           </Link>
           <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
-            <span>Venture</span>
-            <span className="text-amber-400">OS</span>
+            Platform
           </Link>
           <span className="w-24" />
         </div>
@@ -48,7 +47,7 @@ export default function Login() {
                 <div>
                   <CardTitle className="text-2xl font-bold text-slate-900">Welcome back</CardTitle>
                   <CardDescription className="text-slate-400 text-sm mt-1">
-                    Sign in to access VentureOS and your deal flow.
+                    Sign in to access Platform.
                   </CardDescription>
                 </div>
               </div>

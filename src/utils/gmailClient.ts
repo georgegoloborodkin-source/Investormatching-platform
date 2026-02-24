@@ -33,7 +33,6 @@ async function fetchWithRetry(
           ? parseInt(retryAfter, 10) * 1000
           : baseDelayMs * Math.pow(2, attempt);
         if (attempt < maxRetries) {
-          console.warn(`[Gmail] ${response.status} — retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -43,7 +42,6 @@ async function fetchWithRetry(
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < maxRetries) {
         const delay = baseDelayMs * Math.pow(2, attempt);
-        console.warn(`[Gmail] Network error — retry ${attempt + 1}/${maxRetries} in ${delay}ms:`, lastError.message);
         await new Promise((r) => setTimeout(r, delay));
       }
     }

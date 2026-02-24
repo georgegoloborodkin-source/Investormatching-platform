@@ -53,13 +53,11 @@ export function SyncStatus() {
         .eq("is_active", true);
 
       if (error) {
-        console.warn("[SyncStatus] Failed to load configs:", error);
         setSyncConfigs([]);
       } else {
         setSyncConfigs((data as SyncConfig[]) || []);
       }
     } catch (err) {
-      console.warn("[SyncStatus] Error loading sync configs:", err);
       setSyncConfigs([]);
     } finally {
       setLoading(false);
@@ -106,7 +104,6 @@ export function SyncStatus() {
       }
       await loadSyncConfigs();
     } catch (err: any) {
-      console.error("Sync error:", err);
       toast({
         title: "Sync failed",
         description: err.message || "Failed to trigger sync.",

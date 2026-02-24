@@ -55,10 +55,10 @@ export function Header({
               to="/"
               className="text-xl font-bold text-white tracking-tight hover:text-amber-400 transition-colors duration-200"
             >
-              VentureOS
+              Platform
             </Link>
             <span className="hidden md:inline text-sm text-slate-400 font-medium">
-              Venture Capital Platform
+              Platform
             </span>
           </div>
 

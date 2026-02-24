@@ -65,7 +65,6 @@ export function TeamInvitationForm() {
 
       setInvitationCode(code);
     } catch (err: any) {
-      console.error("Error loading invitation code:", err);
       toast({
         title: "Failed to load invitation code",
         description: err.message || "Please try again.",
@@ -146,7 +145,6 @@ export function TeamInvitationForm() {
         description: "Invitation link copied to clipboard. Share it with the invitee.",
       });
     } catch (err: any) {
-      console.error("Error sending invitation:", err);
       toast({
         title: "Failed to send invitation",
         description: err.message || "Please try again.",

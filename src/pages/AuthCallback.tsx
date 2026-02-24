@@ -21,7 +21,6 @@ export default function AuthCallback() {
           const { data, error } = await supabase.auth.getSession();
 
           if (error) {
-            console.error("Session error:", error);
             throw error;
           }
 
@@ -66,11 +65,9 @@ export default function AuthCallback() {
           );
 
           if (upsertError) {
-            console.error("Profile upsert error:", upsertError);
             throw upsertError;
           }
         } else if (profileError) {
-          console.error("Profile fetch error:", profileError);
         }
 
         window.history.replaceState(null, "", window.location.pathname);
@@ -94,7 +91,6 @@ export default function AuthCallback() {
           navigate("/cis");
         }
       } catch (error: any) {
-        console.error("Auth callback error:", error);
         toast({
           title: "Authentication error",
           description: error.message || "Failed to complete sign in",

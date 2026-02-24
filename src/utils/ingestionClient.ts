@@ -39,7 +39,6 @@ async function fetchWithRetry(
           ? parseInt(retryAfter, 10) * 1000
           : baseDelayMs * Math.pow(2, attempt);
         if (attempt < maxRetries) {
-          console.warn(`[fetchWithRetry] ${response.status} on ${url} — retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -49,7 +48,6 @@ async function fetchWithRetry(
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < maxRetries) {
         const delay = baseDelayMs * Math.pow(2, attempt);
-        console.warn(`[fetchWithRetry] Network error on ${url} — retry ${attempt + 1}/${maxRetries} in ${delay}ms:`, lastError.message);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -65,11 +63,8 @@ export function sleep(ms: number): Promise<void> {
 /** Wake up the Render service before bulk requests (fire-and-forget with retry) */
 export async function warmUpIngestion(): Promise<void> {
   try {
-    console.log("[DriveSync] Warming up ingestion service...");
     await fetchWithRetry(`${GDRIVE_PROXY_BASE}/health`, { method: "GET" }, 3, 2000);
-    console.log("[DriveSync] Ingestion service is awake.");
   } catch {
-    console.warn("[DriveSync] Warm-up failed — will retry on first real request.");
   }
 }
 

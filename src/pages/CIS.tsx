@@ -156,7 +156,6 @@ import {
   getCompanyCards,
   updateCompanyCardProperties,
   getAllEntityCards,
-  ingestInvestorCSVRows,
   ingestStartupCSVRows,
   insertDecision,
   insertDocument,
@@ -244,7 +243,7 @@ const initialScopes: ScopeItem[] = [
 
 const initialThreads: Thread[] = [];
 const initialMessages: Message[] = [];
-const LOCAL_CHAT_CACHE_KEY = "ventureos_chat_cache";
+const LOCAL_CHAT_CACHE_KEY = "platform_chat_cache";
 
 type LocalChatMessage = {
   id: string;
@@ -1725,8 +1724,6 @@ function SourcesTab({
   // Debug: log env vars (remove in production)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      console.log('Google API Key present:', !!googleApiKey);
-      console.log('Google Client ID present:', !!googleClientId);
     }
   }, [googleApiKey, googleClientId]);
 
@@ -1760,7 +1757,6 @@ function SourcesTab({
           .eq("source_type", "google_drive")
           .limit(1);
         if (error) {
-          console.warn("[DriveSync] sync_configurations not available:", error.message);
           return;
         }
         const row = data?.[0] as { config?: { google_drive_folder_id?: string; google_drive_folder_name?: string; folders?: Array<{ id: string; name: string; category?: string }> }; last_sync_at?: string } | undefined;
@@ -1784,7 +1780,6 @@ function SourcesTab({
           }
         }
       } catch (err) {
-        console.warn("[DriveSync] Failed to load sync config:", err);
       }
     })();
   }, [activeEventId, initialDriveSyncConfig]);
@@ -1800,7 +1795,7 @@ function SourcesTab({
           .eq("event_id", activeEventId)
           .eq("source_type", "gmail")
           .limit(1);
-        if (error) { console.warn("[GmailSync] sync_configurations not available:", error.message); return; }
+        if (error) { return; }
         const row = data?.[0] as { config?: { gmail_query?: string; max_emails_per_sync?: number; include_attachments?: boolean }; last_sync_at?: string } | undefined;
         if (row) {
           setIsGmailConnected(true);
@@ -1810,7 +1805,6 @@ function SourcesTab({
           if (row.config?.include_attachments !== undefined) setGmailIncludeAttachments(row.config.include_attachments);
         }
       } catch (err) {
-        console.warn("[GmailSync] Failed to load sync config:", err);
       }
     })();
   }, [activeEventId]);
@@ -1934,7 +1928,6 @@ function SourcesTab({
             if (!folder?.id) return;
             const folderId = folder.id;
             const folderName = folder.name || "Portfolio folder";
-            console.log("[DriveSync] Connected folder:", folderName, folderId);
             
             // Add to folders list (avoid duplicates); new folder defaults to Portfolio Companies
             const updatedFolders: DriveFolderEntry[] = [
@@ -1984,7 +1977,6 @@ function SourcesTab({
               { onConflict: "organization_id,event_id,source_type" }
             );
             if (upsertError) {
-              console.error("[DriveSync] Failed to persist folder config:", upsertError);
               toast({
                 title: "Folder not saved",
                 description: "Connected folder could not be saved. It may disappear after reload. Try again.",
@@ -2055,7 +2047,6 @@ function SourcesTab({
         return await operation();
       } catch (error) {
         if (!isDriveAuthError(error)) throw error;
-        console.warn("[DriveSync] Google token appears expired. Refreshing token and retrying once...");
         await refreshDriveAccessToken();
         return await operation();
       }
@@ -2093,7 +2084,6 @@ function SourcesTab({
         allDescendantFolders.push({ id: rootFolder.id, name: rootFolder.name, path: rootPath });
         await collectDescendants(rootFolder.id, rootPath, MAX_FOLDER_DEPTH - 1);
       }
-      console.log(`[DriveSync] Recursive discovery: ${allDescendantFolders.length} folders from ${foldersToSync.length} root(s)`);
 
       // Resolve category for a path using:
       // 1. Root folder's explicit category (if multiple roots with different categories)
@@ -2107,8 +2097,7 @@ function SourcesTab({
         if (/\b(mentor|mentors?|corporate|corporates?|organizations?|advisors?|advisory)\b/.test(lower)) return "Mentors / Corporates";
         // Sourcing / Deals
         if (/\b(sourcing|deal\s*flow|pipeline|inbound|deal|deals|prospects?|market\s*research|research)\b/.test(lower)) return "Sourcing";
-        // Funds / Investors / LPs
-        if (/\b(fund|funds?|investors?|lps?|limited\s*partners?|co-invest|co.?invest|syndicate)\b/.test(lower)) return "Funds";
+        if (/\b(partners?|lps?|limited\s*partners?|co-invest|co.?invest|syndicate)\b/.test(lower)) return "Partners";
         // Portfolio Companies
         if (/\b(portfolio|companies|startups?|ventures?|investments?|due\s*diligence|dd|diligence)\b/.test(lower)) return "Portfolio Companies";
         return null;
@@ -2155,7 +2144,6 @@ function SourcesTab({
         }
         if (i < allDescendantFolders.length - 1) await sleep(300); // throttle
       }
-      console.log(`[DriveSync] ${subFolders.length} folders with documents (from ${allDescendantFolders.length} total)`);
       if (subFolders.length === 0) {
         toast({ title: "No documents found", description: "No folders with documents found in the connected folder(s)." });
         setIsSyncingDrive(false);
@@ -2169,7 +2157,7 @@ function SourcesTab({
       const isLikelyCompanyName = (name: string): boolean => {
         const words = name.trim().split(/\s+/);
         if (words.length > 4) return false; // company names are short
-        const generic = /^(sourcing|intern|interns|team|notes|docs|documents|shared|misc|general|archive|old|new|temp|draft|test|admin|meeting|meetings|portfolio|companies|investors?|funds?|deals?|research|diligence|dd)$/i;
+        const generic = /^(sourcing|intern|interns|team|notes|docs|documents|shared|misc|general|archive|old|new|temp|draft|test|admin|meeting|meetings|portfolio|companies|partners?|funds?|deals?|research|diligence|dd)$/i;
         if (words.some((w) => generic.test(w))) return false;
         return true;
       };
@@ -2178,7 +2166,6 @@ function SourcesTab({
         const companyFolder = subFolders[fi];
         const companyName = companyFolder.name;
         setDriveSyncProgress({ phase: "Syncing companies...", current: fi + 1, total: subFolders.length, currentItem: companyName });
-        console.log(`[DriveSync] Processing folder: ${companyName} (${fi + 1}/${subFolders.length})`);
 
         let newFiles = 0;
         let updatedFiles = 0;
@@ -2187,7 +2174,6 @@ function SourcesTab({
         try {
           // 2. List files in this company folder
           const files = await withDriveAuthRetry(() => listDriveFiles(accessToken, companyFolder.id));
-          console.log(`[DriveSync] ${companyName}: ${files.length} files`);
 
           // 3. Ensure a source_folder exists for this company
           let platformFolderId: string | null = null;
@@ -2256,7 +2242,6 @@ function SourcesTab({
                 unsupportedMimeExact.has(mime) ||
                 unsupportedExtensions.has(ext)
               ) {
-                console.info(`[DriveSync] Skipping unsupported file: ${file.name} (${mime || ext})`);
                 skippedFiles++;
                 continue;
               }
@@ -2266,7 +2251,6 @@ function SourcesTab({
                 downloadDriveFile(accessToken, file.id, file.mimeType, file.name)
               );
               if (!downloaded.content || downloaded.content.startsWith("[Empty")) {
-                console.warn(`[DriveSync] Skipping empty file: ${file.name}`);
                 skippedFiles++;
                 continue;
               }
@@ -2295,7 +2279,6 @@ function SourcesTab({
                 .single();
 
               if (docError || !docRow) {
-                console.error(`[DriveSync] Failed to insert doc for ${file.name}:`, docError);
                 continue;
               }
 
@@ -2326,7 +2309,6 @@ function SourcesTab({
                   .single();
                 if (linkedDoc?.company_entity_id) {
                   companyEntityId = linkedDoc.company_entity_id;
-                  console.log(`[DriveSync] Doc already linked to entity ${companyEntityId} by extractEntities`);
                 }
 
                 // If not linked yet, try folder name or file title
@@ -2339,7 +2321,6 @@ function SourcesTab({
                   };
                   const entityName = isLikelyCompanyName(companyName) ? companyName : cleanFileTitle(fileTitle);
                   const normalizedName = normalizeCompanyNameForMatch(entityName);
-                  console.log(`[DriveSync] Looking up entity by name: "${entityName}" (folder: "${companyName}", file: "${fileTitle}")`);
                   const { data: entityArr } = await supabase
                     .from("kg_entities")
                     .select("id")
@@ -2360,7 +2341,6 @@ function SourcesTab({
                       .limit(1);
                     if (entByDoc?.[0]) {
                       companyEntityId = entByDoc[0].id;
-                      console.log(`[DriveSync] Found entity "${entByDoc[0].name}" by source_document_id`);
                     }
                   }
 
@@ -2401,7 +2381,6 @@ function SourcesTab({
                       .single();
                     if (!createErr && newEntity) {
                       companyEntityId = newEntity.id;
-                      console.log(`[DriveSync] Created company entity "${entityName}" (folder: "${companyName}")`);
                     }
                   }
 
@@ -2423,7 +2402,6 @@ function SourcesTab({
                     .single();
                   const currentEntityName = currentEntityRow?.name || fileTitle;
 
-                  console.log(`[DriveSync] Running property extraction for entity "${currentEntityName}" (${companyEntityId}), raw_content: ${(downloaded.raw_content || "").length} chars`);
                   const existing = await getEntityProperties(companyEntityId);
                   const extraction = await extractCompanyProperties({
                     rawContent: downloaded.raw_content,
@@ -2431,7 +2409,6 @@ function SourcesTab({
                     existingProperties: existing?.properties || {},
                   });
 
-                  console.log(`[DriveSync] Extraction result: ${Object.keys(extraction.properties).length} properties`);
 
                   if (Object.keys(extraction.properties).length > 0) {
                     // If AI identified a better company_name, rename the entity
@@ -2454,14 +2431,12 @@ function SourcesTab({
                           const targetId = existingByAiName[0].id;
                           await supabase.from("documents").update({ company_entity_id: targetId }).eq("id", docRow.id);
                           companyEntityId = targetId;
-                          console.log(`[DriveSync] Merged into existing entity "${aiCompanyName}" (was "${currentEntityName}")`);
                         } else {
                           // Rename entity to AI-detected name
                           await supabase
                             .from("kg_entities")
                             .update({ name: aiCompanyName, normalized_name: aiNorm })
                             .eq("id", companyEntityId);
-                          console.log(`[DriveSync] Renamed entity "${currentEntityName}" → "${aiCompanyName}"`);
                         }
                       }
                       // Remove company_name from properties (it's stored as entity name, not a card field)
@@ -2476,15 +2451,11 @@ function SourcesTab({
                       docRow.id,
                       { isMeetingNotes },
                     );
-                    console.log(`[DriveSync] Card merge for ${aiCompanyName || currentEntityName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped`);
                   } else {
-                    console.warn(`[DriveSync] No properties extracted for "${currentEntityName}" from file "${file.name}"`);
                   }
                 } else {
-                  console.warn(`[DriveSync] No entity found/created for file "${file.name}" — skipping property extraction`);
                 }
               } catch (extractErr) {
-                console.warn(`[DriveSync] Property extraction for ${file.name} failed (non-fatal):`, extractErr);
               }
 
               if (isUpdate) {
@@ -2495,18 +2466,15 @@ function SourcesTab({
             } catch (fileErr) {
               const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
               if (msg.toLowerCase().includes("unsupported file type")) {
-                console.warn(`[DriveSync] Skipping unsupported file type for ${file.name}: ${msg}`);
                 skippedFiles++;
                 continue;
               }
-              console.error(`[DriveSync] Error processing file ${file.name}:`, fileErr);
             }
           }
         } catch (folderErr) {
           if (isDriveAuthError(folderErr)) {
             throw new Error("Google Drive token expired during sync. Please reconnect Google Drive and run sync again.");
           }
-          console.error(`[DriveSync] Error processing folder ${companyName}:`, folderErr);
         }
 
         results.push({ companyName, newFiles, updatedFiles, skippedFiles });
@@ -2536,7 +2504,6 @@ function SourcesTab({
           toast({ title: "Cards cleaned", description: cleanup.message, variant: "default" });
         }
       } catch (e) {
-        console.warn("[DriveSync] Redundant cards cleanup failed:", e);
       }
 
       const totalNew = results.reduce((s, r) => s + r.newFiles, 0);
@@ -2557,7 +2524,6 @@ function SourcesTab({
         setCategoryPickerOpen(true);
       }
     } catch (err) {
-      console.error("[DriveSync] Sync failed:", err);
       // Record error
       if (activeEventId) {
         await supabase
@@ -2601,13 +2567,11 @@ function SourcesTab({
       if (lastDriveSyncAt) {
         const elapsed = Date.now() - new Date(lastDriveSyncAt).getTime();
         if (elapsed < SYNC_INTERVAL_MS) {
-          console.log("[DriveSync] Auto-sync skipped: last sync was less than 15 min ago");
           autoSyncFiredRef.current = true;
           return;
         }
       }
       autoSyncFiredRef.current = true;
-      console.log("[DriveSync] Auto-sync on login triggered");
       syncGoogleDriveFolder();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2625,13 +2589,10 @@ function SourcesTab({
     }
     // Set up interval
     if (!autoSyncIntervalRef.current) {
-      console.log("[DriveSync] Setting up auto-sync interval (every 15 min)");
       autoSyncIntervalRef.current = setInterval(() => {
         if (isSyncingDriveRef.current) {
-          console.log("[DriveSync] Auto-sync interval: skipped (already syncing)");
           return;
         }
-        console.log("[DriveSync] Auto-sync interval triggered");
         syncGoogleDriveFolderRef.current?.();
       }, SYNC_INTERVAL_MS);
     }
@@ -2679,7 +2640,6 @@ function SourcesTab({
     }, { onConflict: "organization_id,event_id,source_type" });
 
     if (error) {
-      console.error("[GmailSync] Failed to save config:", error);
       toast({ title: "Failed to save Gmail config", description: error.message, variant: "destructive" });
       return;
     }
@@ -2758,7 +2718,7 @@ function SourcesTab({
             created_by: currentUserId,
           }).select("id, title, storage_path, folder_id").single();
 
-          if (docErr || !docRow) { console.error("[GmailSync] Insert doc error:", docErr); errors++; continue; }
+          if (docErr || !docRow) { errors++; continue; }
 
           onDocumentSaved({ id: docRow.id, title: docRow.title, storage_path: docRow.storage_path, folder_id: (docRow as any).folder_id });
 
@@ -2781,7 +2741,7 @@ function SourcesTab({
                 mime_type: att.mimeType,
                 size_bytes: att.size,
               });
-              if (attErr) { console.warn("[GmailSync] Attachment insert error:", attErr.message); continue; }
+              if (attErr) { continue; }
 
               // Download and create a separate document for processable attachments
               if (gmailIncludeAttachments && PROCESSABLE_MIMES.has(att.mimeType) && att.size <= MAX_ATTACHMENT_SIZE) {
@@ -2823,7 +2783,6 @@ function SourcesTab({
                     }
                   }
                 } catch (attDownloadErr) {
-                  console.warn(`[GmailSync] Attachment download failed for ${att.filename}:`, attDownloadErr);
                 }
               }
             }
@@ -2838,7 +2797,7 @@ function SourcesTab({
               participants: [...new Set([ingested.email_from, ...ingested.email_to, ...ingested.email_cc].filter(Boolean))],
               last_message_at: ingested.email_date || new Date().toISOString(),
             }, { onConflict: "event_id,gmail_thread_id" }).then(({ error: thErr }) => {
-              if (thErr) console.warn("[GmailSync] Thread upsert error:", thErr.message);
+              // thread upsert may fail silently
             });
           }
 
@@ -2846,7 +2805,6 @@ function SourcesTab({
           indexDocumentEmbeddings(docRow.id, ingested.content, docTitle);
           synced++;
         } catch (msgErr) {
-          console.error(`[GmailSync] Error processing message ${msgSnippet.id}:`, msgErr);
           errors++;
         }
       }
@@ -2862,7 +2820,6 @@ function SourcesTab({
       setGmailSyncResults({ synced, skipped, errors });
       toast({ title: "Gmail sync complete", description: `${synced} new emails synced, ${skipped} already existed, ${errors} errors.` });
     } catch (err) {
-      console.error("[GmailSync] Sync failed:", err);
       toast({ title: "Gmail sync failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
       if (activeEventId) {
         await supabase.from("sync_configurations")
@@ -2897,7 +2854,6 @@ function SourcesTab({
         }
       }
       gmailAutoSyncFiredRef.current = true;
-      console.log("[GmailSync] Auto-sync on login triggered");
       syncGmailInbox();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2913,7 +2869,6 @@ function SourcesTab({
     if (!gmailAutoSyncIntervalRef.current) {
       gmailAutoSyncIntervalRef.current = setInterval(() => {
         if (isSyncingGmailRef.current) return;
-        console.log("[GmailSync] Auto-sync interval triggered");
         syncGmailInboxRef.current?.();
       }, SYNC_INTERVAL_MS);
     }
@@ -3105,16 +3060,13 @@ function SourcesTab({
               const text = await readFileText(file);
               rawContent = text.length > MAX_IMPORT_CHARS ? `${text.slice(0, MAX_IMPORT_CHARS)}…` : text;
             } catch (err) {
-              console.error("Error reading text file:", err);
               rawContent = null;
             }
 
             // CSV files: ALSO send through the converter API for structured extraction
-            // (investors, startups, mentors, corporates) — raw text alone doesn't give us that
             // Use shorter timeout to avoid blocking upload
             if (isCSVFile(file)) {
               try {
-                console.log("[CSV] Sending CSV to converter API for structured extraction…");
                 const conversionPromise = convertFileWithAI(file);
                 const timeoutPromise = new Promise<never>((_, reject) => 
                   setTimeout(() => reject(new Error("CSV conversion timeout")), 10000)
@@ -3126,11 +3078,7 @@ function SourcesTab({
                 if (conversion.raw_content && (!rawContent || conversion.raw_content.length > rawContent.length)) {
                   rawContent = conversion.raw_content;
                 }
-                console.log("[CSV] Converter detected:", conversion.detectedType,
-                  "| investors:", (conversion.investors || []).length,
-                  "| startups:", (conversion.startups || []).length);
               } catch (csvErr) {
-                console.warn("[CSV] Converter API failed or timed out (non-fatal):", csvErr);
                 // Non-fatal — the raw text is already stored
               }
             }
@@ -3148,21 +3096,16 @@ function SourcesTab({
                 const encoded = btoa(raw);
                 if (encoded.length <= MAX_PDF_BASE64_BYTES) {
                   pdfBase64 = encoded;
-                  console.log("[PDF] Captured PDF base64:", Math.round(pdfBase64.length / 1024), "KB");
                 } else {
-                  console.warn(`[PDF] PDF too large for extraction (${Math.round(encoded.length / 1024)}KB > ${MAX_PDF_BASE64_BYTES / 1024}KB), using text-only`);
                   // Still use text extraction for large PDFs
                 }
               } catch (b64Err) {
-                console.warn("[PDF] Failed to capture PDF bytes:", b64Err);
               }
 
               // Try client-side PDF extraction as a quick text fallback (for embeddings)
               try {
                 rawContent = await extractPdfTextClientSide(file);
-                console.log("[PDF] Client-side text extraction:", rawContent?.length || 0, "chars");
               } catch (err) {
-                console.warn("[PDF] Client-side extraction failed, will try AI conversion:", err);
               }
             }
 
@@ -3178,9 +3121,7 @@ function SourcesTab({
                 rawContent = conversion.raw_content ?? rawContent; // Use AI content if better
                 extractedJson = conversion as unknown as Record<string, any>;
                 detectedType = conversion.detectedType || detectedType;
-                console.log("[AI] Conversion succeeded:", conversion.detectedType);
               } catch (err) {
-                console.warn("[AI] Conversion failed or timed out (non-fatal):", err);
                 // Continue without AI conversion - we have client-side content or will store file reference
               }
             }
@@ -3203,11 +3144,9 @@ function SourcesTab({
             if (!uploadError) {
               storagePath = path;
             } else {
-              console.warn("Storage upload failed (non-fatal):", uploadError.message);
               // Continue without storage - document will still be saved
             }
           } catch (storageErr) {
-            console.warn("Storage upload error (non-fatal):", storageErr);
             // Continue without storage
           }
 
@@ -3225,17 +3164,13 @@ function SourcesTab({
             return cleaned;
           };
 
-          // ── Detect folder-based entity type ──
-          // If document is uploaded to a folder with "portfolio", "company", "investor", or "fund" in name,
-          // we'll force-create a company card even if the title doesn't match the pattern
           const currentSelectedFolder = selectedFolderId !== "none" 
             ? sourceFolders.find(f => f.id === selectedFolderId)
             : null;
           const folderName = currentSelectedFolder?.name?.toLowerCase() || "";
-          const isPortfolioFolder = folderName.includes("portfolio") || folderName.includes("company");
-          const isInvestorFolder = folderName.includes("investor") || folderName.includes("fund");
-          const shouldForceCreateCard = isPortfolioFolder || isInvestorFolder;
-          const entityTypeHint = isInvestorFolder ? "fund" : "company";
+          const isPortfolioFolder = folderName.includes("portfolio") || folderName.includes("company") || folderName.includes("partner");
+          const shouldForceCreateCard = isPortfolioFolder;
+          const entityTypeHint = "company";
 
           // Save document record (even if storage upload failed)
           const { data: doc, error: docError } = await insertDocument(eventId, {
@@ -3298,7 +3233,6 @@ function SourcesTab({
               status: "active",
             }, eventId);
           } catch (sourceErr) {
-            console.error("Error creating source:", sourceErr);
             // Non-fatal - document is saved, source creation can fail
           }
 
@@ -3307,38 +3241,19 @@ function SourcesTab({
           if ((rawContent || pdfBase64) && docRecord.id) {
             // Fire and forget - don't await, let it run in background
             indexDocumentEmbeddings(docRecord.id, rawContent, docRecord.title || file.name, pdfBase64).catch((embedErr) => {
-              console.error("Error indexing embeddings (non-fatal):", embedErr);
               // Non-fatal - document is saved, embeddings can be regenerated later
             });
           }
 
-          // ── Structured CSV ingestion: extract rows into kg_entities ──
-          // If the conversion result contains structured investors/startups arrays,
-          // create real entity records so they appear in Company Cards / are queryable.
           if (extractedJson && docRecord.id) {
             try {
               const convData = extractedJson as Record<string, any>;
-              const investorRows = convData.investors as any[] | undefined;
               const startupRows = convData.startups as any[] | undefined;
-
-              if (investorRows && investorRows.length > 0) {
-                const ingResult = await ingestInvestorCSVRows(
-                  eventId, investorRows, docRecord.id, currentUserId || null
-                );
-                console.log(`[StructuredCSV] Investors: ${ingResult.entitiesCreated} created, ${ingResult.entitiesUpdated} updated, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
-                if (ingResult.entitiesCreated > 0 || ingResult.entitiesUpdated > 0) {
-                  toast({ 
-                    title: "Structured data processed",
-                    description: `${ingResult.entitiesCreated} new + ${ingResult.entitiesUpdated} updated investor/fund entities from CSV.`,
-                  });
-                }
-              }
 
               if (startupRows && startupRows.length > 0) {
                 const ingResult = await ingestStartupCSVRows(
                   eventId, startupRows, docRecord.id, currentUserId || null
                 );
-                console.log(`[StructuredCSV] Startups: ${ingResult.entitiesCreated} created, ${ingResult.entitiesUpdated} updated, ${ingResult.skipped} skipped, ${ingResult.errors.length} errors`);
                 if (ingResult.entitiesCreated > 0 || ingResult.entitiesUpdated > 0) {
                   toast({
                     title: "Structured data processed",
@@ -3347,7 +3262,6 @@ function SourcesTab({
                 }
               }
             } catch (structErr) {
-              console.error("Error ingesting structured CSV rows:", structErr);
               // Non-fatal: the document is saved, structured extraction is a bonus
             }
           }
@@ -3371,7 +3285,6 @@ function SourcesTab({
                 await new Promise((r) => setTimeout(r, 1000));
 
                 let companyEntityId = await getDocumentCompanyEntityId(docId);
-                console.log(`[AutoExtract] After DB trigger delay, entity ID: ${companyEntityId || "none"}`);
               
               // ── Folder-based card creation ──
               // Prefer folder name so card is "TBE" not "Copy of TBE Due Diligence"
@@ -3385,7 +3298,7 @@ function SourcesTab({
                     const first = s.split(/\s+/)[0];
                     return (first && first.length > 1) ? first : s || rawTitle;
                   };
-                  const companyName = folderInfo.currentSelectedFolder?.name && !folderInfo.currentSelectedFolder.name.toLowerCase().match(/^(portfolio|companies|investors?|funds?)$/)
+                  const companyName = folderInfo.currentSelectedFolder?.name && !folderInfo.currentSelectedFolder.name.toLowerCase().match(/^(portfolio|companies|partners?|funds?)$/)
                     ? folderInfo.currentSelectedFolder.name
                     : deriveCompanyName(rawTitle);
                   const normalizedName = normalizeCompanyNameForMatch(companyName);
@@ -3406,7 +3319,6 @@ function SourcesTab({
                       .from("documents")
                       .update({ company_entity_id: companyEntityId })
                       .eq("id", docId);
-                    console.log(`[FolderCard] Linked to existing ${entityTypeHint} entity "${companyName}"`);
                   } else {
                     // Create new entity
                     const { data: newEntity, error: createErr } = await supabase
@@ -3451,13 +3363,10 @@ function SourcesTab({
                         .from("documents")
                         .update({ company_entity_id: companyEntityId })
                         .eq("id", docId);
-                      console.log(`[FolderCard] Created ${folderInfo.entityTypeHint} entity "${companyName}" from folder "${folderInfo.currentSelectedFolder?.name}"`);
                     } else {
-                      console.error("[FolderCard] Failed to create entity:", createErr);
                     }
                   }
                 } catch (folderErr) {
-                  console.error("[FolderCard] Failed to create entity from folder:", folderErr);
                 }
               }
 
@@ -3494,7 +3403,6 @@ function SourcesTab({
                         .from("documents")
                         .update({ company_entity_id: companyEntityId })
                         .eq("id", docId);
-                      console.log(`[AutoExtract] Linked to existing company entity "${companyName}"`);
                     } else {
                       // Create new entity
                       const { data: newEntity, error: createErr } = await supabase
@@ -3537,19 +3445,15 @@ function SourcesTab({
                           .from("documents")
                           .update({ company_entity_id: companyEntityId })
                           .eq("id", docId);
-                        console.log(`[AutoExtract] Created company entity "${companyName}" from document title`);
                       } else {
-                        console.error("[AutoExtract] Failed to create entity from title:", createErr);
                       }
                     }
                   }
                 } catch (fallbackErr) {
-                  console.warn("[AutoExtract] Failed to create entity from title (non-fatal):", fallbackErr);
                 }
               }
 
               if (companyEntityId) {
-                console.log(`[AutoExtract] Running property extraction for entity ${companyEntityId}... (PDF: ${filePdfBase64 ? "yes" : "no"})`);
                 const existing = await getEntityProperties(companyEntityId);
                 const extraction = await extractCompanyProperties({
                   rawContent: fileContent,
@@ -3558,7 +3462,6 @@ function SourcesTab({
                   pdfBase64: filePdfBase64 || undefined,
                 });
 
-                console.log(`[AutoExtract] Extraction result: ${Object.keys(extraction.properties).length} properties, type: ${extraction.document_type_detected}`);
 
                 if (Object.keys(extraction.properties).length > 0) {
                   // If AI identified a better company_name, rename the entity
@@ -3579,13 +3482,11 @@ function SourcesTab({
                         const targetId = existingByAiName[0].id;
                         await supabase.from("documents").update({ company_entity_id: targetId }).eq("id", docId);
                         companyEntityId = targetId;
-                        console.log(`[AutoExtract] Merged into existing entity "${aiName}" (was "${curNorm}")`);
                       } else {
                         await supabase
                           .from("kg_entities")
                           .update({ name: aiName, normalized_name: aiNorm })
                           .eq("id", companyEntityId);
-                        console.log(`[AutoExtract] Renamed entity "${curNorm}" → "${aiName}"`);
                       }
                     }
                     delete extraction.properties.company_name;
@@ -3598,22 +3499,17 @@ function SourcesTab({
                     extraction.confidence,
                     docId,
                   );
-                  console.log(`[AutoExtract] ✅ ${aiName || mergeResult.companyName}: ${mergeResult.updated.length} updated, ${mergeResult.skipped.length} skipped, ${mergeResult.conflicts.length} conflicts`);
                   // Refresh company cards if callback available
                   if (onRefreshCompanyCards) {
-                    onRefreshCompanyCards().catch(err => console.warn("[AutoExtract] Failed to refresh cards:", err));
+                    onRefreshCompanyCards().catch(() => {});
                   }
                 } else {
-                  console.warn(`[AutoExtract] ⚠️ No properties extracted for ${file.name} (backend may be down or document type not recognized)`);
                 }
               } else {
-                console.warn(`[AutoExtract] ⚠️ No entity found for ${file.name} - cannot extract properties`);
               }
               } catch (extractErr) {
-                console.error("[AutoExtract] Property extraction failed (non-fatal):", extractErr);
               }
             })().catch((err) => {
-              console.error("[AutoExtract] Background extraction error:", err);
             });
           }
 
@@ -3716,7 +3612,6 @@ function SourcesTab({
         return;
       }
       const result = await ingestGoogleDrive(url.trim(), accessToken);
-      console.log("Drive import result:", { title: result.title, hasContent: !!result.content, hasRaw: !!result.raw_content });
       
       // Extract better title from Google Drive
       const extractTitleFromGoogleDrive = (title: string | null | undefined, content: string | null | undefined, url: string): string => {
@@ -3848,14 +3743,12 @@ function SourcesTab({
           });
           const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null } | null;
           if (docError) {
-            console.error("Document insert error:", docError);
             toast({
               title: "Document save failed",
               description: docError.message || JSON.stringify(docError),
               variant: "destructive",
             });
           } else if (!docRecord?.id) {
-            console.error("Document insert returned no ID:", doc);
             toast({
               title: "Document save failed",
               description: "Insert succeeded but no document ID returned.",
@@ -3870,12 +3763,10 @@ function SourcesTab({
             toast({ title: "Document saved", description: "Raw content stored in Documents." });
             // Index embeddings in background (non-blocking)
             indexDocumentEmbeddings(docRecord.id, rawContent || null, docRecord.title || cleanedTitle).catch((err) => {
-              console.error("Error indexing embeddings (non-fatal):", err);
             });
             assignmentDoc = { id: docRecord.id, title: docRecord.title || cleanedTitle };
           }
         } catch (err) {
-          console.error("Exception during document insert:", err);
           toast({
             title: "Document save error",
             description: err instanceof Error ? err.message : "Unexpected error saving document.",
@@ -3898,7 +3789,6 @@ function SourcesTab({
             assignmentDoc = { id: candidate.id, title: candidate.title || result.title || cleanedTitle };
           }
         } catch (lookupErr) {
-          console.warn("Folder assignment lookup failed:", lookupErr);
         }
       }
 
@@ -8025,13 +7915,11 @@ export default function CIS() {
         const { id, category } = updates[i];
         const { error } = await updateFolderCategory(id, category);
         if (error) {
-          console.warn("[CIS] Folder category update failed:", id, error.message);
           errors++;
           continue;
         }
       }
       if (cancelled) return;
-      console.log(`[CIS] Backfill completed: ${updates.length - errors}/${updates.length} succeeded`);
       const { data } = await getSourceFoldersByEvent(activeEventId);
       setSourceFolders((data || []) as SourceFolder[]);
     })();
@@ -8180,7 +8068,6 @@ export default function CIS() {
    *  Pass 1: exact/prefix. Pass 2: first-segment. Pass 3: contains (broadest). */
   const handleSyncCategoriesFromDrive = useCallback(async () => {
     if (!activeEventId || !initialDriveSyncConfig?.folders?.length || !sourceFolders.length) {
-      console.warn("[SyncCategories] Skipped: missing event, drive folders, or source folders");
       return;
     }
     const driveFolders = initialDriveSyncConfig.folders;
@@ -8241,11 +8128,10 @@ export default function CIS() {
       }
     }
 
-    console.log(`[SyncCategories] ${updates.length} updates across ${sourceFolders.length} source folders`);
     let errors = 0;
     for (const { id, category } of updates) {
       const { error } = await updateFolderCategory(id, category);
-      if (error) { console.error("[SyncCategories] Failed:", id, error.message); errors++; }
+      if (error) { errors++; }
     }
     const { data } = await getSourceFoldersByEvent(activeEventId);
     setSourceFolders((data || []) as SourceFolder[]);
@@ -8269,12 +8155,10 @@ export default function CIS() {
 
   const ensureActiveEventId = useCallback(async () => {
     if (!profile) {
-      console.error("ensureActiveEventId: No profile");
       return null;
     }
     const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
     if (orgError || !orgData?.organization) {
-      console.error("ensureActiveEventId: Organization error:", orgError);
       toast({
         title: "Organization missing",
         description: orgError?.message || "We could not load your organization.",
@@ -8284,7 +8168,6 @@ export default function CIS() {
     }
     const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
     if (eventError) {
-      console.error("ensureActiveEventId: Event creation error:", eventError);
       toast({
         title: "Event creation failed",
         description: eventError.message || "Could not create an active event. Please refresh.",
@@ -8293,7 +8176,6 @@ export default function CIS() {
       return null;
     }
     if (!event) {
-      console.error("ensureActiveEventId: No event returned");
       toast({
         title: "No active event",
         description: "Could not create an active event. Please refresh.",
@@ -8456,7 +8338,6 @@ export default function CIS() {
           setIsInitialLoad(false);
         }
       } catch (error) {
-        console.error("Failed to load chat history:", error);
         setChatLoaded(true); // Set to true even on error to prevent retries
         setIsInitialLoad(false);
       }
@@ -8519,7 +8400,6 @@ export default function CIS() {
       const docRecord = doc as { id?: string; title?: string | null; storage_path?: string | null; folder_id?: string | null } | null;
       const docId = docRecord?.id;
       if (docError) {
-        console.error("Document insert error in auto-log:", docError);
         toast({
           title: "Document save failed",
           description: docError.message || "Could not save document.",
@@ -8528,7 +8408,6 @@ export default function CIS() {
         return;
       }
       if (!docId) {
-        console.error("Document insert returned no ID:", doc);
         toast({
           title: "Document save failed",
           description: "Insert succeeded but no document ID returned.",
@@ -8539,7 +8418,6 @@ export default function CIS() {
 
       // Index embeddings in background (non-blocking)
       indexDocumentEmbeddings(docId, input.rawContent || null, docRecord?.title || input.title || null).catch((err) => {
-        console.error("Error indexing embeddings (non-fatal):", err);
       });
       setDocuments((prev) => [
         {
@@ -8622,7 +8500,6 @@ export default function CIS() {
 
       const { data: orgData, error: orgError } = await ensureOrganizationForUser(profile);
       if (orgError || !orgData?.organization) {
-        console.error("Failed to ensure organization:", orgError);
         toast({
           title: "Organization error",
           description: orgError?.message || "Could not load your organization. Please refresh.",
@@ -8633,7 +8510,6 @@ export default function CIS() {
 
       const { data: event, error: eventError } = await ensureActiveEventForOrg(orgData.organization.id);
       if (eventError) {
-        console.error("Failed to ensure active event:", eventError);
         toast({
           title: "Event creation failed",
           description: eventError.message || "Could not create an active event. Please refresh or contact support.",
@@ -8642,7 +8518,6 @@ export default function CIS() {
         return;
       }
       if (!event) {
-        console.error("No event returned from ensureActiveEventForOrg");
         toast({
           title: "No active event",
           description: "Could not create an active event. Please refresh.",
@@ -8698,7 +8573,6 @@ export default function CIS() {
       
       // Check for documents with NULL event_id and fix them
       if (documentsRes.error) {
-        console.error("[DOCUMENTS] Query error:", documentsRes.error);
         toast({
           title: "Documents load error",
           description: documentsRes.error.message || "Could not load documents. Check RLS policies.",
@@ -8716,16 +8590,13 @@ export default function CIS() {
       
       // If we found orphaned documents, link them to the current event
       if (orphanedDocs && orphanedDocs.length > 0 && event.id) {
-        console.log(`[DOCUMENTS] Found ${orphanedDocs.length} orphaned documents, linking to event ${event.id}`);
         const { error: updateError } = await supabase
           .from("documents")
           .update({ event_id: event.id })
           .in("id", orphanedDocs.map((d) => d.id));
         
         if (updateError) {
-          console.warn("[DOCUMENTS] Failed to link orphaned documents:", updateError);
         } else {
-          console.log(`[DOCUMENTS] ✅ Linked ${orphanedDocs.length} documents to event`);
           toast({
             title: "Documents linked",
             description: `Linked ${orphanedDocs.length} orphaned document(s) to current event.`,
@@ -8754,7 +8625,6 @@ export default function CIS() {
       }
       // Check for sources with NULL event_id and fix them
       if (sourcesRes.error) {
-        console.error("[SOURCES] Query error:", sourcesRes.error);
         toast({
           title: "Sources load error",
           description: sourcesRes.error.message || "Could not load sources. Check RLS policies.",
@@ -8774,7 +8644,6 @@ export default function CIS() {
         
         // If we found orphaned sources, link them to the current event
         if (orphanedSources && orphanedSources.length > 0 && event.id) {
-          console.log(`[SOURCES] Found ${orphanedSources.length} orphaned sources, linking to event ${event.id}`);
           const orphanedIds = orphanedSources.map((s) => s.id);
           const { error: updateError } = await supabase
             .from("sources")
@@ -8782,9 +8651,7 @@ export default function CIS() {
             .in("id", orphanedIds);
           
           if (updateError) {
-            console.warn("[SOURCES] Failed to link orphaned sources:", updateError);
           } else {
-            console.log(`[SOURCES] ✅ Linked ${orphanedSources.length} sources to event`);
             toast({
               title: "Sources linked",
               description: `Linked ${orphanedSources.length} orphaned source(s) to current event.`,
@@ -8825,7 +8692,6 @@ export default function CIS() {
         const { data: refreshedFolders } = await getSourceFoldersByEvent(event.id);
         setSourceFolders((refreshedFolders || []) as SourceFolder[]);
       } catch (folderErr) {
-        console.warn("[FOLDERS] Failed to ensure default folders:", folderErr);
         // Fallback to original folders
         setSourceFolders((foldersRes.data || []) as SourceFolder[]);
       }
@@ -8835,7 +8701,6 @@ export default function CIS() {
       
       // Load pending relationship reviews (handle errors gracefully if migration not run)
       if (pendingReviewsRes.error) {
-        console.warn("[PENDING REVIEWS] Query failed (migration may not be run):", pendingReviewsRes.error);
         setPendingReviews([]);
       } else {
         const pendingData = (pendingReviewsRes.data || []).map((r: any) => ({
@@ -8853,7 +8718,6 @@ export default function CIS() {
       
       // Load company cards (unified view of companies)
       if (companyCardsRes.error) {
-        console.warn("[COMPANY CARDS] Query failed:", companyCardsRes.error);
         setCompanyCards([]);
       } else {
         setCompanyCards((companyCardsRes.data || []) as typeof companyCards);
@@ -8872,7 +8736,6 @@ export default function CIS() {
           },
           (payload) => {
             if (cancelled) return;
-            console.log("Document change:", payload.eventType, payload.new || payload.old);
             
             if (payload.eventType === "INSERT" && payload.new) {
               const newDoc = payload.new as any;
@@ -8942,7 +8805,6 @@ export default function CIS() {
           },
           (payload) => {
             if (cancelled) return;
-            console.log("Decision change:", payload.eventType, payload.new || payload.old);
             
             if (payload.eventType === "INSERT" && payload.new) {
               const newDecision = payload.new as any;
@@ -8985,7 +8847,6 @@ export default function CIS() {
           },
           (payload) => {
             if (cancelled) return;
-            console.log("Source change:", payload.eventType, payload.new || payload.old);
             
             if (payload.eventType === "INSERT" && payload.new) {
               const newSource = payload.new as any;
@@ -9238,7 +9099,7 @@ export default function CIS() {
     const updated = [entry, ...costLog].slice(0, 100);
     setCostLog(updated);
     if (typeof window !== "undefined") {
-      localStorage.setItem("ventureos_cost_log", JSON.stringify(updated));
+      localStorage.setItem("platform_cost_log", JSON.stringify(updated));
     }
   }, [costLog]);
 
@@ -9258,7 +9119,6 @@ export default function CIS() {
         .select("id")
         .single();
       if (error || !data?.id) {
-        console.error("Failed to create chat thread:", error);
         return null;
       }
       return data.id as string;
@@ -9305,10 +9165,8 @@ export default function CIS() {
               created_by: userId,
             }).select();
             if (!error) {
-              console.log("[DEBUG] ✅ Saved chat message to DB:", { role: payload.role, contentLength: payload.content.length, threadId });
               return; // Success
             } else {
-              console.error("[DEBUG] ❌ Failed to save chat message:", error);
             }
             lastError = error;
             // Don't retry on RLS/auth errors
@@ -9327,7 +9185,6 @@ export default function CIS() {
         }
         
         if (lastError) {
-          console.error("Failed to save chat message after retries:", lastError);
           const cached = readLocalChatCache();
           const localMessage: LocalChatMessage = {
             id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -9339,7 +9196,6 @@ export default function CIS() {
           writeLocalChatCache([localMessage, ...cached].slice(0, 200));
         }
       } catch (err) {
-        console.error("Failed to save chat message:", err);
         // Silently fail - don't block chat functionality
       }
     },
@@ -9351,7 +9207,7 @@ export default function CIS() {
     // Clear legacy permanent disable flag — we now use session-only failure tracking
     localStorage.removeItem("disable_embeddings");
     embeddingsDisabledRef.current = false;
-    const existing = localStorage.getItem("ventureos_cost_log");
+    const existing = localStorage.getItem("platform_cost_log");
     if (existing) {
       try {
         const parsed = JSON.parse(existing);
@@ -9495,7 +9351,6 @@ export default function CIS() {
         });
 
         if (!agenticResult.fallback && agenticResult.sections.length > 0) {
-          console.log(`[CHUNK] Agentic chunking succeeded: ${agenticResult.sections.length} sections (${agenticResult.model_used})`);
           const pairs: Array<{ parentText: string; childText: string; parentIndex: number; childIndex: number }> = [];
 
           agenticResult.sections.forEach((section, parentIndex) => {
@@ -9523,11 +9378,9 @@ export default function CIS() {
           }
         }
       } catch (err) {
-        console.warn("[CHUNK] Agentic chunking failed, falling back to semantic:", err);
       }
 
       // ── Fallback: semantic chunking (paragraph/sentence boundaries) ──
-      console.log("[CHUNK] Using semantic fallback chunking");
       const semanticPairs = buildSemanticParentChildChunks(text);
       const parentCount = new Set(semanticPairs.map((p) => p.parentIndex)).size;
       return {
@@ -9547,12 +9400,10 @@ export default function CIS() {
   const disableEmbeddings = useCallback((reason?: string) => {
     embeddingFailCountRef.current++;
     if (reason) {
-      console.warn(`[EMBED] Failure #${embeddingFailCountRef.current}: ${reason}`);
     }
     // Only disable for this session after repeated failures — never persist to localStorage
     if (embeddingFailCountRef.current >= MAX_EMBEDDING_FAILURES) {
       embeddingsDisabledRef.current = true;
-      console.error(`[EMBED] Disabled for this session after ${MAX_EMBEDDING_FAILURES} failures. Refresh page to retry.`);
     }
   }, []);
 
@@ -9575,7 +9426,6 @@ export default function CIS() {
           } else if (lowerTitle.includes("report") || lowerTitle.includes("analysis")) {
             detectedDocType = "report";
           }
-          console.log(`[EXTRACT] Extracting entities from doc ${documentId} — type: ${detectedDocType}, PDF: ${hasPdf ? `yes (${Math.round((pdfBase64ForExtraction?.length || 0) / 1024)}KB)` : "no"}, text: ${rawContent?.length || 0} chars, title: "${docTitle}"`);
           const extraction = await extractEntities({
             document_title: docTitle,
             document_text: rawContent?.slice(0, 12000) || "",
@@ -9584,14 +9434,11 @@ export default function CIS() {
           });
 
           if (extraction.entities.length === 0 && extraction.relationships.length === 0 && extraction.kpis.length === 0) {
-            console.warn("[EXTRACT] No entities/relationships/KPIs found — check backend logs for errors");
             return;
           }
-          console.log(`[EXTRACT] ✅ Found ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
 
           const userId = profile?.id || user?.id;
           if (!userId) {
-            console.warn("[EXTRACT] No user ID, skipping entity storage");
             return;
           }
 
@@ -9631,7 +9478,6 @@ export default function CIS() {
                 .single();
               
               if (insertErr || !newEntity) {
-                console.warn(`[EXTRACT] Failed to insert entity ${entity.name}:`, insertErr);
                 continue;
               }
               entityId = newEntity.id;
@@ -9674,7 +9520,6 @@ export default function CIS() {
             const targetId = entityMap.get(targetKey) ?? entityMap.get(targetCanon);
 
             if (!sourceId || !targetId) {
-              console.warn(`[EXTRACT] Missing entity for relationship ${rel.source_name} → ${rel.target_name}`);
               continue;
             }
 
@@ -9683,11 +9528,9 @@ export default function CIS() {
             if (!ALLOWED_RELATION_TYPES.has(relationType)) {
               const mapped = RELATION_TYPE_MAP[relationType];
               if (mapped) {
-                console.log(`[EXTRACT] Mapped relation_type "${rel.relation_type}" → "${mapped}"`);
                 relationType = mapped;
               } else {
                 // Default to partner_of for unknown types rather than failing
-                console.warn(`[EXTRACT] Unknown relation_type "${rel.relation_type}", defaulting to "partner_of"`);
                 relationType = 'partner_of';
               }
             }
@@ -9719,9 +9562,7 @@ export default function CIS() {
                 ...(reviewStatus === 'approved' ? { reviewed_by: userId, reviewed_at: new Date().toISOString() } : {}),
               });
               if (edgeErr) {
-                console.warn(`[EXTRACT] Failed to insert edge:`, edgeErr);
               } else if (reviewStatus === 'pending') {
-                console.log(`[EXTRACT] ⚠️ Relationship ${rel.source_name} → ${rel.target_name} requires review (confidence: ${rel.confidence})`);
               }
             }
           }
@@ -9753,14 +9594,11 @@ export default function CIS() {
                 created_by: userId,
               });
               if (kpiErr) {
-                console.warn(`[EXTRACT] Failed to insert KPI:`, kpiErr);
               }
             }
           }
 
-          console.log(`[EXTRACT] ✅ Stored ${extraction.entities.length} entities, ${extraction.relationships.length} relationships, ${extraction.kpis.length} KPIs`);
         } catch (err) {
-          console.error("[EXTRACT] Entity extraction failed:", err);
           // Non-fatal — document is saved, embeddings work
         }
       })();
@@ -9786,10 +9624,6 @@ export default function CIS() {
           const title = docTitle || "Untitled document";
           const chunkBuild = await buildParentChildChunks(truncated, title);
           const pairs = chunkBuild.pairs;
-          console.log(
-            `[CHUNK] Doc ${documentId}: mode=${chunkBuild.mode}, parents=${chunkBuild.parentCount}, children=${pairs.length}` +
-            (chunkBuild.modelUsed ? `, model=${chunkBuild.modelUsed}` : "")
-          );
 
           // Build a short document summary for contextual headers (first 500 chars)
           const docSummary = rawContent.slice(0, 500);
@@ -9828,7 +9662,6 @@ export default function CIS() {
               } catch {
                 // Contextual enrichment failed or timed out — embed raw chunk (still works, just less precise)
                 // This is non-fatal and shouldn't block the upload
-                console.log(`[EMBED] Contextual enrichment skipped for chunk ${i + 1}/${pairs.length} (timeout or error)`);
                 contextualSkipped++;
               }
 
@@ -9841,7 +9674,6 @@ export default function CIS() {
                 );
                 embedding = await Promise.race([embeddingPromise, embeddingTimeout]);
               } catch (embedErr) {
-                console.warn(`[EMBED] Embedding failed for chunk ${i + 1}/${pairs.length}:`, embedErr);
                 chunksEmbeddingFailed++;
                 continue; // Skip this chunk
               }
@@ -9895,10 +9727,6 @@ export default function CIS() {
           }
           const failedTotal = chunksEmbeddingFailed + chunksInsertFailed;
           const statusEmoji = chunksEmbedded > 0 ? "✅" : "⚠️";
-          console.log(
-            `[EMBED] ${statusEmoji} Indexed ${chunksEmbedded}/${chunksAttempted} chunks for doc ${documentId} ` +
-            `(mode=${chunkBuild.mode}, contextual_skipped=${contextualSkipped}, embed_failed=${chunksEmbeddingFailed}, insert_failed=${chunksInsertFailed}, total_failed=${failedTotal})`
-          );
           
           // ── Trigger entity extraction after embeddings are done ──
           const eventId = activeEventId || (await ensureActiveEventId());
@@ -10076,20 +9904,15 @@ export default function CIS() {
             .limit(limit);
           
           if (error) {
-            console.error("[DEBUG] Error fetching chat history from DB:", error);
           } else if (dbMessages && dbMessages.length > 0) {
             threadMessages = dbMessages.map((m: any) => ({
               role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
               content: m.content || "",
             }));
-            console.log("[DEBUG] ✅ Fetched chat history from DB:", threadMessages.length, "messages");
-            console.log("[DEBUG] Sample messages:", threadMessages.slice(0, 3).map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." })));
           } else {
-            console.log("[DEBUG] ⚠️ No messages found in DB for thread:", threadId);
           }
         }
       } catch (fetchError) {
-        console.error("[DEBUG] ❌ Failed to fetch chat history from DB:", fetchError);
         // Fallback to state messages if DB fetch fails
         threadMessages = messages
           .filter((m) => m.threadId === threadId)
@@ -10098,7 +9921,6 @@ export default function CIS() {
             role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
             content: m.text,
           }));
-        console.log("[DEBUG] Using state messages as fallback:", threadMessages.length, "messages");
       }
     }
     
@@ -10111,7 +9933,6 @@ export default function CIS() {
           role: (m.author === "assistant" ? "assistant" : "user") as "assistant" | "user",
           content: m.text,
         }));
-      console.log("[DEBUG] Using state messages (no DB messages):", threadMessages.length, "messages");
     }
     
     return threadMessages;
@@ -10385,7 +10206,6 @@ export default function CIS() {
               if (!streamCompleted) streamer.appendChunk(chunk);
             },
             (status) => {
-              console.log("[AGENT] Status:", status);
             },
             (err) => {
               if (!streamCompleted) {
@@ -10476,25 +10296,16 @@ export default function CIS() {
               (doc.folder_id && selectedFolderIds.includes(doc.folder_id))
           );
           
-          console.log("[DEBUG] Folder scope filter:", {
-            totalDocs: docList.length,
-            selectedFolders: selectedFolderIds,
-            linkedDocs: allowed.size,
-            afterFilter: filtered.length,
-            droppedDocs: docList.length - filtered.length,
-          });
           
           // IMPORTANT: If folder filter removes ALL documents, return the original list
           // This prevents the case where a document IS in the folder but the link table
           // is out of sync. Better to show too many results than none.
           if (filtered.length === 0 && docList.length > 0) {
-            console.warn("[DEBUG] Folder scope filter removed ALL docs — returning unfiltered to avoid empty results");
             return docList;
           }
           
           return filtered;
         } catch (err) {
-          console.warn("Folder scope filter failed:", err);
           return docList;
         }
       };
@@ -10506,11 +10317,7 @@ export default function CIS() {
       // Get thread messages (from state or DB)
       const threadMessages = await getThreadMessages(threadId, 10); // Get more messages for better context
       
-      console.log("[DEBUG] ========== QUERY REWRITING ==========");
-      console.log("[DEBUG] Original question:", question);
-      console.log("[DEBUG] Thread messages count:", threadMessages.length);
       if (threadMessages.length > 0) {
-        console.log("[DEBUG] Last few messages:", threadMessages.slice(-3).map(m => ({ role: m.role, content: m.content.substring(0, 100) })));
       }
       
       // Use backend LLM rewriting if we have chat history and the question might need rewriting
@@ -10592,13 +10399,11 @@ export default function CIS() {
       };
       
       const namesInHistory = extractNamesFromHistory(threadMessages);
-      console.log("[DEBUG] Names found in chat history:", namesInHistory);
       
       if ((hasPronouns || hasVaguePattern || isShort) && threadMessages.length > 0) {
         try {
           // Call backend LLM to rewrite the query (much more robust than frontend heuristics)
           searchQuestion = await rewriteQueryWithLLM(question, threadMessages);
-          console.log("[DEBUG] LLM rewritten query:", searchQuestion);
           
           // VALIDATION: Only fall back to name injection if LLM rewrite failed AND
           // we have VERIFIED company names (not AI response headers)
@@ -10610,15 +10415,12 @@ export default function CIS() {
               const knownCompanyLower = new Set((companyCards || []).map(c => (c.company_name || "").toLowerCase()));
               const verifiedName = namesInHistory.reverse().find(n => knownCompanyLower.has(n.toLowerCase()));
               if (verifiedName) {
-                console.log("[DEBUG] ⚠️ LLM rewrite missing company name, injecting verified:", verifiedName);
                 searchQuestion = question;
                 for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
                   const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
                   searchQuestion = searchQuestion.replace(regex, verifiedName);
                 }
-                console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
               } else {
-                console.log("[DEBUG] LLM rewrite didn't include names, but no verified company found — trusting LLM");
               }
             }
           }
@@ -10635,26 +10437,21 @@ export default function CIS() {
           })();
           
           if (companyNameFromLastQ) {
-            console.log("[DEBUG] 🎯 Company from last user question:", companyNameFromLastQ);
             // Ensure the rewritten query includes this company name
             const searchLower = searchQuestion.toLowerCase();
             if (!searchLower.includes(companyNameFromLastQ.toLowerCase())) {
               searchQuestion = `${companyNameFromLastQ} ${searchQuestion}`.replace(/\s+/g, " ").trim();
-              console.log("[DEBUG] ✅ Injected company name into search query:", searchQuestion);
             }
           }
         } catch (rewriteError) {
-          console.warn("[DEBUG] Query rewriting failed:", rewriteError);
           // FALLBACK: If we have pronouns and names in history, replace pronouns with the most recent name
           if (hasPronouns && namesInHistory.length > 0) {
             const mostRecentName = namesInHistory[namesInHistory.length - 1];
-            console.log("[DEBUG] Using fallback: replacing pronouns with", mostRecentName);
             searchQuestion = question;
             for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
               const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
               searchQuestion = searchQuestion.replace(regex, mostRecentName);
             }
-            console.log("[DEBUG] Fallback rewritten query:", searchQuestion);
           } else {
             searchQuestion = question;
           }
@@ -10662,7 +10459,6 @@ export default function CIS() {
       } else if ((hasPronouns || hasVaguePattern || followUpCueInQuestion) && namesInHistory.length > 0) {
         // Even if no LLM rewriting triggered, still resolve pronouns if we have names
         const mostRecentName = namesInHistory[namesInHistory.length - 1];
-        console.log("[DEBUG] Resolving follow-up without LLM using:", mostRecentName);
         for (const pronoun of ["him", "her", "it", "they", "them", "his", "her", "their", "this", "that"]) {
           const regex = new RegExp(`\\b${pronoun}\\b`, "gi");
           searchQuestion = searchQuestion.replace(regex, mostRecentName);
@@ -10671,11 +10467,8 @@ export default function CIS() {
         if (!hasPronouns && !searchQuestion.toLowerCase().includes(mostRecentName.toLowerCase())) {
           searchQuestion = `${searchQuestion} about ${mostRecentName}`.replace(/\s+/g, " ").trim();
         }
-        console.log("[DEBUG] Pronoun-resolved query:", searchQuestion);
       }
       
-      console.log("[DEBUG] Final search question:", searchQuestion);
-      console.log("[DEBUG] ======================================");
       
       // PHASE 1: Extract proper nouns (names) BEFORE cleaning to preserve them
       const extractProperNouns = (text: string): string[] => {
@@ -10719,7 +10512,6 @@ export default function CIS() {
           /\b(who is|about|tell me about|search for)\s+\w{4,}/i.test(query) ||
           hasNameLikeWords;
         
-        console.log("[DEBUG] Name detection:", { nouns, nameMatches, potentialMatches, allNames, hasNameLikeWords, isNameQuery });
         return [isNameQuery, allNames];
       };
       
@@ -10831,12 +10623,6 @@ export default function CIS() {
       let queryAnalysis: QueryAnalysis | null = null;
       try {
         queryAnalysis = await analyzeQuery(question, threadMessages);
-        console.log("[ROUTER] Query analysis:", {
-          intent: queryAnalysis.intent,
-          complexity: queryAnalysis.complexity,
-          strategy: queryAnalysis.retrieval_strategy,
-          entities: queryAnalysis.entities.length,
-        });
         // Use rewritten query from router if available, BUT ensure it includes company name from conversation
         if (queryAnalysis.rewritten_query && queryAnalysis.rewritten_query !== question) {
           // Extract company name from last user question
@@ -10852,7 +10638,6 @@ export default function CIS() {
             if (!rewrittenLower.includes(companyNameFromLastQ.toLowerCase())) {
               // Inject company name into router's rewritten query
               finalSearchQuery = `${companyNameFromLastQ} ${queryAnalysis.rewritten_query}`.replace(/\s+/g, " ").trim();
-              console.log("[DEBUG] ✅ Injected company name into router query:", finalSearchQuery);
             } else {
               finalSearchQuery = queryAnalysis.rewritten_query;
             }
@@ -10861,7 +10646,6 @@ export default function CIS() {
           }
         }
       } catch (routerErr) {
-        console.warn("[ROUTER] Analysis failed, using fallback:", routerErr);
         queryAnalysis = null;
       }
 
@@ -10886,7 +10670,6 @@ export default function CIS() {
       })();
 
       if (isPortfolioIndexQuestion && companyCards.length > 0) {
-        console.log("[FAST-PATH] Portfolio index question detected — answering from company cards only");
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
         }
@@ -10954,41 +10737,33 @@ export default function CIS() {
             question: finalSearchQuery,
             previousMessages: threadMsgsForRouter,
           });
-          console.log("[MULTI-AGENT] Orchestrator plan:", routingPlan);
 
           if (routingPlan.use_web && !webSearchEnabled) {
-            console.log("[MULTI-AGENT] Orchestrator recommends web search — enabling");
           }
         } catch (routerErr) {
-          console.warn("[MULTI-AGENT] Orchestrator failed, falling back to vector-only:", routerErr);
         }
 
         // Client-side override: force graph ON for connection/relationship questions
         const connectionKeywords = /\b(connect|connections?|relationship|partner|who\s+invest|portfolio|expand|expansion|introduce|introductions?|linked|network|graph)\b/i;
         if (connectionKeywords.test(question) && !routingPlan.use_graph) {
           routingPlan.use_graph = true;
-          console.log("[MULTI-AGENT] Client override: forced graph ON (connection keywords detected)");
         }
         // Force KPIs ON for metric questions
         const metricKeywords = /\b(arr|revenue|valuation|burn|runway|growth|metric|kpi|financials?|numbers?)\b/i;
         if (metricKeywords.test(question) && !routingPlan.use_kpis) {
           routingPlan.use_kpis = true;
-          console.log("[MULTI-AGENT] Client override: forced KPIs ON (metric keywords detected)");
         }
         // Force graph + KPIs ON for multi-company comparison / differs / business model questions
         const comparisonKeywords = /\b(compare|comparison|differs?|difference|versus|vs\.?|business\s*model|between\s+\w+\s+and)\b/i;
         if (comparisonKeywords.test(question)) {
           if (!routingPlan.use_graph) {
             routingPlan.use_graph = true;
-            console.log("[MULTI-AGENT] Client override: forced graph ON (comparison/differs detected)");
           }
           if (!routingPlan.use_kpis) {
             routingPlan.use_kpis = true;
-            console.log("[MULTI-AGENT] Client override: forced KPIs ON (comparison/differs detected)");
           }
         }
       } else {
-        console.log("[RAG] Standard single-path RAG (multi-agent OFF)");
       }
 
       // ── Step 2: Parallel Graph/KPI Retrieval (multi-agent only) ──
@@ -10997,7 +10772,6 @@ export default function CIS() {
           const entityNames = queryAnalysis?.entities?.map((e: any) => e.name) || [];
           const searchWords = finalSearchQuery.split(/\s+/).filter((w: string) => w.length > 3);
           const result = await retrieveGraphContext(eventId, searchWords, entityNames);
-          console.log("[MULTI-AGENT] Graph agent:", { entities: result.entities.length, edges: result.edges.length, connections: result.connections.length });
           return result.summary;
         } catch { return ""; }
       })() : Promise.resolve("");
@@ -11011,7 +10785,6 @@ export default function CIS() {
             ?.filter((e: any) => e.type === "metric")
             ?.map((e: any) => e.name) || [];
           const result = await retrieveKpiContext(eventId, companyNames.length > 0 ? companyNames : undefined, metricNames.length > 0 ? metricNames : undefined);
-          console.log("[MULTI-AGENT] KPI agent:", { kpis: result.kpis.length });
           return result.summary;
         } catch { return ""; }
       })() : Promise.resolve("");
@@ -11040,10 +10813,8 @@ export default function CIS() {
             ]);
             if (mqResult.queries.length > 1) {
               queryVariants = mqResult.queries;
-              console.log("[MULTI-QUERY] Variants:", queryVariants);
             }
           } catch {
-            console.log("[MULTI-QUERY] Generation skipped — using original query only");
           }
 
           // Step 2: Embed all variants in parallel
@@ -11092,12 +10863,6 @@ export default function CIS() {
           if (mergedMatches.length === 0) return [];
 
           const totalRaw = allResults.reduce((acc, r) => acc + r.length, 0);
-          console.log("[PARALLEL] Multi-query semantic search:", {
-            variants: queryVariants.length,
-            totalRawHits: totalRaw,
-            mergedUnique: mergedMatches.length,
-            top: mergedMatches.slice(0, 3).map((m: any) => m.similarity),
-          });
 
           // GraphRAG expansion (optional, with tight timeout)
           const useGraphRAG = queryAnalysis?.retrieval_strategy?.includes("graph") ?? false;
@@ -11119,9 +10884,7 @@ export default function CIS() {
                 new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GraphRAG timeout")), 4000)),
               ]);
               finalChunks = graphragResult.relevant_chunks;
-              console.log("[PARALLEL] GraphRAG:", { initial: mergedMatches.length, relevant: finalChunks.length });
             } catch {
-              console.warn("[PARALLEL] GraphRAG skipped (timeout or error)");
             }
           }
 
@@ -11142,7 +10905,6 @@ export default function CIS() {
               
           return filteredMatches;
         } catch (err) {
-          console.warn("[PARALLEL] Semantic search error:", err instanceof Error ? err.message : String(err));
           return [];
         }
       })();
@@ -11158,7 +10920,6 @@ export default function CIS() {
             filter_event_id: eventId,
           });
           if (keywordError || !keywordRows?.length) return [];
-          console.log("[PARALLEL] Keyword search:", { count: keywordRows.length });
           return keywordRows as typeof keywordMatches;
         } catch {
           return [];
@@ -11187,7 +10948,6 @@ export default function CIS() {
             const fullText = `${doc.title || ""} ${doc.file_name || ""} ${(doc.raw_content || "").substring(0, 5000)}`.toLowerCase();
             return Array.from(searchTerms).some(term => fullText.includes(term));
           });
-          console.log("[PARALLEL] Direct title search:", { found: directMatches.length });
           return directMatches.map((doc: any) => ({
             document_id: doc.id, rank: 0.5, snippet: (doc.raw_content || "").substring(0, 200)
           }));
@@ -11220,12 +10980,6 @@ export default function CIS() {
         if (!snippetByDocId.has(m.document_id) && m.snippet?.trim()) snippetByDocId.set(m.document_id, m.snippet!);
       });
 
-      console.log("[PARALLEL] All retrieval done:", {
-        semantic: semanticMatches.length,
-        keyword: keywordMatches.length,
-        direct: directResults.length,
-        budgetUsedMs: RETRIEVAL_BUDGET_MS - (retrievalDeadline - Date.now()),
-      });
 
       if (!docs.length && !error) {
         // ── RRF merge ──
@@ -11243,15 +10997,9 @@ export default function CIS() {
           .map(([id]) => id)
           .slice(0, 15);
         
-        console.log("[DEBUG] RRF results:", { 
-          semanticMatchCount: semanticMatches.length, 
-          keywordMatchCount: keywordMatches.length, 
-          rankedIdsCount: rankedIds.length 
-        });
 
         // CRITICAL FALLBACK: If all searches fail but it's a name query, try direct document query
         if (rankedIds.length === 0 && hasName) {
-          console.log("[DEBUG] 🆘 All searches failed for name query - trying DIRECT document query");
           try {
             // Query ALL documents for this event and filter manually
             let fallbackQuery = supabase
@@ -11269,7 +11017,6 @@ export default function CIS() {
             const { data: allDocs, error: fallbackError } = await fallbackQuery;
             
             if (!fallbackError && allDocs?.length) {
-              console.log("[DEBUG] Fallback: Got", allDocs.length, "documents to scan");
               
               // Filter documents that contain any name or query token
               const searchTermsLower = new Set<string>();
@@ -11288,14 +11035,12 @@ export default function CIS() {
                 return Array.from(searchTermsLower).some(term => fullText.includes(term));
               });
               
-              console.log("[DEBUG] Fallback: Matched", matchedDocs.length, "documents by text search");
               
               if (matchedDocs.length > 0) {
                 docs = matchedDocs.slice(0, 10);
               }
             }
           } catch (fallbackErr) {
-            console.log("[DEBUG] Fallback query error:", fallbackErr);
           }
         }
 
@@ -11459,7 +11204,6 @@ export default function CIS() {
         try {
           response = await responseQuery;
         } catch (queryErr) {
-          console.warn("Document query failed:", queryErr);
           response = { data: [], error: queryErr };
         }
         if (timedOut) return;
@@ -11500,7 +11244,6 @@ export default function CIS() {
                 docs = (keywordResponse.data || []) as typeof docs;
               }
             } catch (keywordErr) {
-              console.warn("Keyword search failed:", keywordErr);
               // Continue without keyword results
             }
           }
@@ -11638,12 +11381,6 @@ export default function CIS() {
           ? 1
           : Math.max(2, Math.ceil(contentTokens.length * 0.6));
       
-      console.log("[DEBUG] Content filtering:", { 
-        contentTokens, 
-        minTokenMatches, 
-        hasName,
-        docsBeforeFilter: docs?.length || 0
-      });
       
       const filteredDocs = (docs || []).filter((doc) => {
         if (!contentTokens.length && !hasName) return false; // No tokens = no match (unless name query)
@@ -11679,10 +11416,6 @@ export default function CIS() {
         return matches >= minTokenMatches || hasStrongMatch || hasNameMatch;
       });
       
-      console.log("[DEBUG] After content filtering:", { 
-        filteredDocsCount: filteredDocs.length,
-        filteredDocTitles: filteredDocs.map(d => d.title || d.file_name).slice(0, 5)
-      });
 
       let rankedDocs = filteredDocs;
       if (rankedDocs.length > 1) {
@@ -11743,11 +11476,9 @@ export default function CIS() {
               .filter(Boolean) as typeof rankedDocs;
             if (colbertReranked.length > 0) {
               rankedDocs = colbertReranked;
-              console.log(`[MULTI-AGENT] ColBERT reranked ${colbertReranked.length} docs (method: ${colbertResult.method})`);
             }
           }
         } catch (colbertErr) {
-          console.warn("[MULTI-AGENT] ColBERT reranking failed (non-fatal):", colbertErr);
         }
       }
 
@@ -11766,7 +11497,7 @@ export default function CIS() {
           "how can you help",
           "what features",
           "what functionality",
-          "what is ventureos",
+          "what is this platform",
           "who are you",
           "introduce yourself",
           "what is this",
@@ -11795,7 +11526,6 @@ export default function CIS() {
         let streamCompleted = false;
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            console.error("Meta-question stream timeout");
             streamer.setError("Request timed out. Please try again.");
             setIsClaudeLoading(false);
           }
@@ -11848,7 +11578,6 @@ export default function CIS() {
         previousEvidence.docs.length > 0 &&
         previousEvidenceThreadId === threadId
       ) {
-        console.log("[DEBUG] ✅ Using previous evidence for pronoun follow-up (skip new search)");
         const maxDocs = isComprehensiveQuestion ? 5 : 3;
         const answerDocs = previousEvidence.docs.slice(0, maxDocs);
         setLastEvidence({ question: searchQuestion, docs: answerDocs, decisions: decisionMatches });
@@ -11862,7 +11591,6 @@ export default function CIS() {
         let streamCompleted = false;
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            console.error("Follow-up stream timeout");
             streamer.setError("Request timed out. Please try again.");
             setIsClaudeLoading(false);
           }
@@ -11932,16 +11660,6 @@ export default function CIS() {
       const lowSignalFollowUp =
         isFollowUpQuery && contentTokens.length <= 1;
 
-      console.log("[DEBUG] Follow-up detection:", {
-        isFollowUpQuery,
-        wantsAlternative,
-        isConnectionIntent,
-        hasRankedDocs: rankedDocs?.length > 0,
-        hasPreviousEvidence: !!previousEvidence,
-        previousEvidenceDocsCount: previousEvidence?.docs?.length,
-        sameThread: previousEvidenceThreadId === threadId,
-        lowSignalFollowUp,
-      });
 
       if (!rankedDocs || rankedDocs.length === 0 || lowSignalFollowUp) {
         // CRITICAL: If search fails but we have context (pronouns OR follow-up cues), use previous evidence
@@ -11956,17 +11674,8 @@ export default function CIS() {
           // Removed: && previousEvidenceThreadId === threadId (too strict!)
         );
         
-        console.log("[DEBUG] Should use previous evidence:", {
-          isFollowUpQuery,
-          hasPronounInQuestion,
-          hasFollowupCueInOriginal,
-          hasPreviousEvidence: !!previousEvidence,
-          previousEvidenceDocsCount: previousEvidence?.docs?.length,
-          shouldUsePreviousEvidence,
-        });
         
         if (shouldUsePreviousEvidence) {
-          console.log("[DEBUG] ✅ Using previous evidence for follow-up query");
           const answerDocs = previousEvidence.docs.slice(0, 3);
           setLastEvidence({ question, docs: answerDocs, decisions: decisionMatches });
           setLastEvidenceThreadId(threadId);
@@ -11981,7 +11690,6 @@ export default function CIS() {
           let streamCompleted = false;
           const streamTimeout = setTimeout(() => {
             if (!streamCompleted) {
-              console.error("Follow-up stream timeout");
               streamer.setError("Request timed out. Please try again.");
               setIsClaudeLoading(false);
             }
@@ -12053,7 +11761,6 @@ export default function CIS() {
         const threadMessagesForFallback = await getThreadMessages(threadId, 10);
         
         if (hasPronounInOriginal && threadMessagesForFallback.length > 0) {
-          console.log("[DEBUG] ✅ Fallback: Calling Claude with chat history only (no new sources)");
           if (searchTimeoutId !== null) {
             window.clearTimeout(searchTimeoutId);
           }
@@ -12063,7 +11770,6 @@ export default function CIS() {
           let streamCompleted = false;
           const streamTimeout = setTimeout(() => {
             if (!streamCompleted) {
-              console.error("Fallback stream timeout");
               streamer.setError("Request timed out. Please try again.");
               setIsClaudeLoading(false);
             }
@@ -12124,8 +11830,6 @@ export default function CIS() {
         // NO DOCUMENTS FOUND — but instead of showing an error, forward to Claude
         // so it can still answer general questions, greetings, or use conversation context.
         // This fixes the problem where "hello" or document-specific questions get blocked.
-        console.log("[DEBUG] No docs found, forwarding to Claude for general answer");
-        console.log("[DEBUG] isConnectionIntent:", isConnectionIntent, "| documents count:", documents.length);
         
         if (searchTimeoutId !== null) {
           window.clearTimeout(searchTimeoutId);
@@ -12137,7 +11841,6 @@ export default function CIS() {
         // the search didn't match the specific company name.
         let portfolioSources: Array<{ title: string | null; file_name: string | null; snippet: string | null }> = [];
         if (isConnectionIntent && documents.length > 0) {
-          console.log("[DEBUG] 🔗 Connection-intent detected — injecting full portfolio context");
           portfolioSources = documents.slice(0, 15).map((doc) => ({
             title: doc.title || "Untitled",
             file_name: null,
@@ -12158,7 +11861,6 @@ export default function CIS() {
         
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            console.error("Stream timeout - no response after 75 seconds");
             streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
             setIsClaudeLoading(false);
           }
@@ -12175,7 +11877,6 @@ export default function CIS() {
             if (alreadyMentioned.length > 0) {
               const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
               questionForClaudeFallback = question + exclusionNote;
-              console.log("[DEBUG] 🚫 Fallback exclusion context added. Already mentioned:", alreadyMentioned);
             }
           }
           
@@ -12213,7 +11914,6 @@ export default function CIS() {
                 streamCompleted = true;
                 clearTimeout(streamTimeout);
                 const errorMsg = error.message || "Claude answer failed. Please try again.";
-                console.error("Stream error:", errorMsg);
                 streamer.setError(errorMsg);
                 setIsClaudeLoading(false);
               }
@@ -12313,7 +12013,6 @@ export default function CIS() {
       // Add timeout to prevent infinite hanging
       const streamTimeout = setTimeout(() => {
         if (!streamCompleted) {
-          console.error("Stream timeout - no response after 120 seconds");
           streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
           setIsClaudeLoading(false);
         }
@@ -12351,7 +12050,6 @@ export default function CIS() {
             }));
           if (extraPortfolio.length > 0) {
             sources = [...sources, ...extraPortfolio];
-            console.log("[DEBUG] 🔗 Connection-intent: injected", extraPortfolio.length, "extra portfolio docs");
           }
         }
         // Web search is now handled natively by Anthropic's web_search tool (no manual DuckDuckGo needed)
@@ -12373,7 +12071,6 @@ export default function CIS() {
                 file_name: null as string | null,
                 snippet: graphContext,
               });
-              console.log("[MULTI-AGENT] Injected graph context into sources");
             }
 
             if (kpiContext && kpiContext !== "No KPI data found.") {
@@ -12382,7 +12079,6 @@ export default function CIS() {
                 file_name: null as string | null,
                 snippet: kpiContext,
               });
-              console.log("[MULTI-AGENT] Injected KPI context into sources");
             }
             // Set context labels so user can see multi-agent sources (Knowledge Graph, KPIs) under the answer
             const labels: string[] = [];
@@ -12390,7 +12086,6 @@ export default function CIS() {
             if (kpiContext && kpiContext !== "No KPI data found.") labels.push("Structured KPIs");
             if (labels.length > 0) streamer.setContextLabels(labels);
           } catch (maErr) {
-            console.warn("[MULTI-AGENT] Graph/KPI await failed (non-fatal):", maErr);
           }
         }
 
@@ -12414,16 +12109,10 @@ export default function CIS() {
           if (alreadyMentioned.length > 0) {
             const exclusionNote = `\n\n[IMPORTANT: The user is asking for a DIFFERENT option. Do NOT mention or recommend these companies/entities that were already discussed: ${alreadyMentioned.join(", ")}. Suggest only NEW companies that have NOT been mentioned yet.]`;
             questionForClaude = question + exclusionNote;
-            console.log("[DEBUG] 🚫 Exclusion context added. Already mentioned:", alreadyMentioned);
           }
         }
         
         // Debug logging
-        console.log("[DEBUG] Sending to backend:", {
-          question: questionForClaude,
-          threadMessagesCount: threadMessages.length,
-          threadMessages: threadMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) + "..." }))
-        });
         
         await askClaudeAnswerStream(
           {
@@ -12445,7 +12134,6 @@ export default function CIS() {
               streamCompleted = true;
               clearTimeout(streamTimeout);
               const errorMsg = error.message || "Claude answer failed. Please try again.";
-              console.error("Stream error:", errorMsg);
               streamer.setError(errorMsg);
               setIsClaudeLoading(false);
             }
@@ -12484,9 +12172,7 @@ export default function CIS() {
             contextKpis: kpiContext,
           }).then((criticResult) => {
             if (criticResult.issues.length > 0) {
-              console.warn("[MULTI-AGENT] Critic found issues:", criticResult.issues);
             } else {
-              console.log("[MULTI-AGENT] Critic: answer is grounded (confidence:", criticResult.confidence, ")");
             }
           }).catch(() => { /* non-fatal */ });
         }
@@ -12501,7 +12187,6 @@ export default function CIS() {
             const MAX_SYSTEM2_ITERATIONS = 2;
 
             for (let iter = 0; iter < MAX_SYSTEM2_ITERATIONS; iter++) {
-              console.log(`[SYSTEM2] Reflection iteration ${iter + 1}...`);
               setChatLoadingStage?.(`System 2: Reflecting (iteration ${iter + 1})...`);
 
               const reflection = await system2Reflect({
@@ -12514,15 +12199,8 @@ export default function CIS() {
                 maxIterations: MAX_SYSTEM2_ITERATIONS,
               });
 
-              console.log("[SYSTEM2] Reflection result:", {
-                needs_more_data: reflection.needs_more_data,
-                confidence: reflection.confidence,
-                queries: reflection.follow_up_queries,
-                missing: reflection.missing_data_types,
-              });
 
               if (!reflection.needs_more_data || reflection.confidence >= 0.85) {
-                console.log(`[SYSTEM2] Satisfied at iteration ${iter + 1} (confidence: ${reflection.confidence})`);
                 break;
               }
 
@@ -12551,7 +12229,6 @@ export default function CIS() {
               }
 
               if (!additionalContext) {
-                console.log("[SYSTEM2] No additional context found, stopping.");
                 break;
               }
 
@@ -12596,18 +12273,14 @@ export default function CIS() {
                   if (refinedText.length > 50) {
                     fullAnswer = refinedText;
                     draftForReflection = refinedText;
-                    console.log(`[SYSTEM2] Refined answer (iteration ${iter + 1}): ${refinedText.length} chars`);
                   }
                 }
               } catch (refineErr) {
-                console.warn("[SYSTEM2] Refinement streaming failed:", refineErr);
               }
             }
             if (totalIterations > 0) {
-              console.log(`[SYSTEM2] Completed ${totalIterations} reflection iterations`);
             }
           } catch (s2err) {
-            console.warn("[SYSTEM2] System 2 RAG failed (non-fatal):", s2err);
           }
         }
 
@@ -12715,7 +12388,6 @@ export default function CIS() {
         // User cancelled — don't show error
         return;
       }
-      console.error("Chat error:", err);
       const errorMsg = err instanceof Error ? err.message : "Chat failed unexpectedly. Please try again.";
       createAssistantMessage(
         `❌ Error: ${errorMsg}\n\nPlease try again or check the console for details.`,
@@ -12782,7 +12454,6 @@ export default function CIS() {
       setLogDecisionDialogOpen(false);
       setPendingDecisionContext(null);
     } catch (err) {
-      console.error("Failed to create connection:", err);
       toast({
         title: "Failed to log decision",
         description: err instanceof Error ? err.message : "Could not create connection.",
@@ -12809,7 +12480,6 @@ export default function CIS() {
         description: `Connection status changed to "${newStatus}"`,
       });
     } catch (err) {
-      console.error("Failed to update connection:", err);
       toast({
         title: "Update failed",
         description: err instanceof Error ? err.message : "Could not update status.",
@@ -12860,7 +12530,6 @@ export default function CIS() {
         });
       }
     } catch (err) {
-      console.error("Suggest connections failed:", err);
       toast({
         title: "Suggestion failed",
         description: err instanceof Error ? err.message : "Could not generate suggestions.",
@@ -12993,7 +12662,6 @@ export default function CIS() {
         toast({ title: "Connections imported", description: `${added} connection(s) added. ${skipped} row(s) skipped (missing source/target).` });
       }
     } catch (err) {
-      console.error("Import connections failed:", err);
       toast({ title: "Import failed", description: err instanceof Error ? err.message : "Could not parse file.", variant: "destructive" });
     }
   }, [activeEventId, profile?.id, user?.id, toast]);
@@ -14279,7 +13947,6 @@ export default function CIS() {
                   for (const id of edgeIds) {
                     const { error } = await updateKgEdgeReview(id, status, userId);
                     if (error) {
-                      console.warn(`[BatchReview] Edge ${id} failed:`, error.message);
                       failed++;
                     } else {
                       succeeded++;
@@ -15114,7 +14781,7 @@ function CompaniesTab({
             Entity Cards
           </h2>
           <p className="text-sm text-slate-500 font-mono mt-1">
-            Auto-created from documents & CSV imports • {companyCounts.companies} companies • {companyCounts.funds} investors/funds
+            Auto-created from documents & CSV imports • {companyCounts.companies} companies • {companyCounts.funds} partners
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
