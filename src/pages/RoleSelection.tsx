@@ -100,7 +100,7 @@ export default function RoleSelection() {
     if (!invitationCode.trim()) {
       toast({
         title: "Code required",
-        description: "Please enter the fund code.",
+        description: "Please enter the code you received.",
         variant: "destructive",
       });
       return;
@@ -108,9 +108,7 @@ export default function RoleSelection() {
 
     setIsSaving(true);
     try {
-      const roleForRpc = codeEntryRole || profile?.role;
-      const rpcName = roleForRpc === "managing_partner" ? "join_fund_by_code" : "join_org_by_invitation_code";
-      const { data, error } = await supabase.rpc(rpcName, {
+      const { data, error } = await (supabase as any).rpc("join_by_code", {
         code_param: invitationCode.trim().toUpperCase(),
       });
 
@@ -120,30 +118,32 @@ export default function RoleSelection() {
 
       await refreshProfile();
 
-      if (roleForRpc === "managing_partner") {
-        // MD created/joined fund
-        setCreatedInvitationCode(data?.invitation_code || data?.organization?.invitation_code || null);
-        if (data?.message === "Fund created successfully") {
-          setStep("fund_created");
-        } else {
-          toast({
-            title: "Welcome!",
-            description: `You've joined ${data?.organization?.name || "the fund"}.`,
-          });
-          navigate("/cis");
-        }
-      } else {
-        // Team member joined
+      if (data?.message === "Fund created successfully") {
+        setCreatedInvitationCode(data?.invitation_code ?? data?.organization?.invitation_code ?? null);
+        setFundName(data?.organization?.name ?? "");
+        setStep("fund_created");
+      } else if (data?.organization?.name) {
         toast({
           title: "Welcome!",
-          description: `You've joined ${data?.organization?.name || "the fund"}.`,
+          description: `You've joined ${data.organization.name}.`,
+        });
+        navigate("/cis");
+      } else {
+        toast({
+          title: "Welcome!",
+          description: "You've joined the fund.",
         });
         navigate("/cis");
       }
     } catch (error: any) {
-      const msg = error?.message || error?.details || (typeof error === "string" ? error : "Invalid or inactive code. If you're a Managing Partner, use the fund code from admin. If you're a team member, use the invitation code from your MD.");
+      const msg =
+        error?.message ||
+        error?.details ||
+        (typeof error === "string"
+          ? error
+          : "Invalid or inactive code. Managing Partners: use the fund code from admin. Team members: use the invitation code from your MD.");
       toast({
-        title: "Failed to join fund",
+        title: "Could not join",
         description: msg,
         variant: "destructive",
       });
@@ -207,12 +207,12 @@ export default function RoleSelection() {
         <Card className={cardClass}>
           <CardHeader className={cardHeaderClass}>
             <CardTitle className="text-2xl font-bold text-white">
-              {(codeEntryRole || profile?.role) === "managing_partner" ? "Enter Fund Code" : "Join Your Fund"}
+              Enter Your Code
             </CardTitle>
             <CardDescription className="text-slate-400 text-base mt-1">
               {(codeEntryRole || profile?.role) === "managing_partner"
-                ? "Enter the fund code provided by admin to create or join your fund"
-                : "Enter the invitation code from your Managing Partner"}
+                ? "Use the fund code from admin (e.g. FUND-1234) to create or join your fund"
+                : "Use the invitation code from your Managing Partner (they get it after creating the fund)"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
@@ -220,18 +220,18 @@ export default function RoleSelection() {
               <Key className="h-4 w-4 text-amber-400" />
               <AlertDescription>
                 {(codeEntryRole || profile?.role) === "managing_partner"
-                  ? "Contact admin to get your fund code (e.g., VOS-1234). First MD to use it creates the fund."
-                  : "Ask your Managing Partner for the invitation code (e.g., VOS-1234)"}
+                  ? "Fund code = from admin. First person to use it creates the fund; others join the same fund."
+                  : "Invitation code = from your MD after they create the fund. It is different from the fund code."}
               </AlertDescription>
             </Alert>
 
             <div className="space-y-2">
               <Label htmlFor="invitation-code" className="text-slate-300">
-                {(codeEntryRole || profile?.role) === "managing_partner" ? "Fund Code" : "Invitation Code"}
+                {(codeEntryRole || profile?.role) === "managing_partner" ? "Fund code" : "Invitation code"}
               </Label>
               <Input
                 id="invitation-code"
-                placeholder="VOS-1234"
+                placeholder="e.g. FUND-1234"
                 value={invitationCode}
                 onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
                 disabled={isSaving}
@@ -240,7 +240,7 @@ export default function RoleSelection() {
             </div>
 
             <Button onClick={handleJoinFund} disabled={isSaving || !invitationCode.trim()} className={btnPrimaryClass}>
-              {isSaving ? "Processing..." : (codeEntryRole || profile?.role) === "managing_partner" ? "Create/Join Fund" : "Join Fund"}
+              {isSaving ? "Processing..." : "Continue"}
             </Button>
 
             <Button variant="ghost" onClick={() => setStep("role_selection")} disabled={isSaving} className="w-full rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 h-11">
