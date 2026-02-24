@@ -494,8 +494,9 @@ async def log_api_usage(
                 "error_message": error_message,
             }).execute()
         )
-    except Exception as e:
-        # Don't break API calls if logging fails
+    except Exception:
+        # Don't break API calls if logging fails.
+        pass
 
 # Ask-the-fund settings (generous tokens for comprehensive answers)
 ASK_MAX_TOKENS = int(os.getenv("ASK_MAX_TOKENS", "4000"))  # Increased from 1000 for more detailed responses
@@ -2053,9 +2054,10 @@ def build_answer_prompt(
         import re
         names = re.findall(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', all_content)
         if names:
-    else:
-    
-    
+            pass
+        else:
+            pass
+
     is_raw_text = is_raw_text_request(question)
     
     if is_meta:
@@ -3092,7 +3094,8 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                 claude_text = await extract_pdf_with_claude_native(content, max_pages=MAX_PDF_PAGES)
                 if claude_text and len(claude_text.strip()) >= 50:
                     return file_ext, claude_text
-            except Exception as claude_err:
+            except Exception:
+                pass
 
         # ── Strategy 2: PyMuPDF fast text extraction (digital PDFs) ──
         import concurrent.futures
@@ -3180,8 +3183,9 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                     parsed = json.loads(text_content)
                     # Re-encode as pretty JSON for better readability
                     text_content = json.dumps(parsed, indent=2, ensure_ascii=False)
-                except json.JSONDecodeError as e:
-                    # Invalid JSON - keep original but log warning
+                except json.JSONDecodeError:
+                    # Invalid JSON - keep original content.
+                    pass
         except UnicodeDecodeError:
             # Try other encodings
             try:
@@ -3495,7 +3499,8 @@ def try_direct_csv_parse(text_data: str, data_type: Optional[str]) -> Optional[C
                         investors.append(inv)
                     else:
                         skipped_no_name += 1
-                        if row_idx < 3:  # Log first few skips for debugging
+                        if row_idx < 3:  # Keep branch explicit for readability.
+                            pass
                 except Exception as e:
                     warnings.append(f"Error parsing investor row {row_idx}: {str(e)}")
             
@@ -3550,8 +3555,9 @@ async def convert_data(request: ConversionRequest):
             direct_result = try_direct_csv_parse(request.data, request.dataType)
             if direct_result:
                 return direct_result
-        except Exception as e:
-            # If direct CSV parsing fails, fall through to Ollama
+        except Exception:
+            # If direct CSV parsing fails, fall through to Ollama.
+            pass
     
     try:
         # Create prompt
@@ -5088,8 +5094,10 @@ async def ask_fund_stream(request: AskRequest, auth: AuthContext = Depends(get_a
         if previous_messages:
             # Print all messages for debugging
             for i, msg in enumerate(previous_messages):
+                pass
         else:
-        
+            pass
+
         prompt = build_answer_prompt(resolved_question, request.sources or [], request.decisions or [], previous_messages, request.connections or [])
         
         async def generate():
@@ -5759,7 +5767,8 @@ async def analyze_query_endpoint(request: AnalyzeQueryRequest):
                 retrieval_strategy=data.get("retrieval_strategy", "vector"),
                 rewritten_query=rewritten,
             )
-        except Exception as e:
+        except Exception:
+            pass
 
     # Fallback: keyword-based heuristic
     q = question.lower()
@@ -7725,7 +7734,9 @@ async def startup_event():
         # Show first/last 4 chars for verification (don't expose full key)
         key_preview = f"{ANTHROPIC_API_KEY[:4]}...{ANTHROPIC_API_KEY[-4:]}" if len(ANTHROPIC_API_KEY) > 8 else "***"
     if EMBEDDINGS_PROVIDER == "voyage":
+        pass
     elif EMBEDDINGS_PROVIDER == "openai":
+        pass
 
 
 if __name__ == "__main__":
