@@ -1957,7 +1957,7 @@ function SourcesTab({
               orgId = up?.[0]?.organization_id || null;
             }
             if (!orgId) {
-              toast({ title: "Org not found", description: "Cannot save sync config without an organization.", variant: "destructive" });
+              toast({ title: "Set up organization first", description: "Create or join an organization from the role selection page, then try connecting a folder again.", variant: "destructive" });
               return;
             }
             const { error: upsertError } = await supabase.from("sync_configurations").upsert(
@@ -1977,9 +1977,12 @@ function SourcesTab({
               { onConflict: "organization_id,event_id,source_type" }
             );
             if (upsertError) {
+              const is403 = upsertError.code === "42501" || upsertError.message?.includes("403");
               toast({
                 title: "Folder not saved",
-                description: "Connected folder could not be saved. It may disappear after reload. Try again.",
+                description: is403
+                  ? "Your account may need to be set up again. Sign out, then sign in and complete onboarding (create or join an organization), then try connecting the folder again."
+                  : "Connected folder could not be saved. It may disappear after reload. Try again.",
                 variant: "destructive",
               });
               return;
@@ -2623,6 +2626,11 @@ function SourcesTab({
     const profile_ = (await supabase.auth.getUser()).data.user;
     const orgId = (await supabase.from("user_profiles").select("organization_id").eq("id", profile_?.id ?? "").single()).data?.organization_id;
 
+    if (!orgId) {
+      toast({ title: "Set up organization first", description: "Create or join an organization from the role selection page, then try connecting Gmail again.", variant: "destructive" });
+      return;
+    }
+
     const configPayload = {
       gmail_query: query || gmailQuery || "",
       max_emails_per_sync: gmailMaxPerSync,
@@ -2640,7 +2648,14 @@ function SourcesTab({
     }, { onConflict: "organization_id,event_id,source_type" });
 
     if (error) {
-      toast({ title: "Failed to save Gmail config", description: error.message, variant: "destructive" });
+      const is403 = error.code === "42501" || error.message?.includes("403");
+      toast({
+        title: "Failed to save Gmail config",
+        description: is403
+          ? "Your account may need to be set up again. Sign out, then sign in and complete onboarding (create or join an organization), then try again."
+          : error.message,
+        variant: "destructive",
+      });
       return;
     }
     setIsGmailConnected(true);
