@@ -8,6 +8,36 @@ function buildCandidateBaseUrls(): string[] {
 
 let resolvedBaseUrl: string | null = null;
 
+const MY_TOKEN_404_CACHE_MS = 8000;
+let lastMyToken404At = 0;
+export function clearMyToken404Cache(): void {
+  lastMyToken404At = 0;
+}
+
+/**
+ * Get Google access token from backend (backend stores tokens after its own OAuth flow).
+ * Pass the current Supabase session access_token. Returns null if not connected or on error.
+ */
+export async function getGoogleAccessTokenFromBackend(supabaseAccessToken: string): Promise<string | null> {
+  if (Date.now() - lastMyToken404At < MY_TOKEN_404_CACHE_MS) return null;
+  try {
+    const base = await resolveIngestionBaseUrl();
+    const res = await fetch(`${base}/gdrive/my-token`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+    if (res.status === 404) {
+      lastMyToken404At = Date.now();
+      return null;
+    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 800): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

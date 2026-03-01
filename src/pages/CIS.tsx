@@ -188,7 +188,8 @@ import {
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
 import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
-import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
+import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
+import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1584,6 +1585,8 @@ function SourcesTab({
   initialDriveSyncConfig,
   onSyncCategoriesFromDrive,
   onSourceFoldersRefetch,
+  openAddFolderAfterOAuth,
+  onOpenAddFolderConsumed,
 }: {
   sources: SourceRecord[];
   documents: Array<{
@@ -1637,7 +1640,14 @@ function SourcesTab({
     lastSyncAt: string | null;
   } | null;
   onSourceFoldersRefetch?: () => Promise<void>;
+  /** When true, open the Drive folder picker shortly after mount (used after OAuth redirect). */
+  openAddFolderAfterOAuth?: boolean;
+  onOpenAddFolderConsumed?: () => void;
 }) {
+  const { openAddFolderAfterOAuth, onOpenAddFolderConsumed } = (() => {
+    const o = (SourcesTab as any).__propsPlaceholder;
+    return { openAddFolderAfterOAuth: o?.openAddFolderAfterOAuth, onOpenAddFolderConsumed: o?.onOpenAddFolderConsumed };
+  })();
   /** Root folder types for Google Drive sync (each connected root can be tagged as one of these). */
   const DRIVE_ROOT_CATEGORIES = [
     "Portfolio Companies",
@@ -1897,13 +1907,20 @@ function SourcesTab({
       });
       return;
     }
+    toast({ title: "Connecting to Google Drive…", description: "Checking access. You may be redirected to sign in." });
     const accessToken = await getGoogleAccessToken();
     if (!accessToken) {
-      toast({
-        title: "Google Drive access needed",
-        description: "Please sign in again with Google Drive access enabled.",
-        variant: "destructive",
-      });
+      try {
+        toast({ title: "Connect Google Drive", description: "Opening Google to grant Drive access…" });
+        await triggerGoogleOAuthForDrive();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast({
+          title: "Could not connect Google Drive",
+          description: msg,
+          variant: "destructive",
+        });
+      }
       return;
     }
     try {
@@ -2553,6 +2570,16 @@ function SourcesTab({
       syncGoogleDriveFolderRef.current = null;
     };
   }, [syncGoogleDriveFolder]);
+
+  // After Drive OAuth redirect: open folder picker automatically
+  useEffect(() => {
+    if (!openAddFolderAfterOAuth) return;
+    const t = setTimeout(() => {
+      connectDrivePortfolioFolder();
+      onOpenAddFolderConsumed?.();
+    }, 700);
+    return () => clearTimeout(t);
+  }, [openAddFolderAfterOAuth, connectDrivePortfolioFolder, onOpenAddFolderConsumed]);
 
   // Derive a stable boolean so interval/auto-sync effects don't re-fire when
   // connectedDriveFolders gets a new array reference with the same contents.
@@ -4709,7 +4736,7 @@ function SourcesTab({
                     }}
                     className="border border-slate-200 bg-white text-slate-900 text-xs font-mono"
                   />
-                  <p className="text-[10px] text-slate-400 font-mono mt-1">No limit — enter any number.</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-1">No limit - enter any number.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -7704,6 +7731,7 @@ export default function CIS() {
   } | null>(null);
   const [lastEvidenceThreadId, setLastEvidenceThreadId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
+  const [openAddFolderAfterOAuth, setOpenAddFolderAfterOAuth] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [multiAgentEnabled, setMultiAgentEnabled] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -7816,6 +7844,15 @@ export default function CIS() {
       setActiveTab("overview");
     }
   }, [profile?.role, activeTab]);
+
+  // After Drive OAuth redirect: go to Sources tab and open folder picker
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google_drive") !== "connected") return;
+    window.history.replaceState(null, "", window.location.pathname || "/cis");
+    setActiveTab("sources");
+    setOpenAddFolderAfterOAuth(true);
+  }, []);
 
   // Keep folder scopes in sync with source folders for Knowledge Scope
   useEffect(() => {
@@ -8367,11 +8404,17 @@ export default function CIS() {
       try {
         await supabase.auth.refreshSession();
       } catch {
-        // ignore; we'll still attempt to read any existing session token
+        // ignore
       }
     }
     const { data } = await supabase.auth.getSession();
-    return data.session?.provider_token || null;
+    const session = data?.session;
+    const supabaseAccessToken = session?.access_token;
+    if (supabaseAccessToken) {
+      const backendToken = await getGoogleAccessTokenFromBackend(supabaseAccessToken);
+      if (backendToken) return backendToken;
+    }
+    return session?.provider_token || null;
   }, []);
 
   const handleAutoLogDecision = useCallback(
@@ -13834,6 +13877,8 @@ export default function CIS() {
                   setSourceFolders((data || []) as SourceFolder[]);
                 }
               }}
+              openAddFolderAfterOAuth={openAddFolderAfterOAuth}
+              onOpenAddFolderConsumed={() => setOpenAddFolderAfterOAuth(false)}
             />
           </TabsContent>
 

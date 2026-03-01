@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import CIS from "./pages/CIS";
@@ -17,6 +17,16 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Root redirect: preserve ?google_drive=connected so CIS can open folder picker after OAuth. */
+function RootRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  if (params.get("google_drive") === "connected") {
+    return <Navigate to="/cis?google_drive=connected" replace />;
+  }
+  return <Navigate to="/orbit-stats" replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -26,7 +36,7 @@ const App = () => (
         <BrowserRouter>
           <div className="app-shell cis-grid-bg cis-mesh-bg">
           <Routes>
-            <Route path="/" element={<Navigate to="/orbit-stats" replace />} />
+            <Route path="/" element={<RootRedirect />} />
             <Route path="/orbit-stats" element={<OrbitStatsDemo />} />
             <Route
               path="/cis"
