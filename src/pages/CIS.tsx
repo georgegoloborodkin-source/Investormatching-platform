@@ -1644,10 +1644,6 @@ function SourcesTab({
   openAddFolderAfterOAuth?: boolean;
   onOpenAddFolderConsumed?: () => void;
 }) {
-  const { openAddFolderAfterOAuth, onOpenAddFolderConsumed } = (() => {
-    const o = (SourcesTab as any).__propsPlaceholder;
-    return { openAddFolderAfterOAuth: o?.openAddFolderAfterOAuth, onOpenAddFolderConsumed: o?.onOpenAddFolderConsumed };
-  })();
   /** Root folder types for Google Drive sync (each connected root can be tagged as one of these). */
   const DRIVE_ROOT_CATEGORIES = [
     "Portfolio Companies",
@@ -9748,8 +9744,7 @@ export default function CIS() {
                 parent_index: pair.parentIndex,
                 child_index: pair.childIndex,
                 embedding,
-                // Store the contextual header for later retrieval debugging
-                ...(contextualHeader ? { contextual_header: contextualHeader } : {}),
+                contextual_header: contextualHeader || null,
               });
               if (error) {
                 // If contextual_header column doesn't exist yet, retry without it
