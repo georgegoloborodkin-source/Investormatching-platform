@@ -1,5 +1,11 @@
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
+const ENV_OAUTH_BACKEND = import.meta.env.VITE_GOOGLE_OAUTH_BACKEND_URL as string | undefined;
 const GDRIVE_PROXY_BASE = "/api/gdrive";
+
+/** Same backend as googleOAuth (has /auth/google-drive/start and /gdrive/my-token). Avoids circular import. */
+function getGoogleOAuthBackendUrl(): string {
+  return ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+}
 
 function buildCandidateBaseUrls(): string[] {
   if (ENV_CONVERTER_API_URL) return [ENV_CONVERTER_API_URL];
@@ -15,13 +21,13 @@ export function clearMyToken404Cache(): void {
 }
 
 /**
- * Get Google access token from backend (backend stores tokens after its own OAuth flow).
+ * Get Google access token from backend (backend that has Drive OAuth: /auth/google-drive/start and /gdrive/my-token).
  * Pass the current Supabase session access_token. Returns null if not connected or on error.
  */
 export async function getGoogleAccessTokenFromBackend(supabaseAccessToken: string): Promise<string | null> {
   if (Date.now() - lastMyToken404At < MY_TOKEN_404_CACHE_MS) return null;
   try {
-    const base = await resolveIngestionBaseUrl();
+    const base = getGoogleOAuthBackendUrl();
     const res = await fetch(`${base}/gdrive/my-token`, {
       method: "GET",
       headers: { Authorization: `Bearer ${supabaseAccessToken}` },

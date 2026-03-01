@@ -1,8 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { clearMyToken404Cache } from "@/utils/ingestionClient";
 
+const ENV_OAUTH_BACKEND = import.meta.env.VITE_GOOGLE_OAUTH_BACKEND_URL as string | undefined;
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
-const BACKEND_ORIGIN = ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+/** Backend that has /auth/google-drive/start and /gdrive/my-token. Default: general-platform (full backend). */
+export function getGoogleOAuthBackendUrl(): string {
+  return ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+}
 
 /**
  * Start backend-driven Google Drive OAuth: backend stores tokens and returns them via GET /gdrive/my-token.
@@ -36,13 +40,19 @@ export async function triggerGoogleOAuthForDrive(): Promise<void> {
     );
   }
 
-  const res = await fetch(`${BACKEND_ORIGIN}/auth/google-drive/start`, {
+  const base = getGoogleOAuthBackendUrl();
+  const res = await fetch(`${base}/auth/google-drive/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ access_token: accessToken }),
   });
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 404) {
+      throw new Error(
+        "Google Drive connection is not available on this backend. Set VITE_GOOGLE_OAUTH_BACKEND_URL to your full backend URL (e.g. https://general-platform.onrender.com) in Vercel env."
+      );
+    }
     if (res.status === 429) {
       throw new Error("Too many requests. Wait a moment and try again.");
     }
