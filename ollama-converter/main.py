@@ -20,7 +20,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Header, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # ---------- High-Performance Foundation ----------
@@ -7169,6 +7169,161 @@ async def ingest_google_drive(request: GoogleDriveIngestRequest):
 
     title = f"{kind}-{file_id[:8]}"
     return GoogleDriveIngestResponse(title=title, content=content, raw_content=content, sourceType=source_type)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Google Drive OAuth (Connect portfolio folder / Gmail) — same as orbit backend
+# ──────────────────────────────────────────────────────────────────────────────
+
+GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "https://remix-of-round-robin-meet.vercel.app")
+BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "https://ai-converter-api.onrender.com").rstrip("/")
+
+_user_google_tokens: Dict[str, Tuple[str, str, float]] = {}  # user_id -> (access_token, refresh_token, expires_at)
+
+
+async def _get_user_id_from_supabase_token(access_token: str) -> str:
+    """Return user id from Supabase access token (for Drive OAuth)."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise HTTPException(status_code=503, detail="Supabase not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "apikey": SUPABASE_SERVICE_KEY,
+                },
+            )
+            if r.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired Supabase token.")
+            data = r.json()
+            return data.get("id") or data.get("sub") or ""
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Could not verify token: {e}")
+
+
+class GoogleDriveStartRequest(BaseModel):
+    access_token: str
+
+
+class GoogleDriveStartResponse(BaseModel):
+    redirect_url: str
+
+
+@app.post("/auth/google-drive/start", response_model=GoogleDriveStartResponse)
+async def auth_google_drive_start(request: GoogleDriveStartRequest):
+    """Start Google Drive OAuth: verify user, return URL to redirect to."""
+    user_id = await _get_user_id_from_supabase_token(request.access_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not get user id.")
+    state = base64.urlsafe_b64encode(user_id.encode()).decode().rstrip("=")
+    redirect_path = f"/auth/google-drive?state={state}"
+    return GoogleDriveStartResponse(redirect_url=f"{BACKEND_PUBLIC_URL}{redirect_path}")
+
+
+def _b64_decode_user_id(state: str) -> str:
+    pad = (4 - len(state) % 4) % 4
+    raw = base64.urlsafe_b64decode(state + "=" * pad)
+    return raw.decode()
+
+
+@app.get("/auth/google-drive")
+async def auth_google_drive_redirect(state: str):
+    """Redirect browser to Google OAuth."""
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="GOOGLE_CLIENT_ID not set.")
+    try:
+        _b64_decode_user_id(state)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid state.")
+    redirect_uri = f"{BACKEND_PUBLIC_URL}/auth/google-drive/callback"
+    from urllib.parse import urlencode
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    url = f"{GOOGLE_OAUTH_AUTH_URL}?{urlencode(params)}"
+    return RedirectResponse(url=url)
+
+
+@app.get("/auth/google-drive/callback")
+async def auth_google_drive_callback(code: str, state: str):
+    """Exchange code for tokens, store by user_id, redirect to frontend. Always redirects (never raises) to prevent auth code leaking."""
+    frontend = FRONTEND_ORIGIN.rstrip("/")
+    try:
+        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            return RedirectResponse(url=f"{frontend}/?google_drive=error&reason=oauth_not_configured")
+        try:
+            user_id = _b64_decode_user_id(state)
+        except Exception:
+            return RedirectResponse(url=f"{frontend}/?google_drive=error&reason=invalid_state")
+        redirect_uri = f"{BACKEND_PUBLIC_URL}/auth/google-drive/callback"
+        body = {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(GOOGLE_OAUTH_TOKEN_URL, data=body)
+            if r.status_code >= 400:
+                return RedirectResponse(url=f"{frontend}/?google_drive=error&reason=token_exchange_failed")
+            data = r.json()
+        access_token = data.get("access_token")
+        refresh_token = data.get("refresh_token")
+        if not access_token:
+            return RedirectResponse(url=f"{frontend}/?google_drive=error&reason=no_access_token")
+        expires_in = data.get("expires_in", 3600)
+        _user_google_tokens[user_id] = (access_token, refresh_token or "", time.time() + expires_in)
+        return RedirectResponse(url=f"{frontend}/?google_drive=connected")
+    except Exception:
+        return RedirectResponse(url=f"{frontend}/?google_drive=error&reason=unexpected")
+
+
+class GDriveMyTokenResponse(BaseModel):
+    access_token: Optional[str] = None
+
+
+@app.get("/gdrive/my-token", response_model=GDriveMyTokenResponse)
+async def gdrive_my_token(authorization: Optional[str] = Header(default=None)):
+    """Return Google access token for the current user. Refreshes if expired. 200 OK with access_token=null when not connected."""
+    if not authorization or "Bearer " not in authorization:
+        raise HTTPException(status_code=401, detail="Authorization: Bearer <supabase_access_token> required.")
+    token = authorization.replace("Bearer ", "").strip()
+    user_id = await _get_user_id_from_supabase_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not get user id.")
+    stored = _user_google_tokens.get(user_id)
+    if not stored:
+        return GDriveMyTokenResponse(access_token=None)
+    access_token, refresh_token, expires_at = stored
+    if refresh_token and time.time() > expires_at - 60:
+        body = {
+            "grant_type": "refresh_token",
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "refresh_token": refresh_token,
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(GOOGLE_OAUTH_TOKEN_URL, data=body)
+            if r.status_code == 200:
+                data = r.json()
+                access_token = data.get("access_token", access_token)
+                exp = data.get("expires_in", 3600)
+                _user_google_tokens[user_id] = (access_token, refresh_token, time.time() + exp)
+    return GDriveMyTokenResponse(access_token=access_token)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

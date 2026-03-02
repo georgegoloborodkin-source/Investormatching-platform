@@ -17,12 +17,17 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-/** Root redirect: preserve ?google_drive=connected so CIS can open folder picker after OAuth. */
+/** Root redirect: preserve ?google_drive=connected so CIS can open folder picker after OAuth. Handle error too. */
 function RootRedirect() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  if (params.get("google_drive") === "connected") {
+  const driveParam = params.get("google_drive");
+  if (driveParam === "connected") {
     return <Navigate to="/cis?google_drive=connected" replace />;
+  }
+  if (driveParam === "error") {
+    const reason = params.get("reason") || "unknown";
+    return <Navigate to={`/cis?google_drive=error&reason=${reason}`} replace />;
   }
   return <Navigate to="/orbit-stats" replace />;
 }

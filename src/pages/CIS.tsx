@@ -7875,14 +7875,32 @@ export default function CIS() {
     }
   }, [profile?.role, activeTab]);
 
-  // After Drive OAuth redirect: go to Sources tab and open folder picker
+  // After Drive OAuth redirect: go to Sources tab and open folder picker (or show error)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("google_drive") !== "connected") return;
+    const driveParam = params.get("google_drive");
+    if (!driveParam) return;
     window.history.replaceState(null, "", window.location.pathname || "/cis");
-    setActiveTab("sources");
-    setOpenAddFolderAfterOAuth(true);
-  }, []);
+    if (driveParam === "connected") {
+      setActiveTab("sources");
+      setOpenAddFolderAfterOAuth(true);
+    } else if (driveParam === "error") {
+      const reason = params.get("reason") || "unknown";
+      const messages: Record<string, string> = {
+        oauth_not_configured: "Google Drive OAuth is not configured on the server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on your Render backend.",
+        invalid_state: "OAuth state was invalid. Try connecting again.",
+        token_exchange_failed: "Could not exchange Google authorization code. Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and BACKEND_PUBLIC_URL on your Render backend.",
+        no_access_token: "Google did not return an access token. Try again.",
+        unexpected: "An unexpected error occurred during Google Drive connection.",
+      };
+      toast({
+        title: "Google Drive connection failed",
+        description: messages[reason] || messages.unexpected,
+        variant: "destructive",
+      });
+      setActiveTab("sources");
+    }
+  }, [toast]);
 
   // Keep folder scopes in sync with source folders for Knowledge Scope
   useEffect(() => {
