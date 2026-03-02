@@ -2,9 +2,10 @@ const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string |
 const ENV_OAUTH_BACKEND = import.meta.env.VITE_GOOGLE_OAUTH_BACKEND_URL as string | undefined;
 const GDRIVE_PROXY_BASE = "/api/gdrive";
 
-/** Same backend as googleOAuth (has /auth/google-drive/start and /gdrive/my-token). Avoids circular import. */
+/** Same backend as googleOAuth (has /auth/google-drive/start and /gdrive/my-token). No trailing slash to avoid // in path. */
 function getGoogleOAuthBackendUrl(): string {
-  return ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+  const url = ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+  return url.replace(/\/+$/, "");
 }
 
 function buildCandidateBaseUrls(): string[] {

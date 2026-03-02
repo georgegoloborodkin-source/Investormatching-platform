@@ -3,9 +3,10 @@ import { clearMyToken404Cache } from "@/utils/ingestionClient";
 
 const ENV_OAUTH_BACKEND = import.meta.env.VITE_GOOGLE_OAUTH_BACKEND_URL as string | undefined;
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
-/** Backend that has /auth/google-drive/start and /gdrive/my-token. Default: general-platform (full backend). */
+/** Backend that has /auth/google-drive/start and /gdrive/my-token. Default: general-platform (full backend). No trailing slash. */
 export function getGoogleOAuthBackendUrl(): string {
-  return ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+  const url = ENV_OAUTH_BACKEND || ENV_CONVERTER_API_URL || "https://general-platform.onrender.com";
+  return url.replace(/\/+$/, "");
 }
 
 /**
@@ -41,7 +42,8 @@ export async function triggerGoogleOAuthForDrive(): Promise<void> {
   }
 
   const base = getGoogleOAuthBackendUrl();
-  const res = await fetch(`${base}/auth/google-drive/start`, {
+  const url = `${base}/auth/google-drive/start`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ access_token: accessToken }),
@@ -50,7 +52,7 @@ export async function triggerGoogleOAuthForDrive(): Promise<void> {
     const text = await res.text();
     if (res.status === 404) {
       throw new Error(
-        "Google Drive connection is not available on this backend. Set VITE_GOOGLE_OAUTH_BACKEND_URL to your full backend URL (e.g. https://general-platform.onrender.com) in Vercel env."
+        `Google Drive connection is not available on this backend (404 from ${url}). Set VITE_GOOGLE_OAUTH_BACKEND_URL in Vercel env, then redeploy — Vite bakes env vars in at build time.`
       );
     }
     if (res.status === 429) {
