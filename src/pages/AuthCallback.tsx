@@ -13,35 +13,43 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorParam = urlParams.get("error");
+        const errorDescription = urlParams.get("error_description");
+
+        if (errorParam) {
+          throw new Error(errorDescription || errorParam);
+        }
+
+        // PKCE flow: exchange the code from the URL for a session
+        const code = urlParams.get("code");
         let session = null;
-        let attempts = 0;
-        const maxAttempts = 10;
 
-        while (!session && attempts < maxAttempts) {
-          const { data, error } = await supabase.auth.getSession();
-
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            throw error;
+            throw new Error(error.message || "Code exchange failed. Check Google OAuth config in Supabase Dashboard.");
           }
+          session = data?.session ?? null;
+        }
 
-          if (data?.session) {
-            session = data.session;
-            break;
+        // Fallback: check if session was already established (e.g. hash fragment flow)
+        if (!session) {
+          let attempts = 0;
+          const maxAttempts = 8;
+          while (!session && attempts < maxAttempts) {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            if (data?.session) {
+              session = data.session;
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempts + 1)));
+            attempts++;
           }
-
-          await new Promise((resolve) => setTimeout(resolve, 300 * (attempts + 1)));
-          attempts++;
         }
 
         if (!session) {
-          const urlParams = new URLSearchParams(window.location.search);
-          const errorParam = urlParams.get("error");
-          const errorDescription = urlParams.get("error_description");
-
-          if (errorParam) {
-            throw new Error(errorDescription || errorParam);
-          }
-
           throw new Error("Session not established. Please try signing in again.");
         }
 
