@@ -1702,6 +1702,8 @@ function SourcesTab({
   const [lastDriveSyncAt, setLastDriveSyncAt] = useState<string | null>(null);
   const [isSyncingCategoriesFromDrive, setIsSyncingCategoriesFromDrive] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(new Set());
+  const [driveConnectCooldownUntil, setDriveConnectCooldownUntil] = useState(0);
+  const [isConnectingDrive, setIsConnectingDrive] = useState(false);
   // Auto-sync interval (15 minutes)
   const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSyncingDriveRef = useRef(false);
@@ -1726,6 +1728,27 @@ function SourcesTab({
   useEffect(() => {
     isSyncingDriveRef.current = isSyncingDrive;
   }, [isSyncingDrive]);
+
+  useEffect(() => {
+    if (driveConnectCooldownUntil <= 0) return;
+    const remaining = driveConnectCooldownUntil - Date.now();
+    if (remaining <= 0) {
+      setDriveConnectCooldownUntil(0);
+      return;
+    }
+    const t = window.setTimeout(() => setDriveConnectCooldownUntil(0), remaining);
+    return () => clearTimeout(t);
+  }, [driveConnectCooldownUntil]);
+
+  const [driveConnectCooldownTick, setDriveConnectCooldownTick] = useState(0);
+  useEffect(() => {
+    if (driveConnectCooldownUntil <= 0 || Date.now() >= driveConnectCooldownUntil) return;
+    const id = setInterval(() => setDriveConnectCooldownTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [driveConnectCooldownUntil]);
+
+  const isDriveConnectOnCooldown = driveConnectCooldownUntil > 0 && Date.now() < driveConnectCooldownUntil;
+  const driveConnectCooldownSeconds = isDriveConnectOnCooldown ? Math.ceil((driveConnectCooldownUntil - Date.now()) / 1000) : 0;
   
   // Debug: log env vars (remove in production)
   useEffect(() => {
@@ -1893,7 +1916,7 @@ function SourcesTab({
   // Ref to avoid "Cannot access syncGoogleDriveFolder before initialization" when Sources tab mounts
   const syncGoogleDriveFolderRef = useRef<((foldersOverride?: DriveFolderEntry[]) => Promise<void>) | null>(null);
 
-  // ── Connect a Google Drive root portfolio folder via Picker ──
+  // ── Connect a Google Drive root portfolio folder via Picker (same flow as orbit-platform) ──
   const connectDrivePortfolioFolder = useCallback(async () => {
     if (!googleApiKey || !googleClientId) {
       toast({
@@ -1903,115 +1926,125 @@ function SourcesTab({
       });
       return;
     }
+    setIsConnectingDrive(true);
     toast({ title: "Connecting to Google Drive…", description: "Checking access. You may be redirected to sign in." });
-    const accessToken = await getGoogleAccessToken();
-    if (!accessToken) {
-      try {
-        toast({ title: "Connect Google Drive", description: "Opening Google to grant Drive access…" });
-        await triggerGoogleOAuthForDrive();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        toast({
-          title: "Could not connect Google Drive",
-          description: msg,
-          variant: "destructive",
-        });
-      }
-      return;
-    }
     try {
-      await loadGooglePicker();
-      // Folder-only view
-      const folderView = new window.google.picker.DocsView()
-        .setIncludeFolders(true)
-        .setSelectFolderEnabled(true)
-        .setMimeTypes("application/vnd.google-apps.folder")
-        .setMode(window.google.picker.DocsViewMode.LIST);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      const supabaseAccessToken = session?.access_token;
+      let accessToken: string | null = null;
+      if (supabaseAccessToken) {
+        accessToken = await getGoogleAccessTokenFromBackend(supabaseAccessToken);
+      }
+      if (!accessToken) {
+        try {
+          toast({
+            title: "Connect Google Drive",
+            description: "Opening Google to grant Drive access…",
+          });
+          await triggerGoogleOAuthForDrive();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const is429 = msg.includes("429") || msg.toLowerCase().includes("too many");
+          if (is429) setDriveConnectCooldownUntil(Date.now() + 15000);
+          toast({
+            title: "Could not connect Google Drive",
+            description: msg,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+      try {
+        await loadGooglePicker();
+        const folderView = new window.google.picker.DocsView()
+          .setIncludeFolders(true)
+          .setSelectFolderEnabled(true)
+          .setMimeTypes("application/vnd.google-apps.folder")
+          .setMode(window.google.picker.DocsViewMode.LIST);
 
-      const picker = new window.google.picker.PickerBuilder()
-        .setDeveloperKey(googleApiKey)
-        .setOAuthToken(accessToken)
-        .setAppId(googleClientId.split("-")[0])
-        .addView(folderView)
-        .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
-        .setTitle("Select your Portfolio root folder")
-        .setCallback(async (data: any) => {
-          if (data.action === window.google.picker.Action.PICKED) {
-            const folder = data.docs?.[0];
-            if (!folder?.id) return;
-            const folderId = folder.id;
-            const folderName = folder.name || "Portfolio folder";
-            
-            // Add to folders list (avoid duplicates); new folder defaults to Portfolio Companies
-            const updatedFolders: DriveFolderEntry[] = [
-              ...connectedDriveFolders.filter(f => f.id !== folderId),
-              { id: folderId, name: folderName, category: "Portfolio Companies" },
-            ];
-            setConnectedDriveFolders(updatedFolders);
-            // Keep primary folder for backward compat
-            if (!connectedDriveFolderId) {
-              setConnectedDriveFolderId(folderId);
-              setConnectedDriveFolderName(folderName);
-            }
+        const picker = new window.google.picker.PickerBuilder()
+          .setDeveloperKey(googleApiKey)
+          .setOAuthToken(accessToken)
+          .setAppId(googleClientId.split("-")[0])
+          .addView(folderView)
+          .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES)
+          .setTitle("Select your Portfolio root folder")
+          .setCallback(async (data: any) => {
+            if (data.action === window.google.picker.Action.PICKED) {
+              const folder = data.docs?.[0];
+              if (!folder?.id) return;
+              const folderId = folder.id;
+              const folderName = folder.name || "Portfolio folder";
 
-            // Persist to sync_configurations
-            const eventId = activeEventId || (await ensureActiveEventId());
-            if (!eventId) return;
-            const { data: profile } = await supabase.auth.getUser();
-            const userId = profile?.user?.id || null;
-            // Look up org
-            let orgId: string | null = null;
-            if (userId) {
-              const { data: up } = await supabase
-                .from("user_profiles")
-                .select("organization_id")
-                .eq("id", userId)
-                .limit(1);
-              orgId = up?.[0]?.organization_id || null;
-            }
-            if (!orgId) {
-              toast({ title: "Set up organization first", description: "Create or join an organization from the role selection page, then try connecting a folder again.", variant: "destructive" });
-              return;
-            }
-            const { error: upsertError } = await supabase.from("sync_configurations").upsert(
-              {
-                organization_id: orgId,
-                event_id: eventId,
-                source_type: "google_drive",
-                config: {
-                  google_drive_folder_id: updatedFolders[0].id,
-                  google_drive_folder_name: updatedFolders[0].name,
-                  folders: updatedFolders.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" })),
+              const updatedFolders: DriveFolderEntry[] = [
+                ...connectedDriveFolders.filter(f => f.id !== folderId),
+                { id: folderId, name: folderName, category: "Portfolio Companies" },
+              ];
+              setConnectedDriveFolders(updatedFolders);
+              if (!connectedDriveFolderId) {
+                setConnectedDriveFolderId(folderId);
+                setConnectedDriveFolderName(folderName);
+              }
+
+              const eventId = activeEventId || (await ensureActiveEventId());
+              if (!eventId) return;
+              const { data: profile } = await supabase.auth.getUser();
+              const userId = profile?.user?.id || null;
+              let orgId: string | null = null;
+              if (userId) {
+                const { data: up } = await supabase
+                  .from("user_profiles")
+                  .select("organization_id")
+                  .eq("id", userId)
+                  .limit(1);
+                orgId = up?.[0]?.organization_id || null;
+              }
+              if (!orgId) {
+                toast({ title: "Set up organization first", description: "Create or join an organization from the role selection page, then try connecting a folder again.", variant: "destructive" });
+                return;
+              }
+              const { error: upsertError } = await supabase.from("sync_configurations").upsert(
+                {
+                  organization_id: orgId,
+                  event_id: eventId,
+                  source_type: "google_drive",
+                  config: {
+                    google_drive_folder_id: updatedFolders[0].id,
+                    google_drive_folder_name: updatedFolders[0].name,
+                    folders: updatedFolders.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" })),
+                  },
+                  sync_frequency: "hourly",
+                  is_active: true,
+                  created_by: userId,
                 },
-                sync_frequency: "hourly",
-                is_active: true,
-                created_by: userId,
-              },
-              { onConflict: "organization_id,event_id,source_type" }
-            );
-            if (upsertError) {
-              const is403 = upsertError.code === "42501" || upsertError.message?.includes("403");
-              toast({
-                title: "Folder not saved",
-                description: is403
-                  ? "Your account may need to be set up again. Sign out, then sign in and complete onboarding (create or join an organization), then try connecting the folder again."
-                  : "Connected folder could not be saved. It may disappear after reload. Try again.",
-                variant: "destructive",
-              });
-              return;
-            }
+                { onConflict: "organization_id,event_id,source_type" }
+              );
+              if (upsertError) {
+                const is403 = upsertError.code === "42501" || upsertError.message?.includes("403");
+                toast({
+                  title: "Folder not saved",
+                  description: is403
+                    ? "Your account may need to be set up again. Sign out, then sign in and complete onboarding (create or join an organization), then try connecting the folder again."
+                    : "Connected folder could not be saved. It may disappear after reload. Try again.",
+                  variant: "destructive",
+                });
+                return;
+              }
 
-            toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Starting sync and extraction...` });
-            // Run sync immediately so we extract and sync right away (state may not have updated yet)
-            syncGoogleDriveFolderRef.current?.(updatedFolders);
-          }
-        })
-        .build();
-      picker.setVisible(true);
-    } catch (err) {
-      toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
+              toast({ title: "Portfolio folder connected", description: `Connected "${folderName}". Starting sync and extraction...` });
+              syncGoogleDriveFolderRef.current?.(updatedFolders);
+            }
+          })
+          .build();
+        picker.setVisible(true);
+      } catch (err) {
+        toast({ title: "Picker error", description: err instanceof Error ? err.message : "Failed to open picker.", variant: "destructive" });
+      }
+    } finally {
+      setIsConnectingDrive(false);
     }
-  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, getGoogleAccessToken, googleApiKey, googleClientId, toast]);
+  }, [activeEventId, connectedDriveFolderId, connectedDriveFolders, ensureActiveEventId, googleApiKey, googleClientId, toast]);
 
   // ── Core folder sync logic ──
   const syncGoogleDriveFolder = useCallback(async (foldersOverride?: Array<{ id: string; name: string }>) => {
@@ -4599,10 +4632,11 @@ function SourcesTab({
                     variant="outline"
                     size="sm"
                     onClick={connectDrivePortfolioFolder}
-                    className="border border-slate-200 bg-white text-slate-500 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold text-[10px] h-7 px-2"
+                    disabled={isDriveConnectOnCooldown || isConnectingDrive}
+                    className="border border-slate-200 bg-white text-slate-500 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold text-[10px] h-7 px-2 disabled:opacity-50"
                   >
-                    <FolderPlus className="h-3.5 w-3.5 mr-1" />
-                    Add Folder
+                    {isConnectingDrive ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5 mr-1" />}
+                    {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Add Folder"}
                   </Button>
                   <Button
                     size="sm"
@@ -4679,11 +4713,11 @@ function SourcesTab({
               <p className="text-sm text-slate-400 font-mono">No portfolio folder connected yet.</p>
               <Button
                 onClick={connectDrivePortfolioFolder}
-                disabled={!canImport}
+                disabled={!canImport || isDriveConnectOnCooldown || isConnectingDrive}
                 className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
               >
-                <Folder className="h-4 w-4 mr-2" />
-                Connect Portfolio Folder
+                {isConnectingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
+                {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Connect Portfolio Folder"}
               </Button>
               <p className="text-[10px] text-slate-400 font-mono">
                 Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
