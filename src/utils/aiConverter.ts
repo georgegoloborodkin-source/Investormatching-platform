@@ -205,7 +205,7 @@ export async function askClaudeAnswer(input: {
         break;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-          throw new Error("Claude request timed out after 70 seconds. The question may be too complex or the API is slow. Please try again with a simpler question.");
+          throw new Error("The request is taking unusually long. Please check your connection and try again.");
         }
         if (attempt < 2) {
           // Exponential backoff: 1s, 2s
@@ -236,6 +236,7 @@ export async function askClaudeAnswerStream(
     connections?: AskFundConnection[];
     previousMessages?: ChatMessage[];
     webSearchEnabled?: boolean;
+    reflexionMemoryContext?: string;
   },
   onChunk: (text: string) => void,
   onError?: (error: Error) => void,
@@ -247,8 +248,7 @@ export async function askClaudeAnswerStream(
   if (externalSignal) {
     externalSignal.addEventListener("abort", () => controller.abort());
   }
-  // Give more time when web search is enabled (Claude may perform multiple searches)
-  const timeoutMs = input.webSearchEnabled ? 120000 : 70000;
+  const timeoutMs = input.webSearchEnabled ? 300000 : 240000;
   let timeoutFired = false;
   const timeout = window.setTimeout(() => {
     timeoutFired = true;
@@ -259,15 +259,17 @@ export async function askClaudeAnswerStream(
   const timeoutSeconds = Math.round(timeoutMs / 1000);
 
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       question: input.question,
       sources: input.sources,
       decisions: input.decisions,
       connections: input.connections || [],
-      // Backend expects snake_case
       previous_messages: input.previousMessages || [],
       web_search_enabled: input.webSearchEnabled || false,
     };
+    if (input.reflexionMemoryContext) {
+      payload.reflexion_memory_context = input.reflexionMemoryContext;
+    }
     const response = await fetch(`${baseUrl}/ask/stream`, {
       method: "POST",
       headers: {
@@ -305,7 +307,7 @@ export async function askClaudeAnswerStream(
         // Check if timeout fired during read
         if (timeoutFired) {
           reader.cancel();
-          onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
+          onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
           return;
         }
 
@@ -354,7 +356,7 @@ export async function askClaudeAnswerStream(
       // If timeout fired, we already handled it above
       if (!timeoutFired) {
         if (readError instanceof DOMException && readError.name === "AbortError") {
-          onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
+          onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
         } else {
           onError?.(readError instanceof Error ? readError : new Error("Stream read error"));
         }
@@ -362,9 +364,9 @@ export async function askClaudeAnswerStream(
     }
   } catch (error) {
     if (timeoutFired) {
-      onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
+      onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
     } else if (error instanceof DOMException && error.name === "AbortError") {
-      onError?.(new Error(`Request timed out after ${timeoutSeconds} seconds. The response is taking too long. Please try again with a simpler question.`));
+      onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
     } else {
       onError?.(error instanceof Error ? error : new Error("Unknown error"));
     }
@@ -413,7 +415,7 @@ export async function askAgentStream(
   if (externalSignal) {
     externalSignal.addEventListener("abort", () => controller.abort());
   }
-  const timeoutMs = input.webSearchEnabled ? 120000 : 90000;
+  const timeoutMs = input.webSearchEnabled ? 300000 : 240000;
   let timeoutFired = false;
   const timeout = window.setTimeout(() => {
     timeoutFired = true;
@@ -463,7 +465,7 @@ export async function askAgentStream(
         }
         if (timeoutFired) {
           reader.cancel();
-          onError?.(new Error(`Request timed out after ${timeoutSeconds}s. Try a simpler question.`));
+          onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
           return;
         }
 
@@ -507,7 +509,7 @@ export async function askAgentStream(
     } catch (readError) {
       if (!timeoutFired) {
         if (readError instanceof DOMException && readError.name === "AbortError") {
-          onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+          onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
         } else {
           onError?.(readError instanceof Error ? readError : new Error("Stream read error"));
         }
@@ -515,9 +517,9 @@ export async function askAgentStream(
     }
   } catch (error) {
     if (timeoutFired) {
-      onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+      onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
     } else if (error instanceof DOMException && error.name === "AbortError") {
-      onError?.(new Error(`Timed out after ${timeoutSeconds}s.`));
+      onError?.(new Error(`The request is taking unusually long. Please check your connection and try again.`));
     } else {
       onError?.(error instanceof Error ? error : new Error("Unknown error"));
     }

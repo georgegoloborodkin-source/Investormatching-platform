@@ -9001,6 +9001,11 @@ export default function CIS() {
       "System 2: Searching for gaps...",
       "System 2: Refining answer...",
       "Critic verifying...",
+      ...(reflexionEnabled ? [
+        "Reflexion: Partner Agent critiquing...",
+        "Reflexion: Partner Agent refining...",
+        "Reflexion: Persisting lessons...",
+      ] : []),
     ] : [
       "Analyzing your question...",
       "Searching documents...",
@@ -9016,7 +9021,7 @@ export default function CIS() {
       setChatLoadingStage(stages[idx]);
     }, 3000);
     return () => clearInterval(interval);
-  }, [chatIsLoading, multiAgentEnabled]);
+  }, [chatIsLoading, multiAgentEnabled, reflexionEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -10830,11 +10835,11 @@ export default function CIS() {
 
         const streamer = createStreamingAssistantMessage(threadId);
         let streamCompleted = false;
-        const agentTimeoutMs = webSearchEnabled ? 120000 : 90000;
+        const agentTimeoutMs = webSearchEnabled ? 300000 : 240000;
         const agentTimeout = window.setTimeout(() => {
           if (!streamCompleted) {
             streamCompleted = true;
-            streamer.setError("Request timed out. Please try again with a simpler question.");
+            streamer.setError("The request is taking unusually long. Please check your connection and try again.");
             setIsClaudeLoading(false);
           }
         }, agentTimeoutMs);
@@ -11093,14 +11098,12 @@ export default function CIS() {
       setLastEvidence(null);
       let timedOut = false;
       let searchTimeoutId: number | null = null;
-      // Increased timeout: 60s for document search (90s when web search enabled)
-      // This timeout is cleared once documents are found or Claude starts processing
-      const searchTimeoutMs = webSearchEnabled ? 90000 : 60000;
+      const searchTimeoutMs = webSearchEnabled ? 300000 : 240000;
       const searchTimeoutId_temp = window.setTimeout(() => {
         timedOut = true;
         setChatIsLoading(false);
         createAssistantMessage(
-          `Search is taking too long (${Math.round(searchTimeoutMs / 1000)}s timeout). Please try a more specific query or check your connection.`,
+          `Search is taking unusually long. Please check your connection and try again.`,
           threadId
         );
       }, searchTimeoutMs);
@@ -11111,6 +11114,37 @@ export default function CIS() {
       const selectedFolderIds = scopes
         .filter((s) => s.type === "folder" && s.checked)
         .map((s) => s.id.replace("folder:", ""));
+
+      // ── Load Reflexion Memory for multi-agent pipeline ──
+      let reflexionMemoryContext = "";
+      if (reflexionEnabled) {
+        try {
+          const { data: memories } = await supabase
+            .from("reflexion_memory" as any)
+            .select("reflection_type, content, company_name, source_question, confidence, created_at")
+            .eq("event_id", eventId)
+            .order("created_at", { ascending: false })
+            .limit(20) as any;
+          if (memories && memories.length > 0) {
+            const lines = memories.map((m: any) => {
+              const ts = new Date(m.created_at).toLocaleDateString();
+              const company = m.company_name ? ` [${m.company_name}]` : "";
+              const typeLabel: Record<string, string> = {
+                critique_issue: "Issue found",
+                blind_spot: "Blind spot",
+                missing_data: "Missing data",
+                lesson: "Lesson learned",
+                follow_up: "Follow-up needed",
+              };
+              return `- (${ts}${company}) ${typeLabel[m.reflection_type] || m.reflection_type}: ${m.content}`;
+            });
+            reflexionMemoryContext =
+              "REFLEXION MEMORY — Lessons from past analyses in this workspace. " +
+              "Use these to avoid repeating mistakes and to proactively address known gaps:\n" +
+              lines.join("\n");
+          }
+        } catch { /* non-fatal */ }
+      }
 
       const filterDocsByFolderScope = async <T extends { id: string; folder_id?: string | null }>(
         docList: T[]
@@ -11516,10 +11550,10 @@ export default function CIS() {
         let streamCompleted = false;
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            streamer.setError("Request timed out. Please try again.");
+            streamer.setError("The request is taking unusually long. Please check your connection and try again.");
             setIsClaudeLoading(false);
           }
-        }, 45000);
+        }, 240000);
         try {
           const cardSources = buildCompanyCardSources(question, companyCards, detectedNames || []);
           const threadMsgs = await getThreadMessages(threadId, 10);
@@ -12363,10 +12397,10 @@ export default function CIS() {
         let streamCompleted = false;
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            streamer.setError("Request timed out. Please try again.");
+            streamer.setError("The request is taking unusually long. Please check your connection and try again.");
             setIsClaudeLoading(false);
           }
-        }, 120000);
+        }, 240000);
         try {
           // Answer meta-questions with general knowledge (streaming)
           // Get thread messages for context (from state or DB)
@@ -12428,10 +12462,10 @@ export default function CIS() {
         let streamCompleted = false;
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            streamer.setError("Request timed out. Please try again.");
+            streamer.setError("The request is taking unusually long. Please check your connection and try again.");
             setIsClaudeLoading(false);
           }
-        }, 120000);
+        }, 240000);
         try {
           const claudeTokens = searchQuestion
             .toLowerCase()
@@ -12527,10 +12561,10 @@ export default function CIS() {
           let streamCompleted = false;
           const streamTimeout = setTimeout(() => {
             if (!streamCompleted) {
-              streamer.setError("Request timed out. Please try again.");
+              streamer.setError("The request is taking unusually long. Please check your connection and try again.");
               setIsClaudeLoading(false);
             }
-          }, 120000);
+          }, 240000);
           try {
             const claudeTokens = question
               .toLowerCase()
@@ -12607,10 +12641,10 @@ export default function CIS() {
           let streamCompleted = false;
           const streamTimeout = setTimeout(() => {
             if (!streamCompleted) {
-              streamer.setError("Request timed out. Please try again.");
+              streamer.setError("The request is taking unusually long. Please check your connection and try again.");
               setIsClaudeLoading(false);
             }
-          }, 120000);
+          }, 240000);
           try {
             await askClaudeAnswerStream(
               {
@@ -12698,10 +12732,10 @@ export default function CIS() {
         
         const streamTimeout = setTimeout(() => {
           if (!streamCompleted) {
-            streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
+            streamer.setError("The request is taking unusually long. Please check your connection and try again.");
             setIsClaudeLoading(false);
           }
-        }, 120000);
+        }, 240000);
         
         try {
           // Get previous messages from this thread for context
@@ -12847,13 +12881,12 @@ export default function CIS() {
       let fullAnswer = "";
       let streamCompleted = false;
       
-      // Add timeout to prevent infinite hanging
       const streamTimeout = setTimeout(() => {
         if (!streamCompleted) {
-          streamer.setError("Request timed out. The response is taking too long. Please try again with a simpler question.");
+          streamer.setError("The request is taking unusually long. Please check your connection and try again.");
           setIsClaudeLoading(false);
         }
-      }, 120000);
+      }, 240000);
       
       try {
         const docsForClaude = answerDocs;
@@ -12959,6 +12992,7 @@ export default function CIS() {
             connections: connectionsForChat,
             previousMessages: threadMessages,
             webSearchEnabled: effectiveWebSearch,
+            reflexionMemoryContext: reflexionMemoryContext || undefined,
           },
           (chunk) => {
             if (!streamCompleted) {
@@ -13016,6 +13050,7 @@ export default function CIS() {
 
         // ── MULTI-AGENT RAG — System 2 RAG: Test-Time Compute (Reflect → Search → Refine) ──
         // After initial answer, reflect on gaps, search again, and produce refined answer
+        let lastMultiAgentReflection: { needs_more_data: boolean; missing_data_types: string[]; follow_up_queries: string[]; reasoning: string; confidence: number } | null = null;
         if (multiAgentEnabled && fullAnswer.length > 100) {
           try {
             const vectorContextStr = sources.map((s) => `${s.title}: ${(s.snippet || "").slice(0, 500)}`).join("\n");
@@ -13036,6 +13071,7 @@ export default function CIS() {
                 maxIterations: MAX_SYSTEM2_ITERATIONS,
               });
 
+              lastMultiAgentReflection = reflection;
 
               if (!reflection.needs_more_data || reflection.confidence >= 0.85) {
                 break;
@@ -13044,7 +13080,6 @@ export default function CIS() {
               totalIterations++;
               setChatLoadingStage?.(`System 2: Searching for missing data...`);
 
-              // Execute follow-up searches based on reflection
               let additionalContext = "";
               for (const fq of reflection.follow_up_queries.slice(0, 2)) {
                 try {
@@ -13069,7 +13104,6 @@ export default function CIS() {
                 break;
               }
 
-              // Stream refined answer
               setChatLoadingStage?.("System 2: Refining answer...");
               try {
                 const refineResp = await system2RefineStream({
@@ -13085,7 +13119,6 @@ export default function CIS() {
                   let refinedText = "";
                   const reader = refineResp.body.getReader();
                   const decoder = new TextDecoder();
-                  // Append refinement separator and stream refined version
                   streamer.appendChunk("\n\n---\n\n**Refined answer (System 2):**\n\n");
                   
                   while (true) {
@@ -13121,23 +13154,162 @@ export default function CIS() {
           }
         }
 
+        // ── MULTI-AGENT: Persist Reflexion Memory (when reflexion + multi-agent both ON) ──
+        if (reflexionEnabled && multiAgentEnabled && fullAnswer.length > 80) {
+          try {
+            const vectorContextStr = sources.map((s) => `${s.title}: ${(s.snippet || "").slice(0, 500)}`).join("\n");
+
+            setChatLoadingStage?.("Reflexion: Critiquing multi-agent answer...");
+            const criticResult = await criticCheck({
+              question: questionForClaude,
+              answer: fullAnswer,
+              contextVector: vectorContextStr,
+              contextGraph: graphContext,
+              contextKpis: kpiContext,
+            });
+
+            const reflection = lastMultiAgentReflection || await system2Reflect({
+              question: questionForClaude,
+              draftAnswer: fullAnswer,
+              vectorContext: vectorContextStr,
+              graphContext,
+              kpiContext,
+              iteration: 0,
+              maxIterations: 1,
+            });
+
+            const issues = criticResult.issues || [];
+            const reasoningParts: string[] = [];
+            if (issues.length > 0) {
+              reasoningParts.push(`Factual issues found: ${issues.join("; ")}`);
+            }
+            if (reflection.missing_data_types?.length > 0) {
+              reasoningParts.push(`Missing data types: ${reflection.missing_data_types.join(", ")}`);
+            }
+            if (reflection.follow_up_queries?.length > 0) {
+              reasoningParts.push(`Follow-up questions to consider: ${reflection.follow_up_queries.join("; ")}`);
+            }
+            reasoningParts.push(`Confidence in draft: ${Math.round(reflection.confidence * 100)}%`);
+            reasoningParts.push(
+              "IMPORTANT: You are a senior VC Partner Agent. Always provide substantive value: " +
+              "identify blind spots, missing context, risks not mentioned, alternative interpretations, " +
+              "data the user should verify, and actionable next steps. Never just say 'looks good'. " +
+              "Think like a skeptical LP doing due diligence."
+            );
+
+            setChatLoadingStage?.("Reflexion: Partner Agent refining...");
+            streamer.appendChunk("\n\n---\n\n**Partner Agent Review:**\n\n");
+
+            const refineResp = await system2RefineStream({
+              question: questionForClaude,
+              draftAnswer: fullAnswer,
+              reflectionReasoning: reasoningParts.join("\n"),
+              additionalContext: reflection.follow_up_queries?.join("; ") || "",
+            });
+
+            const reader = refineResp.body?.getReader();
+            const decoder = new TextDecoder();
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const text = decoder.decode(value, { stream: true });
+                for (const line of text.split("\n")) {
+                  if (!line.startsWith("data: ")) continue;
+                  const payload = line.slice(6).trim();
+                  if (payload === "[DONE]") break;
+                  try {
+                    const parsed = JSON.parse(payload);
+                    if (parsed.text) streamer.appendChunk(parsed.text);
+                  } catch { /* skip non-JSON lines */ }
+                }
+              }
+            }
+
+            const issueCount = issues.length;
+            streamer.setCritic(
+              issueCount > 0
+                ? `Reflexion: Found ${issueCount} issue(s), refined with deeper analysis. Confidence: ${Math.round(reflection.confidence * 100)}%`
+                : `Reflexion: Partner Agent added deeper analysis and blind spots. Confidence: ${Math.round(reflection.confidence * 100)}%`
+            );
+
+            // Persist reflexion memory rows
+            try {
+              const memoryRows: Array<{
+                event_id: string; thread_id: string; reflection_type: string;
+                content: string; company_name: string | null; topic: string | null;
+                source_question: string; confidence: number; created_by: string;
+              }> = [];
+              const questionSnippet = question.slice(0, 200);
+              const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
+              const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+
+              for (const issue of issues) {
+                if (issue && issue.length > 5) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: threadId, reflection_type: "critique_issue",
+                    content: issue, company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId || "",
+                  });
+                }
+              }
+              for (const dt of (reflection.missing_data_types || [])) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: threadId, reflection_type: "missing_data",
+                  content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId || "",
+                });
+              }
+              for (const fq of (reflection.follow_up_queries || [])) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: threadId, reflection_type: "follow_up",
+                  content: fq, company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId || "",
+                });
+              }
+              if (reflection.reasoning && reflection.reasoning.length > 10) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: threadId, reflection_type: "blind_spot",
+                  content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId || "",
+                });
+              }
+              const lessonSummary = [
+                issues.length > 0 ? `Issues: ${issues.slice(0, 3).join("; ")}` : null,
+                reflection.missing_data_types?.length ? `Missing: ${reflection.missing_data_types.join(", ")}` : null,
+                `Confidence: ${Math.round((reflection.confidence || 0.7) * 100)}%`,
+              ].filter(Boolean).join(". ");
+              if (lessonSummary) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: threadId, reflection_type: "lesson",
+                  content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
+                  company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId || "",
+                });
+              }
+              if (memoryRows.length > 0) {
+                await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+              }
+            } catch { /* non-fatal: don't break chat if memory save fails */ }
+          } catch {
+            streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
+          }
+        }
+
       } catch (error: any) {
         streamCompleted = true;
         clearTimeout(streamTimeout);
         const errorMsg = error?.message || "Could not generate an answer.";
         // Provide more helpful error messages
         let userMessage = `Claude answer failed: ${errorMsg}`;
-        if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
-          userMessage = `The request timed out after 70 seconds. This can happen with:\n\n` +
-            `• Complex questions requiring deep analysis\n` +
-            `• Large documents with lots of context\n` +
-            `• Slow API responses\n\n` +
-            `💡 **Try:**\n` +
-            `• Rephrasing your question to be more specific\n` +
-            `• Breaking complex questions into smaller parts\n` +
-            `• Asking about specific companies/topics (e.g., "Giga Energy intern responsibilities")\n` +
-            `• Checking if your documents contain the information\n` +
-            `• Trying again in a moment`;
+        if (errorMsg.includes("timeout") || errorMsg.includes("timed out") || errorMsg.includes("unusually long")) {
+          userMessage = `The request took longer than expected. This can happen with slow API responses or network issues.\n\n` +
+            `Please try again — it usually works on the second attempt.`;
         } else if (errorMsg.includes("HTTP error") || errorMsg.includes("Failed to fetch")) {
           userMessage = `Network error: ${errorMsg}\n\n` +
             `💡 **Check:**\n` +
@@ -13170,6 +13342,7 @@ export default function CIS() {
       getThreadMessages,
       webSearchEnabled,
       multiAgentEnabled,
+      reflexionEnabled,
     ]
   );
 

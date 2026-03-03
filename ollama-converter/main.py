@@ -752,6 +752,7 @@ class AskRequest(BaseModel):
     connections: List[AskConnection] = Field(default_factory=list)
     previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
     web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
+    reflexion_memory_context: Optional[str] = Field(default=None, alias="reflexionMemoryContext")
 
     model_config = {"populate_by_name": True}
 
@@ -5122,7 +5123,17 @@ async def ask_fund_stream(request: AskRequest, auth: AuthContext = Depends(get_a
             pass
 
         prompt = build_answer_prompt(resolved_question, request.sources or [], request.decisions or [], previous_messages, request.connections or [])
-        
+
+        if request.reflexion_memory_context and request.reflexion_memory_context.strip():
+            prompt += (
+                "\n\n## Reflexion Memory (Persistent Agent Learning)\n"
+                "Below are lessons, issues, and blind spots from previous analyses in this workspace. "
+                "Use them to avoid repeating past mistakes, proactively address known gaps, "
+                "and provide more accurate, trustworthy answers. If a past lesson is relevant "
+                "to the current question, incorporate it into your reasoning.\n\n"
+                + request.reflexion_memory_context.strip()
+            )
+
         async def generate():
             try:
                 # ── Real-Time SSE Status Updates ──
