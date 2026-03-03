@@ -7179,7 +7179,7 @@ GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "https://remix-of-round-robin-meet.vercel.app")
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "https://investormatching-platform-bmx6.vercel.app")
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "https://ai-converter-api.onrender.com").rstrip("/")
 
 _user_google_tokens: Dict[str, Tuple[str, str, float]] = {}  # user_id -> (access_token, refresh_token, expires_at)
