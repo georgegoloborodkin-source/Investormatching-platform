@@ -5428,6 +5428,14 @@ function DashboardTab({
     resolved: boolean;
   }>>([]);
   const [temporalLoading, setTemporalLoading] = useState(false);
+  const [temporalKpis, setTemporalKpis] = useState<Array<{
+    id: string; company_name: string; metric_name: string; value: number;
+    unit: string; period: string; metric_category: string; confidence: number;
+  }>>([]);
+  const [temporalMemories, setTemporalMemories] = useState<Array<{
+    id: string; reflection_type: string; content: string; company_name: string | null;
+    source_question: string | null; confidence: number; created_at: string;
+  }>>([]);
 
   const myTasks = useMemo(
     () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
@@ -5450,7 +5458,7 @@ function DashboardTab({
       .then(({ data }) => setTeamMembers((data as TeamMember[]) || []));
   }, [orgId]);
 
-  // Load temporal facts + insights for the Temporal Intelligence dashboard
+  // Load temporal facts + insights + KPIs + reflexion memory for Decision Intelligence dashboard
   useEffect(() => {
     if (!activeEventId || dashboardSection !== "temporal") return;
     setTemporalLoading(true);
@@ -5467,9 +5475,23 @@ function DashboardTab({
         .eq("event_id", activeEventId)
         .order("created_at", { ascending: false })
         .limit(200),
-    ]).then(([factsRes, insightsRes]: any[]) => {
+      supabase
+        .from("company_kpis" as any)
+        .select("id, company_name, metric_name, value, unit, period, metric_category, confidence")
+        .eq("event_id", activeEventId)
+        .order("company_name")
+        .limit(300),
+      supabase
+        .from("reflexion_memory" as any)
+        .select("id, reflection_type, content, company_name, source_question, confidence, created_at")
+        .eq("event_id", activeEventId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]).then(([factsRes, insightsRes, kpisRes, memoriesRes]: any[]) => {
       if (!factsRes.error && factsRes.data) setTemporalFacts(factsRes.data);
       if (!insightsRes.error && insightsRes.data) setTemporalInsights(insightsRes.data);
+      if (!kpisRes.error && kpisRes.data) setTemporalKpis(kpisRes.data);
+      if (!memoriesRes.error && memoriesRes.data) setTemporalMemories(memoriesRes.data);
       setTemporalLoading(false);
     });
   }, [activeEventId, dashboardSection]);
@@ -5618,7 +5640,7 @@ function DashboardTab({
             className="px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all text-slate-500 hover:text-slate-900"
           >
             <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-            Temporal Intelligence
+            Decision Intelligence
           </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -5747,7 +5769,7 @@ function DashboardTab({
           }`}
         >
           <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-          Temporal Intelligence
+          Decision Intelligence
         </button>
       </div>
 
@@ -5756,365 +5778,273 @@ function DashboardTab({
         <DecisionEngineDashboardTab decisions={decisions} />
       )}
 
-      {/* Temporal Intelligence section */}
+      {/* Decision Intelligence section */}
       {dashboardSection === "temporal" && (
         <div className="space-y-6">
           {temporalLoading ? (
             <div className="flex items-center justify-center py-16 gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
-              <span className="text-sm text-slate-500 font-mono">Loading temporal intelligence...</span>
+              <span className="text-sm text-slate-500 font-mono">Loading decision intelligence...</span>
             </div>
-          ) : (temporalFacts.length === 0 && temporalInsights.length === 0) ? (
+          ) : (temporalFacts.length === 0 && temporalInsights.length === 0 && temporalKpis.length === 0) ? (
             <Card className="border border-slate-200 bg-white">
               <CardContent className="pt-10 pb-10">
                 <div className="text-center space-y-3">
                   <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
                     <Brain className="h-8 w-8 text-emerald-400" />
                   </div>
-                  <p className="text-lg font-mono font-bold text-slate-700">No Temporal Intelligence Yet</p>
+                  <p className="text-lg font-mono font-bold text-slate-700">No Decision Intelligence Yet</p>
                   <p className="text-sm text-slate-400 font-mono max-w-md mx-auto">
-                    Import documents (pitch decks, memos, reports) to surface contradictions, hidden risks,
-                    trend shifts, and non-obvious facts that VCs typically miss.
+                    Import documents (pitch decks, memos, reports) to generate per-company decision briefings
+                    with KPIs, risk analysis, and actionable recommendations.
                   </p>
                 </div>
               </CardContent>
             </Card>
           ) : (() => {
-            const insightsByType = new Map<string, typeof temporalInsights>();
-            temporalInsights.forEach(ins => {
-              if (!insightsByType.has(ins.insight_type)) insightsByType.set(ins.insight_type, []);
-              insightsByType.get(ins.insight_type)!.push(ins);
-            });
-            const criticalInsights = temporalInsights.filter(i => i.severity === "critical" || i.severity === "high");
-            const insightCompanies = [...new Set(temporalInsights.map(i => i.company_name))].sort();
-            const factCompanies = [...new Set(temporalFacts.map(f => f.company_name))].sort();
-            const allCompanies = [...new Set([...insightCompanies, ...factCompanies])].sort();
+            const insightCompanies = [...new Set(temporalInsights.map(i => i.company_name))];
+            const factCompanies = [...new Set(temporalFacts.map(f => f.company_name))];
+            const kpiCompanies = [...new Set(temporalKpis.map(k => k.company_name))];
+            const allCompanies = [...new Set([...insightCompanies, ...factCompanies, ...kpiCompanies])].sort();
+            const criticalCount = temporalInsights.filter(i => i.severity === "critical" || i.severity === "high").length;
+            const growingCount = temporalFacts.filter(f => (f.delta_percent || 0) > 0).length;
 
-            const insightTypeConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
-              contradiction: { label: "Contradictions", color: "text-red-700", bg: "bg-red-50", border: "border-red-200", icon: <AlertCircle className="h-4 w-4 text-red-600" /> },
-              trend_shift: { label: "Trend Shifts", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", icon: <TrendingDown className="h-4 w-4 text-amber-600" /> },
-              hidden_risk: { label: "Hidden Risks", color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200", icon: <Shield className="h-4 w-4 text-orange-600" /> },
-              commitment: { label: "Founder Commitments", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200", icon: <Handshake className="h-4 w-4 text-blue-600" /> },
-              red_flag: { label: "Red Flags", color: "text-rose-700", bg: "bg-rose-50", border: "border-rose-200", icon: <Flame className="h-4 w-4 text-rose-600" /> },
-              non_obvious: { label: "Non-Obvious Patterns", color: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", icon: <Lightbulb className="h-4 w-4 text-violet-600" /> },
+            const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+            const companyPriority = (name: string) => {
+              const ins = temporalInsights.filter(i => i.company_name === name);
+              if (ins.length === 0) return 4;
+              return Math.min(...ins.map(i => severityOrder[i.severity] ?? 3));
             };
-
-            const severityBadge = (sev: string) => {
-              const map: Record<string, string> = {
-                critical: "bg-red-100 text-red-800 border-red-300",
-                high: "bg-orange-100 text-orange-800 border-orange-300",
-                medium: "bg-amber-100 text-amber-800 border-amber-300",
-                low: "bg-slate-100 text-slate-600 border-slate-300",
-              };
-              return map[sev] || map.medium;
-            };
+            const sortedCompanies = [...allCompanies].sort((a, b) => companyPriority(a) - companyPriority(b));
 
             return (
               <div className="space-y-6">
-                {/* Top-level summary cards */}
+                {/* Summary bar */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
                     <p className="text-2xl font-mono font-black text-slate-900">{allCompanies.length}</p>
                     <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider mt-1">Companies</p>
                   </div>
+                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 shadow-sm">
+                    <p className="text-2xl font-mono font-black text-blue-700">{temporalKpis.length}</p>
+                    <p className="text-[11px] text-blue-600 font-mono uppercase tracking-wider mt-1">KPI Metrics</p>
+                  </div>
                   <div className="p-4 rounded-xl border border-violet-200 bg-violet-50/50 shadow-sm">
                     <p className="text-2xl font-mono font-black text-violet-700">{temporalInsights.length}</p>
-                    <p className="text-[11px] text-violet-600 font-mono uppercase tracking-wider mt-1">Hidden Insights</p>
+                    <p className="text-[11px] text-violet-600 font-mono uppercase tracking-wider mt-1">Insights</p>
                   </div>
                   <div className="p-4 rounded-xl border border-red-200 bg-red-50/50 shadow-sm">
-                    <p className="text-2xl font-mono font-black text-red-700">{criticalInsights.length}</p>
-                    <p className="text-[11px] text-red-600 font-mono uppercase tracking-wider mt-1">Critical Alerts</p>
+                    <p className="text-2xl font-mono font-black text-red-700">{criticalCount}</p>
+                    <p className="text-[11px] text-red-600 font-mono uppercase tracking-wider mt-1">Action Required</p>
                   </div>
                   <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 shadow-sm">
-                    <p className="text-2xl font-mono font-black text-emerald-700">{temporalFacts.filter(f => (f.delta_percent || 0) > 0).length}</p>
+                    <p className="text-2xl font-mono font-black text-emerald-700">{growingCount}</p>
                     <p className="text-[11px] text-emerald-600 font-mono uppercase tracking-wider mt-1">Growing Metrics</p>
-                  </div>
-                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
-                    <p className="text-2xl font-mono font-black text-slate-900">{temporalFacts.length}</p>
-                    <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider mt-1">Data Points</p>
                   </div>
                 </div>
 
-                {/* ═══ NON-OBVIOUS INSIGHTS — The core value ═══ */}
-                {temporalInsights.length > 0 && (
-                  <Card className="border-2 border-violet-200 bg-gradient-to-br from-violet-50/40 to-white shadow-sm">
-                    <CardHeader className="border-b border-violet-100 pb-3">
-                      <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight flex items-center gap-2 text-base">
-                        <Lightbulb className="h-5 w-5 text-violet-600" />
-                        Non-Obvious Intelligence
-                      </CardTitle>
-                      <CardDescription className="text-slate-500 font-mono text-xs">
-                        Facts, contradictions, and hidden patterns that VCs typically miss — extracted automatically from your documents.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4 space-y-4">
-                      {/* Insight type breakdown chips */}
-                      <div className="flex flex-wrap gap-2">
-                        {Array.from(insightsByType.entries()).map(([type, items]) => {
-                          const cfg = insightTypeConfig[type] || insightTypeConfig.non_obvious;
-                          return (
-                            <div key={type} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${cfg.border} ${cfg.bg}`}>
-                              {cfg.icon}
-                              <span className={`text-xs font-mono font-bold ${cfg.color}`}>{cfg.label}</span>
-                              <span className={`text-xs font-mono font-bold ${cfg.color} bg-white/60 px-1.5 py-0.5 rounded-full`}>{items.length}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                {/* Per-company Decision Briefing cards */}
+                {sortedCompanies.map(company => {
+                  const companyInsights = temporalInsights.filter(i => i.company_name === company);
+                  const companyFacts = temporalFacts.filter(f => f.company_name === company);
+                  const companyKpis = temporalKpis.filter(k => k.company_name === company);
+                  const companyMemories = temporalMemories.filter(m => m.company_name === company);
+                  const criticals = companyInsights.filter(i => i.severity === "critical" || i.severity === "high");
+                  const risks = companyInsights.filter(i => ["hidden_risk", "red_flag", "contradiction"].includes(i.insight_type));
+                  const positives = companyInsights.filter(i => ["commitment", "non_obvious", "trend_shift"].includes(i.insight_type) && i.severity !== "critical" && i.severity !== "high");
+                  const growingFacts = companyFacts.filter(f => (f.delta_percent || 0) > 5);
+                  const decliningFacts = companyFacts.filter(f => (f.delta_percent || 0) < -5);
 
-                      {/* Critical / High severity alerts first */}
-                      {criticalInsights.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-xs font-mono font-bold text-red-700 uppercase tracking-wider flex items-center gap-1.5">
-                            <Flame className="h-3.5 w-3.5" /> Priority Alerts
-                          </p>
-                          {criticalInsights.map(ins => {
-                            const cfg = insightTypeConfig[ins.insight_type] || insightTypeConfig.non_obvious;
-                            return (
-                              <div key={ins.id} className="p-4 rounded-xl border-l-4 border-l-red-400 border border-red-100 bg-white shadow-sm">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                      {cfg.icon}
-                                      <span className="font-mono font-bold text-slate-900 text-sm">{ins.company_name}</span>
-                                      <span className="text-slate-300">·</span>
-                                      <span className="font-mono text-slate-500 text-xs">{ins.field_name}</span>
-                                    </div>
-                                    <p className="text-sm text-slate-800 leading-relaxed">{ins.description}</p>
-                                    {ins.evidence && (
-                                      <p className="text-xs text-slate-500 mt-1.5 italic border-l-2 border-slate-200 pl-2">"{ins.evidence}"</p>
-                                    )}
-                                    {(ins.previous_value || ins.current_value) && (
-                                      <div className="flex items-center gap-2 mt-2">
-                                        {ins.previous_value && <span className="text-xs font-mono text-slate-400 line-through">{ins.previous_value}</span>}
-                                        {ins.previous_value && ins.current_value && <span className="text-xs text-slate-300">→</span>}
-                                        {ins.current_value && <span className="text-xs font-mono font-bold text-slate-700">{ins.current_value}</span>}
-                                      </div>
-                                    )}
-                                    {ins.actionable_step && (
-                                      <div className="flex items-start gap-1.5 mt-2 p-2 rounded-lg bg-blue-50 border border-blue-100">
-                                        <Target className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
-                                        <p className="text-xs text-blue-800 font-mono">{ins.actionable_step}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <Badge className={`shrink-0 font-mono text-[10px] ${severityBadge(ins.severity)}`}>
-                                    {ins.severity.toUpperCase()}
-                                  </Badge>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                  const borderColor = criticals.length > 0 ? "border-red-300" : risks.length > 0 ? "border-amber-200" : "border-slate-200";
+                  const headerBg = criticals.length > 0 ? "bg-red-50/60" : risks.length > 0 ? "bg-amber-50/40" : "bg-slate-50/40";
 
-                      {/* All insights by company */}
-                      <div className="space-y-4">
-                        {insightCompanies.map(company => {
-                          const companyInsights = temporalInsights.filter(i => i.company_name === company && !(i.severity === "critical" || i.severity === "high"));
-                          if (companyInsights.length === 0) return null;
-                          return (
-                            <div key={company} className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4 text-violet-600" />
-                                <span className="font-mono font-bold text-slate-900 text-sm">{company}</span>
-                                <span className="text-xs text-slate-400 font-mono">{companyInsights.length} insights</span>
-                              </div>
-                              <div className="ml-6 space-y-2">
-                                {companyInsights.map(ins => {
-                                  const cfg = insightTypeConfig[ins.insight_type] || insightTypeConfig.non_obvious;
-                                  return (
-                                    <div key={ins.id} className={`p-3 rounded-lg border ${cfg.border} ${cfg.bg}/30 bg-white`}>
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 mb-1">
-                                            {cfg.icon}
-                                            <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${cfg.color}`}>{cfg.label}</span>
-                                            <span className="text-slate-300 mx-1">·</span>
-                                            <span className="font-mono text-slate-500 text-xs">{ins.field_name}</span>
-                                          </div>
-                                          <p className="text-sm text-slate-700 leading-relaxed">{ins.description}</p>
-                                          {ins.evidence && (
-                                            <p className="text-xs text-slate-500 mt-1 italic border-l-2 border-slate-200 pl-2">"{ins.evidence}"</p>
-                                          )}
-                                          {(ins.previous_value || ins.current_value) && (
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                              {ins.previous_value && <span className="text-xs font-mono text-slate-400 line-through">{ins.previous_value}</span>}
-                                              {ins.previous_value && ins.current_value && <span className="text-xs text-slate-300">→</span>}
-                                              {ins.current_value && <span className="text-xs font-mono font-bold text-slate-700">{ins.current_value}</span>}
-                                            </div>
-                                          )}
-                                          {ins.actionable_step && (
-                                            <div className="flex items-start gap-1.5 mt-2 p-2 rounded-lg bg-blue-50/60 border border-blue-100">
-                                              <Target className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
-                                              <p className="text-xs text-blue-800 font-mono">{ins.actionable_step}</p>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1 shrink-0">
-                                          <Badge className={`font-mono text-[10px] ${severityBadge(ins.severity)}`}>
-                                            {ins.severity.toUpperCase()}
-                                          </Badge>
-                                          <span className="text-[10px] text-slate-400 font-mono">{Math.round(ins.confidence * 100)}%</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* ═══ METRIC CHANGES — Numeric temporal data ═══ */}
-                {temporalFacts.length > 0 && (() => {
-                  const significantChanges = temporalFacts.filter(f => f.delta_percent != null && Math.abs(f.delta_percent) > 5)
-                    .sort((a, b) => Math.abs(b.delta_percent || 0) - Math.abs(a.delta_percent || 0))
-                    .slice(0, 10);
-                  const acceleratingFacts = temporalFacts.filter(f => f.acceleration != null && f.acceleration !== 0)
-                    .sort((a, b) => Math.abs(b.acceleration || 0) - Math.abs(a.acceleration || 0))
-                    .slice(0, 10);
-                  const factGrouped = new Map<string, typeof temporalFacts>();
-                  temporalFacts.forEach(f => {
-                    if (!factGrouped.has(f.company_name)) factGrouped.set(f.company_name, []);
-                    factGrouped.get(f.company_name)!.push(f);
-                  });
+                  // Build narrative summary
+                  const narrativeParts: string[] = [];
+                  if (companyKpis.length > 0) {
+                    const topKpis = companyKpis.slice(0, 4).map(k => `${k.metric_name}: ${k.value}${k.unit ? " " + k.unit : ""}`).join(", ");
+                    narrativeParts.push(`Key metrics tracked: ${topKpis}.`);
+                  }
+                  if (growingFacts.length > 0) {
+                    const top = growingFacts.slice(0, 2).map(f => `${f.field_name} (+${f.delta_percent?.toFixed(0)}%)`).join(", ");
+                    narrativeParts.push(`Positive momentum in ${top}.`);
+                  }
+                  if (decliningFacts.length > 0) {
+                    const top = decliningFacts.slice(0, 2).map(f => `${f.field_name} (${f.delta_percent?.toFixed(0)}%)`).join(", ");
+                    narrativeParts.push(`Declining: ${top} — needs attention.`);
+                  }
+                  if (risks.length > 0) {
+                    narrativeParts.push(`${risks.length} risk signal${risks.length > 1 ? "s" : ""} detected that could affect your investment thesis.`);
+                  }
+                  if (positives.length > 0 && risks.length === 0) {
+                    narrativeParts.push(`${positives.length} positive signal${positives.length > 1 ? "s" : ""} identified.`);
+                  }
 
                   return (
-                    <>
-                      {/* Significant metric changes */}
-                      {significantChanges.length > 0 && (
-                        <Card className="border border-amber-200 bg-white shadow-sm">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-mono font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
-                              <AlertCircle className="h-4 w-4" />
-                              Significant Metric Changes
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {significantChanges.map(f => (
-                              <div key={f.id} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${(f.delta_percent || 0) > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
-                                  <div>
-                                    <span className="font-mono font-bold text-slate-900 text-sm">{f.company_name}</span>
-                                    <span className="text-slate-400 mx-1.5">·</span>
-                                    <span className="font-mono text-slate-600 text-sm">{f.field_name}</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3 text-right">
-                                  {f.previous_value_numeric != null && (
-                                    <span className="text-xs text-slate-400 font-mono">{f.previous_value_numeric.toLocaleString()} →</span>
-                                  )}
-                                  <span className="text-sm font-mono font-bold text-slate-900">{f.value_numeric?.toLocaleString()} {f.unit}</span>
-                                  <Badge className={`font-mono text-xs ${(f.delta_percent || 0) > 0 ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-red-100 text-red-700 border-red-300"}`}>
-                                    {(f.delta_percent || 0) > 0 ? "+" : ""}{f.delta_percent?.toFixed(1)}%
-                                  </Badge>
-                                </div>
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-                      )}
+                    <Card key={company} className={`border-2 ${borderColor} bg-white shadow-sm`}>
+                      <CardHeader className={`${headerBg} border-b border-slate-100 pb-3`}>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-slate-900 font-mono font-black flex items-center gap-2.5 text-base">
+                            <Building2 className="h-5 w-5 text-blue-600" />
+                            {company}
+                          </CardTitle>
+                          <div className="flex items-center gap-2">
+                            {criticals.length > 0 && (
+                              <Badge className="bg-red-100 text-red-800 border-red-300 font-mono text-[10px]">
+                                <Flame className="h-3 w-3 mr-1" />{criticals.length} CRITICAL
+                              </Badge>
+                            )}
+                            {companyKpis.length > 0 && (
+                              <Badge className="bg-blue-50 text-blue-700 border-blue-200 font-mono text-[10px]">
+                                {companyKpis.length} KPIs
+                              </Badge>
+                            )}
+                            {companyFacts.length > 0 && (
+                              <Badge className="bg-slate-50 text-slate-600 border-slate-200 font-mono text-[10px]">
+                                {companyFacts.length} data pts
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {/* Narrative summary */}
+                        {narrativeParts.length > 0 && (
+                          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                            {narrativeParts.join(" ")}
+                          </p>
+                        )}
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4">
 
-                      {/* Acceleration (second derivative) */}
-                      {acceleratingFacts.length > 0 && (
-                        <Card className="border border-blue-200 bg-white shadow-sm">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-mono font-bold text-blue-800 uppercase tracking-wider flex items-center gap-2">
-                              <TrendingUp className="h-4 w-4" />
-                              Acceleration / Deceleration
-                            </CardTitle>
-                            <CardDescription className="text-xs text-blue-600 font-mono">
-                              Whether growth is speeding up or slowing down — the "second derivative" of each metric.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {acceleratingFacts.map(f => {
-                              const accel = f.acceleration || 0;
-                              const isAccel = accel > 0;
-                              return (
-                                <div key={f.id} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${isAccel ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
-                                      {isAccel ? "↑↑" : "↓↓"}
-                                    </div>
-                                    <div>
-                                      <span className="font-mono font-bold text-slate-900 text-sm">{f.company_name}</span>
-                                      <span className="text-slate-400 mx-1.5">·</span>
-                                      <span className="font-mono text-slate-600 text-sm">{f.field_name}</span>
+                        {/* KPI Overview */}
+                        {companyKpis.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-blue-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <BarChart3 className="h-3.5 w-3.5" /> Key Metrics
+                            </p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {companyKpis.slice(0, 8).map(kpi => {
+                                const matchingFact = companyFacts.find(f => f.field_name.toLowerCase() === kpi.metric_name.toLowerCase());
+                                return (
+                                  <div key={kpi.id} className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                                    <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider truncate">{kpi.metric_name}</p>
+                                    <p className="text-lg font-mono font-black text-slate-900 mt-0.5">
+                                      {typeof kpi.value === "number" ? kpi.value.toLocaleString() : kpi.value}
+                                      {kpi.unit && <span className="text-xs text-slate-400 ml-1">{kpi.unit}</span>}
+                                    </p>
+                                    {matchingFact?.delta_percent != null && (
+                                      <p className={`text-xs font-mono font-bold mt-0.5 ${matchingFact.delta_percent > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                        {matchingFact.delta_percent > 0 ? "+" : ""}{matchingFact.delta_percent.toFixed(1)}%
+                                      </p>
+                                    )}
+                                    {kpi.period && <p className="text-[9px] text-slate-400 font-mono">{kpi.period}</p>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Insights as narrative advice */}
+                        {companyInsights.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-violet-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Lightbulb className="h-3.5 w-3.5" /> What This Means for Your Decision
+                            </p>
+                            <div className="space-y-2">
+                              {companyInsights.map(ins => {
+                                const typeConfig: Record<string, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
+                                  contradiction: { icon: <AlertCircle className="h-4 w-4 text-red-500" />, color: "text-red-800", bgColor: "bg-red-50", borderColor: "border-l-red-400" },
+                                  hidden_risk: { icon: <Shield className="h-4 w-4 text-orange-500" />, color: "text-orange-800", bgColor: "bg-orange-50", borderColor: "border-l-orange-400" },
+                                  red_flag: { icon: <Flame className="h-4 w-4 text-rose-500" />, color: "text-rose-800", bgColor: "bg-rose-50", borderColor: "border-l-rose-400" },
+                                  trend_shift: { icon: <TrendingUp className="h-4 w-4 text-amber-500" />, color: "text-amber-800", bgColor: "bg-amber-50", borderColor: "border-l-amber-400" },
+                                  commitment: { icon: <Handshake className="h-4 w-4 text-blue-500" />, color: "text-blue-800", bgColor: "bg-blue-50", borderColor: "border-l-blue-400" },
+                                  non_obvious: { icon: <Lightbulb className="h-4 w-4 text-violet-500" />, color: "text-violet-800", bgColor: "bg-violet-50", borderColor: "border-l-violet-400" },
+                                };
+                                const cfg = typeConfig[ins.insight_type] || typeConfig.non_obvious;
+                                return (
+                                  <div key={ins.id} className={`p-3 rounded-lg border border-slate-100 border-l-4 ${cfg.borderColor} ${cfg.bgColor}/30`}>
+                                    <div className="flex items-start gap-2.5">
+                                      <div className="mt-0.5 shrink-0">{cfg.icon}</div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`text-sm ${cfg.color} leading-relaxed`}>{ins.description}</p>
+                                        {ins.evidence && (
+                                          <p className="text-xs text-slate-500 mt-1 italic">Evidence: "{ins.evidence}"</p>
+                                        )}
+                                        {(ins.previous_value || ins.current_value) && (
+                                          <p className="text-xs font-mono text-slate-500 mt-1">
+                                            {ins.previous_value && <span className="line-through">{ins.previous_value}</span>}
+                                            {ins.previous_value && ins.current_value && " → "}
+                                            {ins.current_value && <span className="font-bold text-slate-700">{ins.current_value}</span>}
+                                          </p>
+                                        )}
+                                        {ins.actionable_step && (
+                                          <div className="flex items-start gap-1.5 mt-2 p-2 rounded-md bg-blue-50 border border-blue-100">
+                                            <Target className="h-3.5 w-3.5 text-blue-600 mt-0.5 shrink-0" />
+                                            <p className="text-xs text-blue-800"><span className="font-bold">Recommended action:</span> {ins.actionable_step}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <Badge className={`shrink-0 font-mono text-[10px] ${
+                                        ins.severity === "critical" ? "bg-red-100 text-red-800 border-red-300" :
+                                        ins.severity === "high" ? "bg-orange-100 text-orange-800 border-orange-300" :
+                                        ins.severity === "medium" ? "bg-amber-100 text-amber-800 border-amber-300" :
+                                        "bg-slate-100 text-slate-600 border-slate-300"
+                                      }`}>{ins.severity.toUpperCase()}</Badge>
                                     </div>
                                   </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Metric changes narrative */}
+                        {companyFacts.length > 0 && (growingFacts.length > 0 || decliningFacts.length > 0) && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <TrendingUp className="h-3.5 w-3.5" /> Metric Trends
+                            </p>
+                            <div className="space-y-1.5">
+                              {[...growingFacts.slice(0, 4), ...decliningFacts.slice(0, 4)].map(f => (
+                                <div key={f.id} className="flex items-center justify-between py-2 px-3 rounded-lg border border-slate-100 bg-slate-50/30 text-sm">
+                                  <span className="font-mono text-slate-700">{f.field_name}</span>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs text-slate-400 font-mono">{f.period || "—"}</span>
-                                    <Badge className={`font-mono text-xs ${isAccel ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-orange-100 text-orange-700 border-orange-300"}`}>
-                                      {isAccel ? "Accelerating" : "Decelerating"} ({accel > 0 ? "+" : ""}{accel.toLocaleString()})
+                                    {f.previous_value_numeric != null && (
+                                      <span className="text-xs text-slate-400 font-mono">{f.previous_value_numeric.toLocaleString()} →</span>
+                                    )}
+                                    <span className="font-mono font-bold text-slate-900">{f.value_numeric?.toLocaleString()} {f.unit}</span>
+                                    <Badge className={`font-mono text-[10px] ${(f.delta_percent || 0) > 0 ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-red-100 text-red-700 border-red-300"}`}>
+                                      {(f.delta_percent || 0) > 0 ? "+" : ""}{f.delta_percent?.toFixed(1)}%
                                     </Badge>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
-                      )}
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                      {/* Company fact timeline */}
-                      <Card className="border border-slate-200 bg-white shadow-sm">
-                        <CardHeader className="border-b border-slate-100">
-                          <CardTitle className="text-sm font-mono font-bold text-slate-900 uppercase tracking-wider">
-                            Company Metric Timeline
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-4 space-y-4 max-h-[500px] overflow-y-auto">
-                          {factCompanies.map(company => {
-                            const facts = factGrouped.get(company) || [];
-                            const metrics = [...new Set(facts.map(f => f.field_name))];
-                            return (
-                              <div key={company} className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-blue-600" />
-                                  <span className="font-mono font-bold text-slate-900">{company}</span>
-                                  <span className="text-xs text-slate-400 font-mono">{facts.length} data points · {metrics.length} metrics</span>
+                        {/* Reflexion memory — lessons learned */}
+                        {companyMemories.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Brain className="h-3.5 w-3.5" /> Lessons from Past Analysis
+                            </p>
+                            <div className="space-y-1.5">
+                              {companyMemories.slice(0, 5).map(mem => (
+                                <div key={mem.id} className="p-2.5 rounded-lg border border-amber-100 bg-amber-50/30 text-sm">
+                                  <p className="text-slate-700 leading-relaxed">{mem.content}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono mt-1">
+                                    {mem.reflection_type.replace("_", " ")} · {Math.round(mem.confidence * 100)}% confidence
+                                  </p>
                                 </div>
-                                <div className="ml-6 space-y-1">
-                                  {metrics.map(metric => {
-                                    const metricFacts = facts.filter(f => f.field_name === metric).sort((a, b) => new Date(a.observed_at).getTime() - new Date(b.observed_at).getTime());
-                                    const latest = metricFacts[metricFacts.length - 1];
-                                    return (
-                                      <div key={metric} className="flex items-center justify-between py-1.5 px-3 rounded border border-slate-100 bg-slate-50/50 text-sm">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-mono text-slate-700">{metric}</span>
-                                          <span className="text-xs text-slate-400 font-mono">({metricFacts.length} obs.)</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-mono font-bold text-slate-900">{latest?.value_numeric?.toLocaleString() ?? latest?.value_text ?? "—"} {latest?.unit}</span>
-                                          {latest?.delta_percent != null && (
-                                            <span className={`text-xs font-mono font-bold ${(latest.delta_percent) > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                              {latest.delta_percent > 0 ? "+" : ""}{latest.delta_percent.toFixed(1)}%
-                                            </span>
-                                          )}
-                                          {latest?.acceleration != null && latest.acceleration !== 0 && (
-                                            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${latest.acceleration > 0 ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
-                                              {latest.acceleration > 0 ? "accel" : "decel"}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </CardContent>
-                      </Card>
-                    </>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                      </CardContent>
+                    </Card>
                   );
-                })()}
+                })}
               </div>
             );
           })()}
@@ -14883,7 +14813,14 @@ export default function CIS() {
                             ))}
                           </div>
                         )}
-                        {costData.error && (
+                        {(costData as any).setup_required && (
+                          <div className="p-2 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-800">
+                            <p className="font-bold mb-1">Setup Required</p>
+                            <p>Run the migration SQL in Supabase SQL Editor:</p>
+                            <p className="font-mono text-[9px] mt-1 text-amber-600">supabase/migrations/20260222000003_add_api_cost_tracking.sql</p>
+                          </div>
+                        )}
+                        {costData.error && !(costData as any).setup_required && (
                           <div className="text-red-500 text-[10px]">{costData.error}</div>
                         )}
                       </div>

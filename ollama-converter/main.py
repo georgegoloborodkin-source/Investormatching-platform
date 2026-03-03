@@ -3377,7 +3377,15 @@ async def get_cost_summary():
             "pricing": ANTHROPIC_PRICING,
         }
     except Exception as e:
-        return {"error": str(e), "today": {}, "month": {}}
+        err_str = str(e)
+        if "PGRST205" in err_str or "api_usage_logs" in err_str:
+            return {
+                "setup_required": True,
+                "error": "The api_usage_logs table has not been created yet. Run the migration in Supabase SQL Editor: supabase/migrations/20260222000003_add_api_cost_tracking.sql",
+                "today": {"total_cost_usd": 0, "total_requests": 0, "by_provider": {}, "by_endpoint": {}},
+                "month": {"total_cost_usd": 0, "total_requests": 0, "by_provider": {}, "by_endpoint": {}},
+            }
+        return {"error": err_str, "today": {}, "month": {}}
 
 
 @app.get("/embedding-config")
