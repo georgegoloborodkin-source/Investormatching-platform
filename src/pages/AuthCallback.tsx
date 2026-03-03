@@ -1,4 +1,4 @@
-  import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -14,43 +14,45 @@ export default function AuthCallback() {
     const handleAuthCallback = async () => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const errorParam = urlParams.get("error");
-        const errorDescription = urlParams.get("error_description");
+        const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
+        const errorParam = urlParams.get("error") || hashParams.get("error");
+        const errorDescription = urlParams.get("error_description") || hashParams.get("error_description");
 
         if (errorParam) {
           throw new Error(errorDescription || errorParam);
         }
 
-        // PKCE flow: exchange the code from the URL for a session
-        const code = urlParams.get("code");
+        // With PKCE (flowType: 'pkce') + detectSessionInUrl: true, the Supabase
+        // client auto-exchanges the code for a session when it detects ?code= in
+        // the URL. If we also call exchangeCodeForSession manually, the code_verifier
+        // is already consumed → "both auth code and code verifier should be non-empty".
+        //
+        // Fix: just poll for the session to appear (Supabase handles the exchange).
         let session = null;
+        let lastError: Error | null = null;
+        const maxAttempts = 20;
 
-        if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            throw new Error(error.message || "Code exchange failed. Check Google OAuth config in Supabase Dashboard.");
-          }
-          session = data?.session ?? null;
-        }
-
-        // Fallback: check if session was already established (e.g. hash fragment flow)
-        if (!session) {
-          let attempts = 0;
-          const maxAttempts = 8;
-          while (!session && attempts < maxAttempts) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
             const { data, error } = await supabase.auth.getSession();
-            if (error) throw error;
+            if (error) {
+              lastError = error;
+            }
             if (data?.session) {
               session = data.session;
               break;
             }
-            await new Promise((resolve) => setTimeout(resolve, 400 * (attempts + 1)));
-            attempts++;
+          } catch (e: any) {
+            lastError = e;
           }
+          await new Promise((resolve) => setTimeout(resolve, 400 * Math.min(attempt + 1, 4)));
         }
 
         if (!session) {
-          throw new Error("Session not established. Please try signing in again.");
+          throw new Error(
+            lastError?.message ||
+            "Session not established after sign-in. Please clear your browser cache and try again."
+          );
         }
 
         const user = session.user;
@@ -75,7 +77,6 @@ export default function AuthCallback() {
           if (upsertError) {
             throw upsertError;
           }
-        } else if (profileError) {
         }
 
         window.history.replaceState(null, "", window.location.pathname);
