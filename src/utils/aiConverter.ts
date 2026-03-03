@@ -11,6 +11,7 @@ function buildCandidateBaseUrls(): string[] {
 }
 
 let resolvedBaseUrl: string | null = null;
+let _warmUpPromise: Promise<void> | null = null;
 
 async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 800): Promise<Response> {
   const controller = new AbortController();
@@ -42,9 +43,32 @@ async function resolveConverterApiBaseUrl(): Promise<string> {
     }
   }
 
-  // Nothing reachable; still return first candidate so error messages are consistent.
   resolvedBaseUrl = candidates[0];
   return resolvedBaseUrl;
+}
+
+/**
+ * Pre-warm the converter backend. Call on app/chat mount so the first
+ * message doesn't pay the Render cold-start penalty (~30-60s).
+ * Safe to call multiple times — deduplicates automatically.
+ */
+export function preWarmConverterBackend(): void {
+  if (_warmUpPromise || resolvedBaseUrl) return;
+  _warmUpPromise = (async () => {
+    try {
+      const candidates = buildCandidateBaseUrls();
+      if (!candidates.length) return;
+      const base = candidates[0];
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      try {
+        const res = await fetch(`${base}/health`, { signal: controller.signal });
+        if (res.ok) resolvedBaseUrl = base;
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch { /* non-fatal warm-up */ }
+  })();
 }
 
 export interface AIConversionRequest {

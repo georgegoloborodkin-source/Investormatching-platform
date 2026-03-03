@@ -8433,12 +8433,8 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
         if not event_id:
             raise HTTPException(status_code=400, detail="event_id is required.")
 
-        resolved_question = await rewrite_query_with_llm(question, request.previous_messages or [])
-
-        messages: List[dict] = []
-        for msg in (request.previous_messages or [])[-10:]:
-            messages.append({"role": msg.role, "content": msg.content})
-        messages.append({"role": "user", "content": resolved_question})
+        previous_messages = request.previous_messages or []
+        has_history = len(previous_messages) > 0
 
         tools = list(AGENT_TOOLS)
         if request.web_search_enabled:
@@ -8451,6 +8447,17 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
             try:
                 yield f"data: {json.dumps({'ping': True})}\n\n"
                 yield f"data: {json.dumps({'status': 'Analyzing your question...'})}\n\n"
+
+                # Query rewrite: skip for first message (no history = no pronouns to resolve)
+                if has_history:
+                    resolved_question = await rewrite_query_with_llm(question, previous_messages)
+                else:
+                    resolved_question = question
+
+                messages: List[dict] = []
+                for msg in previous_messages[-10:]:
+                    messages.append({"role": msg.role, "content": msg.content})
+                messages.append({"role": "user", "content": resolved_question})
 
                 if not _anthropic_sdk_available:
                     yield f"data: {json.dumps({'error': 'Anthropic SDK not available'})}\n\n"
@@ -8557,14 +8564,30 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
 
                     current_messages.append({"role": "assistant", "content": assistant_content})
 
-                    tool_results = []
-                    for tc in tool_calls:
-                        result_text = await _execute_agent_tool(tc.name, tc.input, event_id)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tc.id,
-                            "content": result_text,
-                        })
+                    # Execute tool calls in parallel when multiple tools are requested
+                    if len(tool_calls) > 1:
+                        tool_coros = [
+                            _execute_agent_tool(tc.name, tc.input, event_id)
+                            for tc in tool_calls
+                        ]
+                        results = await asyncio.gather(*tool_coros, return_exceptions=True)
+                        tool_results = []
+                        for tc, result in zip(tool_calls, results):
+                            result_text = result if isinstance(result, str) else f"Tool error: {result}"
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tc.id,
+                                "content": result_text,
+                            })
+                    else:
+                        tool_results = []
+                        for tc in tool_calls:
+                            result_text = await _execute_agent_tool(tc.name, tc.input, event_id)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tc.id,
+                                "content": result_text,
+                            })
 
                     current_messages.append({"role": "user", "content": tool_results})
 

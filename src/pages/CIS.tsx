@@ -188,7 +188,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
@@ -1725,6 +1725,11 @@ function SourcesTab({
   const canImport = Boolean(activeEventId);
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  // Pre-warm the converter backend on mount so first chat message is fast
+  useEffect(() => {
+    preWarmConverterBackend();
+  }, []);
 
   useEffect(() => {
     isSyncingDriveRef.current = isSyncingDrive;
@@ -10858,42 +10863,46 @@ export default function CIS() {
         }, agentTimeoutMs);
 
         try {
-          const threadMsgs = await getThreadMessages(threadId, 10);
-
           // Compute folder scope for agentic RAG
           const agentFolderIds = scopes
             .filter((s) => s.type === "folder" && s.checked)
             .map((s) => s.id.replace("folder:", ""));
 
-          // ── Load Reflexion Memory (persistent agent learning) ──
-          let reflexionMemoryContext = "";
-          if (reflexionEnabled) {
-            try {
-              const { data: memories } = await supabase
+          // Run thread message fetch and reflexion memory load in parallel
+          const reflexionPromise = reflexionEnabled
+            ? supabase
                 .from("reflexion_memory" as any)
                 .select("reflection_type, content, company_name, source_question, confidence, created_at")
                 .eq("event_id", eventId)
                 .order("created_at", { ascending: false })
-                .limit(20) as any;
-              if (memories && memories.length > 0) {
-                const lines = memories.map((m: any) => {
-                  const ts = new Date(m.created_at).toLocaleDateString();
-                  const company = m.company_name ? ` [${m.company_name}]` : "";
-                  const typeLabel: Record<string, string> = {
-                    critique_issue: "Issue found",
-                    blind_spot: "Blind spot",
-                    missing_data: "Missing data",
-                    lesson: "Lesson learned",
-                    follow_up: "Follow-up needed",
-                  };
-                  return `- (${ts}${company}) ${typeLabel[m.reflection_type] || m.reflection_type}: ${m.content}`;
-                });
-                reflexionMemoryContext =
-                  "REFLEXION MEMORY — Lessons from past analyses in this workspace. " +
-                  "Use these to avoid repeating mistakes and to proactively address known gaps:\n" +
-                  lines.join("\n");
-              }
-            } catch { /* non-fatal */ }
+                .limit(20)
+                .then(({ data }: any) => data)
+                .catch(() => null)
+            : Promise.resolve(null);
+
+          const [threadMsgs, memories] = await Promise.all([
+            getThreadMessages(threadId, 10),
+            reflexionPromise,
+          ]);
+
+          let reflexionMemoryContext = "";
+          if (memories && memories.length > 0) {
+            const lines = memories.map((m: any) => {
+              const ts = new Date(m.created_at).toLocaleDateString();
+              const company = m.company_name ? ` [${m.company_name}]` : "";
+              const typeLabel: Record<string, string> = {
+                critique_issue: "Issue found",
+                blind_spot: "Blind spot",
+                missing_data: "Missing data",
+                lesson: "Lesson learned",
+                follow_up: "Follow-up needed",
+              };
+              return `- (${ts}${company}) ${typeLabel[m.reflection_type] || m.reflection_type}: ${m.content}`;
+            });
+            reflexionMemoryContext =
+              "REFLEXION MEMORY — Lessons from past analyses in this workspace. " +
+              "Use these to avoid repeating mistakes and to proactively address known gaps:\n" +
+              lines.join("\n");
           }
 
           await askAgentStream(
