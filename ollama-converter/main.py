@@ -2118,7 +2118,7 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         # Document questions: use sources only
         comprehensive_instruction = ""
         if is_comprehensive:
-            comprehensive_instruction = "\n\n🚨 CRITICAL: The user is asking for a COMPREHENSIVE answer. This means:\n- Provide ALL available information from the sources about this topic\n- Be thorough, detailed, and include all relevant details\n- Don't summarize or be brief - give the FULL picture\n- Include all sections, data points, qualifications, experiences, and any other information\n- If asked about a person (e.g., 'all you know about George'), include everything: background, education, experience, role, responsibilities, etc.\n- If asked about a document (e.g., 'what's inside source 1'), provide a complete overview of all content\n- Do NOT say 'limited information' or 'very limited' - extract and present EVERYTHING that exists in the sources\n- Be exhaustive, not defensive"
+            comprehensive_instruction = "\n\n🚨 COMPREHENSIVE MODE: The user is asking for a detailed answer. This means:\n- Provide ALL available information from the sources that is RELEVANT TO THE QUESTION\n- Be thorough and include all relevant details about the ASKED topic\n- If asked about a person, include all info about THAT person only\n- If asked about a document, provide a complete overview of that document's content\n- Do NOT include information about unrelated topics, people, or documents that happen to appear in the sources\n- Stay focused on the question topic — comprehensive means deep on the topic, not broad across unrelated topics"
         raw_text_instruction = ""
         if is_raw_text:
             raw_text_instruction = "\n\nIMPORTANT: The user is asking for RAW/EXACT TEXT. Provide the source snippets verbatim (no paraphrasing). If the text is truncated, say so explicitly. Preserve formatting and line breaks when possible."
@@ -2164,11 +2164,11 @@ CRITICAL RULES:
 3. **COMPANY NAME RESOLUTION**: If the conversation history shows the user asked about a specific company (e.g., "Weego"), and the current question is vague (e.g., "you have it, just give the answer"), you MUST answer about that specific company (Weego), NOT about other companies mentioned in the sources (e.g., Giga Energy). **DO NOT confuse different companies - if the user asked about Weego, answer about Weego, not Giga Energy!**
 3. If the user asks "what's inside", "what is in source X", "all you know", or similar questions about document contents, provide a COMPREHENSIVE and DETAILED answer covering ALL information in the relevant source(s). Do NOT be brief or defensive - give the FULL picture.
 4. If the user references a specific source (e.g., "source 1", "source [1]", "document 1"), focus on that source and provide comprehensive details from it. Recognize that [1] refers to the first source, [2] to the second, etc.
-5. The sources provided may NOT be relevant to the question. You MUST verify relevance before answering.
-6. If the sources DO contain relevant details that DIRECTLY answer the question, provide a thorough, well-structured answer using those details. Be comprehensive and include all relevant information from the sources.
-7. If the sources do NOT contain relevant information about the question topic, still try to be helpful. You can say something like "I didn't find specific documents about this topic in your uploaded sources" and then offer to help in other ways, suggest what to search for, or answer based on general knowledge if appropriate. NEVER show bullet-point instructions about uploading documents — that's unhelpful and annoying.
-8. Do NOT answer with information that is tangentially related but doesn't actually address the question.
-9. If a source talks about a completely different topic (e.g., trading/ATR when asked about a person's resume), you MUST reject it and say you don't have information.
+5. **RELEVANCE FILTER (MOST IMPORTANT RULE)**: The sources provided may contain information about MULTIPLE UNRELATED topics. You MUST filter aggressively — ONLY use source content that DIRECTLY answers the user's question. COMPLETELY IGNORE sources or source sections about unrelated topics. For example, if the user asks about "AWM resume screening", do NOT include information about research essays, course assignments, or other unrelated documents that happen to appear in the sources.
+6. If the relevant sources contain details that DIRECTLY answer the question, provide a thorough, well-structured answer using ONLY those details.
+7. If the sources do NOT contain relevant information about the question topic, say "I didn't find specific documents about this topic in your uploaded sources" and offer to help in other ways. NEVER show bullet-point instructions about uploading documents.
+8. Do NOT answer with information that is tangentially related but doesn't actually address the question. Do NOT pad your response with summaries of unrelated documents.
+9. If a source talks about a completely different topic (e.g., research essays when asked about resume screening), you MUST skip it entirely — do NOT mention it in your answer.
 10. Cite sources using [1], [2], etc. for every claim.
 11. Do NOT be overly apologetic. If you have information, present it confidently and thoroughly. Only apologize if you truly have no relevant information.
 12. When the user asks about something mentioned in the conversation (e.g., "tell me more about him" after discussing George), search the sources for information about that person/entity, even if the current question is vague.
@@ -2181,13 +2181,14 @@ CRITICAL RULES:
 17. If web search results are provided (marked as [WEB] sources), use them to answer the question. Web results are real-time internet data and should be treated as trustworthy supplementary context.{comprehensive_instruction}{raw_text_instruction}{source_ref_instruction}
 
 Answer style:
-- Prioritize comprehensive, coherent narrative answers grounded in sources.
-- Prefer completeness over brevity when sources list multiple items.
+- Answer ONLY what the user asked. Do not volunteer information about unrelated topics found in the sources.
+- Prioritize focused, coherent narrative answers grounded in relevant sources only.
 - Do not force a sectioned structure; use paragraphs with bullets only when they improve clarity.
-- If information is sparse, still provide the most complete answer possible from the available evidence.
+- If information is sparse, say so briefly rather than padding with unrelated content.
 - Use bullet points for responsibilities, qualifications, and scope when asked.
-- For comprehensive questions, expand with all relevant details from sources in a flowing, human-like summary.
+- For comprehensive questions, go deep on the ASKED topic only — do not go broad across unrelated topics.
 - For raw text requests, return verbatim snippets with source labels and no paraphrasing.
+- NEVER create sections about topics the user didn't ask about.
 
 Question:
 {question}
@@ -2207,7 +2208,7 @@ Remember:
 - If a company is NOT in the Connections Graph and NOT in the sources, say so honestly. Do NOT fabricate information or ramble about unrelated companies.
 - ONLY suggest portfolio connections/partnerships when the user asks about connections, partnerships, or synergies — not when they ask "what is this company."
 - If [WEB] sources are present, use them confidently to answer questions about companies not found in internal documents.
-- Be helpful and concise. Answer the actual question asked.
+- STRICT: Answer ONLY the question asked. Skip all sources and content that are about different topics. Never pad your answer with unrelated information from the sources.
 """
 
 # Fast model for simple questions (3-5x faster)
@@ -2387,6 +2388,9 @@ async def call_anthropic_answer(
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
+        "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
+        "If the retrieved sources contain information about multiple unrelated topics, IGNORE the irrelevant ones entirely. "
+        "Do NOT summarize or mention documents/topics the user did not ask about. "
         "When a user asks about a company, check the Connections Graph for relationships. "
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
@@ -2394,7 +2398,7 @@ async def call_anthropic_answer(
            "not covered by the provided internal documents. CRITICAL: Prioritize the most recent information (2026, 2025) "
            "when searching. When performing web searches, include terms like '2026', 'latest', 'recent', or 'current' "
            "in your search queries to ensure you get the freshest data. Always cite web sources. " if web_search_enabled else "")
-        + "Be helpful, concise, and answer the actual question asked."
+        + "Be helpful, concise, and answer ONLY the actual question asked. Never pad responses with unrelated information."
     )
 
     # ── SDK path (preferred) — with tool calling ──
@@ -4197,6 +4201,9 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     system_msg = (
         "You are Orbit AI, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
+        "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
+        "If the retrieved sources contain information about multiple unrelated topics, IGNORE the irrelevant ones entirely. "
+        "Do NOT summarize or mention documents/topics the user did not ask about. "
         "When a user asks about a company, check the Connections Graph for relationships. "
         "If the user asks WHAT a company IS or what it does, focus on answering that question — "
         "do NOT ramble about unrelated companies. Only suggest connections when the user asks about partnerships or connections. "
@@ -4204,7 +4211,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
            "not covered by the provided internal documents. CRITICAL: Prioritize the most recent information (2026, 2025) "
            "when searching. When performing web searches, include terms like '2026', 'latest', 'recent', or 'current' "
            "in your search queries to ensure you get the freshest data. Always cite web sources. " if web_search_enabled else "")
-        + "Be helpful, concise, and answer the actual question asked."
+        + "Be helpful, concise, and answer ONLY the actual question asked. Never pad responses with unrelated information."
     )
 
     # ── SDK streaming (preferred) — with tool support + native web search ──
@@ -5077,8 +5084,9 @@ ANSWER RULES:
 - Prioritize document sources (highest confidence) over web results
 - Integrate graph relationships naturally into the answer
 - Present KPIs/metrics with exact numbers when available
-- Be thorough but concise — no unnecessary filler
-- For comprehensive questions, be exhaustive with all available details
+- STRICT FOCUS: ONLY use context that DIRECTLY answers the user's question. The context sections below may contain information about MANY unrelated topics — you MUST ignore anything not relevant to the question
+- Do NOT summarize or mention documents/topics the user did not ask about
+- Never pad your answer with unrelated information from the context
 {conversation_context}
 Question:
 {question}
@@ -8484,6 +8492,15 @@ AGENT_SYSTEM_PROMPT = """You are Orbit AI, a VC portfolio intelligence assistant
 You have access to tools that let you search the firm's portfolio database, documents, and knowledge graph.
 ALWAYS use your tools to find information before answering. Never guess or say "I don't have access" without searching first.
 
+## MOST IMPORTANT RULE — ANSWER FOCUS
+
+Answer ONLY what the user asked. Your tools may return documents about many different topics — you MUST filter aggressively and use ONLY the content that DIRECTLY answers the user's question. COMPLETELY IGNORE results about unrelated topics.
+
+Examples of what NOT to do:
+- User asks "tell me about AWM resume screening" → Do NOT include sections about research essays, course assignments, or other unrelated documents
+- User asks "what companies are in our portfolio?" → Do NOT include detailed breakdowns of each company's pitch deck content
+- User asks about a specific person → Do NOT include information about other people found in the same documents
+
 ## Tool Selection Rules
 
 1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage):
@@ -8509,6 +8526,7 @@ ALWAYS use your tools to find information before answering. Never guess or say "
 - Be precise with numbers.
 - Keep responses well-structured with clear formatting.
 - When listing companies, include key details (sector, stage, country) for each.
+- NEVER pad your answer with summaries of irrelevant documents. If a tool returns 10 documents but only 3 are relevant, use only those 3.
 """
 
 MAX_AGENT_ITERATIONS = 4

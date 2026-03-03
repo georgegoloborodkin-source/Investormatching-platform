@@ -1731,16 +1731,6 @@ function SourcesTab({
     preWarmConverterBackend();
   }, []);
 
-  // Poll cost data every 60s when the cost panel is open, or once on mount
-  useEffect(() => {
-    fetchCostSummary().then(setCostData).catch(() => {});
-    if (!showCostPanel) return;
-    const interval = setInterval(() => {
-      fetchCostSummary().then(setCostData).catch(() => {});
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [showCostPanel]);
-
   useEffect(() => {
     isSyncingDriveRef.current = isSyncingDrive;
   }, [isSyncingDrive]);
@@ -8296,6 +8286,16 @@ export default function CIS() {
     documentsRef.current = documents;
   }, [documents]);
 
+  // Poll cost data every 60s when the cost panel is open, or once on mount
+  useEffect(() => {
+    fetchCostSummary().then(setCostData).catch(() => {});
+    if (!showCostPanel) return;
+    const interval = setInterval(() => {
+      fetchCostSummary().then(setCostData).catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [showCostPanel]);
+
   const readLocalChatCache = useCallback((): LocalChatMessage[] => {
     if (typeof window === "undefined") return [];
     try {
@@ -10857,6 +10857,7 @@ export default function CIS() {
       // When multi-agent is ON, use the legacy pipeline which has orchestrator + graph + KPI agents.
       // When OFF, use the faster backend-driven agent RAG.
       const USE_AGENT_RAG = !multiAgentEnabled;
+      const currentUserId = profile?.id || user?.id || null;
 
       if (USE_AGENT_RAG) {
         setChatIsLoading(false);
@@ -11036,10 +11037,12 @@ export default function CIS() {
 
                 // ── Persist Reflexion Memory (Sentra-style agent learning) ──
                 try {
+                  const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+                  const safeThreadId = isValidUuid(threadId) ? threadId : null;
                   const memoryRows: Array<{
-                    event_id: string; thread_id: string; reflection_type: string;
+                    event_id: string; thread_id: string | null; reflection_type: string;
                     content: string; company_name: string | null; topic: string | null;
-                    source_question: string; confidence: number; created_by: string;
+                    source_question: string; confidence: number; created_by: string | null;
                   }> = [];
                   const questionSnippet = question.slice(0, 200);
                   const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
@@ -11048,35 +11051,35 @@ export default function CIS() {
                   for (const issue of issues) {
                     if (issue && issue.length > 5) {
                       memoryRows.push({
-                        event_id: eventId, thread_id: threadId, reflection_type: "critique_issue",
+                        event_id: eventId, thread_id: safeThreadId, reflection_type: "critique_issue",
                         content: issue, company_name: detectedCompany, topic: null,
                         source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                        created_by: currentUserId || "",
+                        created_by: currentUserId,
                       });
                     }
                   }
                   for (const dt of (reflection.missing_data_types || [])) {
                     memoryRows.push({
-                      event_id: eventId, thread_id: threadId, reflection_type: "missing_data",
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "missing_data",
                       content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
                       source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId || "",
+                      created_by: currentUserId,
                     });
                   }
                   for (const fq of (reflection.follow_up_queries || [])) {
                     memoryRows.push({
-                      event_id: eventId, thread_id: threadId, reflection_type: "follow_up",
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
                       content: fq, company_name: detectedCompany, topic: null,
                       source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId || "",
+                      created_by: currentUserId,
                     });
                   }
                   if (reflection.reasoning && reflection.reasoning.length > 10) {
                     memoryRows.push({
-                      event_id: eventId, thread_id: threadId, reflection_type: "blind_spot",
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
                       content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
                       source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId || "",
+                      created_by: currentUserId,
                     });
                   }
                   const lessonSummary = [
@@ -11086,17 +11089,18 @@ export default function CIS() {
                   ].filter(Boolean).join(". ");
                   if (lessonSummary) {
                     memoryRows.push({
-                      event_id: eventId, thread_id: threadId, reflection_type: "lesson",
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
                       content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
                       company_name: detectedCompany, topic: null,
                       source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId || "",
+                      created_by: currentUserId,
                     });
                   }
                   if (memoryRows.length > 0) {
-                    await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                    const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                    if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
                   }
-                } catch { /* non-fatal: don't break chat if memory save fails */ }
+                } catch (saveErr) { console.error("[reflexion_memory] persist error:", saveErr); }
               } catch (reflexErr) {
                 streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
               }
@@ -11144,7 +11148,6 @@ export default function CIS() {
       searchTimeoutId = searchTimeoutId_temp;
       const myDocsSelected = scopes.find((s) => s.id === "my-docs")?.checked ?? false;
       const teamDocsSelected = scopes.find((s) => s.id === "team-docs")?.checked ?? false;
-      const currentUserId = profile?.id || user?.id || null;
       const selectedFolderIds = scopes
         .filter((s) => s.type === "folder" && s.checked)
         .map((s) => s.id.replace("folder:", ""));
@@ -13269,10 +13272,12 @@ export default function CIS() {
 
             // Persist reflexion memory rows
             try {
+              const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+              const safeThreadId = isValidUuid(threadId) ? threadId : null;
               const memoryRows: Array<{
-                event_id: string; thread_id: string; reflection_type: string;
+                event_id: string; thread_id: string | null; reflection_type: string;
                 content: string; company_name: string | null; topic: string | null;
-                source_question: string; confidence: number; created_by: string;
+                source_question: string; confidence: number; created_by: string | null;
               }> = [];
               const questionSnippet = question.slice(0, 200);
               const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
@@ -13281,35 +13286,35 @@ export default function CIS() {
               for (const issue of issues) {
                 if (issue && issue.length > 5) {
                   memoryRows.push({
-                    event_id: eventId, thread_id: threadId, reflection_type: "critique_issue",
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "critique_issue",
                     content: issue, company_name: detectedCompany, topic: null,
                     source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                    created_by: currentUserId || "",
+                    created_by: currentUserId,
                   });
                 }
               }
               for (const dt of (reflection.missing_data_types || [])) {
                 memoryRows.push({
-                  event_id: eventId, thread_id: threadId, reflection_type: "missing_data",
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "missing_data",
                   content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
                   source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId || "",
+                  created_by: currentUserId,
                 });
               }
               for (const fq of (reflection.follow_up_queries || [])) {
                 memoryRows.push({
-                  event_id: eventId, thread_id: threadId, reflection_type: "follow_up",
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
                   content: fq, company_name: detectedCompany, topic: null,
                   source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId || "",
+                  created_by: currentUserId,
                 });
               }
               if (reflection.reasoning && reflection.reasoning.length > 10) {
                 memoryRows.push({
-                  event_id: eventId, thread_id: threadId, reflection_type: "blind_spot",
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
                   content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
                   source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId || "",
+                  created_by: currentUserId,
                 });
               }
               const lessonSummary = [
@@ -13319,17 +13324,18 @@ export default function CIS() {
               ].filter(Boolean).join(". ");
               if (lessonSummary) {
                 memoryRows.push({
-                  event_id: eventId, thread_id: threadId, reflection_type: "lesson",
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
                   content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
                   company_name: detectedCompany, topic: null,
                   source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId || "",
+                  created_by: currentUserId,
                 });
               }
               if (memoryRows.length > 0) {
-                await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
               }
-            } catch { /* non-fatal: don't break chat if memory save fails */ }
+            } catch (saveErr) { console.error("[reflexion_memory] persist error:", saveErr); }
           } catch {
             streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
           }
