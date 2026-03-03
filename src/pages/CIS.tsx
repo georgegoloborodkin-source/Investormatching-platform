@@ -188,7 +188,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, fetchCostSummary, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight, type CostData } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
@@ -1730,6 +1730,16 @@ function SourcesTab({
   useEffect(() => {
     preWarmConverterBackend();
   }, []);
+
+  // Poll cost data every 60s when the cost panel is open, or once on mount
+  useEffect(() => {
+    fetchCostSummary().then(setCostData).catch(() => {});
+    if (!showCostPanel) return;
+    const interval = setInterval(() => {
+      fetchCostSummary().then(setCostData).catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [showCostPanel]);
 
   useEffect(() => {
     isSyncingDriveRef.current = isSyncingDrive;
@@ -8207,6 +8217,8 @@ export default function CIS() {
   const [multiAgentEnabled, setMultiAgentEnabled] = useState(false);
   const [reflexionEnabled, setReflexionEnabled] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [costData, setCostData] = useState<CostData | null>(null);
+  const [showCostPanel, setShowCostPanel] = useState(false);
   
   // Company Connections state for visual graph and decision logging
   const [companyConnections, setCompanyConnections] = useState<Array<{
@@ -14806,7 +14818,70 @@ export default function CIS() {
                         <RefreshCw className="h-3.5 w-3.5" />
                         Reflexion {reflexionEnabled ? "ON" : "OFF"}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCostPanel((prev) => !prev);
+                          if (!costData) fetchCostSummary().then(setCostData).catch(() => {});
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                          showCostPanel
+                            ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-500"
+                        }`}
+                        title="View API cost tracker — today and this month"
+                      >
+                        $
+                        {costData?.today?.total_cost_usd != null
+                          ? ` ${costData.today.total_cost_usd.toFixed(2)} today`
+                          : " Costs"}
+                      </button>
                     </div>
+                    {showCostPanel && costData && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs font-mono space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-700">API Cost Tracker</span>
+                          <button onClick={() => fetchCostSummary().then(setCostData)} className="text-blue-500 hover:text-blue-700 text-[10px]">Refresh</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white rounded-md p-2 border border-slate-100">
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Today</div>
+                            <div className="text-lg font-bold text-slate-800">${costData.today.total_cost_usd?.toFixed(4) || "0.00"}</div>
+                            <div className="text-[10px] text-slate-400">{costData.today.total_requests || 0} requests</div>
+                          </div>
+                          <div className="bg-white rounded-md p-2 border border-slate-100">
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wider">This Month</div>
+                            <div className="text-lg font-bold text-slate-800">${costData.month.total_cost_usd?.toFixed(4) || "0.00"}</div>
+                            <div className="text-[10px] text-slate-400">{costData.month.total_requests || 0} requests</div>
+                          </div>
+                        </div>
+                        {costData.month.by_provider && Object.keys(costData.month.by_provider).length > 0 && (
+                          <div>
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Monthly by Provider</div>
+                            {Object.entries(costData.month.by_provider).map(([prov, cost]) => (
+                              <div key={prov} className="flex justify-between text-[11px]">
+                                <span className="text-slate-600">{prov}</span>
+                                <span className="text-slate-800 font-semibold">${(cost as number).toFixed(4)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {costData.month.by_endpoint && Object.keys(costData.month.by_endpoint).length > 0 && (
+                          <div>
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Monthly by Endpoint (top 5)</div>
+                            {Object.entries(costData.month.by_endpoint).slice(0, 5).map(([ep, cost]) => (
+                              <div key={ep} className="flex justify-between text-[10px]">
+                                <span className="text-slate-500 truncate max-w-[200px]">{ep}</span>
+                                <span className="text-slate-700 font-semibold">${(cost as number).toFixed(4)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {costData.error && (
+                          <div className="text-red-500 text-[10px]">{costData.error}</div>
+                        )}
+                      </div>
+                    )}
                     <span className="text-[11px] text-slate-400 font-mono">
                       {chatIsLoading ? (
                         <span className="text-blue-600/70 flex items-center gap-1.5">

@@ -71,6 +71,38 @@ export function preWarmConverterBackend(): void {
   })();
 }
 
+// ---------------------------------------------------------------------------
+//  Cost Tracking
+// ---------------------------------------------------------------------------
+
+export interface CostSummary {
+  total_cost_usd: number;
+  total_requests: number;
+  by_provider: Record<string, number>;
+  by_endpoint: Record<string, number>;
+}
+
+export interface CostData {
+  today: CostSummary;
+  month: CostSummary;
+  error?: string;
+}
+
+export async function fetchCostSummary(): Promise<CostData> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/api/costs`, undefined, 10000);
+    if (!res.ok) return { today: emptyCostSummary(), month: emptyCostSummary(), error: `HTTP ${res.status}` };
+    return await res.json();
+  } catch {
+    return { today: emptyCostSummary(), month: emptyCostSummary(), error: "Failed to fetch costs" };
+  }
+}
+
+function emptyCostSummary(): CostSummary {
+  return { total_cost_usd: 0, total_requests: 0, by_provider: {}, by_endpoint: {} };
+}
+
 export interface AIConversionRequest {
   data: string;
   dataType?: string;

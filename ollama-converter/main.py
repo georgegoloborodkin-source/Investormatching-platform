@@ -435,15 +435,26 @@ def get_supabase():
 #  API Cost Tracking — log Anthropic usage for unit economics
 # ---------------------------------------------------------------------------
 
-# Anthropic pricing (per 1M tokens, as of 2025)
+# Pricing per 1M tokens (as of 2025-2026)
 ANTHROPIC_PRICING = {
     "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
     "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
     "claude-haiku-4-20250514": {"input": 0.25, "output": 1.25},
     "claude-3-7-sonnet-latest": {"input": 3.0, "output": 15.0},
-    # Fallback for unknown models
     "default": {"input": 3.0, "output": 15.0},
 }
+EMBEDDING_PRICING = {
+    "voyage-large-2": 0.12,        # $0.12 per 1M tokens
+    "text-embedding-3-small": 0.02, # $0.02 per 1M tokens
+    "default": 0.12,
+}
+RERANK_PRICING = {
+    "rerank-2.5": 0.05,  # $0.05 per 1M search units
+    "default": 0.05,
+}
+
+# In-memory cost accumulator for per-request tracking (reset per request)
+_request_cost_accumulator: Dict[str, float] = {}
 
 def estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Calculate estimated cost in USD for an Anthropic API call."""
@@ -451,6 +462,14 @@ def estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) -
     input_cost = (input_tokens / 1_000_000) * pricing["input"]
     output_cost = (output_tokens / 1_000_000) * pricing["output"]
     return round(input_cost + output_cost, 6)
+
+def estimate_embedding_cost(model: str, token_count: int) -> float:
+    price_per_m = EMBEDDING_PRICING.get(model, EMBEDDING_PRICING["default"])
+    return round((token_count / 1_000_000) * price_per_m, 6)
+
+def estimate_rerank_cost(model: str, num_docs: int) -> float:
+    price_per_m = RERANK_PRICING.get(model, RERANK_PRICING["default"])
+    return round((num_docs / 1_000_000) * price_per_m, 6)
 
 async def log_api_usage(
     provider: str,
@@ -3304,6 +3323,59 @@ async def health_check():
             "embedding_config": embedding_config,
         }
 
+@app.get("/api/costs")
+async def get_cost_summary():
+    """Return cost summary for the current period. Called by the frontend cost tracker."""
+    if not _supabase_available or not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return {"error": "Supabase not configured", "today": {}, "month": {}}
+    try:
+        sb = get_supabase()
+        from datetime import datetime, timedelta
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        month_start = datetime.utcnow().replace(day=1).strftime("%Y-%m-%d")
+
+        today_rows = await asyncio.to_thread(
+            lambda: sb.table("api_usage_logs")
+            .select("provider, endpoint, estimated_cost_usd, input_tokens, output_tokens")
+            .gte("created_at", today + "T00:00:00Z")
+            .execute()
+        )
+        month_rows = await asyncio.to_thread(
+            lambda: sb.table("api_usage_logs")
+            .select("provider, endpoint, estimated_cost_usd, input_tokens, output_tokens")
+            .gte("created_at", month_start + "T00:00:00Z")
+            .execute()
+        )
+
+        def summarize(rows):
+            total_cost = 0.0
+            total_requests = 0
+            by_provider = {}
+            by_endpoint = {}
+            for r in (rows.data or []):
+                cost = float(r.get("estimated_cost_usd", 0) or 0)
+                total_cost += cost
+                total_requests += 1
+                prov = r.get("provider", "unknown")
+                ep = r.get("endpoint", "unknown")
+                by_provider[prov] = by_provider.get(prov, 0) + cost
+                by_endpoint[ep] = by_endpoint.get(ep, 0) + cost
+            return {
+                "total_cost_usd": round(total_cost, 4),
+                "total_requests": total_requests,
+                "by_provider": {k: round(v, 4) for k, v in sorted(by_provider.items(), key=lambda x: -x[1])},
+                "by_endpoint": {k: round(v, 4) for k, v in sorted(by_endpoint.items(), key=lambda x: -x[1])},
+            }
+
+        return {
+            "today": summarize(today_rows),
+            "month": summarize(month_rows),
+            "pricing": ANTHROPIC_PRICING,
+        }
+    except Exception as e:
+        return {"error": str(e), "today": {}, "month": {}}
+
+
 @app.get("/embedding-config")
 async def get_embedding_config():
     """Show current embedding configuration for debugging"""
@@ -4197,8 +4269,17 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
                             # Message is completing
                             pass
                     
-                    # After stream completes, extract citations from text blocks and append web sources
-                    # Note: Web search citations are already collected above, but we also check text blocks for citations
+                    # Track streaming cost from final message
+                    final_msg = await stream.get_final_message()
+                    if hasattr(final_msg, "usage") and final_msg.usage:
+                        _u = final_msg.usage
+                        asyncio.create_task(log_api_usage(
+                            provider="anthropic", model=model_name,
+                            endpoint="/ask/stream",
+                            input_tokens=getattr(_u, "input_tokens", 0),
+                            output_tokens=getattr(_u, "output_tokens", 0),
+                        ))
+
                     if web_search_citations:
                         sources_text = "\n\n**Web Sources:**"
                         for i, (url, title) in enumerate(web_search_citations.items(), 1):
@@ -5287,15 +5368,20 @@ async def generate_embedding_openai(text: str) -> List[float]:
         return normalize_embedding(embedding)
 
 
+_embedding_cache: Dict[str, List[float]] = {}
+_EMBEDDING_CACHE_MAX = 512
+
 async def generate_embedding_voyage(text: str, input_type: str) -> List[float]:
-    """Generate embedding using VoyageAI API."""
+    """Generate embedding using VoyageAI API. Cached for queries to avoid duplicate calls."""
     if not VOYAGE_API_KEY:
         raise HTTPException(
             status_code=503,
             detail="VOYAGE_API_KEY not set. Set it in the server environment to use VoyageAI embeddings."
         )
 
-    # Log which model is being used for debugging
+    cache_key = f"voyage:{input_type}:{text[:200]}"
+    if cache_key in _embedding_cache:
+        return _embedding_cache[cache_key]
 
     payload = {
         "model": VOYAGE_EMBEDDING_MODEL,
@@ -5321,15 +5407,25 @@ async def generate_embedding_voyage(text: str, input_type: str) -> List[float]:
             )
 
         data = response.json() or {}
+        usage = data.get("usage", {})
+        total_tokens = usage.get("total_tokens", len(text.split()) * 2)
         embedding_data = data.get("data", [{}])[0] if data.get("data") else {}
         embedding = embedding_data.get("embedding")
 
         if not embedding:
             raise HTTPException(status_code=502, detail="No embedding returned from VoyageAI.")
 
-        # Log dimension for debugging
-        
-        return normalize_embedding(embedding)
+        asyncio.create_task(log_api_usage(
+            provider="voyage", model=VOYAGE_EMBEDDING_MODEL,
+            endpoint="/embed/query", input_tokens=total_tokens, output_tokens=0,
+        ))
+
+        result = normalize_embedding(embedding)
+        if len(_embedding_cache) >= _EMBEDDING_CACHE_MAX:
+            oldest = next(iter(_embedding_cache))
+            del _embedding_cache[oldest]
+        _embedding_cache[cache_key] = result
+        return result
 
 async def generate_embedding_ollama(text: str) -> List[float]:
     """Generate embedding using Ollama."""
@@ -6764,11 +6860,19 @@ Return JSON only. Find at least 3-5 insights. Be specific, not generic."""
 
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        model_name = HAIKU_MODEL
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=model_name,
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
+        if hasattr(message, "usage") and message.usage:
+            asyncio.create_task(log_api_usage(
+                provider="anthropic", model=model_name,
+                endpoint="/extract-temporal-insights",
+                input_tokens=getattr(message.usage, "input_tokens", 0),
+                output_tokens=getattr(message.usage, "output_tokens", 0),
+            ))
         raw = message.content[0].text if message.content else "[]"
         json_match = re.search(r'\{[\s\S]*\}', raw)
         if json_match:
@@ -8510,6 +8614,17 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             yield "data: [DONE]\n\n"
                             return
 
+                    # Track tool-use turn cost
+                    if hasattr(response, "usage") and response.usage:
+                        _u = response.usage
+                        asyncio.create_task(log_api_usage(
+                            provider="anthropic", model=model_name,
+                            endpoint="/ask/agent/stream (tool-use)",
+                            input_tokens=getattr(_u, "input_tokens", 0),
+                            output_tokens=getattr(_u, "output_tokens", 0),
+                            event_id=event_id,
+                        ))
+
                     tool_calls = []
                     text_parts = []
                     web_search_citations: Dict[str, str] = {}
@@ -8604,6 +8719,16 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             if event.type == "content_block_delta" and hasattr(event.delta, "type"):
                                 if event.delta.type == "text_delta" and hasattr(event.delta, "text"):
                                     yield f"data: {json.dumps({'text': event.delta.text})}\n\n"
+                        final_msg = await final_stream.get_final_message()
+                        if hasattr(final_msg, "usage") and final_msg.usage:
+                            _u = final_msg.usage
+                            asyncio.create_task(log_api_usage(
+                                provider="anthropic", model=model_name,
+                                endpoint="/ask/agent/stream (final)",
+                                input_tokens=getattr(_u, "input_tokens", 0),
+                                output_tokens=getattr(_u, "output_tokens", 0),
+                                event_id=event_id,
+                            ))
                 except Exception as e:
                     yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
 
