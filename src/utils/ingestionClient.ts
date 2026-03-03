@@ -24,14 +24,18 @@ export function clearMyToken404Cache(): void {
 /**
  * Get Google access token from backend (backend that has Drive OAuth: /auth/google-drive/start and /gdrive/my-token).
  * Pass the current Supabase session access_token. Returns null if not connected or on error.
+ * Includes a 30s timeout to avoid hanging indefinitely on cold-start backends.
  */
 export async function getGoogleAccessTokenFromBackend(supabaseAccessToken: string): Promise<string | null> {
   if (Date.now() - lastMyToken404At < MY_TOKEN_404_CACHE_MS) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
     const base = getGoogleOAuthBackendUrl();
     const res = await fetch(`${base}/gdrive/my-token`, {
       method: "GET",
       headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+      signal: controller.signal,
     });
     if (res.status === 404) {
       lastMyToken404At = Date.now();
@@ -40,8 +44,13 @@ export async function getGoogleAccessTokenFromBackend(supabaseAccessToken: strin
     if (!res.ok) return null;
     const data = await res.json();
     return data.access_token || null;
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      console.warn("[getGoogleAccessTokenFromBackend] Request timed out after 30s (backend may be cold-starting)");
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

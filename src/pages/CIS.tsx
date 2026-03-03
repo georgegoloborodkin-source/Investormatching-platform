@@ -1928,11 +1928,21 @@ function SourcesTab({
       return;
     }
     setIsConnectingDrive(true);
-    toast({ title: "Connecting to Google Drive…", description: "Checking access. You may be redirected to sign in." });
+    toast({ title: "Connecting to Google Drive…", description: "Waking up server and checking access. This may take a few seconds…" });
     try {
+      // Warm up the backend first to avoid cold-start hangs on Render free tier
+      await warmUpIngestion();
+
       const { data: sessionData } = await supabase.auth.getSession();
       const session = sessionData?.session;
-      const supabaseAccessToken = session?.access_token;
+      let supabaseAccessToken = session?.access_token;
+
+      // If session is stale, try refreshing before proceeding
+      if (!supabaseAccessToken) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        supabaseAccessToken = refreshData?.session?.access_token;
+      }
+
       let accessToken: string | null = null;
       if (supabaseAccessToken) {
         accessToken = await getGoogleAccessTokenFromBackend(supabaseAccessToken);
@@ -1947,10 +1957,13 @@ function SourcesTab({
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           const is429 = msg.includes("429") || msg.toLowerCase().includes("too many");
+          const isTimeout = msg.toLowerCase().includes("timed out") || msg.toLowerCase().includes("timeout");
           if (is429) setDriveConnectCooldownUntil(Date.now() + 15000);
           toast({
-            title: "Could not connect Google Drive",
-            description: msg,
+            title: isTimeout ? "Server is waking up" : "Could not connect Google Drive",
+            description: isTimeout
+              ? "The backend is starting up after being idle. Please try again in 10–15 seconds."
+              : msg,
             variant: "destructive",
           });
         }
