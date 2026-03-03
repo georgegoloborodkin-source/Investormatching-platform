@@ -10847,6 +10847,37 @@ export default function CIS() {
             .filter((s) => s.type === "folder" && s.checked)
             .map((s) => s.id.replace("folder:", ""));
 
+          // ── Load Reflexion Memory (persistent agent learning) ──
+          let reflexionMemoryContext = "";
+          if (reflexionEnabled) {
+            try {
+              const { data: memories } = await supabase
+                .from("reflexion_memory" as any)
+                .select("reflection_type, content, company_name, source_question, confidence, created_at")
+                .eq("event_id", eventId)
+                .order("created_at", { ascending: false })
+                .limit(20) as any;
+              if (memories && memories.length > 0) {
+                const lines = memories.map((m: any) => {
+                  const ts = new Date(m.created_at).toLocaleDateString();
+                  const company = m.company_name ? ` [${m.company_name}]` : "";
+                  const typeLabel: Record<string, string> = {
+                    critique_issue: "Issue found",
+                    blind_spot: "Blind spot",
+                    missing_data: "Missing data",
+                    lesson: "Lesson learned",
+                    follow_up: "Follow-up needed",
+                  };
+                  return `- (${ts}${company}) ${typeLabel[m.reflection_type] || m.reflection_type}: ${m.content}`;
+                });
+                reflexionMemoryContext =
+                  "REFLEXION MEMORY — Lessons from past analyses in this workspace. " +
+                  "Use these to avoid repeating mistakes and to proactively address known gaps:\n" +
+                  lines.join("\n");
+              }
+            } catch { /* non-fatal */ }
+          }
+
           await askAgentStream(
             {
               question,
@@ -10854,6 +10885,7 @@ export default function CIS() {
               previousMessages: threadMsgs,
               webSearchEnabled: webSearchEnabled,
               folderIds: agentFolderIds.length > 0 ? agentFolderIds : undefined,
+              reflexionMemoryContext: reflexionMemoryContext || undefined,
             },
             (chunk) => {
               if (!streamCompleted) streamer.appendChunk(chunk);
@@ -10962,6 +10994,70 @@ export default function CIS() {
                     ? `Reflexion: Found ${issueCount} issue(s), refined with deeper analysis. Confidence: ${Math.round(reflection.confidence * 100)}%`
                     : `Reflexion: Partner Agent added deeper analysis and blind spots. Confidence: ${Math.round(reflection.confidence * 100)}%`
                 );
+
+                // ── Persist Reflexion Memory (Sentra-style agent learning) ──
+                try {
+                  const memoryRows: Array<{
+                    event_id: string; thread_id: string; reflection_type: string;
+                    content: string; company_name: string | null; topic: string | null;
+                    source_question: string; confidence: number; created_by: string;
+                  }> = [];
+                  const questionSnippet = question.slice(0, 200);
+                  const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
+                  const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+
+                  for (const issue of issues) {
+                    if (issue && issue.length > 5) {
+                      memoryRows.push({
+                        event_id: eventId, thread_id: threadId, reflection_type: "critique_issue",
+                        content: issue, company_name: detectedCompany, topic: null,
+                        source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                        created_by: currentUserId || "",
+                      });
+                    }
+                  }
+                  for (const dt of (reflection.missing_data_types || [])) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: threadId, reflection_type: "missing_data",
+                      content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId || "",
+                    });
+                  }
+                  for (const fq of (reflection.follow_up_queries || [])) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: threadId, reflection_type: "follow_up",
+                      content: fq, company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId || "",
+                    });
+                  }
+                  if (reflection.reasoning && reflection.reasoning.length > 10) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: threadId, reflection_type: "blind_spot",
+                      content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId || "",
+                    });
+                  }
+                  const lessonSummary = [
+                    issues.length > 0 ? `Issues: ${issues.slice(0, 3).join("; ")}` : null,
+                    reflection.missing_data_types?.length ? `Missing: ${reflection.missing_data_types.join(", ")}` : null,
+                    `Confidence: ${Math.round((reflection.confidence || 0.7) * 100)}%`,
+                  ].filter(Boolean).join(". ");
+                  if (lessonSummary) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: threadId, reflection_type: "lesson",
+                      content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
+                      company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId || "",
+                    });
+                  }
+                  if (memoryRows.length > 0) {
+                    await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                  }
+                } catch { /* non-fatal: don't break chat if memory save fails */ }
               } catch (reflexErr) {
                 streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
               }

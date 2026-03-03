@@ -8405,6 +8405,7 @@ class AgentAskRequest(BaseModel):
     previous_messages: List[ChatMessage] = Field(default_factory=list, alias="previousMessages")
     web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
     folder_ids: List[str] = Field(default_factory=list, alias="folderIds")
+    reflexion_memory_context: str = Field(default="", alias="reflexionMemoryContext")
     model_config = {"populate_by_name": True}
 
 
@@ -8449,13 +8450,25 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
+                # Build system prompt — inject Reflexion Memory if available
+                effective_system_prompt = AGENT_SYSTEM_PROMPT
+                if request.reflexion_memory_context and request.reflexion_memory_context.strip():
+                    effective_system_prompt += (
+                        "\n\n## Reflexion Memory (Persistent Agent Learning)\n"
+                        "Below are lessons, issues, and blind spots from previous analyses in this workspace. "
+                        "Use them to avoid repeating past mistakes, proactively address known gaps, "
+                        "and provide more accurate, trustworthy answers. If a past lesson is relevant "
+                        "to the current question, incorporate it into your reasoning.\n\n"
+                        + request.reflexion_memory_context.strip()
+                    )
+
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     try:
                         response = await client.messages.create(
                             model=model_name,
                             max_tokens=max_tokens,
                             temperature=0.1,
-                            system=AGENT_SYSTEM_PROMPT,
+                            system=effective_system_prompt,
                             messages=current_messages,
                             tools=tools,
                         )
@@ -8466,7 +8479,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                                     model=fallback,
                                     max_tokens=max_tokens,
                                     temperature=0.1,
-                                    system=AGENT_SYSTEM_PROMPT,
+                                    system=effective_system_prompt,
                                     messages=current_messages,
                                     tools=tools,
                                 )

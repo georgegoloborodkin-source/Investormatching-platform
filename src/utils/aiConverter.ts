@@ -397,6 +397,7 @@ export async function askAgentStream(
     previousMessages?: ChatMessage[];
     webSearchEnabled?: boolean;
     folderIds?: string[];
+    reflexionMemoryContext?: string;
   },
   onChunk: (text: string) => void,
   onStatus?: (status: string) => void,
@@ -429,6 +430,9 @@ export async function askAgentStream(
     };
     if (input.folderIds && input.folderIds.length > 0) {
       payload.folder_ids = input.folderIds;
+    }
+    if (input.reflexionMemoryContext) {
+      payload.reflexion_memory_context = input.reflexionMemoryContext;
     }
     const response = await fetch(`${baseUrl}/ask/agent/stream`, {
       method: "POST",
