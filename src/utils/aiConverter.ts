@@ -1422,6 +1422,51 @@ export interface CriticResult {
   confidence: number;
 }
 
+// ---------------------------------------------------------------------------
+//  Temporal Intelligence — Non-obvious VC insights
+// ---------------------------------------------------------------------------
+
+export interface TemporalInsight {
+  insight_type: "contradiction" | "trend_shift" | "hidden_risk" | "commitment" | "red_flag" | "non_obvious";
+  field_name: string;
+  description: string;
+  evidence: string;
+  severity: "low" | "medium" | "high" | "critical";
+  previous_value?: string;
+  current_value?: string;
+  actionable_step?: string;
+  confidence: number;
+}
+
+export async function extractTemporalInsights(input: {
+  documentTitle: string;
+  documentText: string;
+  companyName: string;
+  existingFacts?: string;
+}): Promise<{ insights: TemporalInsight[]; company_name: string }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const response = await fetchWithTimeout(
+      `${baseUrl}/extract-temporal-insights`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_title: input.documentTitle,
+          document_text: input.documentText,
+          company_name: input.companyName,
+          existing_facts: input.existingFacts || "",
+        }),
+      },
+      20000,
+    );
+    if (!response.ok) return { insights: [], company_name: input.companyName };
+    return await response.json();
+  } catch {
+    return { insights: [], company_name: input.companyName };
+  }
+}
+
 /**
  * Multi-Agent RAG — CRITIC (Verifier Agent).
  * Checks whether the answer is grounded in the provided context.

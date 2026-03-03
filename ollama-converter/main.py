@@ -4646,13 +4646,12 @@ async def system2_refine_stream(request: System2RefineRequest):
     Takes the draft answer + additional context from follow-up searches
     and produces an improved, refined final answer via streaming SSE.
     """
-    prompt = f"""You are Orbit AI, a VC intelligence synthesis agent performing iterative refinement.
+    prompt = f"""You are the PARTNER AGENT — a senior, skeptical VC partner reviewing an analyst's draft answer.
+Your job is NOT to say "looks good." Your job is to make the answer TRUSTWORTHY and ACTIONABLE.
 
-You previously produced a draft answer, but upon reflection, you identified gaps.
-Additional data has been retrieved. Your job: produce an IMPROVED, REFINED answer
-that integrates ALL available context.
+You MUST always provide substantive analysis. Think like an LP doing due diligence on a $50M commitment.
 
-REFLECTION NOTES (what was missing):
+REFLECTION & CRITIQUE NOTES:
 {request.reflection_reasoning}
 
 ORIGINAL QUESTION:
@@ -4661,23 +4660,35 @@ ORIGINAL QUESTION:
 ORIGINAL CONTEXT:
 {request.original_context[:6000] if request.original_context else "None"}
 
-ADDITIONAL CONTEXT (from follow-up searches):
+ADDITIONAL CONTEXT (from follow-up):
 {request.additional_context[:4000] if request.additional_context else "None"}
 
-PREVIOUS DRAFT:
-{request.draft_answer[:3000]}
+ANALYST'S DRAFT ANSWER:
+{request.draft_answer[:4000]}
 
-CITATION RULES:
-- Cite document sources with [1], [2], etc.
-- Cite graph relationships with [G]
-- Cite KPI/metrics data with [K]
-- Every factual claim MUST have a citation
+YOUR PARTNER AGENT REVIEW MUST include these sections:
 
-REFINEMENT RULES:
-- DO NOT repeat the draft verbatim — integrate the new data
-- If new data contradicts the draft, prefer the new data
-- Be thorough but concise
-- Ensure the answer is complete and addresses the original question fully"""
+**Blind Spots & Risks** — What did the analyst miss? What risks or red flags are not mentioned?
+Surface things a junior analyst would overlook: liquidation preferences, dilution implications,
+market timing risks, competitive moats (or lack thereof), founder track record gaps.
+
+**Data Gaps** — What data points are missing that a VC should verify before acting?
+Flag unverified claims, missing comparable data, or absent benchmarks.
+
+**Contradictions & Tensions** — If there are inconsistencies in the data, or if the answer
+is too optimistic/pessimistic relative to the evidence, call it out.
+
+**Deeper Insight** — Provide one non-obvious insight that connects dots the analyst didn't.
+Think cross-portfolio patterns, market timing signals, or structural advantages/disadvantages.
+
+**Actionable Next Steps** — What should the VC do next? Specific questions to ask the founder,
+data to request, or diligence steps to take.
+
+RULES:
+- Be specific, not generic. Reference actual details from the draft.
+- DO NOT repeat the draft. ADD to it.
+- If the draft is genuinely excellent, still add the blind spots and next steps.
+- Write in clear, direct language. No filler."""
 
     async def generate():
         try:
@@ -6658,6 +6669,105 @@ async def extract_entities_stream(request: EntityExtractionRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
     )
+
+
+# ---------------------------------------------------------------------------
+#  Temporal Intelligence — Extract non-obvious VC insights from documents
+# ---------------------------------------------------------------------------
+
+class TemporalInsightRequest(BaseModel):
+    document_title: str = ""
+    document_text: str = ""
+    company_name: str = ""
+    existing_facts: str = ""
+
+class TemporalInsight(BaseModel):
+    insight_type: str  # contradiction, trend_shift, hidden_risk, commitment, red_flag, non_obvious
+    field_name: str
+    description: str
+    evidence: str
+    severity: str = "medium"  # low, medium, high, critical
+    previous_value: str = ""
+    current_value: str = ""
+    actionable_step: str = ""
+    confidence: float = 0.8
+
+class TemporalInsightResponse(BaseModel):
+    insights: List[TemporalInsight] = []
+    company_name: str = ""
+
+@app.post("/extract-temporal-insights", response_model=TemporalInsightResponse)
+async def extract_temporal_insights(request: TemporalInsightRequest):
+    """
+    Extract non-obvious temporal insights from a document that VCs would miss.
+    Looks for: contradictions, trend shifts, hidden risks, founder commitments,
+    red flags, and non-obvious patterns.
+    """
+    if not ANTHROPIC_API_KEY:
+        return TemporalInsightResponse(insights=[], company_name=request.company_name)
+
+    prompt = f"""You are a senior VC analyst with 20 years of experience. Your job is to extract
+NON-OBVIOUS insights from this document that a junior analyst would miss.
+
+Company: {request.company_name or "Unknown"}
+Document: {request.document_title}
+
+EXISTING KNOWN FACTS about this company (from prior documents):
+{request.existing_facts[:3000] if request.existing_facts else "None yet — this is the first document."}
+
+DOCUMENT TEXT:
+{request.document_text[:8000]}
+
+Extract insights in these categories:
+
+1. **contradiction** — Facts that contradict what was previously known or stated in prior documents.
+   Example: "Founder claimed $2M ARR in Jan pitch deck, but financials show $1.4M."
+
+2. **trend_shift** — Metrics where growth is accelerating or decelerating (even if absolute numbers look good).
+   Example: "Revenue grew 40% Q1→Q2 but only 15% Q2→Q3 — growth is decelerating despite healthy absolute numbers."
+
+3. **hidden_risk** — Risks buried in fine print, footnotes, or implied but not stated.
+   Example: "Customer concentration: top 3 clients represent 78% of revenue (mentioned only in appendix)."
+
+4. **commitment** — Specific promises/commitments the founder made that should be tracked.
+   Example: "Founder committed to hiring VP Sales by Q3 2025 and reaching $5M ARR by EOY."
+
+5. **red_flag** — Patterns that experienced VCs know to watch for.
+   Example: "Cap table shows 3 co-founders departed in 18 months. No explanation provided."
+
+6. **non_obvious** — Connections or insights that require domain expertise to spot.
+   Example: "Their ML approach requires GPU clusters but they raised only $2M — infrastructure costs will force another raise within 6 months."
+
+Return a JSON object with "insights" array. Each insight has:
+- insight_type (one of the 6 types above)
+- field_name (short label: e.g. "ARR", "burn_rate", "team_stability", "market_position")
+- description (1-2 sentence insight)
+- evidence (exact quote or data point from the document)
+- severity: "low", "medium", "high", "critical"
+- previous_value (if contradicting a known fact, what was previously believed)
+- current_value (the new value from this document)
+- actionable_step (what the VC should do about this)
+- confidence (0-1)
+
+Return JSON only. Find at least 3-5 insights. Be specific, not generic."""
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text if message.content else "[]"
+        json_match = re.search(r'\{[\s\S]*\}', raw)
+        if json_match:
+            data = json.loads(json_match.group())
+            insights = [TemporalInsight(**i) for i in data.get("insights", [])]
+            return TemporalInsightResponse(insights=insights, company_name=request.company_name)
+        return TemporalInsightResponse(insights=[], company_name=request.company_name)
+    except Exception as e:
+        logger.error(f"Temporal insight extraction failed: {e}")
+        return TemporalInsightResponse(insights=[], company_name=request.company_name)
 
 
 # ---------------------------------------------------------------------------
