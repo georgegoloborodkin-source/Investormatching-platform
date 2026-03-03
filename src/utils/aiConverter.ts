@@ -833,8 +833,7 @@ export async function contextualizeChunk(
 ): Promise<ContextualizeChunkResult> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
-    // Fast timeout: 3s max - if backend is slow/down, skip enrichment immediately
-    // This prevents blocking document uploads
+    // 8s timeout so backend Claude call can finish; shorter timeouts left headers empty in DB
     const response = await fetchWithTimeout(
       `${baseUrl}/contextualize-chunk`,
       {
@@ -842,7 +841,7 @@ export async function contextualizeChunk(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       },
-      3000 // 3s — fail fast if backend is slow/down
+      8000 // 8s — backend calls Claude; 3s was too short and headers were never stored
     );
     if (!response.ok) {
       // Fall back to raw chunk

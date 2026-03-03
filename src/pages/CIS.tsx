@@ -111,6 +111,7 @@ import {
   Plus,
   ListTodo,
   GanttChart,
+  AlertCircle,
 } from "lucide-react";
 import {
   BarChart,
@@ -138,7 +139,7 @@ import { TeamInvitationForm } from "@/components/TeamInvitationForm";
 import { TeamMembersList } from "@/components/TeamMembersList";
 import { SyncStatus } from "@/components/SyncStatus";
 import { Link } from "react-router-dom";
-import { Shield, CalendarIcon } from "lucide-react";
+import { Shield, CalendarIcon, Activity } from "lucide-react";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -187,7 +188,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
@@ -3986,6 +3987,287 @@ function SourcesTab({
           </CardContent>
         </Card>
       )}
+      {/* ── Google Drive Portfolio Folder Sync ── */}
+      <Card className="border border-slate-200 bg-white">
+        <CardHeader className="border-b border-slate-200">
+          <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">
+            <Cloud className="h-5 w-5 inline mr-2 text-blue-600" />
+            Google Drive Folder Sync
+          </CardTitle>
+          <CardDescription className="text-slate-500 font-mono">
+            Connect a root portfolio folder from Google Drive. Each sub-folder = one portfolio company.
+            All documents are automatically fetched, embedded, and extracted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {(connectedDriveFolders.length > 0 || connectedDriveFolderId) ? (
+            <>
+              {/* Connected folders list */}
+              <div className="space-y-2">
+                {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder", category: "Portfolio Companies" as const }]).map((folder) => (
+                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-blue-500/30 bg-blue-600/5 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Folder className="h-5 w-5 text-blue-600 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-mono font-bold text-slate-900 text-sm">{folder.name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">{folder.id}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Label className="text-[10px] text-slate-400 font-mono whitespace-nowrap">Root folder type:</Label>
+                      <Select
+                        value={folder.category ?? "Portfolio Companies"}
+                        onValueChange={async (value) => {
+                          const updated = connectedDriveFolders.map((f) =>
+                            f.id === folder.id ? { ...f, category: value } : f
+                          );
+                          setConnectedDriveFolders(updated);
+                          if (activeEventId) {
+                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
+                            await supabase.from("sync_configurations")
+                              .update({
+                                config: {
+                                  google_drive_folder_id: updated[0]?.id || null,
+                                  google_drive_folder_name: updated[0]?.name || null,
+                                  folders: foldersToSave,
+                                },
+                              })
+                              .eq("event_id", activeEventId)
+                              .eq("source_type", "google_drive");
+
+                            const rootName = folder.name?.trim() || "";
+                            const rootNorm = rootName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+                            const rootSeg = rootNorm.replace(/\s*-\s*.*$/, "").trim();
+                            for (const sf of sourceFolders) {
+                              const sfName = (sf.name || "").trim();
+                              const sfNorm = sfName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+                              const sfSeg = (sfNorm.split(/\s*\/\s*/)[0] || sfNorm).replace(/\s*-\s*.*$/, "").trim();
+                              const belongs = sfNorm === rootNorm || sfNorm.startsWith(rootNorm + " / ") || sfSeg === rootSeg;
+                              if (belongs && (sf.category || "Portfolio Companies") !== value) {
+                                await onFolderCategoryUpdated?.(sf.id, value);
+                              }
+                            }
+
+                            onDriveSyncConfigChanged?.(foldersToSave);
+
+                            toast({ title: "Folder type updated", description: `"${folder.name}" is now ${value}. Source folders re-categorized.` });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-[190px] h-8 text-xs border border-slate-200 bg-white text-slate-900 font-mono rounded-md hover:border-blue-400 transition-colors">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
+                          {DRIVE_ROOT_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {connectedDriveFolders.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const updated = connectedDriveFolders.filter(f => f.id !== folder.id);
+                          setConnectedDriveFolders(updated);
+                          if (updated.length > 0) {
+                            setConnectedDriveFolderId(updated[0].id);
+                            setConnectedDriveFolderName(updated[0].name);
+                          } else {
+                            setConnectedDriveFolderId(null);
+                            setConnectedDriveFolderName(null);
+                          }
+                          if (activeEventId) {
+                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
+                            await supabase.from("sync_configurations")
+                              .update({
+                                config: {
+                                  google_drive_folder_id: updated[0]?.id || null,
+                                  google_drive_folder_name: updated[0]?.name || null,
+                                  folders: foldersToSave,
+                                },
+                              })
+                              .eq("event_id", activeEventId)
+                              .eq("source_type", "google_drive");
+                          }
+                          toast({ title: "Folder removed", description: `Removed "${folder.name}" from sync.` });
+                        }}
+                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Sync status bar */}
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/15 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">AUTO-SYNC ACTIVE</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Every 15 min</span>
+                  {lastDriveSyncAt && (
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      | Last: {new Date(lastDriveSyncAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={connectDrivePortfolioFolder}
+                    disabled={isDriveConnectOnCooldown || isConnectingDrive}
+                    className="border border-slate-200 bg-white text-slate-500 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold text-[10px] h-7 px-2 disabled:opacity-50"
+                  >
+                    {isConnectingDrive ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5 mr-1" />}
+                    {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Add Folder"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => syncGoogleDriveFolder()}
+                    disabled={isSyncingDrive || !canImport}
+                    className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50 h-7 text-[10px] px-2"
+                  >
+                    {isSyncingDrive ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                        Sync Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Sync progress */}
+              {driveSyncProgress && (
+                <div className="space-y-2 p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-slate-600">
+                      {driveSyncProgress.phase}{" "}
+                      {driveSyncProgress.total > 0 && (
+                        <>
+                          {driveSyncProgress.current}/{driveSyncProgress.total}:{" "}
+                          <span className="text-blue-600">{driveSyncProgress.currentItem}</span>
+                        </>
+                      )}
+                    </span>
+                    {driveSyncProgress.total > 0 && (
+                      <span className="text-xs font-mono text-slate-400">
+                        {Math.round((driveSyncProgress.current / driveSyncProgress.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {driveSyncProgress.total > 0 && (
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${(driveSyncProgress.current / driveSyncProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sync results */}
+              {driveSyncResults.length > 0 && !driveSyncProgress && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {driveSyncResults.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-slate-500 px-2 py-1 rounded bg-slate-50">
+                      <Building2 className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                      <span className="font-bold text-slate-700">{r.companyName}</span>
+                      {r.newFiles > 0 && <span className="text-emerald-400">+{r.newFiles} new</span>}
+                      {r.updatedFiles > 0 && <span className="text-blue-600">{r.updatedFiles} updated</span>}
+                      {r.skippedFiles > 0 && <span className="text-slate-400">{r.skippedFiles} unchanged</span>}
+                      {r.newFiles === 0 && r.updatedFiles === 0 && r.skippedFiles === 0 && (
+                        <span className="text-slate-400">empty folder</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-6 space-y-3">
+              <Cloud className="h-10 w-10 text-slate-300 mx-auto" />
+              <p className="text-sm text-slate-400 font-mono">No portfolio folder connected yet.</p>
+              <Button
+                onClick={connectDrivePortfolioFolder}
+                disabled={!canImport || isDriveConnectOnCooldown || isConnectingDrive}
+                className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
+              >
+                {isConnectingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
+                {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Connect Portfolio Folder"}
+              </Button>
+              <p className="text-[10px] text-slate-400 font-mono">
+                Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Google Drive Import (Single File/Link) ── */}
+      <Card className="border border-slate-200 bg-white">
+        <CardHeader className="border-b border-slate-200">
+          <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
+          <CardDescription className="text-slate-500 font-mono">
+            Paste a Google Docs/Slides/Sheets link or choose from Drive.
+            {selectedFolderId !== "none" && (
+              <span className="ml-2 text-blue-600">
+                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Label className="text-slate-900 font-mono font-bold">Drive URL</Label>
+              <Input
+                value={driveUrl}
+                onChange={(e) => setDriveUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/..."
+                className="border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+              />
+            </div>
+            <div className="flex items-end">
+              <div className="flex w-full flex-col gap-2">
+                <Button onClick={openDrivePicker} variant="outline" className="w-full border border-slate-200 bg-white text-slate-900 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold">
+                  <Folder className="h-4 w-4 mr-2" />
+                  Choose from Drive
+                </Button>
+                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50">
+                  {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Import Drive
+                </Button>
+              </div>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-slate-200 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500" />
+            Auto-extract and log decision after import
+          </label>
+          <p className="text-xs text-slate-500 font-mono">
+            Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* ClickUp import temporarily disabled */}
 
       {/* Folder Management Section */}
@@ -4060,7 +4342,7 @@ function SourcesTab({
                 <SelectTrigger className="border border-slate-200 bg-white text-slate-900">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a2e] border-slate-200">
+                <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                   {FOLDER_CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                       {cat}
@@ -4441,289 +4723,6 @@ function SourcesTab({
           <p className="text-xs text-slate-500 font-mono">
             Supported: PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt, .md, .csv, .json) — all are indexed for AI search.
           </p>
-        </CardContent>
-      </Card>
-
-      <Card className="border border-slate-200 bg-white">
-        <CardHeader className="border-b border-slate-200">
-          <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">Google Drive Import</CardTitle>
-          <CardDescription className="text-slate-500 font-mono">
-            Paste a Google Docs/Slides/Sheets link or choose from Drive.
-            {selectedFolderId !== "none" && (
-              <span className="ml-2 text-blue-600">
-                → Default folder: {sourceFolders.find(f => f.id === selectedFolderId)?.name}
-              </span>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2">
-              <Label className="text-slate-900 font-mono font-bold">Drive URL</Label>
-              <Input
-                value={driveUrl}
-                onChange={(e) => setDriveUrl(e.target.value)}
-                placeholder="https://docs.google.com/document/d/..."
-                className="border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-              />
-            </div>
-            <div className="flex items-end">
-              <div className="flex w-full flex-col gap-2">
-                <Button onClick={openDrivePicker} variant="outline" className="w-full border border-slate-200 bg-white text-slate-900 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold">
-                  <Folder className="h-4 w-4 mr-2" />
-                  Choose from Drive
-                </Button>
-                <Button onClick={handleImportDrive} disabled={isImportingDrive} className="w-full bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50">
-                  {isImportingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                  Import Drive
-                </Button>
-              </div>
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-xs text-slate-500 font-mono">
-            <Checkbox checked={autoExtract} onCheckedChange={(val) => setAutoExtract(val === true)} className="border-slate-200 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-500" />
-            Auto-extract and log decision after import
-          </label>
-          <p className="text-xs text-slate-500 font-mono">
-            Uses your Google Drive OAuth token. If access fails, sign out and sign in again.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* ── Google Drive Portfolio Folder Sync ── */}
-      <Card className="border border-slate-200 bg-white">
-        <CardHeader className="border-b border-slate-200">
-          <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight">
-            <Cloud className="h-5 w-5 inline mr-2 text-blue-600" />
-            Google Drive Folder Sync
-          </CardTitle>
-          <CardDescription className="text-slate-500 font-mono">
-            Connect a root portfolio folder from Google Drive. Each sub-folder = one portfolio company.
-            All documents are automatically fetched, embedded, and extracted.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {(connectedDriveFolders.length > 0 || connectedDriveFolderId) ? (
-            <>
-              {/* Connected folders list */}
-              <div className="space-y-2">
-                {(connectedDriveFolders.length > 0 ? connectedDriveFolders : [{ id: connectedDriveFolderId!, name: connectedDriveFolderName || "Portfolio folder", category: "Portfolio Companies" as const }]).map((folder) => (
-                  <div key={folder.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-blue-500/30 bg-blue-600/5 flex-wrap">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <Folder className="h-5 w-5 text-blue-600 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-mono font-bold text-slate-900 text-sm">{folder.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">{folder.id}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Label className="text-[10px] text-slate-400 font-mono whitespace-nowrap">Root folder type:</Label>
-                      <Select
-                        value={folder.category ?? "Portfolio Companies"}
-                        onValueChange={async (value) => {
-                          const updated = connectedDriveFolders.map((f) =>
-                            f.id === folder.id ? { ...f, category: value } : f
-                          );
-                          setConnectedDriveFolders(updated);
-                          if (activeEventId) {
-                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
-                            await supabase.from("sync_configurations")
-                              .update({
-                                config: {
-                                  google_drive_folder_id: updated[0]?.id || null,
-                                  google_drive_folder_name: updated[0]?.name || null,
-                                  folders: foldersToSave,
-                                },
-                              })
-                              .eq("event_id", activeEventId)
-                              .eq("source_type", "google_drive");
-
-                            // Propagate category to matching source_folders so Knowledge Scope stays in sync
-                            const rootName = folder.name?.trim() || "";
-                            const rootNorm = rootName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
-                            const rootSeg = rootNorm.replace(/\s*-\s*.*$/, "").trim();
-                            for (const sf of sourceFolders) {
-                              const sfName = (sf.name || "").trim();
-                              const sfNorm = sfName.toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
-                              const sfSeg = (sfNorm.split(/\s*\/\s*/)[0] || sfNorm).replace(/\s*-\s*.*$/, "").trim();
-                              const belongs = sfNorm === rootNorm || sfNorm.startsWith(rootNorm + " / ") || sfSeg === rootSeg;
-                              if (belongs && (sf.category || "Portfolio Companies") !== value) {
-                                await onFolderCategoryUpdated?.(sf.id, value);
-                              }
-                            }
-
-                            // Notify parent so initialDriveSyncConfig (and its backfill effect) stays in sync
-                            onDriveSyncConfigChanged?.(foldersToSave);
-
-                            toast({ title: "Folder type updated", description: `"${folder.name}" is now ${value}. Source folders re-categorized.` });
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="w-[190px] h-8 text-xs border border-slate-200 bg-white text-slate-900 font-mono rounded-md hover:border-blue-400 transition-colors">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
-                          {DRIVE_ROOT_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat} className="text-slate-900 font-mono hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {connectedDriveFolders.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          const updated = connectedDriveFolders.filter(f => f.id !== folder.id);
-                          setConnectedDriveFolders(updated);
-                          if (updated.length > 0) {
-                            setConnectedDriveFolderId(updated[0].id);
-                            setConnectedDriveFolderName(updated[0].name);
-                          } else {
-                            setConnectedDriveFolderId(null);
-                            setConnectedDriveFolderName(null);
-                          }
-                          // Persist updated list (include category for each folder)
-                          if (activeEventId) {
-                            const foldersToSave = updated.map((f) => ({ id: f.id, name: f.name, category: f.category ?? "Portfolio Companies" }));
-                            await supabase.from("sync_configurations")
-                              .update({
-                                config: {
-                                  google_drive_folder_id: updated[0]?.id || null,
-                                  google_drive_folder_name: updated[0]?.name || null,
-                                  folders: foldersToSave,
-                                },
-                              })
-                              .eq("event_id", activeEventId)
-                              .eq("source_type", "google_drive");
-                          }
-                          toast({ title: "Folder removed", description: `Removed "${folder.name}" from sync.` });
-                        }}
-                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Sync status bar */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/15 bg-white">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">AUTO-SYNC ACTIVE</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">Every 15 min</span>
-                  {lastDriveSyncAt && (
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      | Last: {new Date(lastDriveSyncAt).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={connectDrivePortfolioFolder}
-                    disabled={isDriveConnectOnCooldown || isConnectingDrive}
-                    className="border border-slate-200 bg-white text-slate-500 hover:bg-blue-500/10 hover:border-blue-500 hover:text-blue-600 font-bold text-[10px] h-7 px-2 disabled:opacity-50"
-                  >
-                    {isConnectingDrive ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5 mr-1" />}
-                    {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Add Folder"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => syncGoogleDriveFolder()}
-                    disabled={isSyncingDrive || !canImport}
-                    className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50 h-7 text-[10px] px-2"
-                  >
-                    {isSyncingDrive ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                        Sync Now
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Sync progress */}
-              {driveSyncProgress && (
-                <div className="space-y-2 p-3 rounded-lg border border-blue-500/30 bg-blue-600/5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-slate-600">
-                      {driveSyncProgress.phase}{" "}
-                      {driveSyncProgress.total > 0 && (
-                        <>
-                          {driveSyncProgress.current}/{driveSyncProgress.total}:{" "}
-                          <span className="text-blue-600">{driveSyncProgress.currentItem}</span>
-                        </>
-                      )}
-                    </span>
-                    {driveSyncProgress.total > 0 && (
-                      <span className="text-xs font-mono text-slate-400">
-                        {Math.round((driveSyncProgress.current / driveSyncProgress.total) * 100)}%
-                      </span>
-                    )}
-                  </div>
-                  {driveSyncProgress.total > 0 && (
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${(driveSyncProgress.current / driveSyncProgress.total) * 100}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Sync results */}
-              {driveSyncResults.length > 0 && !driveSyncProgress && (
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {driveSyncResults.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[10px] font-mono text-slate-500 px-2 py-1 rounded bg-slate-50">
-                      <Building2 className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                      <span className="font-bold text-slate-700">{r.companyName}</span>
-                      {r.newFiles > 0 && <span className="text-emerald-400">+{r.newFiles} new</span>}
-                      {r.updatedFiles > 0 && <span className="text-blue-600">{r.updatedFiles} updated</span>}
-                      {r.skippedFiles > 0 && <span className="text-slate-400">{r.skippedFiles} unchanged</span>}
-                      {r.newFiles === 0 && r.updatedFiles === 0 && r.skippedFiles === 0 && (
-                        <span className="text-slate-400">empty folder</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-6 space-y-3">
-              <Cloud className="h-10 w-10 text-slate-300 mx-auto" />
-              <p className="text-sm text-slate-400 font-mono">No portfolio folder connected yet.</p>
-              <Button
-                onClick={connectDrivePortfolioFolder}
-                disabled={!canImport || isDriveConnectOnCooldown || isConnectingDrive}
-                className="bg-blue-600 text-slate-900 hover:bg-blue-600/80 font-bold border-2 border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50"
-              >
-                {isConnectingDrive ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Folder className="h-4 w-4 mr-2" />}
-                {isDriveConnectOnCooldown ? `Wait ${driveConnectCooldownSeconds}s` : isConnectingDrive ? "Connecting…" : "Connect Portfolio Folder"}
-              </Button>
-              <p className="text-[10px] text-slate-400 font-mono">
-                Pick a root folder from Google Drive. Each sub-folder inside it will be treated as one portfolio company.
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -5255,7 +5254,7 @@ function SourcesTab({
                   <SelectTrigger className="w-[180px] h-7 text-[10px] border-slate-300 bg-white text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a2e] border-slate-200">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     {FOLDER_CATEGORIES.map((cat) => (
                       <SelectItem key={cat} value={cat} className="text-slate-900 font-mono text-xs hover:bg-blue-50 focus:bg-blue-50 cursor-pointer">
                         {cat}
@@ -5392,10 +5391,18 @@ function DashboardTab({
   const [statusNote, setStatusNote] = useState<Record<string, string>>({});
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
-  const [dashboardSection, setDashboardSection] = useState<"tasks" | "analytics">("tasks");
+  const [dashboardSection, setDashboardSection] = useState<"tasks" | "analytics" | "temporal">("tasks");
   const [ganttRange, setGanttRange] = useState<4 | 8 | 12>(8);
   const [ganttGroupBy, setGanttGroupBy] = useState<"none" | "assignee">("none");
   const [extraProfiles, setExtraProfiles] = useState<Record<string, { full_name?: string | null; email?: string | null }>>({});
+  const [temporalFacts, setTemporalFacts] = useState<Array<{
+    id: string; company_name: string; field_name: string; fact_type: string;
+    value_numeric: number | null; value_text: string | null; unit: string;
+    period: string | null; observed_at: string; delta_absolute: number | null;
+    delta_percent: number | null; acceleration: number | null;
+    previous_value_numeric: number | null;
+  }>>([]);
+  const [temporalLoading, setTemporalLoading] = useState(false);
 
   const myTasks = useMemo(
     () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
@@ -5417,6 +5424,22 @@ function DashboardTab({
       .order("created_at", { ascending: false })
       .then(({ data }) => setTeamMembers((data as TeamMember[]) || []));
   }, [orgId]);
+
+  // Load temporal facts for the Temporal Intelligence dashboard
+  useEffect(() => {
+    if (!activeEventId || dashboardSection !== "temporal") return;
+    setTemporalLoading(true);
+    supabase
+      .from("temporal_facts" as any)
+      .select("id, company_name, field_name, fact_type, value_numeric, value_text, unit, period, observed_at, delta_absolute, delta_percent, acceleration, previous_value_numeric")
+      .eq("event_id", activeEventId)
+      .order("observed_at", { ascending: false })
+      .limit(200)
+      .then(({ data, error }: any) => {
+        if (!error && data) setTemporalFacts(data);
+        setTemporalLoading(false);
+      });
+  }, [activeEventId, dashboardSection]);
 
   // Resolve "Created by" / assignee when not in teamMembers (e.g. RLS or timing)
   useEffect(() => {
@@ -5538,21 +5561,32 @@ function DashboardTab({
   ganttStart.setHours(0, 0, 0, 0);
   const ganttStartMs = ganttStart.getTime();
 
-  // LP Dashboard: portfolio-level KPIs only
-  if (isLP) {
-    const portfolioCount = companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).length;
-    const fundCount = companyCards.filter((c) => c.entity_type === "fund").length;
-    const lastUpdated = documents.length > 0 ? "Recently" : "No data yet";
+  const portfolioCount = companyCards.filter((c) => c.entity_type === "company" || !c.entity_type).length;
+  const fundCount = companyCards.filter((c) => c.entity_type === "fund").length;
+  const lastUpdated = documents.length > 0 ? "Recently" : "No data yet";
+
+  // LP Dashboard: portfolio-level KPIs only (shown when tasks tab is active for LPs)
+  if (isLP && (dashboardSection as string) === "tasks") {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 border-2 border-blue-500 rounded-lg bg-white">
-            <Building2 className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-mono font-black text-slate-900 uppercase tracking-tight">LP Dashboard</h2>
-            <p className="text-xs text-slate-500 font-mono">Portfolio overview for limited partners</p>
-          </div>
+        {/* Section switcher for LP */}
+        <div className="flex items-center gap-1 border-b border-slate-200/20 pb-2">
+          <button
+            onClick={() => setDashboardSection("tasks")}
+            className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
+              dashboardSection === "tasks" ? "bg-blue-600/15 text-blue-600 border-b-2 border-blue-500" : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Building2 className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Portfolio Overview
+          </button>
+          <button
+            onClick={() => setDashboardSection("temporal")}
+            className="px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all text-slate-500 hover:text-slate-900"
+          >
+            <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Temporal Intelligence
+          </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200 bg-white">
@@ -5651,18 +5685,18 @@ function DashboardTab({
 
   return (
     <div className="space-y-6">
-      {/* Section switcher: Tasks (all) / Analytics (MD only) */}
-      {isMD && (
-        <div className="flex items-center gap-1 border-b border-slate-200/20 pb-2">
-          <button
-            onClick={() => setDashboardSection("tasks")}
-            className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-              dashboardSection === "tasks" ? "bg-blue-600/15 text-blue-600 border-b-2 border-blue-500" : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            <ListTodo className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-            Tasks & Overview
-          </button>
+      {/* Section switcher */}
+      <div className="flex items-center gap-1 border-b border-slate-200/20 pb-2">
+        <button
+          onClick={() => setDashboardSection("tasks")}
+          className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
+            dashboardSection === "tasks" ? "bg-blue-600/15 text-blue-600 border-b-2 border-blue-500" : "text-slate-500 hover:text-slate-900"
+          }`}
+        >
+          <ListTodo className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Tasks & Overview
+        </button>
+        {isMD && (
           <button
             onClick={() => setDashboardSection("analytics")}
             className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
@@ -5672,16 +5706,231 @@ function DashboardTab({
             <BarChart3 className="h-4 w-4 inline mr-1.5 -mt-0.5" />
             Decision Analytics
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => setDashboardSection("temporal")}
+          className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
+            dashboardSection === "temporal" ? "bg-emerald-600/15 text-emerald-600 border-b-2 border-emerald-500" : "text-slate-500 hover:text-slate-900"
+          }`}
+        >
+          <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Temporal Intelligence
+        </button>
+      </div>
 
       {/* Decision Analytics section (MD only) */}
       {isMD && dashboardSection === "analytics" && (
         <DecisionEngineDashboardTab decisions={decisions} />
       )}
 
-      {/* Tasks & Overview section (shown for everyone when not on analytics) */}
-      {(dashboardSection === "tasks" || !isMD) && (
+      {/* Temporal Intelligence section */}
+      {dashboardSection === "temporal" && (
+        <div className="space-y-6">
+          <Card className="border border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-200">
+              <CardTitle className="text-slate-900 font-mono font-black uppercase tracking-tight flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+                Temporal Intelligence — How Facts Evolve
+              </CardTitle>
+              <CardDescription className="text-slate-500 font-mono">
+                Tracks how company metrics change over time. Delta = first derivative (change), Acceleration = second derivative (change of change).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {temporalLoading ? (
+                <div className="flex items-center justify-center py-10 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                  <span className="text-sm text-slate-500 font-mono">Loading temporal data...</span>
+                </div>
+              ) : temporalFacts.length === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <Clock className="h-10 w-10 text-slate-300 mx-auto" />
+                  <p className="text-sm text-slate-400 font-mono">No temporal data yet.</p>
+                  <p className="text-xs text-slate-400 font-mono">Import documents with KPIs (revenue, ARR, headcount, etc.) to see how facts evolve over time.</p>
+                </div>
+              ) : (() => {
+                const companies = [...new Set(temporalFacts.map(f => f.company_name))].sort();
+                const grouped = new Map<string, typeof temporalFacts>();
+                temporalFacts.forEach(f => {
+                  const key = f.company_name;
+                  if (!grouped.has(key)) grouped.set(key, []);
+                  grouped.get(key)!.push(f);
+                });
+
+                const significantChanges = temporalFacts.filter(f => f.delta_percent != null && Math.abs(f.delta_percent) > 5)
+                  .sort((a, b) => Math.abs(b.delta_percent || 0) - Math.abs(a.delta_percent || 0))
+                  .slice(0, 10);
+
+                const acceleratingFacts = temporalFacts.filter(f => f.acceleration != null && f.acceleration !== 0)
+                  .sort((a, b) => Math.abs(b.acceleration || 0) - Math.abs(a.acceleration || 0))
+                  .slice(0, 10);
+
+                return (
+                  <div className="space-y-6">
+                    {/* Summary cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                        <p className="text-2xl font-mono font-black text-slate-900">{companies.length}</p>
+                        <p className="text-xs text-slate-500 font-mono uppercase tracking-wider">Companies Tracked</p>
+                      </div>
+                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                        <p className="text-2xl font-mono font-black text-slate-900">{temporalFacts.length}</p>
+                        <p className="text-xs text-slate-500 font-mono uppercase tracking-wider">Data Points</p>
+                      </div>
+                      <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50">
+                        <p className="text-2xl font-mono font-black text-emerald-700">
+                          {temporalFacts.filter(f => (f.delta_percent || 0) > 0).length}
+                        </p>
+                        <p className="text-xs text-emerald-600 font-mono uppercase tracking-wider">Growing Metrics</p>
+                      </div>
+                      <div className="p-4 rounded-lg border border-red-200 bg-red-50">
+                        <p className="text-2xl font-mono font-black text-red-700">
+                          {temporalFacts.filter(f => (f.delta_percent || 0) < 0).length}
+                        </p>
+                        <p className="text-xs text-red-600 font-mono uppercase tracking-wider">Declining Metrics</p>
+                      </div>
+                    </div>
+
+                    {/* Significant Changes (Alerts) */}
+                    {significantChanges.length > 0 && (
+                      <Card className="border border-amber-200 bg-amber-50/50">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-mono font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            Significant Changes Detected
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {significantChanges.map(f => (
+                            <div key={f.id} className="flex items-center justify-between p-2.5 rounded-lg border border-amber-200/50 bg-white">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${(f.delta_percent || 0) > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+                                <div>
+                                  <span className="font-mono font-bold text-slate-900 text-sm">{f.company_name}</span>
+                                  <span className="text-slate-400 mx-1.5">·</span>
+                                  <span className="font-mono text-slate-600 text-sm">{f.field_name}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 text-right">
+                                {f.previous_value_numeric != null && (
+                                  <span className="text-xs text-slate-400 font-mono">
+                                    {f.previous_value_numeric.toLocaleString()} →
+                                  </span>
+                                )}
+                                <span className="text-sm font-mono font-bold text-slate-900">
+                                  {f.value_numeric?.toLocaleString()} {f.unit}
+                                </span>
+                                <Badge className={`font-mono text-xs ${(f.delta_percent || 0) > 0 ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-red-100 text-red-700 border-red-300"}`}>
+                                  {(f.delta_percent || 0) > 0 ? "+" : ""}{f.delta_percent?.toFixed(1)}%
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Acceleration Insights (Second Derivative / Gamma) */}
+                    {acceleratingFacts.length > 0 && (
+                      <Card className="border border-blue-200 bg-blue-50/50">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-mono font-bold text-blue-800 uppercase tracking-wider flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4" />
+                            Acceleration Insights (Second Derivative)
+                          </CardTitle>
+                          <CardDescription className="text-xs text-blue-600 font-mono">
+                            Shows whether growth is speeding up or slowing down — the "gamma" of each metric.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {acceleratingFacts.map(f => {
+                            const accel = f.acceleration || 0;
+                            const isAccelerating = accel > 0;
+                            return (
+                              <div key={f.id} className="flex items-center justify-between p-2.5 rounded-lg border border-blue-200/50 bg-white">
+                                <div className="flex items-center gap-3">
+                                  <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${isAccelerating ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
+                                    {isAccelerating ? "↑↑" : "↓↓"}
+                                  </div>
+                                  <div>
+                                    <span className="font-mono font-bold text-slate-900 text-sm">{f.company_name}</span>
+                                    <span className="text-slate-400 mx-1.5">·</span>
+                                    <span className="font-mono text-slate-600 text-sm">{f.field_name}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-400 font-mono">{f.period || "—"}</span>
+                                  <Badge className={`font-mono text-xs ${isAccelerating ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-orange-100 text-orange-700 border-orange-300"}`}>
+                                    {isAccelerating ? "Accelerating" : "Decelerating"} ({accel > 0 ? "+" : ""}{accel.toLocaleString()})
+                                  </Badge>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Per-company temporal timeline */}
+                    <Card className="border border-slate-200 bg-white">
+                      <CardHeader className="border-b border-slate-200">
+                        <CardTitle className="text-sm font-mono font-bold text-slate-900 uppercase tracking-wider">
+                          Company Fact Timeline
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4 max-h-[500px] overflow-y-auto">
+                        {companies.map(company => {
+                          const facts = grouped.get(company) || [];
+                          const metrics = [...new Set(facts.map(f => f.field_name))];
+                          return (
+                            <div key={company} className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-blue-600" />
+                                <span className="font-mono font-bold text-slate-900">{company}</span>
+                                <span className="text-xs text-slate-400 font-mono">{facts.length} data points · {metrics.length} metrics</span>
+                              </div>
+                              <div className="ml-6 space-y-1">
+                                {metrics.map(metric => {
+                                  const metricFacts = facts.filter(f => f.field_name === metric).sort((a, b) => new Date(a.observed_at).getTime() - new Date(b.observed_at).getTime());
+                                  const latest = metricFacts[metricFacts.length - 1];
+                                  return (
+                                    <div key={metric} className="flex items-center justify-between py-1.5 px-3 rounded border border-slate-100 bg-slate-50/50 text-sm">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-slate-700">{metric}</span>
+                                        <span className="text-xs text-slate-400 font-mono">({metricFacts.length} obs.)</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono font-bold text-slate-900">{latest?.value_numeric?.toLocaleString() ?? latest?.value_text ?? "—"} {latest?.unit}</span>
+                                        {latest?.delta_percent != null && (
+                                          <span className={`text-xs font-mono font-bold ${(latest.delta_percent) > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                            {latest.delta_percent > 0 ? "+" : ""}{latest.delta_percent.toFixed(1)}%
+                                          </span>
+                                        )}
+                                        {latest?.acceleration != null && latest.acceleration !== 0 && (
+                                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${latest.acceleration > 0 ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
+                                            {latest.acceleration > 0 ? "accel" : "decel"}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tasks & Overview section */}
+      {dashboardSection === "tasks" && (
       <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -6084,7 +6333,7 @@ function DashboardTab({
                   <SelectTrigger className="border border-slate-300 bg-slate-50 text-slate-900 mt-1.5 font-mono focus:border-blue-500">
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#0a0a0a] border border-slate-300">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="unassigned" className="text-slate-500 font-mono">Unassigned</SelectItem>
                     {teamMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id} className="text-slate-900 font-mono">
@@ -6100,7 +6349,7 @@ function DashboardTab({
                   <SelectTrigger className="border border-slate-300 bg-slate-50 text-slate-900 mt-1.5 font-mono focus:border-blue-500">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#0a0a0a] border border-slate-300">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-md">
                     <SelectItem value="low" className="text-slate-900 font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400" />Low</span></SelectItem>
                     <SelectItem value="medium" className="text-slate-900 font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-400" />Medium</span></SelectItem>
                     <SelectItem value="high" className="text-slate-900 font-mono"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400" />High</span></SelectItem>
@@ -7764,6 +8013,7 @@ export default function CIS() {
   const [openAddFolderAfterOAuth, setOpenAddFolderAfterOAuth] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [multiAgentEnabled, setMultiAgentEnabled] = useState(false);
+  const [reflexionEnabled, setReflexionEnabled] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   
   // Company Connections state for visual graph and decision logging
@@ -9567,6 +9817,52 @@ export default function CIS() {
             let entityId: string;
             if (existing && existing.length > 0) {
               entityId = existing[0].id;
+
+              // ── Temporal Memory: detect property changes and record deltas ──
+              if (entity.properties && Object.keys(entity.properties).length > 0) {
+                try {
+                  const { data: existingEntity } = await supabase
+                    .from("kg_entities")
+                    .select("properties")
+                    .eq("id", entityId)
+                    .single();
+                  const oldProps = (existingEntity?.properties || {}) as Record<string, unknown>;
+                  const newProps = entity.properties as Record<string, unknown>;
+                  const temporalInserts: Array<{
+                    event_id: string; entity_id: string; entity_name: string;
+                    field_name: string; old_value: string | null; new_value: string | null;
+                    numeric_old: number | null; numeric_new: number | null;
+                    source_document_id: string;
+                  }> = [];
+                  for (const [key, newVal] of Object.entries(newProps)) {
+                    if (newVal == null) continue;
+                    const oldVal = oldProps[key];
+                    const newStr = String(newVal);
+                    const oldStr = oldVal != null ? String(oldVal) : null;
+                    if (oldStr !== newStr && oldStr != null) {
+                      const numOld = typeof oldVal === "number" ? oldVal : parseFloat(String(oldVal));
+                      const numNew = typeof newVal === "number" ? newVal : parseFloat(String(newVal));
+                      temporalInserts.push({
+                        event_id: eventId,
+                        entity_id: entityId,
+                        entity_name: entity.name,
+                        field_name: key,
+                        old_value: oldStr,
+                        new_value: newStr,
+                        numeric_old: isNaN(numOld) ? null : numOld,
+                        numeric_new: isNaN(numNew) ? null : numNew,
+                        source_document_id: documentId,
+                      });
+                    }
+                  }
+                  if (temporalInserts.length > 0) {
+                    await supabase.from("temporal_facts" as any).insert(temporalInserts);
+                    // Merge new properties into existing entity
+                    const merged = { ...oldProps, ...newProps };
+                    await supabase.from("kg_entities").update({ properties: merged, updated_at: new Date().toISOString() }).eq("id", entityId);
+                  }
+                } catch { /* non-fatal: temporal tracking is best-effort */ }
+              }
             } else {
               const { data: newEntity, error: insertErr } = await supabase
                 .from("kg_entities")
@@ -9673,17 +9969,19 @@ export default function CIS() {
             }
           }
 
-          // ── Step 3: Insert KPIs ──
+          // ── Step 3: Insert KPIs + Temporal Facts ──
           for (const kpi of extraction.kpis) {
-            // Check if KPI already exists (same company + metric + period)
             const { data: existingKpi } = await supabase
               .from("company_kpis")
-              .select("id")
+              .select("id, value")
               .eq("event_id", eventId)
               .eq("company_name", kpi.company_name)
               .eq("metric_name", kpi.metric_name)
               .eq("period", kpi.period || "")
               .limit(1);
+
+            const prevValue = existingKpi?.[0]?.value ?? null;
+            const entityIdForKpi = entityMap.get(normalizeCompanyNameForMatch(kpi.company_name)) || null;
 
             if (!existingKpi || existingKpi.length === 0) {
               const { error: kpiErr } = await supabase.from("company_kpis").insert({
@@ -9702,6 +10000,46 @@ export default function CIS() {
               if (kpiErr) {
               }
             }
+
+            // Record temporal fact (tracks value over time for delta/gamma analysis)
+            const deltaAbs = prevValue != null ? kpi.value - prevValue : null;
+            const deltaPct = prevValue != null && prevValue !== 0 ? ((kpi.value - prevValue) / Math.abs(prevValue)) * 100 : null;
+
+            // Compute acceleration: look at previous delta to get second derivative
+            let acceleration: number | null = null;
+            if (deltaAbs != null) {
+              const { data: prevFacts } = await supabase
+                .from("temporal_facts" as any)
+                .select("delta_absolute")
+                .eq("event_id", eventId)
+                .eq("company_name", kpi.company_name)
+                .eq("field_name", kpi.metric_name)
+                .order("observed_at", { ascending: false })
+                .limit(1);
+              const prevDelta = (prevFacts as any)?.[0]?.delta_absolute;
+              if (prevDelta != null) {
+                acceleration = deltaAbs - prevDelta;
+              }
+            }
+
+            await supabase.from("temporal_facts" as any).insert({
+              event_id: eventId,
+              entity_id: entityIdForKpi,
+              company_name: kpi.company_name,
+              fact_type: "kpi",
+              field_name: kpi.metric_name,
+              value_numeric: kpi.value,
+              unit: kpi.unit || "USD",
+              period: kpi.period || null,
+              source_document_id: documentId,
+              previous_value_numeric: prevValue,
+              delta_absolute: deltaAbs,
+              delta_percent: deltaPct,
+              acceleration,
+              confidence: kpi.confidence,
+              extraction_method: "claude_extraction",
+              created_by: userId,
+            });
           }
 
         } catch (err) {
@@ -9758,7 +10096,7 @@ export default function CIS() {
                   total_chunks: pairs.length,
                 });
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                  setTimeout(() => reject(new Error("Contextual enrichment timeout")), 6000)
+                  setTimeout(() => reject(new Error("Contextual enrichment timeout")), 12000)
                 );
                 const ctx = await Promise.race([ctxPromise, timeoutPromise]);
                 if (ctx.enriched_chunk) {
@@ -9943,6 +10281,7 @@ export default function CIS() {
         setCritic: (text: string) => {
           setMessages((prev) => patchById(prev, { critic: text }));
         },
+        getText: () => currentText,
         setContextLabels: (labels: string[]) => {
           _contextLabels = labels;
           setMessages((prev) => patchById(prev, { contextLabels: labels }));
@@ -10331,6 +10670,76 @@ export default function CIS() {
               if (!streamCompleted) streamer.setSourceDocs(docs);
             }
           );
+
+          if (!streamCompleted && reflexionEnabled) {
+            const draftAnswer = streamer.getText?.() || "";
+            if (draftAnswer.length > 80) {
+              try {
+                setChatLoadingStage?.("Reflexion: Partner Agent critiquing...");
+                streamer.appendChunk("\n\n---\n\n**Reflexion — Partner Agent Review:**\n\n");
+
+                const criticResult = await criticCheck({
+                  question,
+                  answer: draftAnswer,
+                  contextVector: "",
+                  contextGraph: "",
+                  contextKpis: "",
+                });
+
+                if (criticResult.issues.length > 0) {
+                  const issueList = criticResult.issues.map((i: string) => `- ${i}`).join("\n");
+                  streamer.appendChunk(`*Issues found:*\n${issueList}\n\n`);
+
+                  setChatLoadingStage?.("Reflexion: Refining answer...");
+
+                  const reflection = await system2Reflect({
+                    question,
+                    draftAnswer,
+                    vectorContext: "",
+                    graphContext: "",
+                    kpiContext: "",
+                    iteration: 0,
+                    maxIterations: 1,
+                  });
+
+                  streamer.appendChunk("**Refined answer:**\n\n");
+
+                  const refineResp = await system2RefineStream({
+                    question,
+                    draftAnswer,
+                    reflectionReasoning: `Issues found: ${criticResult.issues.join("; ")}. Confidence: ${reflection.confidence}`,
+                    additionalContext: reflection.follow_up_queries?.join("; ") || "",
+                  });
+
+                  const reader = refineResp.body?.getReader();
+                  const decoder = new TextDecoder();
+                  if (reader) {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      const text = decoder.decode(value, { stream: true });
+                      for (const line of text.split("\n")) {
+                        if (!line.startsWith("data: ")) continue;
+                        const payload = line.slice(6).trim();
+                        if (payload === "[DONE]") break;
+                        try {
+                          const parsed = JSON.parse(payload);
+                          if (parsed.text) streamer.appendChunk(parsed.text);
+                        } catch { /* skip non-JSON lines */ }
+                      }
+                    }
+                  }
+
+                  streamer.setCritic(`Reflexion found ${criticResult.issues.length} issue(s) and self-corrected. Confidence: ${Math.round(reflection.confidence * 100)}%`);
+                } else {
+                  streamer.appendChunk("*No issues found — answer verified.*\n");
+                  streamer.setCritic("Reflexion: Answer verified — no corrections needed.");
+                }
+              } catch (reflexErr) {
+                streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
+              }
+            }
+          }
 
           if (!streamCompleted) {
             streamCompleted = true;
@@ -13865,6 +14274,19 @@ export default function CIS() {
                       >
                         <Sparkles className="h-3.5 w-3.5" />
                         Multi-Agent {multiAgentEnabled ? "ON" : "OFF"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReflexionEnabled((prev) => !prev)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all border ${
+                          reflexionEnabled
+                            ? "border-amber-500/50 bg-amber-500/15 text-amber-600"
+                            : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-500"
+                        }`}
+                        title="Reflexion: 3-step self-correcting loop. Agent generates → Partner Agent critiques for gaps → Agent refines before you see it. Builds trust through verified, self-checked answers."
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Reflexion {reflexionEnabled ? "ON" : "OFF"}
                       </button>
                     </div>
                     <span className="text-[11px] text-slate-400 font-mono">
