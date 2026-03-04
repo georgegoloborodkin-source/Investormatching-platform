@@ -489,7 +489,7 @@ export default function Landing() {
 
           {/* ── RIGHT: Spline 3D — shifted up and left to sit near "Interface" ── */}
           <motion.div
-            className="relative w-full h-[400px] sm:h-[500px] lg:h-[650px] rounded-2xl overflow-hidden lg:-ml-16 lg:-mt-16"
+            className="relative w-full h-[400px] sm:h-[500px] lg:h-[700px] rounded-2xl overflow-hidden lg:-ml-48 lg:-mt-40"
             initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
