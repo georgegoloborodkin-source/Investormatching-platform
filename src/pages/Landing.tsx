@@ -461,12 +461,20 @@ export default function Landing() {
             </motion.div>
 
             {/* headline */}
-            <motion.h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-              <motion.span
-                className="inline-block"
-                animate={{ opacity: [0.85, 1, 0.85] }}
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-              >Your Networks.</motion.span>
+            <motion.h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-white mb-6 -ml-1" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="flex flex-wrap items-baseline gap-3 sm:gap-4 -ml-2">
+                <span className="inline-flex items-center gap-2 shrink-0">
+                  <span className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-white shrink-0">
+                    <Command className="h-4 w-4 sm:h-5 sm:w-5 text-black" />
+                  </span>
+                  <span className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-white" style={fInter}>Venture OS</span>
+                </span>
+                <motion.span
+                  className="inline-block"
+                  animate={{ opacity: [0.85, 1, 0.85] }}
+                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                >Your Networks.</motion.span>
+              </div>
               <br />
               <span>One Rapid </span>
               <motion.span
