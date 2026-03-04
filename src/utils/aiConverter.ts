@@ -1703,3 +1703,159 @@ export async function colbertRerank(input: {
     return fallback;
   }
 }
+
+
+// ---------------------------------------------------------------------------
+//  NotebookLM Integration — API client functions
+// ---------------------------------------------------------------------------
+
+export interface NLMNotebook {
+  id: string;
+  event_id: string;
+  notebooklm_id: string;
+  title: string;
+  sources_count: number;
+  sources_synced_at: string | null;
+  created_at: string;
+}
+
+export interface NLMArtifact {
+  id: string;
+  event_id: string;
+  artifact_type: string;
+  title: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  download_url: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function notebooklmStatus(): Promise<{
+  available: boolean;
+  reason?: string;
+  notebooks_count?: number;
+}> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/notebooklm/status`, undefined, 15000);
+    if (!res.ok) return { available: false, reason: `HTTP ${res.status}` };
+    return await res.json();
+  } catch (e: unknown) {
+    return { available: false, reason: String(e) };
+  }
+}
+
+export async function notebooklmCreateNotebook(
+  eventId: string,
+  title: string = "Research Workspace",
+): Promise<{ notebook: NLMNotebook; created: boolean }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const res = await fetchWithTimeout(
+    `${baseUrl}/notebooklm/notebooks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: eventId, title }),
+    },
+    30000,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Failed to create notebook: ${detail}`);
+  }
+  return await res.json();
+}
+
+export async function notebooklmGetNotebook(
+  eventId: string,
+): Promise<{ notebook: NLMNotebook | null }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/notebooklm/notebooks/${eventId}`, undefined, 15000);
+    if (!res.ok) return { notebook: null };
+    return await res.json();
+  } catch {
+    return { notebook: null };
+  }
+}
+
+export async function notebooklmSyncSources(
+  eventId: string,
+): Promise<{ synced: number; total_sources: number; errors: Array<{ doc_id: string; title: string; error: string }> }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const res = await fetchWithTimeout(
+    `${baseUrl}/notebooklm/notebooks/${eventId}/sync`,
+    { method: "POST" },
+    120000,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Sync failed: ${detail}`);
+  }
+  return await res.json();
+}
+
+export type NLMArtifactType =
+  | "audio"
+  | "video"
+  | "report"
+  | "quiz"
+  | "flashcards"
+  | "mind_map"
+  | "slide_deck"
+  | "infographic"
+  | "data_table";
+
+export async function notebooklmGenerate(
+  eventId: string,
+  artifactType: NLMArtifactType,
+  options: { title?: string; instructions?: string } = {},
+): Promise<{ artifact: NLMArtifact; task_id: string | null }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const res = await fetchWithTimeout(
+    `${baseUrl}/notebooklm/notebooks/${eventId}/generate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artifact_type: artifactType, ...options }),
+    },
+    60000,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Generation failed: ${detail}`);
+  }
+  return await res.json();
+}
+
+export async function notebooklmListArtifacts(
+  eventId: string,
+): Promise<{ artifacts: NLMArtifact[] }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/notebooklm/notebooks/${eventId}/artifacts`, undefined, 15000);
+    if (!res.ok) return { artifacts: [] };
+    return await res.json();
+  } catch {
+    return { artifacts: [] };
+  }
+}
+
+export async function notebooklmDownloadArtifact(
+  eventId: string,
+  artifactId: string,
+): Promise<{ ready: boolean; download_url?: string; file_path?: string; reason?: string }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(
+      `${baseUrl}/notebooklm/notebooks/${eventId}/artifacts/${artifactId}/download`,
+      undefined,
+      30000,
+    );
+    if (!res.ok) return { ready: false, reason: `HTTP ${res.status}` };
+    return await res.json();
+  } catch (e: unknown) {
+    return { ready: false, reason: String(e) };
+  }
+}

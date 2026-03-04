@@ -8847,6 +8847,351 @@ async def kg_delete_all(request: KGDeleteRequest, auth: AuthContext = Depends(ge
     return {"deleted": deleted, "message": f"Deleted {deleted} entity cards."}
 
 
+# ---------------------------------------------------------------------------
+#  NotebookLM Integration — Google NotebookLM API wrapper
+# ---------------------------------------------------------------------------
+
+try:
+    from notebooklm import NotebookLMClient as _NLMClient
+    _notebooklm_available = True
+except ImportError:
+    _NLMClient = None  # type: ignore[assignment,misc]
+    _notebooklm_available = False
+
+_nlm_client = None
+
+async def _get_nlm_client():
+    """Lazy-init NotebookLM async client from stored credentials."""
+    global _nlm_client
+    if _nlm_client is not None:
+        return _nlm_client
+    if not _notebooklm_available or _NLMClient is None:
+        raise HTTPException(status_code=501, detail="notebooklm-py not installed. Run: pip install notebooklm-py[browser]")
+    try:
+        _nlm_client = await _NLMClient.from_storage()
+        await _nlm_client.__aenter__()
+        return _nlm_client
+    except Exception as e:
+        _nlm_client = None
+        raise HTTPException(status_code=503, detail=f"NotebookLM auth failed — run 'notebooklm login' first. Error: {str(e)[:200]}")
+
+
+class NLMCreateRequest(BaseModel):
+    event_id: str
+    title: str = "Research Workspace"
+
+class NLMGenerateRequest(BaseModel):
+    artifact_type: str  # audio, video, report, quiz, flashcards, mind_map, slide_deck, infographic, data_table
+    title: str = ""
+    instructions: str = ""
+    options: Dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/notebooklm/status")
+async def notebooklm_status():
+    """Check if NotebookLM integration is available and authenticated."""
+    if not _notebooklm_available:
+        return {"available": False, "reason": "notebooklm-py not installed"}
+    try:
+        client = await _get_nlm_client()
+        notebooks = await client.notebooks.list()
+        return {"available": True, "notebooks_count": len(notebooks)}
+    except HTTPException as e:
+        return {"available": False, "reason": e.detail}
+    except Exception as e:
+        return {"available": False, "reason": str(e)[:200]}
+
+
+@app.post("/notebooklm/notebooks")
+async def notebooklm_create_notebook(request: NLMCreateRequest):
+    """Create a NotebookLM notebook linked to an event."""
+    client = await _get_nlm_client()
+    sb = get_supabase()
+
+    existing = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").select("id, notebooklm_id, title")
+        .eq("event_id", request.event_id).limit(1).execute()
+    )
+    if existing.data and len(existing.data) > 0:
+        return {"notebook": existing.data[0], "created": False}
+
+    nb = await client.notebooks.create(request.title)
+
+    row = {
+        "event_id": request.event_id,
+        "notebooklm_id": nb.id,
+        "title": request.title,
+        "sources_count": 0,
+    }
+    result = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").insert(row).execute()
+    )
+    return {"notebook": result.data[0] if result.data else row, "created": True}
+
+
+@app.get("/notebooklm/notebooks/{event_id}")
+async def notebooklm_get_notebook(event_id: str):
+    """Get the NotebookLM notebook mapping for an event."""
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks")
+        .select("id, event_id, notebooklm_id, title, sources_count, sources_synced_at, created_at")
+        .eq("event_id", event_id).limit(1).execute()
+    )
+    if not result.data or len(result.data) == 0:
+        return {"notebook": None}
+    return {"notebook": result.data[0]}
+
+
+@app.post("/notebooklm/notebooks/{event_id}/sync")
+async def notebooklm_sync_sources(event_id: str):
+    """Sync event documents to the NotebookLM notebook."""
+    client = await _get_nlm_client()
+    sb = get_supabase()
+
+    mapping = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").select("id, notebooklm_id")
+        .eq("event_id", event_id).limit(1).execute()
+    )
+    if not mapping.data or len(mapping.data) == 0:
+        raise HTTPException(status_code=404, detail="No NotebookLM notebook for this event. Create one first.")
+    nb_id = mapping.data[0]["notebooklm_id"]
+    mapping_id = mapping.data[0]["id"]
+
+    docs = await asyncio.to_thread(
+        lambda: sb.table("documents").select("id, title, raw_content")
+        .eq("event_id", event_id).not_.is_("raw_content", "null")
+        .order("created_at", desc=True).limit(50).execute()
+    )
+    if not docs.data:
+        return {"synced": 0, "message": "No documents with content found for this event."}
+
+    existing_sources = await client.sources.list(nb_id)
+    existing_titles = {s.title for s in existing_sources}
+
+    synced = 0
+    errors = []
+    for doc in docs.data:
+        title = doc.get("title", "Untitled")
+        content = doc.get("raw_content", "")
+        if not content or len(content.strip()) < 50:
+            continue
+        if title in existing_titles:
+            continue
+        try:
+            await client.sources.add_text(nb_id, title, content[:500000])
+            synced += 1
+        except Exception as e:
+            errors.append({"doc_id": doc["id"], "title": title, "error": str(e)[:100]})
+
+    from datetime import datetime
+    await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").update({
+            "sources_count": len(existing_sources) + synced,
+            "sources_synced_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", mapping_id).execute()
+    )
+
+    return {"synced": synced, "total_sources": len(existing_sources) + synced, "errors": errors}
+
+
+@app.post("/notebooklm/notebooks/{event_id}/generate")
+async def notebooklm_generate(event_id: str, request: NLMGenerateRequest):
+    """Generate content (audio, report, quiz, etc.) from the NotebookLM notebook."""
+    client = await _get_nlm_client()
+    sb = get_supabase()
+
+    mapping = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").select("id, notebooklm_id")
+        .eq("event_id", event_id).limit(1).execute()
+    )
+    if not mapping.data or len(mapping.data) == 0:
+        raise HTTPException(status_code=404, detail="No NotebookLM notebook for this event.")
+    nb_id = mapping.data[0]["notebooklm_id"]
+    mapping_db_id = mapping.data[0]["id"]
+
+    artifact_type = request.artifact_type
+    instructions = request.instructions or None
+    task_id = None
+    status_str = "generating"
+
+    try:
+        if artifact_type == "audio":
+            gen_status = await client.artifacts.generate_audio(nb_id, instructions=instructions)
+            task_id = gen_status.task_id
+        elif artifact_type == "video":
+            gen_status = await client.artifacts.generate_video(nb_id, instructions=instructions)
+            task_id = gen_status.task_id
+        elif artifact_type == "report":
+            gen_status = await client.artifacts.generate_report(
+                nb_id, title=request.title or "Briefing Document",
+                description=instructions or "Generate a comprehensive briefing document.",
+            )
+            task_id = gen_status.task_id
+        elif artifact_type == "quiz":
+            gen_status = await client.artifacts.generate_quiz(nb_id, instructions=instructions)
+            task_id = gen_status.task_id
+        elif artifact_type == "flashcards":
+            gen_status = await client.artifacts.generate_flashcards(nb_id, instructions=instructions)
+            task_id = gen_status.task_id
+        elif artifact_type == "slide_deck":
+            gen_status = await client.artifacts.generate_slide_deck(nb_id, instructions=instructions)
+            task_id = gen_status.task_id
+        elif artifact_type == "infographic":
+            gen_status = await client.artifacts.generate_infographic(nb_id)
+            task_id = gen_status.task_id
+        elif artifact_type == "data_table":
+            gen_status = await client.artifacts.generate_data_table(nb_id, instructions=instructions or "Create a summary table")
+            task_id = gen_status.task_id
+        elif artifact_type == "mind_map":
+            result = await client.artifacts.generate_mind_map(nb_id)
+            task_id = None
+            status_str = "completed"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown artifact type: {artifact_type}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)[:200]}")
+
+    row = {
+        "event_id": event_id,
+        "notebook_mapping_id": mapping_db_id,
+        "artifact_type": artifact_type,
+        "title": request.title or artifact_type.replace("_", " ").title(),
+        "notebooklm_task_id": task_id,
+        "status": status_str,
+        "metadata": request.options,
+    }
+    db_result = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_artifacts").insert(row).execute()
+    )
+    artifact_row = db_result.data[0] if db_result.data else row
+
+    if task_id:
+        asyncio.create_task(_poll_artifact_completion(client, sb, nb_id, task_id, artifact_row.get("id", ""), artifact_type))
+
+    return {"artifact": artifact_row, "task_id": task_id}
+
+
+async def _poll_artifact_completion(client, sb, nb_id: str, task_id: str, artifact_db_id: str, artifact_type: str):
+    """Background task: poll NotebookLM until generation completes, then update DB."""
+    try:
+        final = await client.artifacts.wait_for_completion(nb_id, task_id, timeout=600, poll_interval=8)
+        from datetime import datetime
+        update = {
+            "status": "completed" if final.is_complete else "failed",
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        if final.is_complete and hasattr(final, "url") and final.url:
+            update["download_url"] = final.url
+        await asyncio.to_thread(
+            lambda: sb.table("notebooklm_artifacts").update(update).eq("id", artifact_db_id).execute()
+        )
+    except Exception:
+        from datetime import datetime
+        await asyncio.to_thread(
+            lambda: sb.table("notebooklm_artifacts").update({
+                "status": "failed", "updated_at": datetime.utcnow().isoformat(),
+            }).eq("id", artifact_db_id).execute()
+        )
+
+
+@app.get("/notebooklm/notebooks/{event_id}/artifacts")
+async def notebooklm_list_artifacts(event_id: str):
+    """List all generated artifacts for an event."""
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_artifacts")
+        .select("id, event_id, artifact_type, title, status, download_url, metadata, created_at, updated_at")
+        .eq("event_id", event_id)
+        .order("created_at", desc=True)
+        .limit(50).execute()
+    )
+    return {"artifacts": result.data or []}
+
+
+@app.get("/notebooklm/notebooks/{event_id}/artifacts/{artifact_id}/download")
+async def notebooklm_download_artifact(event_id: str, artifact_id: str):
+    """Get download info for an artifact. For types that support it, triggers a download."""
+    client = await _get_nlm_client()
+    sb = get_supabase()
+
+    artifact = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_artifacts")
+        .select("id, artifact_type, status, download_url, notebooklm_artifact_id, notebook_mapping_id")
+        .eq("id", artifact_id).eq("event_id", event_id).limit(1).execute()
+    )
+    if not artifact.data or len(artifact.data) == 0:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+
+    art = artifact.data[0]
+    if art["status"] != "completed":
+        return {"ready": False, "status": art["status"]}
+
+    if art.get("download_url"):
+        return {"ready": True, "download_url": art["download_url"]}
+
+    mapping = await asyncio.to_thread(
+        lambda: sb.table("notebooklm_notebooks").select("notebooklm_id")
+        .eq("id", art["notebook_mapping_id"]).limit(1).execute()
+    )
+    if not mapping.data:
+        raise HTTPException(status_code=404, detail="Notebook mapping not found.")
+    nb_id = mapping.data[0]["notebooklm_id"]
+
+    download_dir = os.path.join(os.path.dirname(__file__), "_nlm_downloads")
+    os.makedirs(download_dir, exist_ok=True)
+
+    atype = art["artifact_type"]
+    ext_map = {"audio": "mp4", "video": "mp4", "report": "md", "quiz": "json",
+               "flashcards": "json", "mind_map": "json", "slide_deck": "pdf",
+               "infographic": "png", "data_table": "csv"}
+    ext = ext_map.get(atype, "bin")
+    filepath = os.path.join(download_dir, f"{artifact_id}.{ext}")
+
+    try:
+        download_method = {
+            "audio": client.artifacts.download_audio,
+            "video": client.artifacts.download_video,
+            "report": client.artifacts.download_report,
+            "quiz": client.artifacts.download_quiz,
+            "flashcards": client.artifacts.download_flashcards,
+            "mind_map": client.artifacts.download_mind_map,
+            "slide_deck": client.artifacts.download_slide_deck,
+            "infographic": client.artifacts.download_infographic,
+            "data_table": client.artifacts.download_data_table,
+        }.get(atype)
+
+        if download_method:
+            await download_method(nb_id, filepath)
+            from datetime import datetime
+            await asyncio.to_thread(
+                lambda: sb.table("notebooklm_artifacts").update({
+                    "file_path": filepath, "updated_at": datetime.utcnow().isoformat(),
+                }).eq("id", artifact_id).execute()
+            )
+            return {"ready": True, "file_path": filepath, "download_url": f"/notebooklm/files/{artifact_id}.{ext}"}
+        return {"ready": False, "reason": f"No download method for {atype}"}
+    except Exception as e:
+        return {"ready": False, "reason": str(e)[:200]}
+
+
+from fastapi.responses import FileResponse as _FileResponse
+
+@app.get("/notebooklm/files/{filename}")
+async def notebooklm_serve_file(filename: str):
+    """Serve a downloaded NotebookLM artifact file."""
+    download_dir = os.path.join(os.path.dirname(__file__), "_nlm_downloads")
+    filepath = os.path.join(download_dir, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found.")
+    return _FileResponse(filepath, filename=filename)
+
+
+# ---------------------------------------------------------------------------
+
 @app.on_event("startup")
 async def startup_event():
     """Log configuration on startup for debugging"""
