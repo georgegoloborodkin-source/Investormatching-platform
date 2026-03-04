@@ -29,7 +29,7 @@ export function clearMyToken404Cache(): void {
 export async function getGoogleAccessTokenFromBackend(supabaseAccessToken: string): Promise<string | null> {
   if (Date.now() - lastMyToken404At < MY_TOKEN_404_CACHE_MS) return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const base = getGoogleOAuthBackendUrl();
     const res = await fetch(`${base}/gdrive/my-token`, {
@@ -106,10 +106,13 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Wake up the Render service before bulk requests (fire-and-forget with retry) */
+let _warmUpDone = false;
+/** Wake up the Render service before bulk requests (fire-and-forget with retry). Deduplicates. */
 export async function warmUpIngestion(): Promise<void> {
+  if (_warmUpDone) return;
   try {
     await fetchWithRetry(`${GDRIVE_PROXY_BASE}/health`, { method: "GET" }, 3, 2000);
+    _warmUpDone = true;
   } catch {
   }
 }

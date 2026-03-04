@@ -44,7 +44,7 @@ export async function triggerGoogleOAuthForDrive(): Promise<void> {
   const base = getGoogleOAuthBackendUrl();
   const url = `${base}/auth/google-drive/start`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
   let res: Response;
   try {
     res = await fetch(url, {

@@ -1727,8 +1727,11 @@ function SourcesTab({
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   // Pre-warm the converter backend on mount so first chat message is fast
+  // Also preload the Google Picker script so "Add Folder" opens instantly
   useEffect(() => {
     preWarmConverterBackend();
+    warmUpIngestion();
+    loadGooglePicker().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1933,16 +1936,17 @@ function SourcesTab({
       return;
     }
     setIsConnectingDrive(true);
-    toast({ title: "Connecting to Google Drive…", description: "Waking up server and checking access. This may take a few seconds…" });
+    toast({ title: "Connecting to Google Drive…", description: "Checking access…" });
     try {
-      // Warm up the backend first to avoid cold-start hangs on Render free tier
-      await warmUpIngestion();
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
+      // Run warmup, session fetch, and picker preload ALL in parallel
+      const [, sessionData, pickerResult] = await Promise.all([
+        warmUpIngestion().catch(() => {}),
+        supabase.auth.getSession(),
+        loadGooglePicker().catch(() => {}),
+      ]);
+      const session = sessionData?.data?.session;
       let supabaseAccessToken = session?.access_token;
 
-      // If session is stale, try refreshing before proceeding
       if (!supabaseAccessToken) {
         const { data: refreshData } = await supabase.auth.refreshSession();
         supabaseAccessToken = refreshData?.session?.access_token;
