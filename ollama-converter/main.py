@@ -9110,18 +9110,30 @@ async def studio_delete_artifact(event_id: str, artifact_id: str):
 
 
 # ---------------------------------------------------------------------------
-#  NotebookLM Integration — Google NotebookLM API wrapper (optional)
+#  NotebookLM Integration — Google NotebookLM API (optional, lazy-loaded so app starts without it)
 # ---------------------------------------------------------------------------
 
-try:
-    from notebooklm import NotebookLMClient as _NLMClient
-    _notebooklm_available = True
-except ImportError:
-    _NLMClient = None  # type: ignore[assignment,misc]
-    _notebooklm_available = False
+_NLMClient = None  # type: ignore[assignment,misc]
+_notebooklm_available: bool | None = None  # None = not yet tried; True/False after first _ensure_notebooklm()
 
 _nlm_client = None
 _nlm_last_auth_hint: str | None = None  # so /notebooklm/status can return production hint
+
+
+def _ensure_notebooklm() -> bool:
+    """Lazy-load notebooklm-py on first use so server can bind port before any heavy import."""
+    global _NLMClient, _notebooklm_available
+    if _notebooklm_available is not None:
+        return _notebooklm_available
+    try:
+        from notebooklm import NotebookLMClient
+        _NLMClient = NotebookLMClient
+        _notebooklm_available = True
+        return True
+    except ImportError:
+        _notebooklm_available = False
+        return False
+
 
 def _nlm_auth_error_detail(e: Exception) -> tuple[str, str | None]:
     """Build user-facing error and optional production hint."""
@@ -9133,6 +9145,12 @@ def _nlm_auth_error_detail(e: Exception) -> tuple[str, str | None]:
             "the full contents of ~/.notebooklm/storage_state.json (paste as one-line JSON)."
         )
         return ("NotebookLM auth not configured on this server.", hint)
+    if "SID" in msg or "Missing required cookies" in msg:
+        hint = (
+            "Export ALL Google cookies (including SID, HSID, SSID, APISID) from your browser for .google.com and notebooklm.google.com, "
+            "convert to notebooklm-py format, and set NOTEBOOKLM_AUTH_JSON on the server."
+        )
+        return (f"NotebookLM auth failed: {msg[:200]}", hint)
     return (f"NotebookLM auth failed: {msg[:200]}", None)
 
 
@@ -9141,10 +9159,10 @@ async def _get_nlm_client():
     Reads from NOTEBOOKLM_AUTH_JSON env (production) or ~/.notebooklm/storage_state.json (local).
     """
     global _nlm_client
+    if not _ensure_notebooklm() or _NLMClient is None:
+        raise HTTPException(status_code=501, detail="notebooklm-py not installed. Run: pip install notebooklm-py[browser]")
     if _nlm_client is not None:
         return _nlm_client
-    if not _notebooklm_available or _NLMClient is None:
-        raise HTTPException(status_code=501, detail="notebooklm-py not installed. Run: pip install notebooklm-py[browser]")
     try:
         _nlm_client = await _NLMClient.from_storage()
         await _nlm_client.__aenter__()
@@ -9171,7 +9189,7 @@ class NLMGenerateRequest(BaseModel):
 async def notebooklm_status():
     """Check if NotebookLM integration is available and authenticated."""
     global _nlm_last_auth_hint
-    if not _notebooklm_available:
+    if not _ensure_notebooklm():
         return {"available": False, "reason": "notebooklm-py not installed"}
     try:
         client = await _get_nlm_client()

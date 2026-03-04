@@ -188,7 +188,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, fetchCostSummary, notebooklmStatus, notebooklmCreateNotebook, notebooklmGetNotebook, notebooklmSyncSources, notebooklmGenerate, notebooklmListArtifacts, notebooklmDownloadArtifact, studioGenerate, studioListArtifacts, studioGetArtifact, studioDeleteArtifact, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight, type CostData, type NLMArtifactType, type StudioArtifactType, type StudioArtifact } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, fetchCostSummary, notebooklmStatus, notebooklmCreateNotebook, notebooklmGetNotebook, notebooklmSyncSources, notebooklmGenerate, notebooklmListArtifacts, notebooklmDownloadArtifact, resolveConverterApiBaseUrl, studioGenerate, studioListArtifacts, studioGetArtifact, studioDeleteArtifact, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight, type CostData, type NLMArtifactType, type NLMNotebook, type NLMArtifact, type StudioArtifactType, type StudioArtifact } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
@@ -5437,11 +5437,17 @@ function DashboardTab({
     source_question: string | null; confidence: number; created_at: string;
   }>>([]);
 
-  // ── Studio (self-hosted RAG + Claude) state ──
+  // ── Studio: NotebookLM (Google) + built-in (Claude) ──
   const [studioArtifacts, setStudioArtifacts] = useState<StudioArtifact[]>([]);
   const [studioLoading, setStudioLoading] = useState(false);
   const [studioGenerating, setStudioGenerating] = useState<string | null>(null);
   const [studioViewingArtifact, setStudioViewingArtifact] = useState<StudioArtifact | null>(null);
+  const [studioNlmAvailable, setStudioNlmAvailable] = useState<boolean | null>(null);
+  const [studioNlmHint, setStudioNlmHint] = useState<string>("");
+  const [studioNotebook, setStudioNotebook] = useState<NLMNotebook | null>(null);
+  const [studioNlmArtifacts, setStudioNlmArtifacts] = useState<NLMArtifact[]>([]);
+  const [studioSyncing, setStudioSyncing] = useState(false);
+  const [studioGeneratingNlm, setStudioGeneratingNlm] = useState<string | null>(null);
 
   const myTasks = useMemo(
     () => (currentUserId ? tasks.filter((t) => t.assignee_user_id === currentUserId) : []),
@@ -5502,18 +5508,37 @@ function DashboardTab({
     });
   }, [activeEventId, dashboardSection]);
 
-  // ── Studio data fetch (self-hosted) ──
+  // ── Studio data fetch: NotebookLM status + notebook + artifacts; built-in artifacts ──
   useEffect(() => {
     if (!activeEventId || dashboardSection !== "studio") return;
     let cancelled = false;
     setStudioLoading(true);
+    setStudioNlmAvailable(null);
 
     (async () => {
       try {
+        const statusRes = await notebooklmStatus();
+        if (!cancelled) {
+          setStudioNlmAvailable(statusRes.available);
+          setStudioNlmHint(statusRes.production_hint || statusRes.reason || "");
+        }
+        if (statusRes.available && activeEventId) {
+          const [nbRes, nlmArtRes] = await Promise.all([
+            notebooklmGetNotebook(activeEventId),
+            notebooklmListArtifacts(activeEventId),
+          ]);
+          if (!cancelled) {
+            setStudioNotebook(nbRes.notebook || null);
+            setStudioNlmArtifacts(nlmArtRes.artifacts || []);
+          }
+        } else if (!cancelled) {
+          setStudioNotebook(null);
+          setStudioNlmArtifacts([]);
+        }
         const artRes = await studioListArtifacts(activeEventId);
         if (!cancelled) setStudioArtifacts(artRes.artifacts);
       } catch {
-        // silently ignore — empty list shown
+        if (!cancelled) setStudioNlmAvailable(false);
       } finally {
         if (!cancelled) setStudioLoading(false);
       }
@@ -6241,11 +6266,10 @@ function DashboardTab({
         </div>
       )}
 
-      {/* ── Studio (self-hosted RAG + Claude) section ── */}
+      {/* ── Studio: Google NotebookLM (when available) + built-in Claude fallback ── */}
       {dashboardSection === "studio" && (
         <div className="space-y-6">
           {studioViewingArtifact ? (
-            /* ── Artifact viewer ── */
             <div className="bg-white border border-slate-200 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -6288,33 +6312,166 @@ function DashboardTab({
                 )}
               </div>
             </div>
-          ) : studioLoading ? (
+          ) : studioLoading || studioNlmAvailable === null ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
               <span className="ml-3 text-sm font-mono text-slate-500">Loading Studio...</span>
             </div>
           ) : (
             <>
-              {/* Generation grid */}
+              {/* NotebookLM (Google): show when available */}
+              {studioNlmAvailable && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 border-l-4 border-l-emerald-500">
+                  <h3 className="text-sm font-mono font-bold text-slate-800 flex items-center gap-2 mb-4">
+                    <Sparkles className="h-4 w-4 text-emerald-500" />
+                    Google NotebookLM — Audio, video, mind maps, quizzes
+                  </h3>
+                  {!studioNotebook ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs text-slate-600">Create a workspace linked to this event to sync your documents and use NotebookLM&apos;s generation (audio overviews, video, mind maps, etc.).</p>
+                      <button
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-mono font-bold hover:bg-emerald-700 transition-colors w-fit"
+                        onClick={async () => {
+                          if (!activeEventId) return;
+                          try {
+                            const { notebook } = await notebooklmCreateNotebook(activeEventId, "Research Workspace");
+                            setStudioNotebook(notebook);
+                            toast({ title: "NotebookLM workspace created" });
+                          } catch (err: unknown) {
+                            toast({ title: "Failed to create workspace", description: String(err), variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Create NotebookLM workspace
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                          {studioNotebook.sources_count} sources synced
+                        </span>
+                        <button
+                          disabled={studioSyncing}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-mono font-bold hover:bg-emerald-700 disabled:opacity-50"
+                          onClick={async () => {
+                            if (!activeEventId) return;
+                            setStudioSyncing(true);
+                            try {
+                              const r = await notebooklmSyncSources(activeEventId);
+                              setStudioNotebook(prev => prev ? { ...prev, sources_count: r.total_sources } : null);
+                              toast({ title: `Synced ${r.synced} documents` });
+                            } catch (err: unknown) {
+                              toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+                            } finally {
+                              setStudioSyncing(false);
+                            }
+                          }}
+                        >
+                          {studioSyncing ? "Syncing…" : "Sync sources"}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                        {([
+                          { type: "audio" as NLMArtifactType, label: "Audio overview", icon: "🎙️" },
+                          { type: "video" as NLMArtifactType, label: "Video", icon: "🎬" },
+                          { type: "report" as NLMArtifactType, label: "Report", icon: "📄" },
+                          { type: "quiz" as NLMArtifactType, label: "Quiz", icon: "❓" },
+                          { type: "mind_map" as NLMArtifactType, label: "Mind map", icon: "🧠" },
+                          { type: "flashcards" as NLMArtifactType, label: "Flashcards", icon: "🃏" },
+                          { type: "slide_deck" as NLMArtifactType, label: "Slide deck", icon: "📊" },
+                          { type: "infographic" as NLMArtifactType, label: "Infographic", icon: "📈" },
+                          { type: "data_table" as NLMArtifactType, label: "Data table", icon: "📋" },
+                        ]).map(({ type, label, icon }) => (
+                          <button
+                            key={type}
+                            disabled={studioGeneratingNlm !== null}
+                            className="flex flex-col items-start p-3 border border-slate-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50/30 transition-all text-left disabled:opacity-40"
+                            onClick={async () => {
+                              if (!activeEventId) return;
+                              setStudioGeneratingNlm(type);
+                              try {
+                                const { artifact } = await notebooklmGenerate(activeEventId, type, { title: label });
+                                setStudioNlmArtifacts(prev => [artifact, ...prev]);
+                                toast({ title: `${label} started` });
+                              } catch (err: unknown) {
+                                toast({ title: "Generation failed", description: String(err), variant: "destructive" });
+                              } finally {
+                                setStudioGeneratingNlm(null);
+                              }
+                            }}
+                          >
+                            <span className="text-2xl mb-2">{icon}</span>
+                            <span className="text-xs font-mono font-bold text-slate-700">{label}</span>
+                            {studioGeneratingNlm === type && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-600 mt-2" />}
+                          </button>
+                        ))}
+                      </div>
+                      {studioNlmArtifacts.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                          <h4 className="text-xs font-mono font-bold text-slate-600 mb-2">NotebookLM artifacts</h4>
+                          <div className="space-y-2">
+                            {studioNlmArtifacts.map((art) => (
+                              <div key={art.id} className="flex items-center justify-between p-2 border border-slate-100 rounded-lg bg-slate-50/50">
+                                <span className="text-xs font-mono text-slate-700">{art.title || art.artifact_type} · {art.status}</span>
+                                <div className="flex gap-2">
+                                  {art.status === "completed" && (
+                                    <button
+                                      className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-mono font-bold hover:bg-emerald-700"
+                                      onClick={async () => {
+                                        let url = art.download_url;
+                                        if (url && !url.startsWith("http")) {
+                                          const baseUrl = await resolveConverterApiBaseUrl();
+                                          url = `${baseUrl.replace(/\/$/, "")}${url}`;
+                                        }
+                                        if (!url) {
+                                          const d = await notebooklmDownloadArtifact(activeEventId!, art.id);
+                                          if (d.ready && d.download_url) url = d.download_url;
+                                          else { toast({ title: "Download not ready", description: d.reason, variant: "destructive" }); return; }
+                                        }
+                                        window.open(url, "_blank");
+                                      }}
+                                    >
+                                      Download
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* When NotebookLM not available: setup hint */}
+              {studioNlmAvailable === false && studioNlmHint && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                  <p className="text-xs font-mono font-bold text-amber-800 mb-1">Use Google NotebookLM (audio, video, mind maps)</p>
+                  <p className="text-[11px] text-amber-700 font-mono whitespace-pre-wrap">{studioNlmHint}</p>
+                </div>
+              )}
+
+              {/* Built-in Claude generation (always shown) */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-mono font-bold text-slate-800 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-violet-500" />
-                    Generate Content
+                    {studioNlmAvailable ? "Or generate with Claude (built-in)" : "Generate with Claude (built-in)"}
                   </h3>
-                  <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    Powered by your RAG + Claude
-                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">RAG + Claude</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {([
-                    { type: "report" as StudioArtifactType, label: "One-Pager Report", icon: "📄", desc: "Deal briefing document" },
-                    { type: "audio_script" as StudioArtifactType, label: "Audio Script", icon: "🎙️", desc: "Podcast-style briefing" },
-                    { type: "quiz" as StudioArtifactType, label: "Quiz", icon: "❓", desc: "Knowledge check questions" },
-                    { type: "mind_map" as StudioArtifactType, label: "Mind Map", icon: "🧠", desc: "Concept relationship map" },
-                    { type: "flashcards" as StudioArtifactType, label: "Flashcards", icon: "🃏", desc: "Study flashcard pairs" },
-                    { type: "slide_deck" as StudioArtifactType, label: "Slide Deck", icon: "📊", desc: "IC presentation slides" },
-                    { type: "data_table" as StudioArtifactType, label: "Data Table", icon: "📋", desc: "Structured data extract" },
+                    { type: "report" as StudioArtifactType, label: "One-Pager Report", icon: "📄", desc: "Deal briefing" },
+                    { type: "audio_script" as StudioArtifactType, label: "Audio Script", icon: "🎙️", desc: "Podcast-style" },
+                    { type: "quiz" as StudioArtifactType, label: "Quiz", icon: "❓", desc: "Knowledge check" },
+                    { type: "mind_map" as StudioArtifactType, label: "Mind Map", icon: "🧠", desc: "Concept map" },
+                    { type: "flashcards" as StudioArtifactType, label: "Flashcards", icon: "🃏", desc: "Study cards" },
+                    { type: "slide_deck" as StudioArtifactType, label: "Slide Deck", icon: "📊", desc: "IC slides" },
+                    { type: "data_table" as StudioArtifactType, label: "Data Table", icon: "📋", desc: "Structured data" },
                   ]).map(({ type, label, icon, desc }) => (
                     <button
                       key={type}
@@ -6337,20 +6494,16 @@ function DashboardTab({
                       <span className="text-2xl mb-2">{icon}</span>
                       <span className="text-xs font-mono font-bold text-slate-700">{label}</span>
                       <span className="text-[10px] font-mono text-slate-400 mt-0.5">{desc}</span>
-                      {studioGenerating === type && (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600 mt-2" />
-                      )}
+                      {studioGenerating === type && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600 mt-2" />}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Artifacts list */}
+              {/* Built-in artifacts list */}
               {studioArtifacts.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <h3 className="text-sm font-mono font-bold text-slate-800 mb-4">
-                    Generated Content ({studioArtifacts.length})
-                  </h3>
+                  <h3 className="text-sm font-mono font-bold text-slate-800 mb-4">Generated with Claude ({studioArtifacts.length})</h3>
                   <div className="space-y-3">
                     {studioArtifacts.map((art) => {
                       const typeIcons: Record<string, string> = {
@@ -6373,37 +6526,29 @@ function DashboardTab({
                             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
                               art.status === "completed" ? "bg-emerald-100 text-emerald-700" :
                               art.status === "generating" ? "bg-amber-100 text-amber-700" :
-                              art.status === "failed" ? "bg-red-100 text-red-700" :
-                              "bg-slate-100 text-slate-600"
-                            }`}>
-                              {art.status}
-                            </span>
+                              art.status === "failed" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
+                            }`}>{art.status}</span>
                             {art.status === "completed" && (
                               <button
-                                className="px-3 py-1 bg-violet-600 text-white rounded-lg text-[10px] font-mono font-bold hover:bg-violet-700 transition-colors"
+                                className="px-3 py-1 bg-violet-600 text-white rounded-lg text-[10px] font-mono font-bold hover:bg-violet-700"
                                 onClick={async () => {
-                                  if (art.content) {
-                                    setStudioViewingArtifact(art);
-                                  } else {
+                                  if (art.content) setStudioViewingArtifact(art);
+                                  else {
                                     const full = await studioGetArtifact(activeEventId!, art.id);
                                     if (full.artifact) setStudioViewingArtifact(full.artifact);
                                   }
                                 }}
-                              >
-                                View
-                              </button>
+                              >View</button>
                             )}
                             <button
-                              className="px-2 py-1 text-slate-400 hover:text-red-500 rounded-lg text-[10px] font-mono transition-colors"
+                              className="px-2 py-1 text-slate-400 hover:text-red-500 rounded-lg text-[10px] font-mono"
                               onClick={async () => {
                                 if (!activeEventId) return;
                                 await studioDeleteArtifact(activeEventId, art.id);
                                 setStudioArtifacts(prev => prev.filter(a => a.id !== art.id));
                               }}
                               title="Delete"
-                            >
-                              ×
-                            </button>
+                            >×</button>
                           </div>
                         </div>
                       );

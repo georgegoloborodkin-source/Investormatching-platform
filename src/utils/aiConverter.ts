@@ -23,7 +23,7 @@ async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 800
   }
 }
 
-async function resolveConverterApiBaseUrl(): Promise<string> {
+export async function resolveConverterApiBaseUrl(): Promise<string> {
   if (resolvedBaseUrl) return resolvedBaseUrl;
 
   const candidates = buildCandidateBaseUrls();
@@ -1735,6 +1735,7 @@ export async function notebooklmStatus(): Promise<{
   available: boolean;
   reason?: string;
   notebooks_count?: number;
+  production_hint?: string;
 }> {
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
@@ -1854,7 +1855,11 @@ export async function notebooklmDownloadArtifact(
       30000,
     );
     if (!res.ok) return { ready: false, reason: `HTTP ${res.status}` };
-    return await res.json();
+    const data = await res.json();
+    if (data.ready && data.download_url && data.download_url.startsWith("/")) {
+      data.download_url = `${baseUrl.replace(/\/$/, "")}${data.download_url}`;
+    }
+    return data;
   } catch (e: unknown) {
     return { ready: false, reason: String(e) };
   }
