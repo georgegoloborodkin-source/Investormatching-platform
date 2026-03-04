@@ -444,8 +444,11 @@ export default function Landing() {
           <motion.div className="absolute -top-6 right-4 xl:right-8 hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
             <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
           </motion.div>
-          <motion.div className="absolute bottom-24 -left-16 xl:-left-12 hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
+          <motion.div className="absolute -bottom-4 -left-16 xl:-left-12 hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
             <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
+          </motion.div>
+          <motion.div className="absolute -bottom-4 -right-16 xl:-right-12 hidden lg:block" animate={{ y: [0, -10, 0], rotate: [1, -2, 1] }} transition={{ repeat: Infinity, duration: 6.5, ease: "easeInOut", delay: 1.5 }}>
+            <div className="px-3 py-1.5 rounded-full border border-orange-500/20 bg-orange-500/5 backdrop-blur-sm text-[10px] font-mono text-orange-400/60">3,000+ documents processed</div>
           </motion.div>
 
           {/* badge */}
@@ -504,7 +507,7 @@ export default function Landing() {
       <RevealSection className="relative z-10 -mt-4 mb-12 px-5 sm:px-8">
         <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { val: 50, suffix: "+", label: "Documents processed", c: C.purple },
+            { val: 3000, suffix: "+", label: "Documents processed", c: C.purple },
             { val: 98, suffix: "%", label: "RAG accuracy", c: "#34d399" },
             { val: 3, suffix: "x", label: "Faster decisions", c: C.orange },
             { val: 100, suffix: "%", label: "Data ownership", c: "#3b82f6" },
