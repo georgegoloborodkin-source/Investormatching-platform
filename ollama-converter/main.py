@@ -4651,11 +4651,11 @@ async def system2_reflect(request: System2ReflectRequest):
     context_block = "\n\n".join(context_summary) or "No context provided."
 
     prompt = f"""You are a reflective VC intelligence analyst performing test-time compute (Reflexion pattern).
-Evaluate the DRAFT ANSWER, identify gaps, and extract reusable learning.
+Evaluate the DRAFT ANSWER and the USER'S MESSAGE together. Extract user signals and reusable learning.
 
 ITERATION: {request.iteration + 1} of {request.max_iterations}
 
-ORIGINAL QUESTION:
+USER'S MESSAGE (parse this for agreements, disagreements, and "but what about" redirects):
 {request.question}
 
 AVAILABLE CONTEXT:
@@ -4665,11 +4665,12 @@ DRAFT ANSWER:
 {request.draft_answer}
 
 TASK:
-1. Is the answer complete and well-supported by the context?
-2. Are there specific facts, metrics, or relationships that are mentioned but lack supporting data?
-3. If data is missing, what specific follow-up search queries would fill the gaps?
-4. LESSON: Write ONE reusable lesson for future similar questions. A lesson is a short, actionable takeaway like "For 'what does X do' questions, always start with the company's product description from the knowledge graph" or "Revenue claims without source documents should be flagged as unverified." The lesson should help the agent answer better NEXT TIME, not describe this specific answer.
-5. BLIND SPOT: Write ONE specific gap, risk, or bias in this draft that the user should be aware of. Example: "Answer relies on a single pitch deck — competitor data or independent market reports would improve reliability."
+1. Parse the USER'S MESSAGE for: (a) explicit agreement ("yes", "agree", "exactly"), (b) doubt or pushback ("weird", "not sure", "doesn't match"), (c) redirects ("but what about X", "and X?", "what about X?").
+2. Use those user signals to produce SPECIFIC lessons and blind spots — not generic advice. Example: if the user said "yes I agree the MRR looks weird, but what about competitors", your lesson should reference "When user questions MRR and asks about competitors, always provide competitor context" — not "always verify numbers."
+3. Is the answer complete and well-supported? Are there facts mentioned but lacking data?
+4. If data is missing, what specific follow-up search queries would fill the gaps?
+5. LESSON: ONE reusable lesson. MUST cite the user's words or a specific claim from this conversation. Never generic "always verify" without tying to this exchange.
+6. BLIND SPOT: ONE specific gap in this draft. If the user questioned something (e.g. "MRR looks weird"), that IS a blind spot — mention it specifically.
 
 OUTPUT ONLY valid JSON:
 {{
@@ -8299,7 +8300,7 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     return "\n\n".join(lines)
 
 
-async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
+async def _agent_search_documents(tool_input: dict, event_id: str, doc_collector: list | None = None) -> str:
     sb = get_supabase()
     query_text = (tool_input.get("query") or "").strip()
     company_name = (tool_input.get("company_name") or "").strip()
@@ -8337,6 +8338,11 @@ async def _agent_search_documents(tool_input: dict, event_id: str) -> str:
         try:
             docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
             doc_map = {d["id"]: d for d in (docs_result.data or [])}
+            if doc_collector is not None:
+                for did in doc_ids:
+                    d = doc_map.get(did, {})
+                    if did and d:
+                        doc_collector.append({"id": did, "title": d.get("title") or d.get("file_name") or "Document"})
         except Exception:
             pass
 
@@ -8492,12 +8498,12 @@ async def _agent_search_knowledge_graph(tool_input: dict, event_id: str) -> str:
     return "\n".join(lines)
 
 
-async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str) -> str:
+async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str, doc_collector: list | None = None) -> str:
     try:
         if tool_name == "search_portfolio":
             return await _agent_search_portfolio(tool_input, event_id)
         elif tool_name == "search_documents":
-            return await _agent_search_documents(tool_input, event_id)
+            return await _agent_search_documents(tool_input, event_id, doc_collector)
         elif tool_name == "get_company_details":
             return await _agent_get_company_details(tool_input, event_id)
         elif tool_name == "search_knowledge_graph":
@@ -8689,6 +8695,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     "### Company Connections Graph:\n" + connections_block
                 )
 
+                all_agent_source_docs: list = []
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     try:
                         response = await client.messages.create(
@@ -8784,10 +8791,10 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
 
                     current_messages.append({"role": "assistant", "content": assistant_content})
 
-                    # Execute tool calls in parallel when multiple tools are requested
+                    agent_source_docs: list = []
                     if len(tool_calls) > 1:
                         tool_coros = [
-                            _execute_agent_tool(tc.name, tc.input, event_id)
+                            _execute_agent_tool(tc.name, tc.input, event_id, agent_source_docs if tc.name == "search_documents" else None)
                             for tc in tool_calls
                         ]
                         results = await asyncio.gather(*tool_coros, return_exceptions=True)
@@ -8802,7 +8809,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     else:
                         tool_results = []
                         for tc in tool_calls:
-                            result_text = await _execute_agent_tool(tc.name, tc.input, event_id)
+                            result_text = await _execute_agent_tool(tc.name, tc.input, event_id, agent_source_docs if tc.name == "search_documents" else None)
                             tool_results.append({
                                 "type": "tool_result",
                                 "tool_use_id": tc.id,
@@ -8810,6 +8817,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             })
 
                     current_messages.append({"role": "user", "content": tool_results})
+                    all_agent_source_docs.extend(agent_source_docs)
 
                 yield f"data: {json.dumps({'status': 'Generating final answer...'})}\n\n"
                 try:
@@ -8837,6 +8845,15 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 except Exception as e:
                     yield f"data: {json.dumps({'error': f'Final answer error: {str(e)[:200]}'})}\n\n"
 
+                seen_ids = set()
+                unique_docs = []
+                for d in all_agent_source_docs:
+                    did = d.get("id") or ""
+                    if did and did not in seen_ids:
+                        seen_ids.add(did)
+                        unique_docs.append({"id": did, "title": d.get("title") or "Document"})
+                if unique_docs:
+                    yield f"data: {json.dumps({'source_docs': unique_docs})}\n\n"
                 yield "data: [DONE]\n\n"
 
             except Exception as e:

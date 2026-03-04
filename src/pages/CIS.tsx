@@ -11329,12 +11329,33 @@ export default function CIS() {
                   source_question: string; confidence: number; created_by: string | null;
                 }> = [];
                 const questionSnippet = question.slice(0, 200);
-                const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
-                const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+                const blacklist = new Set(["what", "which", "who", "how", "the", "that", "this", "with", "could", "would", "should", "have", "make", "connect", "specifically", "portfolio", "companies", "company", "firm", "our", "their", "we", "they"]);
+                const extractCompanyName = (q: string): string | null => {
+                  if (!q || q.length < 2) return null;
+                  const patterns = [
+                    /\bconnect\s+([A-Z][A-Za-z0-9&\-]{1,35})\s+(?:company|with|to|and)/i,
+                    /\b(?:connect|about|for|tell\s+me\s+about)\s+([A-Z][A-Za-z0-9&\-]{1,35})\b(?!\s+company\b)/i,
+                    /\b([A-Z][A-Za-z0-9&\-]{1,35})\s+company\b/i,
+                    /\bwith\s+([A-Z][A-Za-z0-9&\-]{1,35})\s+(?:portfolio|companies|connect)/i,
+                    /\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9&\-]{2,40})\b/i,
+                  ];
+                  for (const re of patterns) {
+                    const m = q.match(re);
+                    if (m && m[1]) {
+                      const c = m[1].trim();
+                      const lower = c.toLowerCase();
+                      if (c.length >= 2 && c.length <= 45 && !blacklist.has(lower) && !/\b(what|which|who|how|could|would)\b/i.test(c)) return c;
+                    }
+                  }
+                  return null;
+                };
+                const detectedCompany = extractCompanyName(question);
                 const isErrorStr = (s: string) => /^(Reflection error|Error code|Could not parse|No AI available|Reflection unavailable)/i.test(s);
+                const looksLikeError = (s: string) => /Reflection error|Error code:\s*404|not_found_error/i.test(s);
+                const isMetadataOnlyLesson = (s: string) => s.length < 100 && /confidence\s*:\s*\d+\s*%/i.test(s) && !/[a-z][a-z\s]{24,}\./i.test(s);
 
                 const backendLesson = reflection.lesson || "";
-                if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson)) {
+                if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson) && !looksLikeError(backendLesson) && !isMetadataOnlyLesson(backendLesson)) {
                   memoryRows.push({
                     event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
                     content: backendLesson.slice(0, 500), company_name: detectedCompany, topic: null,
@@ -11349,7 +11370,7 @@ export default function CIS() {
                     source_question: questionSnippet, confidence: reflection.confidence || 0.7,
                     created_by: currentUserId,
                   });
-                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning)) {
+                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning) && !looksLikeError(reflection.reasoning)) {
                   memoryRows.push({
                     event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
                     content: `Analysis: ${reflection.reasoning.slice(0, 480)}`, company_name: detectedCompany, topic: null,
@@ -11359,14 +11380,14 @@ export default function CIS() {
                 }
 
                 const backendBlindSpot = reflection.blind_spot || "";
-                if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot)) {
+                if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot) && !looksLikeError(backendBlindSpot)) {
                   memoryRows.push({
                     event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
                     content: backendBlindSpot.slice(0, 500), company_name: detectedCompany, topic: null,
                     source_question: questionSnippet, confidence: reflection.confidence || 0.7,
                     created_by: currentUserId,
                   });
-                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning) && memoryRows.length === 0) {
+                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning) && !looksLikeError(reflection.reasoning) && memoryRows.length === 0) {
                   memoryRows.push({
                     event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
                     content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,

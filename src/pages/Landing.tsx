@@ -440,28 +440,25 @@ export default function Landing() {
         {/* subtle bg gradient */}
         <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#07060b] via-[#0c0a14] to-[#07060b]" />
 
-        {/* ── Spline 3D — behind text layer, positioned right-center ── */}
-        <motion.div
+        {/* ── Spline 3D — behind text layer; fades in when loaded (HeroSpline controls its own opacity) ── */}
+        <div
           className="absolute z-[1] top-0 right-0 w-[70%] h-full hidden lg:block"
           style={{ transform: "translate(5%, -32%)" }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 1 }}
         >
           <HeroSpline />
-        </motion.div>
+        </div>
 
         {/* ── Text content — on top of Spline ── */}
         <motion.div className="relative z-10 mx-auto max-w-7xl w-full" style={{ y: heroParallax }}>
           <div className="max-w-2xl text-left">
             {/* badge */}
-            <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
+            <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.5 }}>
               <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
               <span className="text-sm text-white/80 font-medium" style={fCabin}>The signal stack for frontier capital</span>
             </motion.div>
 
             {/* headline */}
-            <motion.h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+            <motion.h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
               <motion.span
                 className="inline-block"
                 animate={{ opacity: [0.85, 1, 0.85] }}
@@ -482,7 +479,7 @@ export default function Landing() {
             </motion.p>
 
             {/* CTAs */}
-            <motion.div className="flex flex-col sm:flex-row items-start gap-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65, duration: 0.7 }}>
+            <motion.div className="flex flex-col sm:flex-row items-start gap-4" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
               <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
                 <Link to="/login" className="group relative flex items-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full transition-shadow overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
                   <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent" animate={{ x: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 3 }} />
