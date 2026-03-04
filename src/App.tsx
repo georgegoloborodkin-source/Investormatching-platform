@@ -13,6 +13,7 @@ import RoleSelection from "./pages/RoleSelection";
 import InviteAcceptance from "./pages/InviteAcceptance";
 import AdminPanel from "./pages/AdminPanel";
 import OrbitStatsDemo from "./pages/OrbitStatsDemo";
+import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,7 +30,7 @@ function RootRedirect() {
     const reason = params.get("reason") || "unknown";
     return <Navigate to={`/cis?google_drive=error&reason=${reason}`} replace />;
   }
-  return <Navigate to="/orbit-stats" replace />;
+  return <Navigate to="/home" replace />;
 }
 
 const App = () => (
@@ -42,6 +43,7 @@ const App = () => (
           <div className="app-shell cis-grid-bg cis-mesh-bg">
           <Routes>
             <Route path="/" element={<RootRedirect />} />
+            <Route path="/home" element={<Landing />} />
             <Route path="/orbit-stats" element={<OrbitStatsDemo />} />
             <Route
               path="/cis"

@@ -24,13 +24,13 @@ export default function Login() {
       <header className="border-b border-slate-200/5 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link
-            to="/orbit-stats"
+            to="/home"
             className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors text-sm font-medium"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to home
           </Link>
-          <Link to="/orbit-stats" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
+          <Link to="/home" className="flex items-center gap-2 font-semibold text-slate-900 tracking-tight">
             Platform
           </Link>
           <span className="w-24" />

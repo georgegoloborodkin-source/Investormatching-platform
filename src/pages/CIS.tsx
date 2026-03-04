@@ -188,7 +188,7 @@ import {
   type ConnectionStatus,
   type CompanyConnection,
 } from "@/utils/supabaseHelpers";
-import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, fetchCostSummary, notebooklmStatus, notebooklmCreateNotebook, notebooklmGetNotebook, notebooklmSyncSources, notebooklmGenerate, notebooklmListArtifacts, notebooklmDownloadArtifact, resolveConverterApiBaseUrl, studioGenerate, studioListArtifacts, studioGetArtifact, studioDeleteArtifact, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight, type CostData, type NLMArtifactType, type NLMNotebook, type NLMArtifact, type StudioArtifactType, type StudioArtifact } from "@/utils/aiConverter";
+import { convertFileWithAI, convertWithAI, askClaudeAnswerStream, askAgentStream, deleteRedundantCards, deleteAllCards, embedQuery, rerankDocuments, rewriteQueryWithLLM, generateMultiQueries, suggestConnections, contextualizeChunk, agenticChunk, graphragRetrieve, analyzeQuery, logRAGEval, extractEntities, extractCompanyProperties, orchestrateQuery, criticCheck, system2Reflect, system2RefineStream, extractTemporalInsights, preWarmConverterBackend, fetchCostSummary, notebooklmStatus, notebooklmCreateNotebook, notebooklmGetNotebook, notebooklmSyncSources, notebooklmGenerate, notebooklmListArtifacts, notebooklmDownloadArtifact, resolveConverterApiBaseUrl, type AIConversionResponse, type AskFundConnection, type QueryAnalysis, type VerifiableSource, type SourceDoc, type TemporalInsight, type CostData, type NLMArtifactType, type NLMNotebook, type NLMArtifact, type StudioArtifact } from "@/utils/aiConverter";
 import { getClickUpLists, ingestClickUpList, ingestGoogleDrive, listDriveFolders, listDriveFiles, downloadDriveFile, warmUpIngestion, sleep, getGoogleAccessTokenFromBackend, type GDriveFolderEntry, type GDriveFileEntry } from "@/utils/ingestionClient";
 import { triggerGoogleOAuthForDrive } from "@/utils/googleOAuth";
 import { gmailListMessages, gmailIngestMessage, gmailDownloadAttachment, type GmailIngestResult } from "@/utils/gmailClient";
@@ -5539,8 +5539,6 @@ function DashboardTab({
           setStudioNotebook(null);
           setStudioNlmArtifacts([]);
         }
-        const artRes = await studioListArtifacts(activeEventId);
-        if (!cancelled) setStudioArtifacts(artRes.artifacts);
       } catch {
         if (!cancelled) setStudioNlmAvailable(false);
       } finally {
@@ -5697,13 +5695,6 @@ function DashboardTab({
             <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
             Decision Intelligence
           </button>
-          <button
-            onClick={() => setDashboardSection("studio")}
-            className="px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all text-slate-500 hover:text-slate-900"
-          >
-            <Sparkles className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-            Studio
-          </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200 bg-white">
@@ -5832,15 +5823,6 @@ function DashboardTab({
         >
           <TrendingUp className="h-4 w-4 inline mr-1.5 -mt-0.5" />
           Decision Intelligence
-        </button>
-        <button
-          onClick={() => setDashboardSection("studio")}
-          className={`px-4 py-2 rounded-t-lg text-sm font-mono font-bold transition-all ${
-            dashboardSection === "studio" ? "bg-violet-600/15 text-violet-600 border-b-2 border-violet-500" : "text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <Sparkles className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-          Studio
         </button>
       </div>
 
@@ -6270,8 +6252,8 @@ function DashboardTab({
         </div>
       )}
 
-      {/* ── Studio: Google NotebookLM (when available) + built-in Claude fallback ── */}
-      {dashboardSection === "studio" && (
+      {/* ── Studio: hidden for now ── */}
+      {dashboardSection === "studio" && false && (
         <div className="space-y-6">
           {studioViewingArtifact ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-5">
@@ -6454,110 +6436,11 @@ function DashboardTab({
               {studioNlmAvailable === false && studioNlmHint && (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                   <p className="text-xs font-mono font-bold text-amber-800 mb-1">Use Google NotebookLM (audio, video, mind maps)</p>
-                  <p className="text-[11px] text-amber-700 font-mono whitespace-pre-wrap">{studioNlmHint}</p>
-                </div>
-              )}
-
-              {/* Built-in Claude generation (always shown) */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-mono font-bold text-slate-800 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-violet-500" />
-                    {studioNlmAvailable ? "Or generate with Claude (built-in)" : "Generate with Claude (built-in)"}
-                  </h3>
-                  <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">RAG + Claude</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {([
-                    { type: "report" as StudioArtifactType, label: "One-Pager Report", icon: "📄", desc: "Deal briefing" },
-                    { type: "audio_script" as StudioArtifactType, label: "Audio Script", icon: "🎙️", desc: "Podcast-style" },
-                    { type: "quiz" as StudioArtifactType, label: "Quiz", icon: "❓", desc: "Knowledge check" },
-                    { type: "mind_map" as StudioArtifactType, label: "Mind Map", icon: "🧠", desc: "Concept map" },
-                    { type: "flashcards" as StudioArtifactType, label: "Flashcards", icon: "🃏", desc: "Study cards" },
-                    { type: "slide_deck" as StudioArtifactType, label: "Slide Deck", icon: "📊", desc: "IC slides" },
-                    { type: "data_table" as StudioArtifactType, label: "Data Table", icon: "📋", desc: "Structured data" },
-                  ]).map(({ type, label, icon, desc }) => (
-                    <button
-                      key={type}
-                      disabled={studioGenerating !== null}
-                      className="flex flex-col items-start p-3 border border-slate-200 rounded-xl hover:border-violet-300 hover:bg-violet-50/30 transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
-                      onClick={async () => {
-                        if (!activeEventId) return;
-                        setStudioGenerating(type);
-                        try {
-                          const { artifact } = await studioGenerate(activeEventId, type, { title: label });
-                          setStudioArtifacts(prev => [artifact, ...prev]);
-                          toast({ title: `${label} generated!` });
-                        } catch (err: unknown) {
-                          toast({ title: "Generation failed", description: String(err), variant: "destructive" });
-                        } finally {
-                          setStudioGenerating(null);
-                        }
-                      }}
-                    >
-                      <span className="text-2xl mb-2">{icon}</span>
-                      <span className="text-xs font-mono font-bold text-slate-700">{label}</span>
-                      <span className="text-[10px] font-mono text-slate-400 mt-0.5">{desc}</span>
-                      {studioGenerating === type && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600 mt-2" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Built-in artifacts list */}
-              {studioArtifacts.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <h3 className="text-sm font-mono font-bold text-slate-800 mb-4">Generated with Claude ({studioArtifacts.length})</h3>
-                  <div className="space-y-3">
-                    {studioArtifacts.map((art) => {
-                      const typeIcons: Record<string, string> = {
-                        report: "📄", quiz: "❓", flashcards: "🃏", mind_map: "🧠",
-                        audio_script: "🎙️", slide_deck: "📊", data_table: "📋",
-                      };
-                      return (
-                        <div key={art.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl bg-slate-50/30">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xl">{typeIcons[art.artifact_type] || "📎"}</span>
-                            <div>
-                              <p className="text-xs font-mono font-bold text-slate-700">{art.title || art.artifact_type.replace(/_/g, " ")}</p>
-                              <p className="text-[10px] font-mono text-slate-400">
-                                {art.created_at ? new Date(art.created_at).toLocaleDateString() : "Just now"} · {art.artifact_type.replace(/_/g, " ")} · {art.content_format}
-                                {art.source_doc_count ? ` · ${art.source_doc_count} docs` : ""}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                              art.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                              art.status === "generating" ? "bg-amber-100 text-amber-700" :
-                              art.status === "failed" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
-                            }`}>{art.status}</span>
-                            {art.status === "completed" && (
-                              <button
-                                className="px-3 py-1 bg-violet-600 text-white rounded-lg text-[10px] font-mono font-bold hover:bg-violet-700"
-                                onClick={async () => {
-                                  if (art.content) setStudioViewingArtifact(art);
-                                  else {
-                                    const full = await studioGetArtifact(activeEventId!, art.id);
-                                    if (full.artifact) setStudioViewingArtifact(full.artifact);
-                                  }
-                                }}
-                              >View</button>
-                            )}
-                            <button
-                              className="px-2 py-1 text-slate-400 hover:text-red-500 rounded-lg text-[10px] font-mono"
-                              onClick={async () => {
-                                if (!activeEventId) return;
-                                await studioDeleteArtifact(activeEventId, art.id);
-                                setStudioArtifacts(prev => prev.filter(a => a.id !== art.id));
-                              }}
-                              title="Delete"
-                            >×</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="text-[11px] text-amber-700 font-mono whitespace-pre-wrap">
+                    {studioNlmHint.includes("RPC") && studioNlmHint.includes("null result")
+                      ? "NotebookLM is unavailable. Check that NOTEBOOKLM_AUTH_JSON is set on the server with SID, HSID, and APISID cookies for .google.com, or try re-running notebooklm login and exporting cookies again."
+                      : studioNlmHint}
+                  </p>
                 </div>
               )}
             </>
