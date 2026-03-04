@@ -8848,7 +8848,269 @@ async def kg_delete_all(request: KGDeleteRequest, auth: AuthContext = Depends(ge
 
 
 # ---------------------------------------------------------------------------
-#  NotebookLM Integration — Google NotebookLM API wrapper
+#  Studio — Self-hosted content generation (RAG + Claude, no external deps)
+# ---------------------------------------------------------------------------
+
+STUDIO_ARTIFACT_TYPES = {
+    "report": {
+        "format": "markdown",
+        "title_default": "Deal Briefing",
+        "system": (
+            "You are a senior VC analyst. Given source documents about a company or deal, "
+            "produce a concise, professional one-page briefing document in Markdown.\n"
+            "Structure: Executive Summary, Company Overview, Market & Traction, "
+            "Key Metrics, Investment Thesis (bull/bear), Key Risks, Next Steps.\n"
+            "Be data-driven. Cite numbers from the sources. Keep it to ~800 words."
+        ),
+        "max_tokens": 2000,
+    },
+    "quiz": {
+        "format": "json",
+        "title_default": "Knowledge Check",
+        "system": (
+            "You are an investment analyst trainer. Given source documents, generate a JSON array of "
+            "quiz questions that test understanding of the deal/company.\n"
+            "Return ONLY valid JSON: [{\"question\": \"...\", \"options\": [\"A\", \"B\", \"C\", \"D\"], "
+            "\"correct\": \"A\", \"explanation\": \"...\"}]\n"
+            "Generate 8-10 questions. Mix factual recall with analytical thinking."
+        ),
+        "max_tokens": 3000,
+    },
+    "flashcards": {
+        "format": "json",
+        "title_default": "Study Flashcards",
+        "system": (
+            "You are a research analyst creating study materials. Given source documents, generate "
+            "flashcards as a JSON array.\n"
+            "Return ONLY valid JSON: [{\"front\": \"question or term\", \"back\": \"answer or definition\"}]\n"
+            "Generate 12-15 flashcards covering key facts, metrics, and concepts."
+        ),
+        "max_tokens": 2500,
+    },
+    "mind_map": {
+        "format": "json",
+        "title_default": "Concept Map",
+        "system": (
+            "You are a visual analyst. Given source documents, generate a hierarchical mind map as JSON.\n"
+            "Return ONLY valid JSON: {\"label\": \"root topic\", \"children\": ["
+            "{\"label\": \"...\", \"children\": [{\"label\": \"...\"}]}]}\n"
+            "Create 3-5 top-level branches, each with 2-4 sub-items. Keep labels concise (3-8 words)."
+        ),
+        "max_tokens": 2000,
+    },
+    "audio_script": {
+        "format": "markdown",
+        "title_default": "Audio Briefing Script",
+        "system": (
+            "You are a podcast host covering VC deals. Given source documents, write an engaging "
+            "3-minute audio script (~450 words) in a conversational but professional tone.\n"
+            "Structure: Hook/intro → company overview → why it's interesting → key metrics → "
+            "risks to watch → closing thought.\n"
+            "Write it as spoken text (no headers/bullets). Use transitions like a real podcast."
+        ),
+        "max_tokens": 1500,
+    },
+    "slide_deck": {
+        "format": "json",
+        "title_default": "Presentation Slides",
+        "system": (
+            "You are a VC associate preparing an IC deck. Given source documents, generate a slide deck.\n"
+            "Return ONLY valid JSON: [{\"slide\": 1, \"title\": \"...\", \"bullets\": [\"...\"], "
+            "\"speaker_notes\": \"...\"}]\n"
+            "Generate 6-8 slides: Title, Executive Summary, Company Overview, Market & Traction, "
+            "Key Metrics, Investment Thesis, Risks, Recommendation."
+        ),
+        "max_tokens": 3000,
+    },
+    "data_table": {
+        "format": "csv",
+        "title_default": "Data Extract",
+        "system": (
+            "You are a data analyst. Given source documents, extract structured data into CSV format.\n"
+            "Return ONLY valid CSV with a header row. Focus on quantitative data: metrics, financials, "
+            "KPIs, dates, milestones. If multiple companies, include a 'company' column.\n"
+            "Aim for 5-20 rows of the most important data points."
+        ),
+        "max_tokens": 2000,
+    },
+}
+
+
+class StudioGenerateRequest(BaseModel):
+    event_id: str
+    artifact_type: str
+    title: str = ""
+    instructions: str = ""
+
+
+async def _gather_event_context(sb, event_id: str, max_chars: int = 80000) -> tuple[str, int]:
+    """Fetch event documents and build a context string for Claude."""
+    docs = await asyncio.to_thread(
+        lambda: sb.table("documents").select("id, title, raw_content")
+        .eq("event_id", event_id).not_.is_("raw_content", "null")
+        .order("created_at", desc=True).limit(30).execute()
+    )
+    if not docs.data:
+        return "", 0
+
+    parts = []
+    total = 0
+    for doc in docs.data:
+        content = (doc.get("raw_content") or "").strip()
+        if not content or len(content) < 50:
+            continue
+        title = doc.get("title") or "Untitled"
+        chunk = f"--- Document: {title} ---\n{content}"
+        if total + len(chunk) > max_chars:
+            remaining = max_chars - total
+            if remaining > 200:
+                parts.append(chunk[:remaining] + "\n[...truncated]")
+            break
+        parts.append(chunk)
+        total += len(chunk)
+
+    return "\n\n".join(parts), len(parts)
+
+
+@app.post("/studio/generate")
+async def studio_generate(request: StudioGenerateRequest):
+    """Generate content using RAG + Claude (self-hosted, no external dependencies)."""
+    atype = request.artifact_type
+    if atype not in STUDIO_ARTIFACT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unknown artifact type: {atype}. Valid: {list(STUDIO_ARTIFACT_TYPES.keys())}")
+
+    spec = STUDIO_ARTIFACT_TYPES[atype]
+    sb = get_supabase()
+    client = _get_anthropic_async_client()
+
+    context, doc_count = await _gather_event_context(sb, request.event_id)
+    if not context:
+        raise HTTPException(status_code=404, detail="No documents with content found for this event. Upload documents first.")
+
+    title = request.title or spec["title_default"]
+    row_id = None
+    try:
+        row = {
+            "event_id": request.event_id,
+            "artifact_type": atype,
+            "title": title,
+            "status": "generating",
+            "content": "",
+            "content_format": spec["format"],
+            "instructions": request.instructions or "",
+            "source_doc_count": doc_count,
+        }
+        db_result = await asyncio.to_thread(
+            lambda: sb.table("studio_artifacts").insert(row).execute()
+        )
+        row_id = db_result.data[0]["id"] if db_result.data else None
+    except Exception:
+        pass
+
+    user_msg = f"Here are the source documents:\n\n{context}"
+    if request.instructions:
+        user_msg += f"\n\nAdditional instructions: {request.instructions}"
+
+    try:
+        result = await _call_claude_with_fallback(
+            client,
+            messages=[{"role": "user", "content": user_msg}],
+            system=spec["system"],
+            max_tokens=spec["max_tokens"],
+            temperature=0.3,
+            endpoint="studio_generate",
+            event_id=request.event_id,
+        )
+        content_text = ""
+        if hasattr(result, "content"):
+            for block in result.content:
+                if hasattr(block, "text"):
+                    content_text += block.text
+
+        token_cost = {}
+        if hasattr(result, "usage"):
+            token_cost = {
+                "input_tokens": getattr(result.usage, "input_tokens", 0),
+                "output_tokens": getattr(result.usage, "output_tokens", 0),
+                "model": getattr(result, "model", ""),
+            }
+
+        if row_id:
+            await asyncio.to_thread(
+                lambda: sb.table("studio_artifacts").update({
+                    "status": "completed",
+                    "content": content_text,
+                    "token_cost": token_cost,
+                }).eq("id", row_id).execute()
+            )
+
+        return {
+            "artifact": {
+                "id": row_id,
+                "event_id": request.event_id,
+                "artifact_type": atype,
+                "title": title,
+                "status": "completed",
+                "content": content_text,
+                "content_format": spec["format"],
+                "source_doc_count": doc_count,
+                "token_cost": token_cost,
+                "created_at": "",
+            }
+        }
+    except Exception as e:
+        if row_id:
+            await asyncio.to_thread(
+                lambda: sb.table("studio_artifacts").update({
+                    "status": "failed",
+                    "content": f"Generation failed: {str(e)[:300]}",
+                }).eq("id", row_id).execute()
+            )
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)[:200]}")
+
+
+@app.get("/studio/artifacts/{event_id}")
+async def studio_list_artifacts(event_id: str):
+    """List all self-hosted generated artifacts for an event."""
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.table("studio_artifacts")
+        .select("id, event_id, artifact_type, title, status, content_format, source_doc_count, instructions, created_at")
+        .eq("event_id", event_id)
+        .order("created_at", desc=True)
+        .limit(50).execute()
+    )
+    return {"artifacts": result.data or []}
+
+
+@app.get("/studio/artifacts/{event_id}/{artifact_id}")
+async def studio_get_artifact(event_id: str, artifact_id: str):
+    """Get a specific artifact with its full content."""
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.table("studio_artifacts")
+        .select("*")
+        .eq("id", artifact_id).eq("event_id", event_id)
+        .limit(1).execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+    return {"artifact": result.data[0]}
+
+
+@app.delete("/studio/artifacts/{event_id}/{artifact_id}")
+async def studio_delete_artifact(event_id: str, artifact_id: str):
+    """Delete an artifact."""
+    sb = get_supabase()
+    await asyncio.to_thread(
+        lambda: sb.table("studio_artifacts")
+        .delete().eq("id", artifact_id).eq("event_id", event_id).execute()
+    )
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+#  NotebookLM Integration — Google NotebookLM API wrapper (optional)
 # ---------------------------------------------------------------------------
 
 try:
@@ -8859,9 +9121,25 @@ except ImportError:
     _notebooklm_available = False
 
 _nlm_client = None
+_nlm_last_auth_hint: str | None = None  # so /notebooklm/status can return production hint
+
+def _nlm_auth_error_detail(e: Exception) -> tuple[str, str | None]:
+    """Build user-facing error and optional production hint."""
+    msg = str(e)
+    if "storage_state.json" in msg or "Storage file not found" in msg or "not found" in msg.lower():
+        hint = (
+            "For production (e.g. Render): run 'notebooklm login' on your local machine, "
+            "then in your server's Environment Variables add NOTEBOOKLM_AUTH_JSON and set it to "
+            "the full contents of ~/.notebooklm/storage_state.json (paste as one-line JSON)."
+        )
+        return ("NotebookLM auth not configured on this server.", hint)
+    return (f"NotebookLM auth failed: {msg[:200]}", None)
+
 
 async def _get_nlm_client():
-    """Lazy-init NotebookLM async client from stored credentials."""
+    """Lazy-init NotebookLM async client from stored credentials.
+    Reads from NOTEBOOKLM_AUTH_JSON env (production) or ~/.notebooklm/storage_state.json (local).
+    """
     global _nlm_client
     if _nlm_client is not None:
         return _nlm_client
@@ -8873,7 +9151,9 @@ async def _get_nlm_client():
         return _nlm_client
     except Exception as e:
         _nlm_client = None
-        raise HTTPException(status_code=503, detail=f"NotebookLM auth failed — run 'notebooklm login' first. Error: {str(e)[:200]}")
+        global _nlm_last_auth_hint
+        detail, _nlm_last_auth_hint = _nlm_auth_error_detail(e)
+        raise HTTPException(status_code=503, detail=detail)
 
 
 class NLMCreateRequest(BaseModel):
@@ -8890,6 +9170,7 @@ class NLMGenerateRequest(BaseModel):
 @app.get("/notebooklm/status")
 async def notebooklm_status():
     """Check if NotebookLM integration is available and authenticated."""
+    global _nlm_last_auth_hint
     if not _notebooklm_available:
         return {"available": False, "reason": "notebooklm-py not installed"}
     try:
@@ -8897,7 +9178,11 @@ async def notebooklm_status():
         notebooks = await client.notebooks.list()
         return {"available": True, "notebooks_count": len(notebooks)}
     except HTTPException as e:
-        return {"available": False, "reason": e.detail}
+        out = {"available": False, "reason": e.detail}
+        if _nlm_last_auth_hint:
+            out["production_hint"] = _nlm_last_auth_hint
+            _nlm_last_auth_hint = None
+        return out
     except Exception as e:
         return {"available": False, "reason": str(e)[:200]}
 

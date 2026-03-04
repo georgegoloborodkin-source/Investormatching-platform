@@ -1,3 +1,6 @@
+# NotebookLM auth helper (contains cookie values — do not commit)
+ollama-converter/cookie_to_notebooklm.py
+
 # Environment variables
 .env
 .env.*

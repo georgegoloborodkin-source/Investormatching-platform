@@ -1859,3 +1859,92 @@ export async function notebooklmDownloadArtifact(
     return { ready: false, reason: String(e) };
   }
 }
+
+
+// ---------------------------------------------------------------------------
+//  Studio — Self-hosted content generation (RAG + Claude)
+// ---------------------------------------------------------------------------
+
+export type StudioArtifactType =
+  | "report"
+  | "quiz"
+  | "flashcards"
+  | "mind_map"
+  | "audio_script"
+  | "slide_deck"
+  | "data_table";
+
+export interface StudioArtifact {
+  id: string;
+  event_id: string;
+  artifact_type: StudioArtifactType;
+  title: string;
+  status: "generating" | "completed" | "failed";
+  content?: string;
+  content_format: "markdown" | "json" | "csv" | "html";
+  source_doc_count: number;
+  instructions?: string;
+  token_cost?: { input_tokens?: number; output_tokens?: number; model?: string };
+  created_at: string;
+}
+
+export async function studioGenerate(
+  eventId: string,
+  artifactType: StudioArtifactType,
+  options: { title?: string; instructions?: string } = {},
+): Promise<{ artifact: StudioArtifact }> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  const res = await fetchWithTimeout(
+    `${baseUrl}/studio/generate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: eventId, artifact_type: artifactType, ...options }),
+    },
+    120000,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Generation failed: ${detail}`);
+  }
+  return await res.json();
+}
+
+export async function studioListArtifacts(
+  eventId: string,
+): Promise<{ artifacts: StudioArtifact[] }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/studio/artifacts/${eventId}`, undefined, 15000);
+    if (!res.ok) return { artifacts: [] };
+    return await res.json();
+  } catch {
+    return { artifacts: [] };
+  }
+}
+
+export async function studioGetArtifact(
+  eventId: string,
+  artifactId: string,
+): Promise<{ artifact: StudioArtifact | null }> {
+  try {
+    const baseUrl = await resolveConverterApiBaseUrl();
+    const res = await fetchWithTimeout(`${baseUrl}/studio/artifacts/${eventId}/${artifactId}`, undefined, 15000);
+    if (!res.ok) return { artifact: null };
+    return await res.json();
+  } catch {
+    return { artifact: null };
+  }
+}
+
+export async function studioDeleteArtifact(
+  eventId: string,
+  artifactId: string,
+): Promise<void> {
+  const baseUrl = await resolveConverterApiBaseUrl();
+  await fetchWithTimeout(
+    `${baseUrl}/studio/artifacts/${eventId}/${artifactId}`,
+    { method: "DELETE" },
+    15000,
+  );
+}
