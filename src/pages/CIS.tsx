@@ -5786,7 +5786,7 @@ function DashboardTab({
               <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
               <span className="text-sm text-slate-500 font-mono">Loading decision intelligence...</span>
             </div>
-          ) : (temporalFacts.length === 0 && temporalInsights.length === 0 && temporalKpis.length === 0) ? (
+          ) : (temporalFacts.length === 0 && temporalInsights.length === 0 && temporalKpis.length === 0 && temporalMemories.length === 0) ? (
             <Card className="border border-slate-200 bg-white">
               <CardContent className="pt-10 pb-10">
                 <div className="text-center space-y-3">
@@ -5805,7 +5805,8 @@ function DashboardTab({
             const insightCompanies = [...new Set(temporalInsights.map(i => i.company_name))];
             const factCompanies = [...new Set(temporalFacts.map(f => f.company_name))];
             const kpiCompanies = [...new Set(temporalKpis.map(k => k.company_name))];
-            const allCompanies = [...new Set([...insightCompanies, ...factCompanies, ...kpiCompanies])].sort();
+            const memoryCompanies = [...new Set(temporalMemories.filter(m => m.company_name).map(m => m.company_name!))];
+            const allCompanies = [...new Set([...insightCompanies, ...factCompanies, ...kpiCompanies, ...memoryCompanies])].sort();
             const criticalCount = temporalInsights.filter(i => i.severity === "critical" || i.severity === "high").length;
             const growingCount = temporalFacts.filter(f => (f.delta_percent || 0) > 0).length;
 
@@ -5837,9 +5838,9 @@ function DashboardTab({
                     <p className="text-2xl font-mono font-black text-red-700">{criticalCount}</p>
                     <p className="text-[11px] text-red-600 font-mono uppercase tracking-wider mt-1">Action Required</p>
                   </div>
-                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 shadow-sm">
-                    <p className="text-2xl font-mono font-black text-emerald-700">{growingCount}</p>
-                    <p className="text-[11px] text-emerald-600 font-mono uppercase tracking-wider mt-1">Growing Metrics</p>
+                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 shadow-sm">
+                    <p className="text-2xl font-mono font-black text-amber-700">{temporalMemories.length}</p>
+                    <p className="text-[11px] text-amber-600 font-mono uppercase tracking-wider mt-1">Agent Memories</p>
                   </div>
                 </div>
 
@@ -6022,29 +6023,176 @@ function DashboardTab({
                           </div>
                         )}
 
-                        {/* Reflexion memory — lessons learned */}
-                        {companyMemories.length > 0 && (
+                        {/* Reflexion Memory — Senra-style grouped by type */}
+                        {companyMemories.length > 0 && (() => {
+                          const memLessons = companyMemories.filter(m => m.reflection_type === "lesson");
+                          const memBlindSpots = companyMemories.filter(m => m.reflection_type === "blind_spot");
+                          const memCritiques = companyMemories.filter(m => m.reflection_type === "critique_issue");
+                          const memFollowUps = companyMemories.filter(m => m.reflection_type === "follow_up");
+                          return (
+                            <div className="space-y-3">
+                              <p className="text-[11px] font-mono font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <Brain className="h-3.5 w-3.5" /> Agent Memory (Reflexion)
+                              </p>
+                              {memLessons.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <Lightbulb className="h-3 w-3" /> Lessons Learned
+                                  </p>
+                                  <div className="space-y-1">
+                                    {memLessons.slice(0, 4).map(mem => (
+                                      <div key={mem.id} className="p-2 rounded-md border border-emerald-100 bg-emerald-50/30 text-sm">
+                                        <p className="text-slate-700 leading-relaxed">{mem.content}</p>
+                                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">{Math.round(mem.confidence * 100)}% confidence</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {memBlindSpots.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-mono font-bold text-orange-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <Shield className="h-3 w-3" /> Blind Spots Identified
+                                  </p>
+                                  <div className="space-y-1">
+                                    {memBlindSpots.slice(0, 3).map(mem => (
+                                      <div key={mem.id} className="p-2 rounded-md border border-orange-100 bg-orange-50/30 text-sm">
+                                        <p className="text-slate-700 leading-relaxed">{mem.content}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {memCritiques.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-mono font-bold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3" /> Issues Found
+                                  </p>
+                                  <div className="space-y-1">
+                                    {memCritiques.slice(0, 3).map(mem => (
+                                      <div key={mem.id} className="p-2 rounded-md border border-red-100 bg-red-50/30 text-sm">
+                                        <p className="text-slate-700 leading-relaxed">{mem.content}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {memFollowUps.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-mono font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <Target className="h-3 w-3" /> Suggested Follow-ups
+                                  </p>
+                                  <div className="space-y-1">
+                                    {memFollowUps.slice(0, 3).map(mem => (
+                                      <div key={mem.id} className="p-2 rounded-md border border-blue-100 bg-blue-50/30 text-sm">
+                                        <p className="text-slate-700 leading-relaxed">{mem.content}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {/* Cross-company Agent Learning Hub */}
+                {(() => {
+                  const generalMemories = temporalMemories.filter(m => !m.company_name);
+                  const allLessons = temporalMemories.filter(m => m.reflection_type === "lesson");
+                  const allBlindSpots = temporalMemories.filter(m => m.reflection_type === "blind_spot");
+                  if (allLessons.length === 0 && allBlindSpots.length === 0) return null;
+                  return (
+                    <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50/30 to-white shadow-sm">
+                      <CardHeader className="border-b border-amber-100 pb-3">
+                        <CardTitle className="text-slate-900 font-mono font-black flex items-center gap-2.5 text-base">
+                          <Brain className="h-5 w-5 text-amber-600" />
+                          Agent Learning Hub
+                        </CardTitle>
+                        <CardDescription className="text-slate-500 font-mono text-xs">
+                          Accumulated lessons and blind spots from reflexion — the agent uses these to improve future answers.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="p-3 rounded-lg border border-emerald-100 bg-emerald-50/40 text-center">
+                            <p className="text-xl font-mono font-black text-emerald-700">{allLessons.length}</p>
+                            <p className="text-[10px] text-emerald-600 font-mono uppercase">Lessons</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-orange-100 bg-orange-50/40 text-center">
+                            <p className="text-xl font-mono font-black text-orange-700">{allBlindSpots.length}</p>
+                            <p className="text-[10px] text-orange-600 font-mono uppercase">Blind Spots</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-red-100 bg-red-50/40 text-center">
+                            <p className="text-xl font-mono font-black text-red-700">{temporalMemories.filter(m => m.reflection_type === "critique_issue").length}</p>
+                            <p className="text-[10px] text-red-600 font-mono uppercase">Critiques</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-blue-100 bg-blue-50/40 text-center">
+                            <p className="text-xl font-mono font-black text-blue-700">{temporalMemories.filter(m => m.reflection_type === "follow_up").length}</p>
+                            <p className="text-[10px] text-blue-600 font-mono uppercase">Follow-ups</p>
+                          </div>
+                        </div>
+
+                        {allLessons.length > 0 && (
                           <div>
-                            <p className="text-[11px] font-mono font-bold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                              <Brain className="h-3.5 w-3.5" /> Lessons from Past Analysis
+                            <p className="text-[11px] font-mono font-bold text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Lightbulb className="h-3.5 w-3.5" /> Recent Lessons
                             </p>
                             <div className="space-y-1.5">
-                              {companyMemories.slice(0, 5).map(mem => (
-                                <div key={mem.id} className="p-2.5 rounded-lg border border-amber-100 bg-amber-50/30 text-sm">
-                                  <p className="text-slate-700 leading-relaxed">{mem.content}</p>
-                                  <p className="text-[10px] text-slate-400 font-mono mt-1">
-                                    {mem.reflection_type.replace("_", " ")} · {Math.round(mem.confidence * 100)}% confidence
-                                  </p>
+                              {allLessons.slice(0, 6).map(mem => (
+                                <div key={mem.id} className="p-2.5 rounded-lg border border-emerald-100 bg-emerald-50/20">
+                                  <p className="text-sm text-slate-700 leading-relaxed">{mem.content}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {mem.company_name && <span className="text-[9px] font-mono text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">{mem.company_name}</span>}
+                                    <span className="text-[9px] text-slate-400 font-mono">{Math.round(mem.confidence * 100)}% · {new Date(mem.created_at).toLocaleDateString()}</span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
 
+                        {allBlindSpots.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-orange-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <Shield className="h-3.5 w-3.5" /> Identified Blind Spots
+                            </p>
+                            <div className="space-y-1.5">
+                              {allBlindSpots.slice(0, 5).map(mem => (
+                                <div key={mem.id} className="p-2.5 rounded-lg border border-orange-100 bg-orange-50/20">
+                                  <p className="text-sm text-slate-700 leading-relaxed">{mem.content}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {mem.company_name && <span className="text-[9px] font-mono text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">{mem.company_name}</span>}
+                                    <span className="text-[9px] text-slate-400 font-mono">{new Date(mem.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {generalMemories.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-mono font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              General Insights
+                            </p>
+                            <div className="space-y-1">
+                              {generalMemories.slice(0, 4).map(mem => (
+                                <div key={mem.id} className="p-2 rounded-md border border-slate-100 bg-slate-50/30 text-sm">
+                                  <p className="text-slate-600">{mem.content}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );
-                })}
+                })()}
               </div>
             );
           })()}
@@ -10965,7 +11113,7 @@ export default function CIS() {
                     : `Reflexion: Partner Agent added deeper analysis and blind spots. Confidence: ${Math.round(reflection.confidence * 100)}%`
                 );
 
-                // ── Persist Reflexion Memory (Sentra-style agent learning) ──
+                // ── Persist Reflexion Memory (Senra-style: only real lessons + blind spots) ──
                 try {
                   const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
                   const safeThreadId = isValidUuid(threadId) ? threadId : null;
@@ -10977,7 +11125,46 @@ export default function CIS() {
                   const questionSnippet = question.slice(0, 200);
                   const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
                   const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+                  const isErrorStr = (s: string) => /^(Reflection error|Error code|Could not parse|No AI available)/i.test(s);
 
+                  // Lesson: prefer the backend's dedicated lesson field
+                  const backendLesson = (reflection as any).lesson || "";
+                  if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson)) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                      content: backendLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  } else if (issues.length > 0) {
+                    const fallbackLesson = `Issues found: ${issues.slice(0, 3).join("; ")}${reflection.missing_data_types?.length ? `. Missing: ${reflection.missing_data_types.join(", ")}` : ""}`;
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                      content: fallbackLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  }
+
+                  // Blind spot: prefer backend's dedicated blind_spot field
+                  const backendBlindSpot = (reflection as any).blind_spot || "";
+                  if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot)) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                      content: backendBlindSpot.slice(0, 500), company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning)) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                      content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  }
+
+                  // Critique issues (keep — these are valuable)
                   for (const issue of issues) {
                     if (issue && issue.length > 5) {
                       memoryRows.push({
@@ -10988,44 +11175,19 @@ export default function CIS() {
                       });
                     }
                   }
-                  for (const dt of (reflection.missing_data_types || [])) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "missing_data",
-                      content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  }
+
+                  // Follow-up queries (keep — useful for Decision Intelligence tab)
                   for (const fq of (reflection.follow_up_queries || [])) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
-                      content: fq, company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
+                    if (fq && fq.length > 5) {
+                      memoryRows.push({
+                        event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
+                        content: fq, company_name: detectedCompany, topic: null,
+                        source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                        created_by: currentUserId,
+                      });
+                    }
                   }
-                  if (reflection.reasoning && reflection.reasoning.length > 10) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
-                      content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  }
-                  const lessonSummary = [
-                    issues.length > 0 ? `Issues: ${issues.slice(0, 3).join("; ")}` : null,
-                    reflection.missing_data_types?.length ? `Missing: ${reflection.missing_data_types.join(", ")}` : null,
-                    `Confidence: ${Math.round((reflection.confidence || 0.7) * 100)}%`,
-                  ].filter(Boolean).join(". ");
-                  if (lessonSummary) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
-                      content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
-                      company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  }
+
                   if (memoryRows.length > 0) {
                     const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
                     if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
@@ -13200,7 +13362,7 @@ export default function CIS() {
                 : `Reflexion: Partner Agent added deeper analysis and blind spots. Confidence: ${Math.round(reflection.confidence * 100)}%`
             );
 
-            // Persist reflexion memory rows
+            // Persist reflexion memory rows (Senra-style: only real lessons + blind spots)
             try {
               const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
               const safeThreadId = isValidUuid(threadId) ? threadId : null;
@@ -13212,7 +13374,46 @@ export default function CIS() {
               const questionSnippet = question.slice(0, 200);
               const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
               const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+              const isErrorStr = (s: string) => /^(Reflection error|Error code|Could not parse|No AI available)/i.test(s);
 
+              // Lesson: prefer the backend's dedicated lesson field
+              const backendLesson = (reflection as any).lesson || "";
+              if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson)) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                  content: backendLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId,
+                });
+              } else if (issues.length > 0) {
+                const fallbackLesson = `Issues found: ${issues.slice(0, 3).join("; ")}${reflection.missing_data_types?.length ? `. Missing: ${reflection.missing_data_types.join(", ")}` : ""}`;
+                memoryRows.push({
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                  content: fallbackLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId,
+                });
+              }
+
+              // Blind spot: prefer backend's dedicated blind_spot field
+              const backendBlindSpot = (reflection as any).blind_spot || "";
+              if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot)) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                  content: backendBlindSpot.slice(0, 500), company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId,
+                });
+              } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning)) {
+                memoryRows.push({
+                  event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                  content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
+                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                  created_by: currentUserId,
+                });
+              }
+
+              // Critique issues
               for (const issue of issues) {
                 if (issue && issue.length > 5) {
                   memoryRows.push({
@@ -13223,44 +13424,19 @@ export default function CIS() {
                   });
                 }
               }
-              for (const dt of (reflection.missing_data_types || [])) {
-                memoryRows.push({
-                  event_id: eventId, thread_id: safeThreadId, reflection_type: "missing_data",
-                  content: `Missing data type: ${dt}`, company_name: detectedCompany, topic: null,
-                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId,
-                });
-              }
+
+              // Follow-up queries
               for (const fq of (reflection.follow_up_queries || [])) {
-                memoryRows.push({
-                  event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
-                  content: fq, company_name: detectedCompany, topic: null,
-                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId,
-                });
+                if (fq && fq.length > 5) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
+                    content: fq, company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                }
               }
-              if (reflection.reasoning && reflection.reasoning.length > 10) {
-                memoryRows.push({
-                  event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
-                  content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
-                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId,
-                });
-              }
-              const lessonSummary = [
-                issues.length > 0 ? `Issues: ${issues.slice(0, 3).join("; ")}` : null,
-                reflection.missing_data_types?.length ? `Missing: ${reflection.missing_data_types.join(", ")}` : null,
-                `Confidence: ${Math.round((reflection.confidence || 0.7) * 100)}%`,
-              ].filter(Boolean).join(". ");
-              if (lessonSummary) {
-                memoryRows.push({
-                  event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
-                  content: `For "${questionSnippet.slice(0, 80)}…": ${lessonSummary}`,
-                  company_name: detectedCompany, topic: null,
-                  source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                  created_by: currentUserId,
-                });
-              }
+
               if (memoryRows.length > 0) {
                 const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
                 if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);

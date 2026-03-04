@@ -4620,6 +4620,8 @@ class System2ReflectResponse(BaseModel):
     reasoning: str = ""
     refined_answer: str = ""
     confidence: float = 0.0
+    lesson: str = ""
+    blind_spot: str = ""
 
 
 @app.post("/system2-reflect", response_model=System2ReflectResponse)
@@ -4646,8 +4648,8 @@ async def system2_reflect(request: System2ReflectRequest):
         context_summary.append(f"[KPIS]: {request.kpi_context[:1500]}")
     context_block = "\n\n".join(context_summary) or "No context provided."
 
-    prompt = f"""You are a reflective VC intelligence analyst performing test-time compute.
-You must evaluate a DRAFT ANSWER and decide if more information is needed.
+    prompt = f"""You are a reflective VC intelligence analyst performing test-time compute (Reflexion pattern).
+Evaluate the DRAFT ANSWER, identify gaps, and extract reusable learning.
 
 ITERATION: {request.iteration + 1} of {request.max_iterations}
 
@@ -4660,10 +4662,12 @@ AVAILABLE CONTEXT:
 DRAFT ANSWER:
 {request.draft_answer}
 
-TASK: Analyze the draft and decide:
-1. Is the answer complete and well-supported by the context? 
+TASK:
+1. Is the answer complete and well-supported by the context?
 2. Are there specific facts, metrics, or relationships that are mentioned but lack supporting data?
 3. If data is missing, what specific follow-up search queries would fill the gaps?
+4. LESSON: Write ONE reusable lesson for future similar questions. A lesson is a short, actionable takeaway like "For 'what does X do' questions, always start with the company's product description from the knowledge graph" or "Revenue claims without source documents should be flagged as unverified." The lesson should help the agent answer better NEXT TIME, not describe this specific answer.
+5. BLIND SPOT: Write ONE specific gap, risk, or bias in this draft that the user should be aware of. Example: "Answer relies on a single pitch deck — competitor data or independent market reports would improve reliability."
 
 OUTPUT ONLY valid JSON:
 {{
@@ -4671,7 +4675,9 @@ OUTPUT ONLY valid JSON:
   "missing_data_types": ["vector" | "graph" | "kpis"],
   "follow_up_queries": ["specific search query 1", "specific search query 2"],
   "reasoning": "one paragraph explaining what's missing and why",
-  "confidence": float 0.0-1.0 (how confident you are the draft fully answers the question)
+  "confidence": float 0.0-1.0,
+  "lesson": "one reusable lesson for the agent to remember for future questions (MUST be a real takeaway, not just metadata like confidence scores)",
+  "blind_spot": "one specific gap or bias in this draft (or empty string if none)"
 }}
 
 RULES:
@@ -4679,13 +4685,15 @@ RULES:
 - follow_up_queries should be specific, actionable search queries (not vague)
 - missing_data_types tells the frontend WHICH agents to re-query
 - Maximum 3 follow-up queries per reflection
-- If the draft is good enough, just return needs_more_data: false with high confidence"""
+- "lesson" MUST be a real verbal takeaway — never just "Confidence: N%" or a restatement of the question
+- "blind_spot" should be a specific gap, not a generic statement like "more data needed"
+- If the draft is good enough, still provide a lesson (there's always something to learn)"""
 
     try:
         client = _get_anthropic_async_client()
         message = await client.messages.create(
             model=HAIKU_MODEL,
-            max_tokens=600,
+            max_tokens=900,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -4716,6 +4724,8 @@ RULES:
             reasoning=data.get("reasoning", ""),
             refined_answer=data.get("refined_answer", ""),
             confidence=data.get("confidence", 0.5),
+            lesson=data.get("lesson", ""),
+            blind_spot=data.get("blind_spot", ""),
         )
     except Exception as e:
         return System2ReflectResponse(
@@ -4723,6 +4733,8 @@ RULES:
             refined_answer=request.draft_answer,
             confidence=0.5,
             reasoning=f"Reflection error: {str(e)[:100]}",
+            lesson="",
+            blind_spot="",
         )
 
 
