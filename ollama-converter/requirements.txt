@@ -40,5 +40,5 @@ supabase>=2.0.0
 ollama>=0.3.0
 openai>=1.0.0
 
-# ── NotebookLM integration (Google NotebookLM API wrapper) ──
-notebooklm-py>=0.3.0
+# ── NotebookLM integration (optional, not required for self-hosted Studio) ──
+# notebooklm-py>=0.3.0
