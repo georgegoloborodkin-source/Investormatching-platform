@@ -30,6 +30,7 @@ const fSerif: React.CSSProperties = { fontFamily: "'Instrument Serif', serif" };
 const NAV_LINKS = [
   { label: "Home", href: "#hero" },
   { label: "Features", href: "#features" },
+  { label: "Use Cases", href: "#usecases" },
   { label: "How it works", href: "#how", chevron: true },
   { label: "Roadmap", href: "#roadmap" },
 ];
@@ -59,6 +60,91 @@ const DIFFERENTIATORS = [
   { icon: FileText, title: "Grounded in your data", desc: "Every answer is sourced from your documents and company cards. Click any citation to verify." },
   { icon: Brain, title: "Built for funds, not generic chat", desc: "Decision logs, company graphs, and portfolio analytics — purpose-built for investment teams." },
   { icon: Lock, title: "Your data, your control", desc: "Row-level security. Multi-tenant by design. Your fund's data is isolated at the database layer." },
+];
+
+/* ─── dynamic terminal lines ─── */
+const TERMINAL_SEQUENCES = [
+  [
+    { text: "> initializing fund_alpha_iii...", delay: 60 },
+    { text: "> loading portfolio [186 companies]", delay: 50 },
+    { text: "> syncing market_data...", delay: 40 },
+    { text: "  pipeline: 342 active deals scored", delay: 30, dim: true },
+    { text: "  alerts: 3 portfolio events detected", delay: 30, dim: true },
+    { text: "  lp_report: Q4 draft ready for review", delay: 30, dim: true },
+    { text: "> ai_engine: analyzing sector correlations", delay: 50 },
+    { text: "  ✓ 12 new patterns identified", delay: 40, color: "#34d399" },
+  ],
+  [
+    { text: "> ask: \"What does TechCorp do?\"", delay: 55 },
+    { text: "  searching 2,847 document chunks...", delay: 35, dim: true },
+    { text: "  matched: pitch_deck_v3.pdf (94% relevance)", delay: 30, dim: true },
+    { text: "  matched: due_diligence_memo.docx (89%)", delay: 30, dim: true },
+    { text: "> answer: TechCorp is a B2B SaaS platform...", delay: 45, color: "#a78bfa" },
+    { text: "  sources: 3 documents, 7 chunks cited", delay: 30, dim: true },
+    { text: "  ✓ grounded — 0 unsupported claims", delay: 40, color: "#34d399" },
+  ],
+  [
+    { text: "> decision.log --company Acme --action invest", delay: 50 },
+    { text: "  sector: fintech | stage: series_a", delay: 30, dim: true },
+    { text: "  conviction: high | partner: @sarah", delay: 30, dim: true },
+    { text: "> reflexion: analyzing decision patterns...", delay: 55 },
+    { text: "  fintech pass rate: 72% (above avg)", delay: 30, dim: true },
+    { text: "  avg time-to-decision: 14 days", delay: 30, dim: true },
+    { text: "  ✓ decision logged to knowledge graph", delay: 40, color: "#34d399" },
+    { text: "  ✓ company card updated", delay: 40, color: "#34d399" },
+  ],
+];
+
+/* ─── use case cards ─── */
+const USE_CASES = [
+  {
+    category: "Due Diligence",
+    color: "#7b39fc",
+    questions: [
+      "\"What does this company do and what's their business model?\"",
+      "\"Summarize the key risks from the due diligence memo\"",
+      "\"What are their unit economics and burn rate?\"",
+    ],
+    benefit: "Get answers in seconds from hundreds of pages — every claim sourced and verifiable.",
+  },
+  {
+    category: "Portfolio Intelligence",
+    color: "#f87b52",
+    questions: [
+      "\"Which portfolio companies overlap in the healthcare sector?\"",
+      "\"Show me all connections between Fund X and our pipeline\"",
+      "\"Compare the ARR trajectory of Company A vs Company B\"",
+    ],
+    benefit: "See patterns across your entire portfolio that no spreadsheet can surface.",
+  },
+  {
+    category: "Decision Analytics",
+    color: "#3b82f6",
+    questions: [
+      "\"What's our pass rate on fintech deals this quarter?\"",
+      "\"Which partner has the fastest time-to-decision?\"",
+      "\"Show conversion by stage and sector for 2025\"",
+    ],
+    benefit: "Measure how your fund actually decides — and improve systematically.",
+  },
+  {
+    category: "Team Collaboration",
+    color: "#14b8a6",
+    questions: [
+      "\"What did we discuss about Acme in last week's IC?\"",
+      "\"Who on the team has reviewed the latest pitch deck?\"",
+      "\"Sync all new files from our shared Drive folder\"",
+    ],
+    benefit: "Everyone on the same page. No lost context, no repeated work.",
+  },
+];
+
+/* ─── key metrics for dashboard section ─── */
+const KEY_METRICS = [
+  { label: "TOTAL VALUE LOCKED", value: "$4.2B", delta: "+12.4%", positive: true, sparkline: [20, 25, 22, 30, 28, 35, 32, 40, 38, 45, 50, 55] },
+  { label: "IRR (NET)", value: "38.2%", delta: "+2.1%", positive: true, sparkline: [30, 32, 28, 35, 33, 36, 34, 38, 37, 39, 38, 40] },
+  { label: "DPI", value: "2.8x", delta: "+0.3x", positive: true, sparkline: [15, 18, 16, 20, 19, 22, 21, 24, 23, 26, 27, 28] },
+  { label: "ACTIVE DEALS", value: "24", delta: "-3", positive: false, sparkline: [30, 28, 32, 27, 29, 26, 28, 25, 27, 24, 26, 24] },
 ];
 
 const ROADMAP = [
@@ -125,6 +211,138 @@ function Counter({ target, suffix = "" }: { target: number; suffix?: string }) {
     return () => cancelAnimationFrame(frame);
   }, [inView, target]);
   return <span ref={ref}>{val}{suffix}</span>;
+}
+
+/* ─── dynamic terminal with typewriter ─── */
+function TerminalAnimation() {
+  const [seqIdx, setSeqIdx] = useState(0);
+  const [lines, setLines] = useState<Array<{ text: string; dim?: boolean; color?: string }>>([]);
+  const [currentLine, setCurrentLine] = useState("");
+  const [lineIdx, setLineIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: false, margin: "-100px" });
+
+  useEffect(() => {
+    if (!inView) return;
+    const seq = TERMINAL_SEQUENCES[seqIdx];
+    if (lineIdx >= seq.length) {
+      const timer = setTimeout(() => {
+        setSeqIdx((s) => (s + 1) % TERMINAL_SEQUENCES.length);
+        setLines([]);
+        setLineIdx(0);
+        setCharIdx(0);
+        setCurrentLine("");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+    const line = seq[lineIdx];
+    if (charIdx < line.text.length) {
+      const speed = line.delay || 40;
+      const jitter = Math.random() * speed * 0.6;
+      const timer = setTimeout(() => {
+        setCurrentLine(line.text.slice(0, charIdx + 1));
+        setCharIdx((c) => c + 1);
+      }, speed + jitter);
+      return () => clearTimeout(timer);
+    }
+    const timer = setTimeout(() => {
+      setLines((prev) => [...prev, { text: line.text, dim: line.dim, color: line.color }]);
+      setCurrentLine("");
+      setLineIdx((l) => l + 1);
+      setCharIdx(0);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [inView, seqIdx, lineIdx, charIdx]);
+
+  return (
+    <div ref={ref} className="rounded-2xl border border-white/[0.08] overflow-hidden" style={{ background: "rgba(10,10,18,0.9)", boxShadow: "0 25px 60px -12px rgba(0,0,0,0.7), 0 0 40px -10px rgba(123,57,252,0.1)" }}>
+      {/* title bar */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+        <div className="flex gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+        </div>
+        <span className="text-white/30 text-xs font-mono ml-2">venture-os://terminal</span>
+      </div>
+      {/* content */}
+      <div className="p-5 min-h-[280px] font-mono text-sm leading-relaxed">
+        {lines.map((l, i) => (
+          <motion.div key={`${seqIdx}-${i}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className={l.dim ? "text-white/30" : ""} style={l.color ? { color: l.color } : { color: "rgba(255,255,255,0.7)" }}>
+            {l.text}
+          </motion.div>
+        ))}
+        {currentLine && (
+          <div className="text-white/70">
+            {currentLine}
+            <motion.span className="inline-block w-2 h-4 ml-0.5 -mb-0.5" style={{ background: C.orange }} animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.7 }} />
+          </div>
+        )}
+        {!currentLine && lineIdx < TERMINAL_SEQUENCES[seqIdx].length && (
+          <motion.span className="inline-block w-2 h-4" style={{ background: C.orange }} animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.7 }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── sparkline SVG ─── */
+function Sparkline({ data, color, positive }: { data: number[]; color?: string; positive: boolean }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const w = 120;
+  const h = 32;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(" ");
+  const c = color || (positive ? "#34d399" : "#f472b6");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="mt-2">
+      <defs>
+        <linearGradient id={`sg-${c.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={c} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={c} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polyline fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={points}>
+        <animate attributeName="stroke-dashoffset" from="300" to="0" dur="1.5s" fill="freeze" />
+        <animate attributeName="stroke-dasharray" from="300" to="300" dur="0.01s" fill="freeze" />
+      </polyline>
+      <polygon fill={`url(#sg-${c.replace("#", "")})`} points={`0,${h} ${points} ${w},${h}`} opacity="0.5" />
+    </svg>
+  );
+}
+
+/* ─── text shimmer effect ─── */
+function ShimmerText({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`relative inline-block ${className}`}>
+      <span className="relative z-10">{children}</span>
+      <motion.span
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent z-20 pointer-events-none"
+        style={{ WebkitBackgroundClip: "text" }}
+        animate={{ x: ["-100%", "200%"] }}
+        transition={{ repeat: Infinity, duration: 3, ease: "linear", repeatDelay: 2 }}
+      />
+    </span>
+  );
+}
+
+/* ─── pulse ring animation ─── */
+function PulseRings({ color = C.purple }: { color?: string }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full border"
+          style={{ borderColor: color, width: 60 + i * 30, height: 60 + i * 30 }}
+          animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
+          transition={{ repeat: Infinity, duration: 3, delay: i * 0.8, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
 }
 
 /* ─── main ─── */
@@ -219,18 +437,36 @@ export default function Landing() {
         <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/40 via-black/50 to-[#07060b]" />
 
         <motion.div className="relative z-10 text-center max-w-4xl mx-auto" style={{ y: heroParallax }}>
+          {/* floating badges */}
+          <motion.div className="absolute -top-10 left-[10%] hidden lg:block" animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
+            <div className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/30">RAG accuracy: 98%</div>
+          </motion.div>
+          <motion.div className="absolute top-20 right-[8%] hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
+            <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
+          </motion.div>
+          <motion.div className="absolute bottom-32 left-[6%] hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
+            <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
+          </motion.div>
+
           {/* badge */}
-          <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.7 }}>
+          <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
             <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
             <span className="text-sm text-white/80 font-medium" style={fCabin}>The signal stack for frontier capital</span>
           </motion.div>
 
           {/* headline */}
           <motion.h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-[80px] font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-            Your Networks.
+            <motion.span
+              className="inline-block"
+              animate={{ opacity: [0.85, 1, 0.85] }}
+              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            >Your Networks.</motion.span>
             <br />
             <span>One Rapid </span>
-            <span className="italic font-normal" style={fSerif}>Interface</span>
+            <motion.span
+              className="italic font-normal inline-block bg-clip-text text-transparent animate-gradient-sweep"
+              style={{ ...fSerif, backgroundImage: `linear-gradient(135deg, ${C.purple}, ${C.orange}, ${C.purple})`, backgroundSize: "200% 200%" }}
+            >Interface</motion.span>
             <span>.</span>
           </motion.h1>
 
@@ -243,14 +479,15 @@ export default function Landing() {
 
           {/* CTAs */}
           <motion.div className="flex flex-col sm:flex-row items-center justify-center gap-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65, duration: 0.7 }}>
-            <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-              <Link to="/login" className="group flex items-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full transition-shadow" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
-                Get Started
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
+              <Link to="/login" className="group relative flex items-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full transition-shadow overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
+                <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent" animate={{ x: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 3 }} />
+                <span className="relative z-10">Get Started</span>
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 relative z-10" />
               </Link>
             </motion.div>
             <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-              <Link to="/login" className="flex items-center gap-2 px-8 py-4 text-base font-bold text-white/85 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm transition-colors hover:bg-white/10" style={fCabin}>
+              <Link to="/login" className="flex items-center gap-2 px-8 py-4 text-base font-bold text-white/85 rounded-full border animate-border-glow bg-white/5 backdrop-blur-sm transition-colors hover:bg-white/10" style={fCabin}>
                 Book a Demo
               </Link>
             </motion.div>
@@ -267,18 +504,140 @@ export default function Landing() {
       <RevealSection className="relative z-10 -mt-4 mb-12 px-5 sm:px-8">
         <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { val: 50, suffix: "+", label: "Documents processed" },
-            { val: 98, suffix: "%", label: "RAG accuracy" },
-            { val: 3, suffix: "x", label: "Faster decisions" },
-            { val: 100, suffix: "%", label: "Data ownership" },
+            { val: 50, suffix: "+", label: "Documents processed", c: C.purple },
+            { val: 98, suffix: "%", label: "RAG accuracy", c: "#34d399" },
+            { val: 3, suffix: "x", label: "Faster decisions", c: C.orange },
+            { val: 100, suffix: "%", label: "Data ownership", c: "#3b82f6" },
           ].map((s, i) => (
-            <motion.div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-md p-6 text-center" whileHover={{ y: -3, borderColor: "rgba(255,255,255,0.1)" }}>
-              <div className="text-3xl md:text-4xl font-extrabold mb-1" style={{ ...fInter, color: C.purple }}><Counter target={s.val} suffix={s.suffix} /></div>
+            <motion.div
+              key={i}
+              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-md p-6 text-center"
+              whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.1)", boxShadow: `0 20px 40px -12px rgba(0,0,0,0.4), 0 0 30px -8px ${s.c}15` }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, type: "spring", stiffness: 200 }}
+            >
+              <div className="text-3xl md:text-4xl font-extrabold mb-1" style={{ ...fInter, color: s.c }}><Counter target={s.val} suffix={s.suffix} /></div>
               <div className="text-white/40 text-xs font-medium uppercase tracking-wider" style={fCabin}>{s.label}</div>
             </motion.div>
           ))}
         </div>
       </RevealSection>
+
+      {/* ═══ COMMAND CENTER (dynamic terminal) ═══ */}
+      <section className="relative z-10 py-28 px-5 sm:px-8 border-t border-white/[0.04]">
+        <div className="mx-auto max-w-6xl">
+          <RevealSection className="text-center mb-16">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.orange }}>System Interface</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>
+              <ShimmerText>Command Center</ShimmerText>
+            </h2>
+            <p className="text-white/35 text-base mt-4 max-w-lg mx-auto">Watch your fund intelligence platform work in real time — syncing, searching, deciding.</p>
+          </RevealSection>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <RevealSection delay={0.1}>
+              <TerminalAnimation />
+            </RevealSection>
+            <RevealSection delay={0.2}>
+              <div className="space-y-6">
+                {[
+                  { icon: Zap, title: "Real-time sync", desc: "Portfolio data, market signals, and documents stream in continuously.", color: "#f87b52" },
+                  { icon: Brain, title: "AI-powered analysis", desc: "Every query searches thousands of chunks and returns cited, grounded answers.", color: "#7b39fc" },
+                  { icon: Target, title: "Instant decisions", desc: "Log decisions, track outcomes, and build institutional memory automatically.", color: "#34d399" },
+                ].map((item, i) => {
+                  const Icon = item.icon;
+                  return (
+                    <motion.div key={i} className="flex gap-4 items-start p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]" whileHover={{ x: 6, borderColor: "rgba(255,255,255,0.1)" }} transition={{ type: "spring", stiffness: 300 }}>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background: `${item.color}18` }}>
+                        <Icon className="h-5 w-5" style={{ color: item.color }} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold mb-1" style={fInter}>{item.title}</h4>
+                        <p className="text-white/35 text-xs leading-relaxed">{item.desc}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </RevealSection>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ KEY METRICS DASHBOARD ═══ */}
+      <section className="relative z-10 py-28 px-5 sm:px-8 border-t border-white/[0.04]">
+        <div className="mx-auto max-w-6xl">
+          <RevealSection className="text-center mb-16">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3 text-emerald-400">Fund Performance</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Key Metrics</h2>
+            <p className="text-white/35 text-base mt-4 max-w-lg mx-auto">Track your fund's vital signs in one dashboard — updated in real time.</p>
+          </RevealSection>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {KEY_METRICS.map((m, i) => (
+              <RevealSection key={i} delay={i * 0.08}>
+                <motion.div className="rounded-2xl border border-white/[0.06] p-5" style={{ background: "rgba(10,10,18,0.8)" }} whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.1)", boxShadow: "0 20px 40px -12px rgba(0,0,0,0.5)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/25 mb-3 font-mono" style={fCabin}>{m.label}</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl md:text-3xl font-extrabold font-mono" style={fInter}>{m.value}</span>
+                    <span className={`text-xs font-bold font-mono ${m.positive ? "text-emerald-400" : "text-pink-400"}`}>{m.delta}</span>
+                  </div>
+                  <Sparkline data={m.sparkline} positive={m.positive} />
+                </motion.div>
+              </RevealSection>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ USE CASES ═══ */}
+      <section id="usecases" className="relative z-10 py-28 px-5 sm:px-8 border-t border-white/[0.04]">
+        <div className="mx-auto max-w-6xl">
+          <RevealSection className="text-center mb-16">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.purple }}>Use Cases</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>
+              Ask anything about<br /><span className="text-white/35 font-medium">your portfolio</span>
+            </h2>
+            <p className="text-white/35 text-base mt-4 max-w-xl mx-auto">See the real questions investment teams ask every day — and how Venture OS answers them from your own documents.</p>
+          </RevealSection>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {USE_CASES.map((uc, i) => (
+              <RevealSection key={i} delay={i * 0.1}>
+                <GlassCard className="p-7 min-h-[280px] flex flex-col" accentColor={uc.color}>
+                  <div className="flex items-center gap-3 mb-5">
+                    <motion.div
+                      className="h-3 w-3 rounded-full"
+                      style={{ background: uc.color }}
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }}
+                      transition={{ repeat: Infinity, duration: 2, delay: i * 0.3 }}
+                    />
+                    <span className="text-xs font-bold uppercase tracking-[0.15em]" style={{ ...fCabin, color: uc.color }}>{uc.category}</span>
+                  </div>
+                  <div className="space-y-3 mb-5 flex-1">
+                    {uc.questions.map((q, qi) => (
+                      <motion.div
+                        key={qi}
+                        className="flex items-start gap-2.5 p-3 rounded-xl border border-white/[0.05] bg-white/[0.02]"
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: qi * 0.1 + 0.3 }}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: uc.color }} />
+                        <span className="text-white/55 text-xs leading-relaxed font-mono">{q}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                  <div className="flex items-start gap-2 pt-4 border-t border-white/[0.05]">
+                    <Check className="h-4 w-4 mt-0.5 shrink-0" style={{ color: uc.color }} />
+                    <p className="text-white/40 text-xs leading-relaxed">{uc.benefit}</p>
+                  </div>
+                </GlassCard>
+              </RevealSection>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ═══ WHY WE EXIST ═══ */}
       <section className="relative z-10 py-28 px-5 sm:px-8">
@@ -290,14 +649,20 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {PROBLEMS.map((p, i) => {
               const Icon = p.icon;
+              const colors = ["#f472b6", C.purple, "#34d399"];
+              const c = colors[i];
               return (
                 <RevealSection key={i} delay={i * 0.1}>
-                  <GlassCard className="p-8 min-h-[280px] flex flex-col" accentColor={C.purple}>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl mb-6 transition-colors" style={{ background: "rgba(123,57,252,0.12)" }}>
-                      <Icon className="h-6 w-6" style={{ color: C.purple }} />
+                  <GlassCard className="group p-8 min-h-[280px] flex flex-col" accentColor={c}>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="relative flex h-12 w-12 items-center justify-center rounded-xl shrink-0 transition-colors" style={{ background: `${c}18` }}>
+                        <Icon className="h-6 w-6 transition-transform group-hover:scale-110" style={{ color: c }} />
+                      </div>
+                      <span className="text-5xl font-black text-white/[0.04]" style={fInter}>0{i + 1}</span>
                     </div>
                     <h3 className="text-xl font-bold mb-3" style={fInter}>{p.title}</h3>
-                    <p className="text-white/40 text-sm leading-relaxed">{p.desc}</p>
+                    <p className="text-white/40 text-sm leading-relaxed flex-1">{p.desc}</p>
+                    <motion.div className="h-0.5 mt-5 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: i * 0.15 }} />
                   </GlassCard>
                 </RevealSection>
               );
@@ -316,14 +681,18 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f, i) => {
               const Icon = f.icon;
+              const colors = [C.orange, C.purple, "#3b82f6", "#34d399", "#f472b6", "#eab308"];
+              const c = colors[i % colors.length];
               return (
                 <RevealSection key={i} delay={Math.min(i * 0.08, 0.4)}>
-                  <GlassCard className="p-6 min-h-[220px] flex flex-col" accentColor={C.orange}>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg mb-4 transition-colors" style={{ background: "rgba(248,123,82,0.12)" }}>
-                      <Icon className="h-5 w-5" style={{ color: C.orange }} />
+                  <GlassCard className="group p-6 min-h-[220px] flex flex-col" accentColor={c}>
+                    <div className="relative flex h-12 w-12 items-center justify-center rounded-xl mb-5 transition-colors" style={{ background: `${c}15` }}>
+                      <Icon className="h-5 w-5 transition-transform group-hover:scale-110" style={{ color: c }} />
+                      <motion.div className="absolute inset-0 rounded-xl border" style={{ borderColor: c }} initial={{ opacity: 0, scale: 1 }} whileHover={{ opacity: [0, 0.4, 0], scale: [1, 1.6, 1.6] }} transition={{ duration: 1 }} />
                     </div>
                     <h3 className="text-lg font-bold mb-2" style={fInter}>{f.title}</h3>
-                    <p className="text-white/40 text-sm leading-relaxed">{f.desc}</p>
+                    <p className="text-white/40 text-sm leading-relaxed flex-1">{f.desc}</p>
+                    <motion.div className="h-0.5 mt-4 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: i * 0.1 }} />
                   </GlassCard>
                 </RevealSection>
               );
@@ -346,8 +715,9 @@ export default function Landing() {
               const Icon = s.icon;
               return (
                 <RevealSection key={i} delay={i * 0.15} className="text-center relative">
-                  <motion.div className="flex h-16 w-16 items-center justify-center rounded-2xl mx-auto mb-5 border border-white/[0.08] bg-white/[0.04]" whileHover={{ scale: 1.1, borderColor: "rgba(52,211,153,0.3)" }} transition={{ type: "spring", stiffness: 300 }}>
-                    <Icon className="h-7 w-7 text-emerald-400" />
+                  <motion.div className="relative flex h-16 w-16 items-center justify-center rounded-2xl mx-auto mb-5 border border-white/[0.08] bg-white/[0.04]" whileHover={{ scale: 1.1, borderColor: "rgba(52,211,153,0.3)" }} transition={{ type: "spring", stiffness: 300 }}>
+                    <PulseRings color="rgba(52,211,153,0.2)" />
+                    <Icon className="h-7 w-7 text-emerald-400 relative z-10" />
                   </motion.div>
                   <p className="text-xs font-bold tracking-[0.15em] uppercase text-white/25 mb-2" style={fCabin}>{s.num}</p>
                   <h3 className="text-xl font-bold mb-3" style={fInter}>{s.title}</h3>
@@ -369,14 +739,17 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {DIFFERENTIATORS.map((d, i) => {
               const Icon = d.icon;
+              const colors = ["#38bdf8", "#a78bfa", "#f472b6"];
+              const c = colors[i];
               return (
                 <RevealSection key={i} delay={i * 0.1}>
-                  <GlassCard className="p-7" accentColor="#38bdf8">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg mb-4" style={{ background: "rgba(56,189,248,0.12)" }}>
-                      <Icon className="h-5 w-5 text-sky-400" />
+                  <GlassCard className="group p-7" accentColor={c}>
+                    <div className="relative flex h-12 w-12 items-center justify-center rounded-xl mb-5" style={{ background: `${c}15` }}>
+                      <Icon className="h-5 w-5 transition-transform group-hover:scale-110 group-hover:rotate-6" style={{ color: c }} />
                     </div>
                     <h3 className="text-lg font-bold mb-2" style={fInter}>{d.title}</h3>
                     <p className="text-white/40 text-sm leading-relaxed">{d.desc}</p>
+                    <motion.div className="h-0.5 mt-4 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: i * 0.1 + 0.2 }} />
                   </GlassCard>
                 </RevealSection>
               );
@@ -424,22 +797,30 @@ export default function Landing() {
       {/* ═══ FINAL CTA ═══ */}
       <section className="relative z-10 py-28 px-5 sm:px-8">
         <RevealSection>
-          <div className="mx-auto max-w-3xl rounded-3xl border border-white/[0.08] p-12 md:p-16 text-center" style={{ background: "linear-gradient(180deg, rgba(123,57,252,0.1) 0%, rgba(255,255,255,0.02) 100%)", boxShadow: "0 32px 64px -16px rgba(0,0,0,0.5), 0 0 80px -20px rgba(123,57,252,0.15)" }}>
-            <motion.div className="flex h-14 w-14 items-center justify-center rounded-2xl mx-auto mb-6" style={{ background: "rgba(123,57,252,0.15)" }} animate={{ rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}>
-              <Sparkles className="h-7 w-7" style={{ color: C.purple }} />
-            </motion.div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight" style={fInter}>Ready to get started?</h2>
-            <p className="text-white/40 text-lg mb-8 max-w-xl mx-auto">Join forward-thinking investment teams who use Venture OS to make faster, data-driven decisions.</p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-                <Link to="/login" className="group flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
-                  Start free trial
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Link>
+          <div className="relative mx-auto max-w-3xl rounded-3xl border border-white/[0.08] p-12 md:p-16 text-center overflow-hidden" style={{ background: "linear-gradient(180deg, rgba(123,57,252,0.1) 0%, rgba(255,255,255,0.02) 100%)", boxShadow: "0 32px 64px -16px rgba(0,0,0,0.5), 0 0 80px -20px rgba(123,57,252,0.15)" }}>
+            {/* animated gradient bg */}
+            <motion.div className="absolute inset-0 opacity-30 pointer-events-none" animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }} transition={{ repeat: Infinity, duration: 8, ease: "linear" }} style={{ backgroundImage: `linear-gradient(135deg, ${C.purple}22, ${C.orange}22, ${C.purple}22)`, backgroundSize: "200% 200%" }} />
+            <div className="relative z-10">
+              <motion.div className="relative flex h-16 w-16 items-center justify-center rounded-2xl mx-auto mb-6" style={{ background: "rgba(123,57,252,0.15)" }} animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}>
+                <PulseRings />
+                <Sparkles className="h-7 w-7 relative z-10" style={{ color: C.purple }} />
               </motion.div>
-              <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-                <Link to="/login" className="flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white/75 rounded-full border border-white/10 bg-white/5 transition-colors hover:bg-white/10" style={fCabin}>Explore platform</Link>
-              </motion.div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight" style={fInter}>
+                <ShimmerText>Ready to get started?</ShimmerText>
+              </h2>
+              <p className="text-white/40 text-lg mb-8 max-w-xl mx-auto">Join forward-thinking investment teams who use Venture OS to make faster, data-driven decisions.</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
+                  <Link to="/login" className="group relative flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
+                    <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent" animate={{ x: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 3 }} />
+                    <span className="relative z-10">Start free trial</span>
+                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 relative z-10" />
+                  </Link>
+                </motion.div>
+                <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
+                  <Link to="/login" className="flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white/75 rounded-full border border-white/10 bg-white/5 transition-colors hover:bg-white/10" style={fCabin}>Explore platform</Link>
+                </motion.div>
+              </div>
             </div>
           </div>
         </RevealSection>
@@ -475,6 +856,25 @@ export default function Landing() {
         }
         .animate-morph-1 { animation: morph1 20s ease-in-out infinite; }
         .animate-morph-2 { animation: morph2 25s ease-in-out infinite; }
+        @keyframes gradientSweep {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-gradient-sweep {
+          background-size: 200% 200%;
+          animation: gradientSweep 4s ease infinite;
+        }
+        @keyframes floatY {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        .animate-float { animation: floatY 3s ease-in-out infinite; }
+        @keyframes borderGlow {
+          0%, 100% { border-color: rgba(123,57,252,0.2); box-shadow: 0 0 20px -5px rgba(123,57,252,0.1); }
+          50% { border-color: rgba(123,57,252,0.5); box-shadow: 0 0 30px -5px rgba(123,57,252,0.2); }
+        }
+        .animate-border-glow { animation: borderGlow 3s ease-in-out infinite; }
       `}</style>
     </div>
   );
