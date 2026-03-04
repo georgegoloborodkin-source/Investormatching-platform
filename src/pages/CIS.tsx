@@ -11251,6 +11251,8 @@ export default function CIS() {
             outcome: d.outcome ?? null,
             notes: d.notes ?? null,
           }));
+          console.log("[agent-rag] decisions to send:", decisionsForAgent.length, decisionsForAgent.slice(0, 3));
+          console.log("[agent-rag] connections to send:", connectionsForChat.length, connectionsForChat.slice(0, 3));
           await askAgentStream(
             {
               question,
@@ -11290,42 +11292,126 @@ export default function CIS() {
           if (!streamCompleted && reflexionEnabled) {
             const draftAnswer = streamer.getText?.() || "";
             if (draftAnswer.length > 80) {
+              let criticResult = { issues: [] as string[], is_grounded: true, confidence: 0.5 };
+              let reflection: Awaited<ReturnType<typeof system2Reflect>> = {
+                needs_more_data: false, missing_data_types: [], follow_up_queries: [],
+                reasoning: "", refined_answer: "", confidence: 0.7, lesson: "", blind_spot: "",
+              };
+
+              // Step 1 + 2: Critic + Reflect (safe — both have internal try-catch)
               try {
-                // Step 1: Critic checks for factual/logical issues
                 setChatLoadingStage?.("Reflexion: Partner Agent critiquing...");
-                const criticResult = await criticCheck({
-                  question,
-                  answer: draftAnswer,
-                  contextVector: "",
-                  contextGraph: "",
-                  contextKpis: "",
+                criticResult = await criticCheck({
+                  question, answer: draftAnswer,
+                  contextVector: "", contextGraph: "", contextKpis: "",
                 });
-
-                // Step 2: System 2 reflection — always runs to find gaps, blind spots, deeper analysis
+              } catch (critErr) { console.error("[reflexion] critic error:", critErr); }
+              try {
                 setChatLoadingStage?.("Reflexion: Reflecting on blind spots...");
-                const reflection = await system2Reflect({
-                  question,
-                  draftAnswer,
-                  vectorContext: "",
-                  graphContext: "",
-                  kpiContext: "",
-                  iteration: 0,
-                  maxIterations: 1,
+                reflection = await system2Reflect({
+                  question, draftAnswer,
+                  vectorContext: "", graphContext: "", kpiContext: "",
+                  iteration: 0, maxIterations: 1,
                 });
+              } catch (reflErr) { console.error("[reflexion] reflect error:", reflErr); }
 
-                console.log("[reflexion] critic result:", { issues: criticResult.issues?.length, is_grounded: criticResult.is_grounded, confidence: criticResult.confidence });
-                console.log("[reflexion] reflection result:", { confidence: reflection.confidence, lesson: (reflection as any).lesson?.slice(0, 80), blind_spot: (reflection as any).blind_spot?.slice(0, 80), reasoning: reflection.reasoning?.slice(0, 80) });
-                const issues = criticResult.issues || [];
+              console.log("[reflexion] critic result:", { issues: criticResult.issues?.length, is_grounded: criticResult.is_grounded, confidence: criticResult.confidence });
+              console.log("[reflexion] reflection result:", { confidence: reflection.confidence, lesson: reflection.lesson?.slice(0, 80), blind_spot: reflection.blind_spot?.slice(0, 80), reasoning: reflection.reasoning?.slice(0, 80) });
+              const issues = criticResult.issues || [];
+
+              // ── Persist Reflexion Memory FIRST (before refine stream) ──
+              try {
+                const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+                const safeThreadId = isValidUuid(threadId) ? threadId : null;
+                const memoryRows: Array<{
+                  event_id: string; thread_id: string | null; reflection_type: string;
+                  content: string; company_name: string | null; topic: string | null;
+                  source_question: string; confidence: number; created_by: string | null;
+                }> = [];
+                const questionSnippet = question.slice(0, 200);
+                const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
+                const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
+                const isErrorStr = (s: string) => /^(Reflection error|Error code|Could not parse|No AI available|Reflection unavailable)/i.test(s);
+
+                const backendLesson = reflection.lesson || "";
+                if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson)) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                    content: backendLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                } else if (issues.length > 0) {
+                  const fallbackLesson = `Issues found: ${issues.slice(0, 3).join("; ")}${reflection.missing_data_types?.length ? `. Missing: ${reflection.missing_data_types.join(", ")}` : ""}`;
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                    content: fallbackLesson.slice(0, 500), company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning)) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
+                    content: `Analysis: ${reflection.reasoning.slice(0, 480)}`, company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                }
+
+                const backendBlindSpot = reflection.blind_spot || "";
+                if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot)) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                    content: backendBlindSpot.slice(0, 500), company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning) && memoryRows.length === 0) {
+                  memoryRows.push({
+                    event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
+                    content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
+                    source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                    created_by: currentUserId,
+                  });
+                }
+
+                for (const issue of issues) {
+                  if (issue && issue.length > 5) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "critique_issue",
+                      content: issue, company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  }
+                }
+                for (const fq of (reflection.follow_up_queries || [])) {
+                  if (fq && fq.length > 5) {
+                    memoryRows.push({
+                      event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
+                      content: fq, company_name: detectedCompany, topic: null,
+                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
+                      created_by: currentUserId,
+                    });
+                  }
+                }
+
+                console.log("[reflexion_memory] rows to insert:", memoryRows.length, memoryRows.map(r => ({ type: r.reflection_type, len: r.content.length })));
+                if (memoryRows.length > 0) {
+                  const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
+                  if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
+                  else console.log("[reflexion_memory] saved", memoryRows.length, "entries");
+                } else {
+                  console.warn("[reflexion_memory] no rows — lesson:", backendLesson?.slice(0, 50), "blind_spot:", backendBlindSpot?.slice(0, 50), "issues:", issues.length);
+                }
+              } catch (saveErr) { console.error("[reflexion_memory] persist error:", saveErr); }
+
+              // Step 3: Refine stream (Partner Agent Review) — independent from memory saving
+              try {
                 const reasoningParts: string[] = [];
-                if (issues.length > 0) {
-                  reasoningParts.push(`Factual issues found: ${issues.join("; ")}`);
-                }
-                if (reflection.missing_data_types?.length > 0) {
-                  reasoningParts.push(`Missing data types: ${reflection.missing_data_types.join(", ")}`);
-                }
-                if (reflection.follow_up_queries?.length > 0) {
-                  reasoningParts.push(`Follow-up questions to consider: ${reflection.follow_up_queries.join("; ")}`);
-                }
+                if (issues.length > 0) reasoningParts.push(`Factual issues found: ${issues.join("; ")}`);
+                if (reflection.missing_data_types?.length > 0) reasoningParts.push(`Missing data types: ${reflection.missing_data_types.join(", ")}`);
+                if (reflection.follow_up_queries?.length > 0) reasoningParts.push(`Follow-up questions to consider: ${reflection.follow_up_queries.join("; ")}`);
                 reasoningParts.push(`Confidence in draft: ${Math.round(reflection.confidence * 100)}%`);
                 reasoningParts.push(
                   "IMPORTANT: You are a senior VC Partner Agent. Always provide substantive value: " +
@@ -11334,13 +11420,11 @@ export default function CIS() {
                   "Think like a skeptical LP doing due diligence."
                 );
 
-                // Step 3: Always refine — the Partner Agent adds depth, not just corrections
                 setChatLoadingStage?.("Reflexion: Partner Agent refining...");
                 streamer.appendChunk("\n\n---\n\n**Partner Agent Review:**\n\n");
 
                 const refineResp = await system2RefineStream({
-                  question,
-                  draftAnswer,
+                  question, draftAnswer,
                   reflectionReasoning: reasoningParts.join("\n"),
                   additionalContext: reflection.follow_up_queries?.join("; ") || "",
                 });
@@ -11370,94 +11454,9 @@ export default function CIS() {
                     ? `Reflexion: Found ${issueCount} issue(s), refined with deeper analysis. Confidence: ${Math.round(reflection.confidence * 100)}%`
                     : `Reflexion: Partner Agent added deeper analysis and blind spots. Confidence: ${Math.round(reflection.confidence * 100)}%`
                 );
-
-                // ── Persist Reflexion Memory (Senra-style: only real lessons + blind spots) ──
-                try {
-                  const isValidUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-                  const safeThreadId = isValidUuid(threadId) ? threadId : null;
-                  const memoryRows: Array<{
-                    event_id: string; thread_id: string | null; reflection_type: string;
-                    content: string; company_name: string | null; topic: string | null;
-                    source_question: string; confidence: number; created_by: string | null;
-                  }> = [];
-                  const questionSnippet = question.slice(0, 200);
-                  const companyMatch = question.match(/\b(?:about|for|on|at)\s+([A-Z][A-Za-z0-9 &.-]{1,40})/i);
-                  const detectedCompany = companyMatch ? companyMatch[1].trim() : null;
-                  const isErrorStr = (s: string) => /^(Reflection error|Error code|Could not parse|No AI available)/i.test(s);
-
-                  // Lesson: prefer the backend's dedicated lesson field
-                  const backendLesson = (reflection as any).lesson || "";
-                  if (backendLesson && backendLesson.length > 15 && !isErrorStr(backendLesson)) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
-                      content: backendLesson.slice(0, 500), company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  } else if (issues.length > 0) {
-                    const fallbackLesson = `Issues found: ${issues.slice(0, 3).join("; ")}${reflection.missing_data_types?.length ? `. Missing: ${reflection.missing_data_types.join(", ")}` : ""}`;
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "lesson",
-                      content: fallbackLesson.slice(0, 500), company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  }
-
-                  // Blind spot: prefer backend's dedicated blind_spot field
-                  const backendBlindSpot = (reflection as any).blind_spot || "";
-                  if (backendBlindSpot && backendBlindSpot.length > 10 && !isErrorStr(backendBlindSpot)) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
-                      content: backendBlindSpot.slice(0, 500), company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  } else if (reflection.reasoning && reflection.reasoning.length > 20 && !isErrorStr(reflection.reasoning)) {
-                    memoryRows.push({
-                      event_id: eventId, thread_id: safeThreadId, reflection_type: "blind_spot",
-                      content: reflection.reasoning.slice(0, 500), company_name: detectedCompany, topic: null,
-                      source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                      created_by: currentUserId,
-                    });
-                  }
-
-                  // Critique issues (keep — these are valuable)
-                  for (const issue of issues) {
-                    if (issue && issue.length > 5) {
-                      memoryRows.push({
-                        event_id: eventId, thread_id: safeThreadId, reflection_type: "critique_issue",
-                        content: issue, company_name: detectedCompany, topic: null,
-                        source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                        created_by: currentUserId,
-                      });
-                    }
-                  }
-
-                  // Follow-up queries (keep — useful for Decision Intelligence tab)
-                  for (const fq of (reflection.follow_up_queries || [])) {
-                    if (fq && fq.length > 5) {
-                      memoryRows.push({
-                        event_id: eventId, thread_id: safeThreadId, reflection_type: "follow_up",
-                        content: fq, company_name: detectedCompany, topic: null,
-                        source_question: questionSnippet, confidence: reflection.confidence || 0.7,
-                        created_by: currentUserId,
-                      });
-                    }
-                  }
-
-                  console.log("[reflexion_memory] rows to insert:", memoryRows.length, memoryRows.map(r => ({ type: r.reflection_type, len: r.content.length })));
-                  if (memoryRows.length > 0) {
-                    const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
-                    if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
-                    else console.log("[reflexion_memory] saved", memoryRows.length, "entries");
-                  } else {
-                    console.warn("[reflexion_memory] no rows — lesson:", backendLesson?.slice(0, 50), "blind_spot:", backendBlindSpot?.slice(0, 50), "issues:", issues.length);
-                  }
-                } catch (saveErr) { console.error("[reflexion_memory] persist error:", saveErr); }
-              } catch (reflexErr) {
-                console.error("[reflexion] timeout or error:", reflexErr);
-                streamer.appendChunk("\n*(Reflexion check timed out — try again or check server logs)*\n");
+              } catch (refineErr) {
+                console.error("[reflexion] refine stream error:", refineErr);
+                streamer.appendChunk("\n*(Partner Agent refinement failed — memory was still saved)*\n");
               }
             }
           }

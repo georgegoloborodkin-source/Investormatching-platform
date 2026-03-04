@@ -1593,6 +1593,8 @@ export interface System2ReflectResult {
   reasoning: string;
   refined_answer: string;
   confidence: number;
+  lesson?: string;
+  blind_spot?: string;
 }
 
 /**
@@ -1615,6 +1617,8 @@ export async function system2Reflect(input: {
     reasoning: "Reflection unavailable",
     refined_answer: "",
     confidence: 0.7,
+    lesson: "",
+    blind_spot: "",
   };
   try {
     const baseUrl = await resolveConverterApiBaseUrl();

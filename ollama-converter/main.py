@@ -8625,7 +8625,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
-                # Build system prompt — inject Reflexion Memory, then Decisions & Connections if available
+                # Build system prompt — inject Reflexion Memory, then Decisions & Connections
                 effective_system_prompt = AGENT_SYSTEM_PROMPT
                 if request.reflexion_memory_context and request.reflexion_memory_context.strip():
                     effective_system_prompt += (
@@ -8636,15 +8636,15 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         "to the current question, incorporate it into your reasoning.\n\n"
                         + request.reflexion_memory_context.strip()
                     )
-                # Decisions: so the agent can answer "what decisions did we make?", "recent decisions", etc.
+
+                # ── Decisions & Connections: prefer frontend payload, fall back to Supabase ──
                 decision_lines = []
-                for d in request.decisions or []:
-                    summary = " | ".join([part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part])
-                    if summary:
-                        decision_lines.append(f"- {summary}")
-                decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
-                # Connections: so the agent can answer about company relationships, portfolio connections
                 connection_lines = []
+                if request.decisions:
+                    for d in request.decisions:
+                        summary = " | ".join([part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part])
+                        if summary:
+                            decision_lines.append(f"- {summary}")
                 if request.connections:
                     for conn in request.connections:
                         parts = [
@@ -8653,6 +8653,30 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             f"status={conn.connection_status}" if conn.connection_status else None,
                         ]
                         connection_lines.append(" | ".join(p for p in parts if p))
+
+                # If frontend didn't send decisions/connections, fetch directly from Supabase
+                if not decision_lines or not connection_lines:
+                    try:
+                        sb = get_supabase()
+                        if not decision_lines:
+                            dec_resp = sb.table("decisions").select("startup_name, action_type, outcome, notes").eq("event_id", event_id).order("created_at", desc=True).limit(20).execute()
+                            for row in (dec_resp.data or []):
+                                summary = " | ".join([p for p in [row.get("startup_name"), row.get("action_type"), row.get("outcome"), row.get("notes")] if p])
+                                if summary:
+                                    decision_lines.append(f"- {summary}")
+                        if not connection_lines:
+                            conn_resp = sb.table("company_connections").select("source_company_name, target_company_name, connection_type, connection_status").eq("event_id", event_id).order("created_at", desc=True).limit(30).execute()
+                            for row in (conn_resp.data or []):
+                                parts = [
+                                    f"{row.get('source_company_name', '')} -> {row.get('target_company_name', '')}",
+                                    f"type={row['connection_type']}" if row.get("connection_type") else None,
+                                    f"status={row['connection_status']}" if row.get("connection_status") else None,
+                                ]
+                                connection_lines.append(" | ".join(p for p in parts if p))
+                    except Exception as db_err:
+                        print(f"[agent] Supabase fallback for decisions/connections failed: {db_err}")
+
+                decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
                 connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
                 effective_system_prompt += (
                     "\n\n## Decision History & Company Connections (from this workspace)\n"
