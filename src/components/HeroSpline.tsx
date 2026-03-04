@@ -5,7 +5,7 @@ const SPLINE_SCENE = "https://prod.spline.design/RY8CoZwe0ZoyVMJF/scene.splineco
 
 export default function HeroSpline() {
   const handleLoad = (splineApp: Application) => {
-    splineApp.setZoom(0.15);
+    splineApp.setZoom(0.2);
     const canvas = splineApp.canvas as HTMLCanvasElement | undefined;
     if (canvas) {
       canvas.style.pointerEvents = "none";

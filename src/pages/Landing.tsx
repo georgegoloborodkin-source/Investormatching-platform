@@ -443,7 +443,7 @@ export default function Landing() {
         {/* ── Spline 3D — behind text layer, positioned right-center ── */}
         <motion.div
           className="absolute z-[1] top-0 right-0 w-[70%] h-full hidden lg:block"
-          style={{ transform: "translate(5%, -25%)" }}
+          style={{ transform: "translate(5%, -32%)" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3, duration: 1 }}
