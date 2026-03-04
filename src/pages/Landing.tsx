@@ -441,10 +441,10 @@ export default function Landing() {
           <motion.div className="absolute top-4 left-4 xl:left-8 hidden lg:block" animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
             <div className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/30">RAG accuracy: 98%</div>
           </motion.div>
-          <motion.div className="absolute top-6 right-4 xl:right-8 hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
+          <motion.div className="absolute -top-6 right-4 xl:right-8 hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
             <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
           </motion.div>
-          <motion.div className="absolute bottom-24 -left-2 xl:left-0 hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
+          <motion.div className="absolute bottom-24 -left-16 xl:-left-12 hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
             <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
           </motion.div>
 
