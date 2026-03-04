@@ -17,6 +17,12 @@ const Hero3DScene = /* lazy */ (() => {
     <Suspense fallback={null}><Lazy {...props} /></Suspense>
   );
 })();
+const HeroSpline = (() => {
+  const Lazy = React.lazy(() => import("@/components/HeroSpline"));
+  return () => (
+    <Suspense fallback={null}><Lazy /></Suspense>
+  );
+})();
 import React from "react";
 
 /* ─── tokens ─── */
@@ -264,12 +270,12 @@ function TerminalAnimation() {
           <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
           <div className="w-3 h-3 rounded-full bg-[#28c840]" />
         </div>
-        <span className="text-white/30 text-xs font-mono ml-2">venture-os://terminal</span>
+        <span className="text-white/65 text-xs font-mono ml-2">venture-os://terminal</span>
       </div>
       {/* content */}
       <div className="p-5 min-h-[280px] font-mono text-sm leading-relaxed">
         {lines.map((l, i) => (
-          <motion.div key={`${seqIdx}-${i}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className={l.dim ? "text-white/30" : ""} style={l.color ? { color: l.color } : { color: "rgba(255,255,255,0.7)" }}>
+          <motion.div key={`${seqIdx}-${i}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className={l.dim ? "text-white/65" : ""} style={l.color ? { color: l.color } : { color: "rgba(255,255,255,0.85)" }}>
             {l.text}
           </motion.div>
         ))}
@@ -389,7 +395,7 @@ export default function Landing() {
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map((l) => (
-              <motion.a key={l.label} href={l.href} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white/55 hover:text-white transition-colors rounded-lg" whileHover={{ scale: 1.04 }}>
+              <motion.a key={l.label} href={l.href} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors rounded-lg" whileHover={{ scale: 1.04 }}>
                 {l.label}
                 {l.chevron && <ChevronDown className="h-3.5 w-3.5 opacity-50" />}
               </motion.a>
@@ -431,15 +437,15 @@ export default function Landing() {
 
       {/* ═══ HERO ═══ */}
       <section id="hero" ref={heroRef} className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 pt-20 pb-28 overflow-hidden">
-        {/* 3D scene behind everything */}
-        <Hero3DScene />
-        {/* dark overlay */}
-        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/40 via-black/50 to-[#07060b]" />
+        {/* Spline 3D scene on first page */}
+        <HeroSpline />
+        {/* dark overlay for text readability */}
+        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/50 via-black/55 to-[#07060b]" />
 
         <motion.div className="relative z-10 text-center max-w-4xl mx-auto" style={{ y: heroParallax }}>
           {/* floating badges — pushed to far edges so they don't overlap hero text */}
           <motion.div className="absolute top-4 left-4 xl:left-8 hidden lg:block" animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
-            <div className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/30">RAG accuracy: 98%</div>
+            <div className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/65">RAG accuracy: 98%</div>
           </motion.div>
           <motion.div className="absolute -top-6 right-4 xl:right-8 hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
             <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
@@ -474,7 +480,7 @@ export default function Landing() {
           </motion.h1>
 
           {/* subtext */}
-          <motion.p className="text-lg sm:text-xl text-white/50 max-w-2xl mx-auto mb-10 leading-relaxed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.7 }}>
+          <motion.p className="text-lg sm:text-xl text-white/65 max-w-2xl mx-auto mb-10 leading-relaxed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.7 }}>
             Every document, every decision, every pattern — unified and searchable.
             <br className="hidden sm:block" />
             Built for venture capital and investment teams.
@@ -522,7 +528,7 @@ export default function Landing() {
               transition={{ delay: i * 0.1, type: "spring", stiffness: 200 }}
             >
               <div className="text-3xl md:text-4xl font-extrabold mb-1" style={{ ...fInter, color: s.c }}><Counter target={s.val} suffix={s.suffix} /></div>
-              <div className="text-white/40 text-xs font-medium uppercase tracking-wider" style={fCabin}>{s.label}</div>
+              <div className="text-white/60 text-xs font-medium uppercase tracking-wider" style={fCabin}>{s.label}</div>
             </motion.div>
           ))}
         </div>
@@ -536,7 +542,7 @@ export default function Landing() {
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>
               <ShimmerText>Command Center</ShimmerText>
             </h2>
-            <p className="text-white/35 text-base mt-4 max-w-lg mx-auto">Watch your fund intelligence platform work in real time — syncing, searching, deciding.</p>
+            <p className="text-white/70 text-base mt-4 max-w-lg mx-auto">Watch your fund intelligence platform work in real time — syncing, searching, deciding.</p>
           </RevealSection>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
             <RevealSection delay={0.1}>
@@ -557,7 +563,7 @@ export default function Landing() {
                       </div>
                       <div>
                         <h4 className="text-sm font-bold mb-1" style={fInter}>{item.title}</h4>
-                        <p className="text-white/35 text-xs leading-relaxed">{item.desc}</p>
+                        <p className="text-white/70 text-xs leading-relaxed">{item.desc}</p>
                       </div>
                     </motion.div>
                   );
@@ -574,13 +580,13 @@ export default function Landing() {
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3 text-emerald-400">Fund Performance</p>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Key Metrics</h2>
-            <p className="text-white/35 text-base mt-4 max-w-lg mx-auto">Track your fund's vital signs in one dashboard — updated in real time.</p>
+            <p className="text-white/70 text-base mt-4 max-w-lg mx-auto">Track your fund's vital signs in one dashboard — updated in real time.</p>
           </RevealSection>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {KEY_METRICS.map((m, i) => (
               <RevealSection key={i} delay={i * 0.08}>
                 <motion.div className="rounded-2xl border border-white/[0.06] p-5" style={{ background: "rgba(10,10,18,0.8)" }} whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.1)", boxShadow: "0 20px 40px -12px rgba(0,0,0,0.5)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/25 mb-3 font-mono" style={fCabin}>{m.label}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60 mb-3 font-mono" style={fCabin}>{m.label}</p>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl md:text-3xl font-extrabold font-mono" style={fInter}>{m.value}</span>
                     <span className={`text-xs font-bold font-mono ${m.positive ? "text-emerald-400" : "text-pink-400"}`}>{m.delta}</span>
@@ -599,9 +605,9 @@ export default function Landing() {
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.purple }}>Use Cases</p>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>
-              Ask anything about<br /><span className="text-white/35 font-medium">your portfolio</span>
+              Ask anything about<br /><span className="text-white/70 font-medium">your portfolio</span>
             </h2>
-            <p className="text-white/35 text-base mt-4 max-w-xl mx-auto">See the real questions investment teams ask every day — and how Venture OS answers them from your own documents.</p>
+            <p className="text-white/70 text-base mt-4 max-w-xl mx-auto">See the real questions investment teams ask every day — and how Venture OS answers them from your own documents.</p>
           </RevealSection>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {USE_CASES.map((uc, i) => (
@@ -627,13 +633,13 @@ export default function Landing() {
                         transition={{ delay: qi * 0.1 + 0.3 }}
                       >
                         <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: uc.color }} />
-                        <span className="text-white/55 text-xs leading-relaxed font-mono">{q}</span>
+                        <span className="text-white/70 text-xs leading-relaxed font-mono">{q}</span>
                       </motion.div>
                     ))}
                   </div>
                   <div className="flex items-start gap-2 pt-4 border-t border-white/[0.05]">
                     <Check className="h-4 w-4 mt-0.5 shrink-0" style={{ color: uc.color }} />
-                    <p className="text-white/40 text-xs leading-relaxed">{uc.benefit}</p>
+                    <p className="text-white/60 text-xs leading-relaxed">{uc.benefit}</p>
                   </div>
                 </GlassCard>
               </RevealSection>
@@ -647,7 +653,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.purple }}>Why we exist</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>The problem we solve<br /><span className="text-white/35 font-medium">and the future we&apos;re building</span></h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>The problem we solve<br /><span className="text-white/70 font-medium">and the future we&apos;re building</span></h2>
           </RevealSection>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {PROBLEMS.map((p, i) => {
@@ -664,7 +670,7 @@ export default function Landing() {
                       <span className="text-5xl font-black text-white/[0.04]" style={fInter}>0{i + 1}</span>
                     </div>
                     <h3 className="text-xl font-bold mb-3" style={fInter}>{p.title}</h3>
-                    <p className="text-white/40 text-sm leading-relaxed flex-1">{p.desc}</p>
+                    <p className="text-white/60 text-sm leading-relaxed flex-1">{p.desc}</p>
                     <motion.div className="h-0.5 mt-5 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: i * 0.15 }} />
                   </GlassCard>
                 </RevealSection>
@@ -679,7 +685,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.orange }}>Platform</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Capabilities that transform<br /><span className="text-white/35 font-medium">how teams operate</span></h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Capabilities that transform<br /><span className="text-white/70 font-medium">how teams operate</span></h2>
           </RevealSection>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f, i) => {
@@ -694,7 +700,7 @@ export default function Landing() {
                       <motion.div className="absolute inset-0 rounded-xl border" style={{ borderColor: c }} initial={{ opacity: 0, scale: 1 }} whileHover={{ opacity: [0, 0.4, 0], scale: [1, 1.6, 1.6] }} transition={{ duration: 1 }} />
                     </div>
                     <h3 className="text-lg font-bold mb-2" style={fInter}>{f.title}</h3>
-                    <p className="text-white/40 text-sm leading-relaxed flex-1">{f.desc}</p>
+                    <p className="text-white/60 text-sm leading-relaxed flex-1">{f.desc}</p>
                     <motion.div className="h-0.5 mt-4 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: i * 0.1 }} />
                   </GlassCard>
                 </RevealSection>
@@ -709,7 +715,7 @@ export default function Landing() {
         <div className="mx-auto max-w-5xl">
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3 text-emerald-400">How it works</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Three steps to<br /><span className="text-white/35 font-medium">intelligence at scale</span></h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Three steps to<br /><span className="text-white/70 font-medium">intelligence at scale</span></h2>
           </RevealSection>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {/* connecting line */}
@@ -722,9 +728,9 @@ export default function Landing() {
                     <PulseRings color="rgba(52,211,153,0.2)" />
                     <Icon className="h-7 w-7 text-emerald-400 relative z-10" />
                   </motion.div>
-                  <p className="text-xs font-bold tracking-[0.15em] uppercase text-white/25 mb-2" style={fCabin}>{s.num}</p>
+                  <p className="text-xs font-bold tracking-[0.15em] uppercase text-white/60 mb-2" style={fCabin}>{s.num}</p>
                   <h3 className="text-xl font-bold mb-3" style={fInter}>{s.title}</h3>
-                  <p className="text-white/40 text-sm leading-relaxed max-w-xs mx-auto">{s.desc}</p>
+                  <p className="text-white/60 text-sm leading-relaxed max-w-xs mx-auto">{s.desc}</p>
                 </RevealSection>
               );
             })}
@@ -737,7 +743,7 @@ export default function Landing() {
         <div className="mx-auto max-w-5xl">
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3 text-sky-400">What sets us apart</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Built different.<br /><span className="text-white/35 font-medium">On purpose.</span></h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Built different.<br /><span className="text-white/70 font-medium">On purpose.</span></h2>
           </RevealSection>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {DIFFERENTIATORS.map((d, i) => {
@@ -751,7 +757,7 @@ export default function Landing() {
                       <Icon className="h-5 w-5 transition-transform group-hover:scale-110 group-hover:rotate-6" style={{ color: c }} />
                     </div>
                     <h3 className="text-lg font-bold mb-2" style={fInter}>{d.title}</h3>
-                    <p className="text-white/40 text-sm leading-relaxed">{d.desc}</p>
+                    <p className="text-white/60 text-sm leading-relaxed">{d.desc}</p>
                     <motion.div className="h-0.5 mt-4 rounded-full origin-left" style={{ background: `linear-gradient(90deg, ${c}, transparent)` }} initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: i * 0.1 + 0.2 }} />
                   </GlassCard>
                 </RevealSection>
@@ -766,7 +772,7 @@ export default function Landing() {
         <div className="mx-auto max-w-4xl">
           <RevealSection className="text-center mb-16">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: C.purple }}>Roadmap</p>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Our vision for the future<br /><span className="text-white/35 font-medium">of fund operations</span></h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight" style={fInter}>Our vision for the future<br /><span className="text-white/70 font-medium">of fund operations</span></h2>
           </RevealSection>
           <div className="space-y-6">
             {ROADMAP.map((r, i) => (
@@ -774,9 +780,9 @@ export default function Landing() {
                 <GlassCard className="p-8" accentColor={C.purple}>
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-white/50 font-bold text-sm">{i + 1}</div>
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-white/65 font-bold text-sm">{i + 1}</div>
                       <div>
-                        <p className="text-white/35 text-xs font-semibold uppercase tracking-wider">{r.phase}</p>
+                        <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{r.phase}</p>
                         <h3 className="text-xl md:text-2xl font-bold" style={fInter}>{r.title}</h3>
                       </div>
                     </div>
@@ -784,7 +790,7 @@ export default function Landing() {
                   </div>
                   <ul className="space-y-3">
                     {r.features.map((f, fi) => (
-                      <li key={fi} className="flex items-start gap-3 text-white/45 text-sm">
+                      <li key={fi} className="flex items-start gap-3 text-white/60 text-sm">
                         <span className="mt-1 shrink-0" style={{ color: C.purple }}><Check className="h-4 w-4" /></span>
                         <span>{f}</span>
                       </li>
@@ -811,7 +817,7 @@ export default function Landing() {
               <h2 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight" style={fInter}>
                 <ShimmerText>Ready to get started?</ShimmerText>
               </h2>
-              <p className="text-white/40 text-lg mb-8 max-w-xl mx-auto">Join forward-thinking investment teams who use Venture OS to make faster, data-driven decisions.</p>
+              <p className="text-white/60 text-lg mb-8 max-w-xl mx-auto">Join forward-thinking investment teams who use Venture OS to make faster, data-driven decisions.</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
                   <Link to="/login" className="group relative flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
@@ -821,7 +827,7 @@ export default function Landing() {
                   </Link>
                 </motion.div>
                 <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-                  <Link to="/login" className="flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white/75 rounded-full border border-white/10 bg-white/5 transition-colors hover:bg-white/10" style={fCabin}>Explore platform</Link>
+                  <Link to="/login" className="flex items-center justify-center gap-2 px-8 py-4 text-base font-bold text-white/90 rounded-full border border-white/10 bg-white/5 transition-colors hover:bg-white/10" style={fCabin}>Explore platform</Link>
                 </motion.div>
               </div>
             </div>
@@ -834,12 +840,12 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white"><Command className="h-4 w-4 text-black" /></div>
-            <span className="text-white/50 text-sm font-semibold" style={fInter}>Venture OS</span>
+            <span className="text-white/65 text-sm font-semibold" style={fInter}>Venture OS</span>
           </div>
-          <p className="text-white/25 text-xs">&copy; {new Date().getFullYear()} Venture OS. All rights reserved.</p>
+          <p className="text-white/60 text-xs">&copy; {new Date().getFullYear()} Venture OS. All rights reserved.</p>
           <div className="flex gap-6">
             {["Privacy", "Terms", "Contact"].map((l) => (
-              <motion.a key={l} href="#" className="text-white/25 text-xs hover:text-white/50 transition-colors" whileHover={{ y: -1 }}>{l}</motion.a>
+              <motion.a key={l} href="#" className="text-white/60 text-xs hover:text-white/65 transition-colors" whileHover={{ y: -1 }}>{l}</motion.a>
             ))}
           </div>
         </div>
@@ -887,7 +893,7 @@ function RoadmapBadge({ status }: { status: string }) {
   const cfg: Record<string, { cls: string; icon: typeof Check }> = {
     Complete: { cls: "bg-emerald-500/15 text-emerald-400 border-emerald-400/20", icon: Check },
     "In Progress": { cls: "bg-amber-500/15 text-amber-400 border-amber-400/20", icon: Loader2 },
-    Planned: { cls: "bg-white/5 text-white/40 border-white/10", icon: Circle },
+    Planned: { cls: "bg-white/5 text-white/60 border-white/10", icon: Circle },
   };
   const { cls, icon: Icon } = cfg[status] || cfg.Planned;
   return (
