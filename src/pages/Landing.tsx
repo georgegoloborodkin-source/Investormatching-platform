@@ -387,7 +387,7 @@ export default function Landing() {
         initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.6, ease: "easeOut" }}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12 h-16">
-          <Link to="/home" className="flex items-center gap-2.5 -ml-2 lg:-ml-4">
+          <Link to="/home" className="flex items-center gap-2.5 -ml-4 lg:-ml-8">
             <motion.div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white" whileHover={{ rotate: 10, scale: 1.05 }} transition={{ type: "spring", stiffness: 400 }}>
               <Command className="h-5 w-5 text-black" />
             </motion.div>
