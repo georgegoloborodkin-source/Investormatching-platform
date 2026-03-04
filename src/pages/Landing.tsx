@@ -527,7 +527,7 @@ export default function Landing() {
           <div className="hidden md:flex items-center gap-3">
             <Link to="/login" className="px-5 py-2 text-sm font-semibold text-white/80 rounded-full border transition-all hover:text-white hover:border-white/25" style={{ ...fCabin, borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", backdropFilter: "blur(12px)" }}>Sign In</Link>
             <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
-              <Link to="/login" className="px-5 py-2 text-sm font-semibold text-white rounded-full transition-all inline-block" style={{ ...fCabin, background: C.purple, boxShadow: "0 4px 20px -4px rgba(123,57,252,0.4)" }}>Get Started</Link>
+              <button onClick={() => setDemoModalOpen(true)} className="px-5 py-2 text-sm font-semibold text-white rounded-full transition-all" style={{ ...fCabin, background: C.purple, boxShadow: "0 4px 20px -4px rgba(123,57,252,0.4)" }}>Get a Demo</button>
             </motion.div>
           </div>
           <button className="md:hidden h-10 w-10 flex items-center justify-center text-white" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="h-6 w-6" /></button>
@@ -551,7 +551,7 @@ export default function Landing() {
               ))}
               <div className="flex flex-col gap-3 mt-8 w-64">
                 <Link to="/login" className="px-5 py-3 text-center text-sm font-semibold text-white rounded-full border" style={{ ...fCabin, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }} onClick={() => setMobileOpen(false)}>Sign In</Link>
-                <Link to="/login" className="px-5 py-3 text-center text-sm font-semibold text-white rounded-full" style={{ ...fCabin, background: C.purple }} onClick={() => setMobileOpen(false)}>Get Started</Link>
+                <button className="px-5 py-3 text-center text-sm font-semibold text-white rounded-full" style={{ ...fCabin, background: C.purple }} onClick={() => { setMobileOpen(false); setDemoModalOpen(true); }}>Get a Demo</button>
               </div>
             </div>
           </motion.div>
