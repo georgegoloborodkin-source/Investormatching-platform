@@ -440,9 +440,20 @@ export default function Landing() {
         {/* subtle bg gradient */}
         <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#07060b] via-[#0c0a14] to-[#07060b]" />
 
-        <div className="relative z-10 mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-          {/* ── LEFT: text + badges ── */}
-          <motion.div className="relative text-left" style={{ y: heroParallax }}>
+        {/* ── Spline 3D — behind text layer, positioned right-center ── */}
+        <motion.div
+          className="absolute z-[1] top-0 right-0 w-[70%] h-full hidden lg:block"
+          style={{ transform: "translate(5%, -10%)" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 1 }}
+        >
+          <HeroSpline />
+        </motion.div>
+
+        {/* ── Text content — on top of Spline ── */}
+        <motion.div className="relative z-10 mx-auto max-w-7xl w-full" style={{ y: heroParallax }}>
+          <div className="max-w-2xl text-left">
             {/* badge */}
             <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
               <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
@@ -485,18 +496,8 @@ export default function Landing() {
                 </Link>
               </motion.div>
             </motion.div>
-          </motion.div>
-
-          {/* ── RIGHT: Spline 3D — shifted up and left to sit near "Interface" ── */}
-          <motion.div
-            className="relative w-full h-[400px] sm:h-[500px] lg:h-[700px] rounded-2xl overflow-hidden lg:-ml-48 lg:-mt-40"
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <HeroSpline />
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
 
         {/* self-drawing line decoration */}
         <motion.svg className="absolute bottom-0 left-0 right-0 z-[2] w-full h-20" viewBox="0 0 1440 80" fill="none" preserveAspectRatio="none">
