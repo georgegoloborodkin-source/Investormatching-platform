@@ -8559,6 +8559,8 @@ class AgentAskRequest(BaseModel):
     web_search_enabled: bool = Field(default=False, alias="webSearchEnabled")
     folder_ids: List[str] = Field(default_factory=list, alias="folderIds")
     reflexion_memory_context: str = Field(default="", alias="reflexionMemoryContext")
+    decisions: List[AskDecision] = Field(default_factory=list)
+    connections: List[AskConnection] = Field(default_factory=list)
     model_config = {"populate_by_name": True}
 
 
@@ -8610,7 +8612,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 current_messages = list(messages)
                 model_name = ANTHROPIC_MODEL_FALLBACKS[0] if ANTHROPIC_MODEL_FALLBACKS else "claude-sonnet-4-20250514"
 
-                # Build system prompt — inject Reflexion Memory if available
+                # Build system prompt — inject Reflexion Memory, then Decisions & Connections if available
                 effective_system_prompt = AGENT_SYSTEM_PROMPT
                 if request.reflexion_memory_context and request.reflexion_memory_context.strip():
                     effective_system_prompt += (
@@ -8620,6 +8622,32 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         "and provide more accurate, trustworthy answers. If a past lesson is relevant "
                         "to the current question, incorporate it into your reasoning.\n\n"
                         + request.reflexion_memory_context.strip()
+                    )
+                # Decisions: so the agent can answer "what decisions did we make?", "recent decisions", etc.
+                decision_lines = []
+                for d in request.decisions or []:
+                    summary = " | ".join([part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part])
+                    if summary:
+                        decision_lines.append(f"- {summary}")
+                decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
+                # Connections: so the agent can answer about company relationships, portfolio connections
+                connection_lines = []
+                if request.connections:
+                    for conn in request.connections:
+                        parts = [
+                            f"{conn.source_company_name} -> {conn.target_company_name}",
+                            f"type={conn.connection_type}" if conn.connection_type else None,
+                            f"status={conn.connection_status}" if conn.connection_status else None,
+                        ]
+                        connection_lines.append(" | ".join(p for p in parts if p))
+                connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
+                if decision_lines or connection_lines:
+                    effective_system_prompt += (
+                        "\n\n## Decision History & Company Connections (from this workspace)\n"
+                        "Use this when the user asks about decisions, outcomes, or company relationships.\n\n"
+                        "Decision history:\n" + decisions_block + "\n\n"
+                        "Company Connections Graph:\n" + connections_block + "\n\n"
+                        "When the user asks about a company, check the Connections Graph and report known connections. When they ask about decisions or outcomes, use the Decision history above."
                     )
 
                 for iteration in range(MAX_AGENT_ITERATIONS):

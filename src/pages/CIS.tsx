@@ -11245,6 +11245,12 @@ export default function CIS() {
               lines.join("\n");
           }
 
+          const decisionsForAgent = decisions.map((d) => ({
+            startup_name: d.startupName ?? null,
+            action_type: d.actionType ?? null,
+            outcome: d.outcome ?? null,
+            notes: d.notes ?? null,
+          }));
           await askAgentStream(
             {
               question,
@@ -11253,6 +11259,8 @@ export default function CIS() {
               webSearchEnabled: webSearchEnabled,
               folderIds: agentFolderIds.length > 0 ? agentFolderIds : undefined,
               reflexionMemoryContext: reflexionMemoryContext || undefined,
+              decisions: decisionsForAgent.length > 0 ? decisionsForAgent : undefined,
+              connections: connectionsForChat.length > 0 ? connectionsForChat : undefined,
             },
             (chunk) => {
               if (!streamCompleted) streamer.appendChunk(chunk);

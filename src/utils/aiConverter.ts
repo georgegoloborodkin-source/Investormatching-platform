@@ -448,6 +448,14 @@ export type VerifiableSource = {
 /** Simple source doc from agent (id + title for Sources strip) */
 export type SourceDoc = { id: string; title: string };
 
+/** Decision summary for agent context (matches backend AskDecision) */
+export type AskDecisionForAgent = {
+  startup_name?: string | null;
+  action_type?: string | null;
+  outcome?: string | null;
+  notes?: string | null;
+};
+
 export async function askAgentStream(
   input: {
     question: string;
@@ -456,6 +464,8 @@ export async function askAgentStream(
     webSearchEnabled?: boolean;
     folderIds?: string[];
     reflexionMemoryContext?: string;
+    decisions?: AskDecisionForAgent[];
+    connections?: AskFundConnection[];
   },
   onChunk: (text: string) => void,
   onStatus?: (status: string) => void,
@@ -491,6 +501,12 @@ export async function askAgentStream(
     }
     if (input.reflexionMemoryContext) {
       payload.reflexion_memory_context = input.reflexionMemoryContext;
+    }
+    if (input.decisions && input.decisions.length > 0) {
+      payload.decisions = input.decisions;
+    }
+    if (input.connections && input.connections.length > 0) {
+      payload.connections = input.connections;
     }
     const response = await fetch(`${baseUrl}/ask/agent/stream`, {
       method: "POST",
