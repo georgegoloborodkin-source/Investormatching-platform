@@ -2212,7 +2212,7 @@ Remember:
 """
 
 # Fast model for simple questions (3-5x faster)
-HAIKU_MODEL = "claude-haiku-4-20250514"
+HAIKU_MODEL = os.getenv("HAIKU_MODEL", "claude-3-5-haiku-20241022")
 
 def is_simple_question(question: str, sources: List[AskSource]) -> bool:
     """
@@ -4488,8 +4488,9 @@ async def orchestrate_query(request: OrchestrateRequest):
 
     try:
         client = _get_anthropic_async_client()
-        message = await client.messages.create(
-            model=HAIKU_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
+            preferred_model=HAIKU_MODEL,
             max_tokens=300,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
@@ -4578,8 +4579,9 @@ async def critic_check(request: CriticRequest):
 
     try:
         client = _get_anthropic_async_client()
-        message = await client.messages.create(
-            model=HAIKU_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
+            preferred_model=HAIKU_MODEL,
             max_tokens=500,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
@@ -4691,8 +4693,9 @@ RULES:
 
     try:
         client = _get_anthropic_async_client()
-        message = await client.messages.create(
-            model=HAIKU_MODEL,
+        message = await _call_claude_with_fallback(
+            client,
+            preferred_model=HAIKU_MODEL,
             max_tokens=900,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
