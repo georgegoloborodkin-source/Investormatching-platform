@@ -11305,7 +11305,8 @@ export default function CIS() {
                   maxIterations: 1,
                 });
 
-                // Build the reasoning for refinement
+                console.log("[reflexion] critic result:", { issues: criticResult.issues?.length, is_grounded: criticResult.is_grounded, confidence: criticResult.confidence });
+                console.log("[reflexion] reflection result:", { confidence: reflection.confidence, lesson: (reflection as any).lesson?.slice(0, 80), blind_spot: (reflection as any).blind_spot?.slice(0, 80), reasoning: reflection.reasoning?.slice(0, 80) });
                 const issues = criticResult.issues || [];
                 const reasoningParts: string[] = [];
                 if (issues.length > 0) {
@@ -11437,13 +11438,18 @@ export default function CIS() {
                     }
                   }
 
+                  console.log("[reflexion_memory] rows to insert:", memoryRows.length, memoryRows.map(r => ({ type: r.reflection_type, len: r.content.length })));
                   if (memoryRows.length > 0) {
                     const { error: memErr } = await supabase.from("reflexion_memory" as any).insert(memoryRows as any);
                     if (memErr) console.error("[reflexion_memory] insert failed:", memErr.message, memErr.details);
+                    else console.log("[reflexion_memory] saved", memoryRows.length, "entries");
+                  } else {
+                    console.warn("[reflexion_memory] no rows — lesson:", backendLesson?.slice(0, 50), "blind_spot:", backendBlindSpot?.slice(0, 50), "issues:", issues.length);
                   }
                 } catch (saveErr) { console.error("[reflexion_memory] persist error:", saveErr); }
               } catch (reflexErr) {
-                streamer.appendChunk("\n*(Reflexion check skipped due to timeout)*\n");
+                console.error("[reflexion] timeout or error:", reflexErr);
+                streamer.appendChunk("\n*(Reflexion check timed out — try again or check server logs)*\n");
               }
             }
           }

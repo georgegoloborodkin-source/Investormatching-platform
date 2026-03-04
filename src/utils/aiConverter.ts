@@ -1557,7 +1557,7 @@ export async function criticCheck(input: {
           context_web: input.contextWeb || "",
         }),
       },
-      15000
+      30000
     );
     if (!response.ok) return { issues: [], is_grounded: true, confidence: 0.5 };
     return await response.json();
@@ -1617,7 +1617,7 @@ export async function system2Reflect(input: {
           max_iterations: input.maxIterations ?? 3,
         }),
       },
-      12000,
+      30000,
     );
     if (!response.ok) return fallback;
     return await response.json();
