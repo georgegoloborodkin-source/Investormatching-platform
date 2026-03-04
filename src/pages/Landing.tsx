@@ -65,33 +65,33 @@ const DIFFERENTIATORS = [
 /* ─── dynamic terminal lines ─── */
 const TERMINAL_SEQUENCES = [
   [
-    { text: "> initializing fund_alpha_iii...", delay: 60 },
-    { text: "> loading portfolio [186 companies]", delay: 50 },
-    { text: "> syncing market_data...", delay: 40 },
-    { text: "  pipeline: 342 active deals scored", delay: 30, dim: true },
-    { text: "  alerts: 3 portfolio events detected", delay: 30, dim: true },
-    { text: "  lp_report: Q4 draft ready for review", delay: 30, dim: true },
-    { text: "> ai_engine: analyzing sector correlations", delay: 50 },
-    { text: "  ✓ 12 new patterns identified", delay: 40, color: "#34d399" },
+    { text: "> initializing fund_alpha_iii...", delay: 25 },
+    { text: "> loading portfolio [186 companies]", delay: 20 },
+    { text: "> syncing market_data...", delay: 18 },
+    { text: "  pipeline: 342 active deals scored", delay: 12, dim: true },
+    { text: "  alerts: 3 portfolio events detected", delay: 12, dim: true },
+    { text: "  lp_report: Q4 draft ready for review", delay: 12, dim: true },
+    { text: "> ai_engine: analyzing sector correlations", delay: 22 },
+    { text: "  ✓ 12 new patterns identified", delay: 18, color: "#34d399" },
   ],
   [
-    { text: "> ask: \"What does TechCorp do?\"", delay: 55 },
-    { text: "  searching 2,847 document chunks...", delay: 35, dim: true },
-    { text: "  matched: pitch_deck_v3.pdf (94% relevance)", delay: 30, dim: true },
-    { text: "  matched: due_diligence_memo.docx (89%)", delay: 30, dim: true },
-    { text: "> answer: TechCorp is a B2B SaaS platform...", delay: 45, color: "#a78bfa" },
-    { text: "  sources: 3 documents, 7 chunks cited", delay: 30, dim: true },
-    { text: "  ✓ grounded — 0 unsupported claims", delay: 40, color: "#34d399" },
+    { text: "> ask: \"What does TechCorp do?\"", delay: 22 },
+    { text: "  searching 2,847 document chunks...", delay: 14, dim: true },
+    { text: "  matched: pitch_deck_v3.pdf (94% relevance)", delay: 12, dim: true },
+    { text: "  matched: due_diligence_memo.docx (89%)", delay: 12, dim: true },
+    { text: "> answer: TechCorp is a B2B SaaS platform...", delay: 20, color: "#a78bfa" },
+    { text: "  sources: 3 documents, 7 chunks cited", delay: 12, dim: true },
+    { text: "  ✓ grounded — 0 unsupported claims", delay: 18, color: "#34d399" },
   ],
   [
-    { text: "> decision.log --company Acme --action invest", delay: 50 },
-    { text: "  sector: fintech | stage: series_a", delay: 30, dim: true },
-    { text: "  conviction: high | partner: @sarah", delay: 30, dim: true },
-    { text: "> reflexion: analyzing decision patterns...", delay: 55 },
-    { text: "  fintech pass rate: 72% (above avg)", delay: 30, dim: true },
-    { text: "  avg time-to-decision: 14 days", delay: 30, dim: true },
-    { text: "  ✓ decision logged to knowledge graph", delay: 40, color: "#34d399" },
-    { text: "  ✓ company card updated", delay: 40, color: "#34d399" },
+    { text: "> decision.log --company Acme --action invest", delay: 22 },
+    { text: "  sector: fintech | stage: series_a", delay: 12, dim: true },
+    { text: "  conviction: high | partner: @sarah", delay: 12, dim: true },
+    { text: "> reflexion: analyzing decision patterns...", delay: 22 },
+    { text: "  fintech pass rate: 72% (above avg)", delay: 12, dim: true },
+    { text: "  avg time-to-decision: 14 days", delay: 12, dim: true },
+    { text: "  ✓ decision logged to knowledge graph", delay: 18, color: "#34d399" },
+    { text: "  ✓ company card updated", delay: 18, color: "#34d399" },
   ],
 ];
 
@@ -233,13 +233,13 @@ function TerminalAnimation() {
         setLineIdx(0);
         setCharIdx(0);
         setCurrentLine("");
-      }, 3000);
+      }, 1500);
       return () => clearTimeout(timer);
     }
     const line = seq[lineIdx];
     if (charIdx < line.text.length) {
       const speed = line.delay || 40;
-      const jitter = Math.random() * speed * 0.6;
+      const jitter = Math.random() * speed * 0.3;
       const timer = setTimeout(() => {
         setCurrentLine(line.text.slice(0, charIdx + 1));
         setCharIdx((c) => c + 1);
@@ -251,7 +251,7 @@ function TerminalAnimation() {
       setCurrentLine("");
       setLineIdx((l) => l + 1);
       setCharIdx(0);
-    }, 200);
+    }, 80);
     return () => clearTimeout(timer);
   }, [inView, seqIdx, lineIdx, charIdx]);
 
