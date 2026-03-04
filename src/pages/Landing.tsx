@@ -443,22 +443,6 @@ export default function Landing() {
         <div className="relative z-10 mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
           {/* ── LEFT: text + badges ── */}
           <motion.div className="relative text-left" style={{ y: heroParallax }}>
-            {/* floating badges */}
-            <motion.div className="mb-3 hidden lg:block" animate={{ y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
-              <div className="inline-block px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/65">RAG accuracy: 98%</div>
-            </motion.div>
-            <div className="flex flex-wrap gap-2 mb-6 hidden lg:flex">
-              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 0.5 }}>
-                <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
-              </motion.div>
-              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 1 }}>
-                <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
-              </motion.div>
-              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 6.5, ease: "easeInOut", delay: 1.5 }}>
-                <div className="px-3 py-1.5 rounded-full border border-orange-500/20 bg-orange-500/5 backdrop-blur-sm text-[10px] font-mono text-orange-400/60">3,000+ documents processed</div>
-              </motion.div>
-            </div>
-
             {/* badge */}
             <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
               <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
