@@ -8521,21 +8521,34 @@ Examples of what NOT to do:
 - User asks "what companies are in our portfolio?" → Do NOT include detailed breakdowns of each company's pitch deck content
 - User asks about a specific person → Do NOT include information about other people found in the same documents
 
+## Decision History & Company Connections
+
+Decision history and company connections are provided DIRECTLY in this system prompt (see sections below, if present).
+When the user asks about decisions, outcomes, logged actions, or company connections/partnerships,
+**answer from the data already in your system prompt** — do NOT search documents or the knowledge graph for this.
+Only use tools if the user asks for additional detail beyond what the decision/connection data provides.
+
 ## Tool Selection Rules
 
-1. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage):
+1. **Decision / outcome questions** (what decisions, recent actions, logged outcomes):
+   Answer directly from the Decision History in your system prompt. No tool needed.
+
+2. **Connection / partnership questions** (company relationships, who is connected):
+   Answer directly from the Company Connections Graph in your system prompt. No tool needed.
+
+3. **Portfolio metadata questions** (counts, lists, filtering by country/sector/stage):
    Use `search_portfolio` with appropriate filters.
 
-2. **Document content questions** (pitch details, meeting notes, financials):
+4. **Document content questions** (pitch details, meeting notes, financials):
    Use `search_documents` with a clear query.
 
-3. **Specific company deep-dives** (detailed info about one company):
+5. **Specific company deep-dives** (detailed info about one company):
    Use `get_company_details` first, then `search_documents` if you need more.
 
-4. **Relationship questions** (investors, founders, competitors, connections):
+6. **Relationship questions** (investors, founders, competitors, connections):
    Use `search_knowledge_graph`.
 
-5. **Complex multi-step questions**:
+7. **Complex multi-step questions**:
    Use multiple tools in sequence.
 
 ## Important Rules
@@ -8641,14 +8654,13 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         ]
                         connection_lines.append(" | ".join(p for p in parts if p))
                 connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
-                if decision_lines or connection_lines:
-                    effective_system_prompt += (
-                        "\n\n## Decision History & Company Connections (from this workspace)\n"
-                        "Use this when the user asks about decisions, outcomes, or company relationships.\n\n"
-                        "Decision history:\n" + decisions_block + "\n\n"
-                        "Company Connections Graph:\n" + connections_block + "\n\n"
-                        "When the user asks about a company, check the Connections Graph and report known connections. When they ask about decisions or outcomes, use the Decision history above."
-                    )
+                effective_system_prompt += (
+                    "\n\n## Decision History & Company Connections (from this workspace)\n"
+                    "IMPORTANT: Answer questions about decisions, outcomes, and connections DIRECTLY from the data below.\n"
+                    "Do NOT use search tools for decision or connection questions — the data is right here.\n\n"
+                    "### Decision history:\n" + decisions_block + "\n\n"
+                    "### Company Connections Graph:\n" + connections_block
+                )
 
                 for iteration in range(MAX_AGENT_ITERATIONS):
                     try:
@@ -8778,7 +8790,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                         model=model_name,
                         max_tokens=max_tokens,
                         temperature=0.1,
-                        system=AGENT_SYSTEM_PROMPT,
+                        system=effective_system_prompt,
                         messages=current_messages,
                     ) as final_stream:
                         async for event in final_stream:

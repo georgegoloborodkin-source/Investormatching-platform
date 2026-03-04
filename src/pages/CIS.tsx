@@ -12597,6 +12597,19 @@ export default function CIS() {
         "notes",
         "table",
         "document",
+        "were",
+        "made",
+        "our",
+        "firm",
+        "far",
+        "show",
+        "list",
+        "all",
+        "recent",
+        "logged",
+        "history",
+        "give",
+        "summary",
       ]);
       const decisionTokens = tokens.filter((t) => !decisionStopwords.has(t));
       const minDecisionMatches = Math.max(
@@ -12605,8 +12618,9 @@ export default function CIS() {
       );
       
       const decisionMatches = decisionIntent
-        ? decisions
-            .filter((d) => {
+        ? (() => {
+            if (!decisionTokens.length) return decisions.slice(0, 10);
+            const filtered = decisions.filter((d) => {
               const haystack = [
                 d.startupName,
                 d.actionType,
@@ -12616,11 +12630,11 @@ export default function CIS() {
               ]
                 .join(" ")
                 .toLowerCase();
-              if (!decisionTokens.length) return false;
               const matches = decisionTokens.filter((t) => haystack.includes(t)).length;
               return matches >= minDecisionMatches;
-            })
-            .slice(0, 5)
+            });
+            return filtered.length > 0 ? filtered.slice(0, 10) : decisions.slice(0, 10);
+          })()
         : [];
 
       if (error) {
