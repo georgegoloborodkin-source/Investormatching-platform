@@ -1,11 +1,9 @@
 import Spline from "@splinetool/react-spline";
 
-const SPLINE_SCENE = "https://prod.spline.design/0vFifcps3sXeyeOT/scene.splinecode";
+const SPLINE_SCENE = "https://prod.spline.design/RY8CoZwe0ZoyVMJF/scene.splinecode";
 
 export default function HeroSpline() {
   return (
-    <div className="absolute inset-0 z-0">
-      <Spline scene={SPLINE_SCENE} />
-    </div>
+    <Spline scene={SPLINE_SCENE} style={{ width: "100%", height: "100%" }} />
   );
 }

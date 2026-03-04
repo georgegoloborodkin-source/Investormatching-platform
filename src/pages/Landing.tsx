@@ -436,72 +436,83 @@ export default function Landing() {
       </AnimatePresence>
 
       {/* ═══ HERO ═══ */}
-      <section id="hero" ref={heroRef} className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 pt-20 pb-28 overflow-hidden">
-        {/* Spline 3D scene on first page */}
-        <HeroSpline />
-        {/* dark overlay for text readability */}
-        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/50 via-black/55 to-[#07060b]" />
+      <section id="hero" ref={heroRef} className="relative min-h-screen flex items-center px-5 sm:px-8 lg:px-12 pt-20 pb-28 overflow-hidden">
+        {/* subtle bg gradient */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#07060b] via-[#0c0a14] to-[#07060b]" />
 
-        <motion.div className="relative z-10 text-center max-w-4xl mx-auto" style={{ y: heroParallax }}>
-          {/* floating badges — pushed to far edges so they don't overlap hero text */}
-          <motion.div className="absolute top-4 left-4 xl:left-8 hidden lg:block" animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
-            <div className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/65">RAG accuracy: 98%</div>
-          </motion.div>
-          <motion.div className="absolute -top-6 right-4 xl:right-8 hidden lg:block" animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 1 }}>
-            <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
-          </motion.div>
-          <motion.div className="absolute -bottom-4 -left-16 xl:-left-12 hidden lg:block" animate={{ y: [0, -8, 0], rotate: [-1, 3, -1] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 2 }}>
-            <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
-          </motion.div>
-          <motion.div className="absolute -bottom-4 -right-16 xl:-right-12 hidden lg:block" animate={{ y: [0, -10, 0], rotate: [1, -2, 1] }} transition={{ repeat: Infinity, duration: 6.5, ease: "easeInOut", delay: 1.5 }}>
-            <div className="px-3 py-1.5 rounded-full border border-orange-500/20 bg-orange-500/5 backdrop-blur-sm text-[10px] font-mono text-orange-400/60">3,000+ documents processed</div>
-          </motion.div>
-
-          {/* badge */}
-          <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
-            <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
-            <span className="text-sm text-white/80 font-medium" style={fCabin}>The signal stack for frontier capital</span>
-          </motion.div>
-
-          {/* headline */}
-          <motion.h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-[80px] font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-            <motion.span
-              className="inline-block"
-              animate={{ opacity: [0.85, 1, 0.85] }}
-              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-            >Your Networks.</motion.span>
-            <br />
-            <span>One Rapid </span>
-            <motion.span
-              className="italic font-normal inline-block bg-clip-text text-transparent animate-gradient-sweep"
-              style={{ ...fSerif, backgroundImage: `linear-gradient(135deg, ${C.purple}, ${C.orange}, ${C.purple})`, backgroundSize: "200% 200%" }}
-            >Interface</motion.span>
-            <span className="ml-1">.</span>
-          </motion.h1>
-
-          {/* subtext */}
-          <motion.p className="text-lg sm:text-xl text-white/65 max-w-2xl mx-auto mb-10 leading-relaxed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.7 }}>
-            Every document, every decision, every pattern — unified and searchable.
-            <br className="hidden sm:block" />
-            Built for venture capital and investment teams.
-          </motion.p>
-
-          {/* CTAs */}
-          <motion.div className="flex flex-col sm:flex-row items-center justify-center gap-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65, duration: 0.7 }}>
-            <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
-              <Link to="/login" className="group relative flex items-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full transition-shadow overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
-                <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent" animate={{ x: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 3 }} />
-                <span className="relative z-10">Get Started</span>
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 relative z-10" />
-              </Link>
+        <div className="relative z-10 mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+          {/* ── LEFT: text + badges ── */}
+          <motion.div className="relative text-left" style={{ y: heroParallax }}>
+            {/* floating badges */}
+            <motion.div className="mb-3 hidden lg:block" animate={{ y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}>
+              <div className="inline-block px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[10px] font-mono text-white/65">RAG accuracy: 98%</div>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
-              <Link to="/login" className="flex items-center gap-2 px-8 py-4 text-base font-bold text-white/85 rounded-full border animate-border-glow bg-white/5 backdrop-blur-sm transition-colors hover:bg-white/10" style={fCabin}>
-                Book a Demo
-              </Link>
+            <div className="flex flex-wrap gap-2 mb-6 hidden lg:flex">
+              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut", delay: 0.5 }}>
+                <div className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm text-[10px] font-mono text-emerald-400/60">✓ grounded answers</div>
+              </motion.div>
+              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 7, ease: "easeInOut", delay: 1 }}>
+                <div className="px-3 py-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 backdrop-blur-sm text-[10px] font-mono text-purple-400/60">186 companies tracked</div>
+              </motion.div>
+              <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 6.5, ease: "easeInOut", delay: 1.5 }}>
+                <div className="px-3 py-1.5 rounded-full border border-orange-500/20 bg-orange-500/5 backdrop-blur-sm text-[10px] font-mono text-orange-400/60">3,000+ documents processed</div>
+              </motion.div>
+            </div>
+
+            {/* badge */}
+            <motion.div className="inline-flex items-center gap-2.5 mb-8 px-4 py-2 rounded-full border" style={{ borderColor: C.glassBorder, background: C.glassBg, backdropFilter: "blur(16px)" }} initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.2, duration: 0.7, type: "spring" }}>
+              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75" style={{ background: C.orange }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.orange }} /></span>
+              <span className="text-sm text-white/80 font-medium" style={fCabin}>The signal stack for frontier capital</span>
+            </motion.div>
+
+            {/* headline */}
+            <motion.h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-white mb-6" style={fInter} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+              <motion.span
+                className="inline-block"
+                animate={{ opacity: [0.85, 1, 0.85] }}
+                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+              >Your Networks.</motion.span>
+              <br />
+              <span>One Rapid </span>
+              <motion.span
+                className="italic font-normal inline-block bg-clip-text text-transparent animate-gradient-sweep"
+                style={{ ...fSerif, backgroundImage: `linear-gradient(135deg, ${C.purple}, ${C.orange}, ${C.purple})`, backgroundSize: "200% 200%" }}
+              >Interface</motion.span>
+              <span className="ml-1">.</span>
+            </motion.h1>
+
+            {/* subtext */}
+            <motion.p className="text-lg sm:text-xl text-white/65 max-w-xl mb-10 leading-relaxed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.7 }}>
+              Every document, every decision, every pattern — unified and searchable. Built for venture capital and investment teams.
+            </motion.p>
+
+            {/* CTAs */}
+            <motion.div className="flex flex-col sm:flex-row items-start gap-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65, duration: 0.7 }}>
+              <motion.div whileHover={{ scale: 1.06, y: -3 }} whileTap={{ scale: 0.96 }}>
+                <Link to="/login" className="group relative flex items-center gap-2 px-8 py-4 text-base font-bold text-white rounded-full transition-shadow overflow-hidden" style={{ ...fCabin, background: C.purple, boxShadow: "0 8px 32px -4px rgba(123,57,252,0.35)" }}>
+                  <motion.span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent" animate={{ x: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 3 }} />
+                  <span className="relative z-10">Get Started</span>
+                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 relative z-10" />
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
+                <Link to="/login" className="flex items-center gap-2 px-8 py-4 text-base font-bold text-white/85 rounded-full border animate-border-glow bg-white/5 backdrop-blur-sm transition-colors hover:bg-white/10" style={fCabin}>
+                  Book a Demo
+                </Link>
+              </motion.div>
             </motion.div>
           </motion.div>
-        </motion.div>
+
+          {/* ── RIGHT: Spline 3D ── */}
+          <motion.div
+            className="relative w-full h-[400px] sm:h-[500px] lg:h-[600px] rounded-2xl overflow-hidden"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <HeroSpline />
+          </motion.div>
+        </div>
 
         {/* self-drawing line decoration */}
         <motion.svg className="absolute bottom-0 left-0 right-0 z-[2] w-full h-20" viewBox="0 0 1440 80" fill="none" preserveAspectRatio="none">
