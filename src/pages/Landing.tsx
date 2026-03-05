@@ -375,7 +375,7 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
       >
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
         <motion.div
-          className="relative w-full max-w-lg rounded-2xl border border-white/[0.08] overflow-hidden"
+          className="relative w-full max-w-lg rounded-2xl border border-white/[0.08] overflow-hidden flex flex-col max-h-[90vh]"
           style={{ background: "rgba(7,6,11,0.98)", boxShadow: "0 32px 64px -16px rgba(0,0,0,0.6), 0 0 60px -20px rgba(123,57,252,0.2)" }}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -383,91 +383,101 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white">
-                  <Command className="h-5 w-5 text-black" />
+          <div className="p-5 flex-shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
+                  <Command className="h-4 w-4 text-black" />
                 </div>
-                <span className="text-xl font-bold text-white" style={fInter}>Get a Demo</span>
+                <span className="text-lg font-bold text-white" style={fInter}>Get a Demo</span>
               </div>
-              <button className="p-2 text-white/60 hover:text-white rounded-lg transition-colors" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
+              <button className="p-1.5 text-white/60 hover:text-white rounded-lg transition-colors" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
             </div>
-            <p className="text-white/70 text-sm mb-6">Connect with our team to explore how Venture OS can support your investment workflow.</p>
+            <p className="text-white/70 text-xs mb-0">Connect with our team to explore how Venture OS can support your investment workflow.</p>
+          </div>
 
             {submitted ? (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="py-12 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl mx-auto mb-4" style={{ background: "rgba(52,211,153,0.15)" }}>
-                  <Check className="h-8 w-8 text-emerald-400" />
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-5 pb-5 pt-2 text-center flex-shrink-0">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl mx-auto mb-3" style={{ background: "rgba(52,211,153,0.15)" }}>
+                  <Check className="h-7 w-7 text-emerald-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2" style={fInter}>Thank you!</h3>
-                <p className="text-white/60 text-sm">We&apos;ll be in touch shortly to schedule your demo.</p>
+                <h3 className="text-lg font-bold text-white mb-1" style={fInter}>Thank you!</h3>
+                <p className="text-white/60 text-xs">We&apos;ll be in touch shortly to schedule your demo.</p>
               </motion.div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>First name</label>
-                    <input type="text" required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors" placeholder="John" style={fManrope} />
+              <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                <div className="px-5 overflow-y-auto flex-1 min-h-0 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>First name</label>
+                      <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="John" style={fManrope} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Last name</label>
+                      <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Doe" style={fManrope} />
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>Last name</label>
-                    <input type="text" required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors" placeholder="Doe" style={fManrope} />
+                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Work email</label>
+                    <input type="email" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="john@fund.com" style={fManrope} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>LinkedIn profile</label>
+                    <input type="url" className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="https://linkedin.com/in/yourprofile" style={fManrope} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Company</label>
+                    <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Acme Ventures" style={fManrope} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Company size</label>
+                      <select required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                        <option value="" className="bg-[#0c0a14] text-white/40">Select size</option>
+                        <option value="1-10" className="bg-[#0c0a14]">1-10</option>
+                        <option value="11-50" className="bg-[#0c0a14]">11-50</option>
+                        <option value="51-200" className="bg-[#0c0a14]">51-200</option>
+                        <option value="201-500" className="bg-[#0c0a14]">201-500</option>
+                        <option value="500+" className="bg-[#0c0a14]">500+</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Country</label>
+                      <select required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                        <option value="" className="bg-[#0c0a14] text-white/40">Select country</option>
+                        <option value="US" className="bg-[#0c0a14]">United States</option>
+                        <option value="UK" className="bg-[#0c0a14]">United Kingdom</option>
+                        <option value="CA" className="bg-[#0c0a14]">Canada</option>
+                        <option value="DE" className="bg-[#0c0a14]">Germany</option>
+                        <option value="FR" className="bg-[#0c0a14]">France</option>
+                        <option value="SG" className="bg-[#0c0a14]">Singapore</option>
+                        <option value="OTHER" className="bg-[#0c0a14]">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>How did you hear about us?</label>
+                    <select className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                      <option value="" className="bg-[#0c0a14] text-white/40">Select option</option>
+                      <option value="search" className="bg-[#0c0a14]">Search</option>
+                      <option value="referral" className="bg-[#0c0a14]">Referral</option>
+                      <option value="linkedin" className="bg-[#0c0a14]">LinkedIn</option>
+                      <option value="event" className="bg-[#0c0a14]">Event or conference</option>
+                      <option value="other" className="bg-[#0c0a14]">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>What motivated you to explore Venture OS?</label>
+                    <textarea rows={2} className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 resize-none" placeholder="e.g. We want a system that captures decisions and makes them searchable." style={fManrope} />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>Work email</label>
-                  <input type="email" required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors" placeholder="john@fund.com" style={fManrope} />
+                <div className="p-5 flex-shrink-0 border-t border-white/[0.06]">
+                  <motion.button type="submit" disabled={submitting} className="w-full py-3 rounded-full font-bold text-white text-sm transition-all disabled:opacity-70 flex items-center justify-center gap-2" style={{ ...fCabin, background: C.purple, boxShadow: "0 4px 20px -4px rgba(123,57,252,0.4)" }} whileHover={{ scale: submitting ? 1 : 1.02 }} whileTap={{ scale: submitting ? 1 : 0.98 }}>
+                    {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />Sending...</> : "Get a Demo"}
+                  </motion.button>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>Company</label>
-                  <input type="text" required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors" placeholder="Acme Ventures" style={fManrope} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>Company size</label>
-                  <select required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors appearance-none cursor-pointer" style={fManrope}>
-                    <option value="" className="bg-[#0c0a14] text-white/40">Select a company size</option>
-                    <option value="1-10" className="bg-[#0c0a14]">1-10</option>
-                    <option value="11-50" className="bg-[#0c0a14]">11-50</option>
-                    <option value="51-200" className="bg-[#0c0a14]">51-200</option>
-                    <option value="201-500" className="bg-[#0c0a14]">201-500</option>
-                    <option value="500+" className="bg-[#0c0a14]">500+</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>Country</label>
-                  <select required className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors appearance-none cursor-pointer" style={fManrope}>
-                    <option value="" className="bg-[#0c0a14] text-white/40">Select a country</option>
-                    <option value="US" className="bg-[#0c0a14]">United States</option>
-                    <option value="UK" className="bg-[#0c0a14]">United Kingdom</option>
-                    <option value="CA" className="bg-[#0c0a14]">Canada</option>
-                    <option value="DE" className="bg-[#0c0a14]">Germany</option>
-                    <option value="FR" className="bg-[#0c0a14]">France</option>
-                    <option value="SG" className="bg-[#0c0a14]">Singapore</option>
-                    <option value="OTHER" className="bg-[#0c0a14]">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>How did you hear about us?</label>
-                  <select className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors appearance-none cursor-pointer" style={fManrope}>
-                    <option value="" className="bg-[#0c0a14] text-white/40">Select an option</option>
-                    <option value="search" className="bg-[#0c0a14]">Search</option>
-                    <option value="referral" className="bg-[#0c0a14]">Referral</option>
-                    <option value="linkedin" className="bg-[#0c0a14]">LinkedIn</option>
-                    <option value="event" className="bg-[#0c0a14]">Event or conference</option>
-                    <option value="other" className="bg-[#0c0a14]">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-white/70 mb-1.5" style={fCabin}>What motivated you to explore Venture OS?</label>
-                  <textarea rows={3} className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-colors resize-none" placeholder="Example: We want a system that captures decisions across meetings and Slack, and makes them searchable for new hires." style={fManrope} />
-                </div>
-                <motion.button type="submit" disabled={submitting} className="w-full py-4 rounded-full font-bold text-white transition-all disabled:opacity-70 flex items-center justify-center gap-2" style={{ ...fCabin, background: C.purple, boxShadow: "0 4px 20px -4px rgba(123,57,252,0.4)" }} whileHover={{ scale: submitting ? 1 : 1.02 }} whileTap={{ scale: submitting ? 1 : 0.98 }}>
-                  {submitting ? <><Loader2 className="h-5 w-5 animate-spin" />Sending...</> : "Get a Demo"}
-                </motion.button>
               </form>
             )}
-          </div>
         </motion.div>
     </motion.div>
   );
