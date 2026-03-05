@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      demo_requests: {
+        Row: {
+          id: string
+          first_name: string
+          last_name: string
+          work_email: string
+          linkedin_url: string | null
+          company: string
+          company_size: string | null
+          country: string | null
+          how_heard: string | null
+          motivation: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          first_name: string
+          last_name: string
+          work_email: string
+          linkedin_url?: string | null
+          company: string
+          company_size?: string | null
+          country?: string | null
+          how_heard?: string | null
+          motivation?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          first_name?: string
+          last_name?: string
+          work_email?: string
+          linkedin_url?: string | null
+          company?: string
+          company_size?: string | null
+          country?: string | null
+          how_heard?: string | null
+          motivation?: string | null
+          created_at?: string
+        }
+      }
       [_ in never]: never
     }
     Views: {

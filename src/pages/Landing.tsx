@@ -24,6 +24,7 @@ const HeroSpline = (() => {
   );
 })();
 import React from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─── tokens ─── */
 const C = { purple: "#7b39fc", purpleHover: "#6a2ce0", dark: "#2b2344", darkHover: "#352b54", orange: "#f87b52", glassBorder: "rgba(164,132,215,0.5)", glassBg: "rgba(85,80,110,0.4)" } as const;
@@ -355,14 +356,32 @@ function PulseRings({ color = C.purple }: { color?: string }) {
 function GetDemoModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError(null);
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      setSubmitted(true);
-    }, 800);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const payload = {
+      first_name: (formData.get("first_name") as string).trim(),
+      last_name: (formData.get("last_name") as string).trim(),
+      work_email: (formData.get("work_email") as string).trim(),
+      linkedin_url: (formData.get("linkedin_url") as string)?.trim() || null,
+      company: (formData.get("company") as string).trim(),
+      company_size: (formData.get("company_size") as string) || null,
+      country: (formData.get("country") as string) || null,
+      how_heard: (formData.get("how_heard") as string) || null,
+      motivation: (formData.get("motivation") as string)?.trim() || null,
+    };
+    const { error: insertError } = await (supabase as any).from("demo_requests").insert(payload);
+    setSubmitting(false);
+    if (insertError) {
+      setError(insertError.message || "Something went wrong. Please try again.");
+      return;
+    }
+    setSubmitted(true);
   };
 
   return (
@@ -410,29 +429,29 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>First name</label>
-                      <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="John" style={fManrope} />
+                      <input name="first_name" type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="John" style={fManrope} />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Last name</label>
-                      <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Doe" style={fManrope} />
+                      <input name="last_name" type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Doe" style={fManrope} />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Work email</label>
-                    <input type="email" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="john@fund.com" style={fManrope} />
+                    <input name="work_email" type="email" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="john@fund.com" style={fManrope} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>LinkedIn profile</label>
-                    <input type="url" className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="https://linkedin.com/in/yourprofile" style={fManrope} />
+                    <input name="linkedin_url" type="url" className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="https://linkedin.com/in/yourprofile" style={fManrope} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Company</label>
-                    <input type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Acme Ventures" style={fManrope} />
+                    <input name="company" type="text" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50" placeholder="Acme Ventures" style={fManrope} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Company size</label>
-                      <select required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                      <select name="company_size" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
                         <option value="" className="bg-[#0c0a14] text-white/40">Select size</option>
                         <option value="1-10" className="bg-[#0c0a14]">1-10</option>
                         <option value="11-50" className="bg-[#0c0a14]">11-50</option>
@@ -443,7 +462,7 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>Country</label>
-                      <select required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                      <select name="country" required className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
                         <option value="" className="bg-[#0c0a14] text-white/40">Select country</option>
                         <option value="US" className="bg-[#0c0a14]">United States</option>
                         <option value="UK" className="bg-[#0c0a14]">United Kingdom</option>
@@ -456,9 +475,9 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>How did you hear about us?</label>
-                    <select className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
-                      <option value="" className="bg-[#0c0a14] text-white/40">Select option</option>
+<label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>How did you hear about us?</label>
+                    <select name="how_heard" className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-sm focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer" style={fManrope}>
+                        <option value="" className="bg-[#0c0a14] text-white/40">Select option</option>
                       <option value="search" className="bg-[#0c0a14]">Search</option>
                       <option value="referral" className="bg-[#0c0a14]">Referral</option>
                       <option value="linkedin" className="bg-[#0c0a14]">LinkedIn</option>
@@ -468,8 +487,9 @@ function GetDemoModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-white/70 mb-0.5" style={fCabin}>What motivated you to explore Venture OS?</label>
-                    <textarea rows={2} className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 resize-none" placeholder="e.g. We want a system that captures decisions and makes them searchable." style={fManrope} />
+                    <textarea name="motivation" rows={2} className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder-white/40 text-sm focus:outline-none focus:border-purple-500/50 resize-none" placeholder="e.g. We want a system that captures decisions and makes them searchable." style={fManrope} />
                   </div>
+                  {error && <p className="text-red-400 text-xs mt-2" style={fManrope}>{error}</p>}
                 </div>
                 <div className="p-5 flex-shrink-0 border-t border-white/[0.06]">
                   <motion.button type="submit" disabled={submitting} className="w-full py-3 rounded-full font-bold text-white text-sm transition-all disabled:opacity-70 flex items-center justify-center gap-2" style={{ ...fCabin, background: C.purple, boxShadow: "0 4px 20px -4px rgba(123,57,252,0.4)" }} whileHover={{ scale: submitting ? 1 : 1.02 }} whileTap={{ scale: submitting ? 1 : 0.98 }}>
