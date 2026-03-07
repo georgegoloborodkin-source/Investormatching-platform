@@ -2463,7 +2463,7 @@ async def call_anthropic_answer(
     When web_search_enabled=True, adds Anthropic's native web search tool so Claude can search the internet.
     When CONVERTER_PROVIDER=gemini and GEMINI_API_KEY is set, uses Gemini 2.5 Pro instead (no tool loop).
     """
-    use_gemini_for_ask = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER == "gemini"
+    use_gemini_for_ask = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER != "claude"
     if not ANTHROPIC_API_KEY and not use_gemini_for_ask:
         raise HTTPException(
             status_code=503,
@@ -3230,10 +3230,8 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
                 detail=f'File has ".pdf" extension but does not look like a valid PDF (missing %PDF header). First bytes (hex): {head_hex}'
             )
 
-        # ── Strategy 1: Claude-native PDF document block (best quality) ──
-        # Sends the entire PDF as a base64 document content block.
-        # Claude "sees" layouts, charts, tables, scanned text — no OCR needed.
-        if ANTHROPIC_API_KEY:
+        # ── Strategy 1: Claude-native PDF (skip when using Gemini to avoid Anthropic billing) ──
+        if ANTHROPIC_API_KEY and (CONVERTER_PROVIDER == "claude" or not GEMINI_API_KEY):
             try:
                 claude_text = await extract_pdf_with_claude_native(content, max_pages=MAX_PDF_PAGES)
                 if claude_text and len(claude_text.strip()) >= 50:
@@ -3357,7 +3355,7 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
 
 @app.get("/")
 async def root():
-    arch = "Gemini 2.5 Pro + Flash-Lite (email)" if (GEMINI_API_KEY and CONVERTER_PROVIDER == "gemini") else "Anthropic-native (Claude 3.5/3.7 Sonnet)"
+    arch = "Gemini 2.5 Pro + Flash-Lite (email)" if (GEMINI_API_KEY and CONVERTER_PROVIDER != "claude") else "Anthropic-native (Claude 3.5/3.7 Sonnet)"
     return {
         "message": "Company Second Brain V2 API",
         "version": "2.0.0",
@@ -3395,7 +3393,7 @@ async def health_check():
         "cohere_api_key_set": bool(COHERE_API_KEY),
     }
     
-    if GEMINI_API_KEY and CONVERTER_PROVIDER == "gemini":
+    if GEMINI_API_KEY and CONVERTER_PROVIDER != "claude":
         return {
             "status": "healthy",
             "available": True,
@@ -3779,9 +3777,9 @@ async def convert_data(request: ConversionRequest):
         # Create prompt
         prompt = create_conversion_prompt(request.data, request.dataType)
 
-        # Decide which provider to use
-        use_gemini = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER == "gemini"
-        use_claude = ANTHROPIC_API_KEY is not None and ANTHROPIC_API_KEY.strip() != ""
+        # Decide which provider to use (prefer Gemini when GEMINI_API_KEY is set unless explicitly claude)
+        use_gemini = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER != "claude"
+        use_claude = not use_gemini and (ANTHROPIC_API_KEY is not None and ANTHROPIC_API_KEY.strip() != "")
 
         if use_gemini:
             # ── Gemini 2.5 Pro for conversion (structured JSON output) ──
