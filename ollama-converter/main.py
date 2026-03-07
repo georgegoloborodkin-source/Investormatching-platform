@@ -431,10 +431,10 @@ ANTHROPIC_MODEL_FALLBACKS = [
 # ---------------------------------------------------------------------------
 #  Google Gemini — primary LLM (2.5 Pro) and email parsing (2.5 Flash-Lite)
 #  Render env vars: set GEMINI_API_KEY, CONVERTER_PROVIDER=gemini,
-#  optional GEMINI_MODEL (default gemini-2.5-pro), GEMINI_EMAIL_MODEL (default gemini-2.5-flash-lite).
+#  optional GEMINI_MODEL (default gemini-3.1-pro-preview), GEMINI_EMAIL_MODEL (default gemini-2.5-flash-lite).
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip() or None
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
 GEMINI_EMAIL_MODEL = os.getenv("GEMINI_EMAIL_MODEL", "gemini-2.5-flash-lite")
 
 # When True, Claude is used; when False, do not call Anthropic (avoids 400 billing errors when Gemini is primary).
@@ -8468,76 +8468,120 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
 
 async def _retrieve_document_context_for_gemini(event_id: str, question: str, folder_ids: Optional[List[str]] = None) -> str:
     """
-    Retrieve relevant document chunks (raw text) for the question via vector search.
+    Retrieve relevant document chunks (raw text) for the question via vector search,
+    with keyword-search fallback so the agent can always access document content when it exists.
     Used by the Gemini agent path so it can answer from uploaded documents.
-    Returns a formatted string of chunk text, or empty string on failure/no results.
+    Returns a formatted string of chunk/snippet text, or empty string on failure/no results.
     """
+    sb = get_supabase()
+    lines = []
+    doc_map = {}
+
+    # 1) Vector search on document_embeddings (chunk_text, parent_text)
     try:
-        sb = get_supabase()
         if EMBEDDINGS_PROVIDER == "voyage":
             embedding = await generate_embedding_voyage(question, "query")
         elif EMBEDDINGS_PROVIDER == "openai":
             embedding = await generate_embedding_openai(question)
         else:
             embedding = await generate_embedding_ollama(question)
-    except Exception:
-        return ""
+        embedding = normalize_embedding(embedding)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[Venture OS RAG] Embedding failed: {e}", flush=True)
+        embedding = None
 
-    embedding = normalize_embedding(embedding)
-    if not embedding:
-        return ""
-
-    match_count = 20
-    filter_folder_ids = None
-    if folder_ids and len(folder_ids) > 0:
+    if embedding:
+        match_count = 25
+        filter_folder_ids = None
+        if folder_ids and len(folder_ids) > 0:
+            try:
+                filter_folder_ids = [str(u) for u in folder_ids if u]
+            except Exception:
+                filter_folder_ids = None
         try:
-            filter_folder_ids = [str(u) for u in folder_ids if u]
-        except Exception:
-            filter_folder_ids = None
+            if filter_folder_ids:
+                result = sb.rpc(
+                    "match_document_chunks_scoped",
+                    {
+                        "query_embedding": embedding,
+                        "match_count": match_count,
+                        "filter_event_id": event_id,
+                        "filter_folder_ids": filter_folder_ids,
+                    },
+                ).execute()
+            else:
+                result = sb.rpc(
+                    "match_document_chunks",
+                    {
+                        "query_embedding": embedding,
+                        "match_count": match_count,
+                        "filter_event_id": event_id,
+                    },
+                ).execute()
+            chunks = result.data or []
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[Venture OS RAG] match_document_chunks RPC failed: {e}", flush=True)
+            chunks = []
+    else:
+        chunks = []
 
-    try:
-        if filter_folder_ids:
-            result = sb.rpc(
-                "match_document_chunks_scoped",
-                {
-                    "query_embedding": embedding,
-                    "match_count": match_count,
-                    "filter_event_id": event_id,
-                    "filter_folder_ids": filter_folder_ids,
-                },
-            ).execute()
-        else:
-            result = sb.rpc(
-                "match_document_chunks",
-                {
-                    "query_embedding": embedding,
-                    "match_count": match_count,
-                    "filter_event_id": event_id,
-                },
-            ).execute()
-    except Exception:
-        return ""
+    if chunks:
+        doc_ids = list({c.get("document_id") for c in chunks if c.get("document_id")})
+        if doc_ids:
+            try:
+                docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
+                doc_map = {str(d["id"]): d for d in (docs_result.data or [])}
+            except Exception:
+                pass
+        for i, chunk in enumerate(chunks[:15], 1):
+            doc = doc_map.get(str(chunk.get("document_id", "")), {})
+            title = doc.get("title") or doc.get("file_name") or "Document"
+            text = (chunk.get("parent_text") or chunk.get("chunk_text") or "").strip()
+            if text:
+                lines.append(f"[{i}] **{title}**\n{text[:800]}")
 
-    chunks = result.data or []
-    if not chunks:
-        return ""
-
-    doc_ids = list({c.get("document_id") for c in chunks if c.get("document_id")})
-    doc_map = {}
-    if doc_ids:
+    # 2) If no vector results, fall back to keyword search on documents.raw_content (snippets)
+    if not lines and question.strip():
         try:
-            docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
-            doc_map = {str(d["id"]): d for d in (docs_result.data or [])}
-        except Exception:
-            pass
+            kw_result = sb.rpc(
+                "match_documents_keyword",
+                {"query_text": question.strip(), "match_count": 15, "filter_event_id": event_id},
+            ).execute()
+            kw_rows = kw_result.data or []
+        except Exception as e:
+            print(f"[Venture OS RAG] match_documents_keyword fallback failed: {e}", flush=True)
+            kw_rows = []
+        if kw_rows:
+            kw_doc_ids = list({r.get("document_id") for r in kw_rows if r.get("document_id")})
+            if kw_doc_ids and not doc_map:
+                try:
+                    docs_result = sb.table("documents").select("id, title, file_name").in_("id", kw_doc_ids).execute()
+                    doc_map = {str(d["id"]): d for d in (docs_result.data or [])}
+                except Exception:
+                    pass
+            for i, row in enumerate(kw_rows[:15], 1):
+                doc = doc_map.get(str(row.get("document_id", "")), {})
+                title = doc.get("title") or doc.get("file_name") or "Document"
+                snippet = (row.get("snippet") or "").strip()
+                if snippet:
+                    lines.append(f"[{i}] **{title}** (keyword match)\n{snippet[:800]}")
 
-    lines = []
-    for i, chunk in enumerate(chunks[:15], 1):
-        doc = doc_map.get(str(chunk.get("document_id", "")), {})
-        title = doc.get("title") or doc.get("file_name") or "Document"
-        text = (chunk.get("parent_text") or chunk.get("chunk_text") or "").strip()
-        if text:
-            lines.append(f"[{i}] **{title}**\n{text[:800]}")
+    # 3) Last resort: if no chunks/keyword hits, attach raw_content from recent docs so agent can still see uploads
+    if not lines:
+        try:
+            q = sb.table("documents").select("id, title, file_name, raw_content").eq("event_id", event_id).not_.is_("raw_content", "null").order("created_at", desc=True).limit(5).execute()
+            for i, doc in enumerate((q.data or [])[:5], 1):
+                raw = (doc.get("raw_content") or "").strip()
+                if not raw:
+                    continue
+                title = doc.get("title") or doc.get("file_name") or "Document"
+                lines.append(f"[{i}] **{title}** (full document excerpt)\n{raw[:1200]}")
+        except Exception as e:
+            print(f"[Venture OS RAG] Fallback raw_content fetch failed: {e}", flush=True)
 
     if not lines:
         return ""
@@ -8914,11 +8958,12 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     if doc_context:
                         sys_prompt += (
                             "\n\n## Document context (from your uploaded documents)\n"
-                            "Use the excerpts below to answer questions about people, companies, and facts. "
+                            "The excerpts below are chunks and raw text from the user's uploaded documents. "
+                            "You MUST use this context to answer questions about people, companies, and any facts — it is the primary source. "
                             "Cite which document (by title) when you use it.\n\n" + doc_context
                         )
                         sys_prompt += (
-                            "\n\nAnswer the user's question using the document context above, plus decisions and connections when relevant. "
+                            "\n\nAnswer the user's question using the document context above first; add decisions and connections when relevant. "
                             "Always respond with at least one sentence; never return empty."
                         )
                     else:
@@ -8937,8 +8982,8 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                                 yield f"data: {json.dumps({'text': text[i:i+80]})}\n\n"
                         else:
                             fallback = (
-                                "I don't have document context in this mode — only your decision history and company connections. "
-                                "To answer questions about specific people or companies from your uploads, document search is required (use Claude agent or ensure documents are indexed)."
+                                "I couldn't generate a response for that. Your documents are searched for every question — if nothing was found about William BAO, "
+                                "make sure relevant docs are uploaded and indexed for this workspace, then try again."
                             )
                             yield f"data: {json.dumps({'text': fallback})}\n\n"
                     except Exception as e:
