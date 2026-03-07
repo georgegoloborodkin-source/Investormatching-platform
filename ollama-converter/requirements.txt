@@ -21,6 +21,9 @@ python-multipart>=0.0.9
 # ── Anthropic SDK (Claude-native stack) ──
 anthropic>=0.40.0
 
+# ── Google Gemini (primary LLM + email parsing) ──
+google-genai>=1.0.0
+
 # ── JWT auth ──
 PyJWT>=2.9.0
 

@@ -46,6 +46,16 @@ try:
 except ImportError:
     ollama = None  # type: ignore[assignment]
 
+# Optional: Google Gemini (primary LLM + email parsing)
+try:
+    from google import genai as _genai_module
+    from google.genai import types as _genai_types
+    _gemini_sdk_available = True
+except ImportError:
+    _genai_module = None  # type: ignore[assignment]
+    _genai_types = None  # type: ignore[assignment]
+    _gemini_sdk_available = False
+
 # Supabase — backend-side retrieval for Agentic RAG
 try:
     from supabase import create_client as _supabase_create_client
@@ -306,6 +316,7 @@ async def extract_pdf_with_claude_native(pdf_bytes: bytes, max_pages: int = 10) 
                     ],
                 }
             ],
+            endpoint="/ingest/pdf (native)",
         )
         # Extract text from response
         text_parts = [
@@ -364,6 +375,7 @@ async def _extract_pdf_as_page_images(pdf_bytes: bytes, max_pages: int = 10) -> 
                         ],
                     }
                 ],
+                endpoint="/ingest/pdf (page-images)",
             )
             page_text = "".join(
                 b.text for b in message.content if hasattr(b, "text")
@@ -410,6 +422,91 @@ ANTHROPIC_MODEL_FALLBACKS = [
         "claude-3-7-sonnet-latest",
     ]) if m
 ]
+
+# ---------------------------------------------------------------------------
+#  Google Gemini — primary LLM (2.5 Pro) and email parsing (2.5 Flash-Lite)
+#  Render env vars: set GEMINI_API_KEY, CONVERTER_PROVIDER=gemini,
+#  optional GEMINI_MODEL (default gemini-2.5-pro), GEMINI_EMAIL_MODEL (default gemini-2.5-flash-lite).
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip() or None
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+GEMINI_EMAIL_MODEL = os.getenv("GEMINI_EMAIL_MODEL", "gemini-2.5-flash-lite")
+
+def _get_gemini_client():
+    """Return Gemini async client. Requires GEMINI_API_KEY and google-genai installed."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not set.")
+    if not _gemini_sdk_available or _genai_module is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Gemini SDK not installed. Run: pip install google-genai",
+        )
+    return _genai_module.Client(api_key=GEMINI_API_KEY)
+
+def _gemini_config(max_output_tokens: int = 8192, temperature: float = 0.1):
+    """Build Gemini GenerateContentConfig if types available."""
+    if _genai_types is not None:
+        return _genai_types.GenerateContentConfig(
+            max_output_tokens=max_output_tokens,
+            temperature=temperature,
+        )
+    return {"max_output_tokens": max_output_tokens, "temperature": temperature}
+
+async def call_gemini(
+    prompt: str,
+    system_instruction: Optional[str] = None,
+    model: str = GEMINI_MODEL,
+    max_tokens: int = 8192,
+    temperature: float = 0.1,
+) -> str:
+    """Generate text using Gemini. Used for primary LLM (convert, ask) when Gemini is configured."""
+    client = _get_gemini_client()
+    aio = client.aio
+    try:
+        contents = system_instruction + "\n\n" + prompt if system_instruction else prompt
+        config = _gemini_config(max_output_tokens=max_tokens, temperature=temperature)
+        response = await aio.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config,
+        )
+        if response.text:
+            return response.text.strip()
+        return ""
+    finally:
+        await aio.aclose()
+
+async def parse_email_with_gemini(raw_email_text: str) -> str:
+    """
+    Use Gemini 2.5 Flash-Lite to parse and normalize email content for accurate extraction.
+    Returns cleaned, structured text suitable for RAG and display.
+    """
+    if not raw_email_text or not raw_email_text.strip():
+        return raw_email_text
+    client = _get_gemini_client()
+    aio = client.aio
+    try:
+        system = (
+            "You are an email parsing assistant. Your task is to normalize and clean the raw email content. "
+            "Preserve: From, To, Cc, Date, Subject, and the full body text. "
+            "Strip HTML tags and decode any broken or quoted-printable text. "
+            "Keep signatures and quoted replies but mark them clearly if needed. "
+            "Output ONLY the cleaned email text, no commentary or meta-description."
+        )
+        contents = system + "\n\n---\n\n" + (raw_email_text[:120000] if len(raw_email_text) > 120000 else raw_email_text)
+        config = _gemini_config(max_output_tokens=16384, temperature=0.0)
+        response = await aio.models.generate_content(
+            model=GEMINI_EMAIL_MODEL,
+            contents=contents,
+            config=config,
+        )
+        if response.text and response.text.strip():
+            return response.text.strip()
+        return raw_email_text
+    except Exception:
+        return raw_email_text
+    finally:
+        await aio.aclose()
 
 # ---------------------------------------------------------------------------
 #  Supabase — backend-side database access for Agentic RAG
@@ -2364,12 +2461,23 @@ async def call_anthropic_answer(
     Call Claude to answer a user question with tool-augmented RAG.
     Uses the Anthropic SDK when available (faster, automatic retries, prompt caching) with httpx fallback.
     When web_search_enabled=True, adds Anthropic's native web search tool so Claude can search the internet.
+    When CONVERTER_PROVIDER=gemini and GEMINI_API_KEY is set, uses Gemini 2.5 Pro instead (no tool loop).
     """
-    if not ANTHROPIC_API_KEY:
+    use_gemini_for_ask = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER == "gemini"
+    if not ANTHROPIC_API_KEY and not use_gemini_for_ask:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY not set. Set it in the server environment to use Claude."
+            detail="ANTHROPIC_API_KEY not set. Set it in the server environment to use Claude, or set GEMINI_API_KEY and CONVERTER_PROVIDER=gemini for Gemini."
         )
+
+    if use_gemini_for_ask:
+        system_msg = (
+            "You are Orbit AI, a VC intelligence system. You answer questions based on "
+            "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
+            "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
+            "Be helpful, concise, and answer ONLY the actual question asked. Never pad responses with unrelated information."
+        )
+        return await call_gemini(prompt, system_instruction=system_msg, model=GEMINI_MODEL, max_tokens=10000, temperature=0.5)
 
     # Choose model based on question complexity (Haiku is 3-5x faster)
     use_haiku = question and sources and is_simple_question(question, sources)
@@ -3249,10 +3357,11 @@ async def extract_text_content(file: UploadFile) -> Tuple[str, str]:
 
 @app.get("/")
 async def root():
+    arch = "Gemini 2.5 Pro + Flash-Lite (email)" if (GEMINI_API_KEY and CONVERTER_PROVIDER == "gemini") else "Anthropic-native (Claude 3.5/3.7 Sonnet)"
     return {
         "message": "Company Second Brain V2 API",
         "version": "2.0.0",
-        "architecture": "Anthropic-native (Claude 3.5/3.7 Sonnet)",
+        "architecture": arch,
         "endpoints": {
             "/convert": "POST - Convert unstructured data (structured output via tool_choice)",
             "/convert-file": "POST - Convert uploaded file",
@@ -3286,6 +3395,16 @@ async def health_check():
         "cohere_api_key_set": bool(COHERE_API_KEY),
     }
     
+    if GEMINI_API_KEY and CONVERTER_PROVIDER == "gemini":
+        return {
+            "status": "healthy",
+            "available": True,
+            "provider": "gemini",
+            "models": [GEMINI_MODEL],
+            "email_model": GEMINI_EMAIL_MODEL,
+            "error": None,
+            "embedding_config": embedding_config,
+        }
     if ANTHROPIC_API_KEY:
         return {
             "status": "healthy",
@@ -3661,8 +3780,23 @@ async def convert_data(request: ConversionRequest):
         prompt = create_conversion_prompt(request.data, request.dataType)
 
         # Decide which provider to use
+        use_gemini = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER == "gemini"
         use_claude = ANTHROPIC_API_KEY is not None and ANTHROPIC_API_KEY.strip() != ""
-        if CONVERTER_PROVIDER == "claude" or use_claude:
+
+        if use_gemini:
+            # ── Gemini 2.5 Pro for conversion (structured JSON output) ──
+            try:
+                system = (
+                    "You extract structured data from the input. Return ONLY a single valid JSON object with keys: "
+                    "startups (array), investors (array), mentors (array), corporates (array), detectedType (string), errors (array), warnings (array). "
+                    "No markdown, no explanation."
+                )
+                response_text = await call_gemini(prompt, system_instruction=system, model=GEMINI_MODEL, max_tokens=8192, temperature=0.1)
+                parsed_data = parse_ollama_response(response_text)
+            except Exception as gemini_err:
+                response_text = await call_gemini(prompt, system_instruction=None, model=GEMINI_MODEL, max_tokens=8192, temperature=0.1)
+                parsed_data = parse_ollama_response(response_text)
+        elif CONVERTER_PROVIDER == "claude" or use_claude:
             # ── V2: Prefer strict structured output (tool_choice) ──
             # This guarantees valid JSON matching our Pydantic schema,
             # eliminating the need for regex/bracket-balancing parsing.
@@ -4494,6 +4628,7 @@ async def orchestrate_query(request: OrchestrateRequest):
             max_tokens=300,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
+            endpoint="/orchestrate-query",
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
 
@@ -4585,6 +4720,7 @@ async def critic_check(request: CriticRequest):
             max_tokens=500,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
+            endpoint="/critic-check",
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
         try:
@@ -4700,6 +4836,7 @@ RULES:
             max_tokens=900,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
+            endpoint="/system2-reflect",
         )
         raw = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
 
@@ -7988,6 +8125,13 @@ async def ingest_gmail(request: GmailIngestRequest):
 
     content = f"{header_block}\n{body}"
     title = f"[Email] {subject}"
+
+    # Use Gemini 2.5 Flash-Lite for accurate email parsing when configured
+    if GEMINI_API_KEY:
+        try:
+            content = await parse_email_with_gemini(content)
+        except Exception:
+            pass  # keep original content on any error
 
     return GmailIngestResponse(
         title=title,
