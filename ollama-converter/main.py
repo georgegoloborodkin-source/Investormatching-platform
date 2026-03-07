@@ -8780,6 +8780,64 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                 yield f"data: {json.dumps({'ping': True})}\n\n"
                 yield f"data: {json.dumps({'status': 'Analyzing your question...'})}\n\n"
 
+                # ── Gemini-only path: no Anthropic key or Gemini primary ──
+                use_gemini_agent = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+                if use_gemini_agent:
+                    decision_lines = []
+                    connection_lines = []
+                    if request.decisions:
+                        for d in request.decisions:
+                            summary = " | ".join([part for part in [d.startup_name, d.action_type, d.outcome, d.notes] if part])
+                            if summary:
+                                decision_lines.append(f"- {summary}")
+                    if request.connections:
+                        for conn in request.connections:
+                            parts = [f"{conn.source_company_name} -> {conn.target_company_name}"]
+                            if conn.connection_type:
+                                parts.append(f"type={conn.connection_type}")
+                            if conn.connection_status:
+                                parts.append(f"status={conn.connection_status}")
+                            connection_lines.append(" | ".join(parts))
+                    if not decision_lines or not connection_lines:
+                        try:
+                            sb = get_supabase()
+                            if not decision_lines:
+                                dec_resp = sb.table("decisions").select("startup_name, action_type, outcome, notes").eq("event_id", event_id).order("created_at", desc=True).limit(20).execute()
+                                for row in (dec_resp.data or []):
+                                    summary = " | ".join([p for p in [row.get("startup_name"), row.get("action_type"), row.get("outcome"), row.get("notes")] if p])
+                                    if summary:
+                                        decision_lines.append(f"- {summary}")
+                            if not connection_lines:
+                                conn_resp = sb.table("company_connections").select("source_company_name, target_company_name, connection_type, connection_status").eq("event_id", event_id).order("created_at", desc=True).limit(30).execute()
+                                for row in (conn_resp.data or []):
+                                    parts = [f"{row.get('source_company_name', '')} -> {row.get('target_company_name', '')}"]
+                                    if row.get("connection_type"):
+                                        parts.append(f"type={row['connection_type']}")
+                                    if row.get("connection_status"):
+                                        parts.append(f"status={row['connection_status']}")
+                                    connection_lines.append(" | ".join(parts))
+                        except Exception:
+                            pass
+                    decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
+                    connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
+                    sys_prompt = (
+                        AGENT_SYSTEM_PROMPT
+                        + "\n\n## Decision History & Company Connections\n"
+                        + "### Decision history:\n" + decisions_block + "\n\n"
+                        + "### Company Connections Graph:\n" + connections_block
+                    )
+                    if request.reflexion_memory_context and request.reflexion_memory_context.strip():
+                        sys_prompt += "\n\n## Reflexion Memory\n" + request.reflexion_memory_context.strip()
+                    try:
+                        text = await call_gemini(question, system_instruction=sys_prompt, model=GEMINI_MODEL, max_tokens=8000, temperature=0.1)
+                        if text:
+                            for i in range(0, len(text), 80):
+                                yield f"data: {json.dumps({'text': text[i:i+80]})}\n\n"
+                    except Exception as e:
+                        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
                 # Query rewrite: skip for first message (no history = no pronouns to resolve)
                 if has_history:
                     resolved_question = await rewrite_query_with_llm(question, previous_messages)
