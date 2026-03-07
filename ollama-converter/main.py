@@ -516,6 +516,51 @@ async def parse_email_with_gemini(raw_email_text: str) -> str:
     finally:
         await aio.aclose()
 
+
+async def call_gemini_with_document(
+    prompt: str,
+    pdf_base64: Optional[str] = None,
+    system_instruction: Optional[str] = None,
+    model: str = GEMINI_MODEL,
+    max_tokens: int = 8192,
+    temperature: float = 0.0,
+) -> str:
+    """
+    Generate text using Gemini, optionally with a PDF document (e.g. for entity/KPI extraction).
+    When pdf_base64 is provided, Gemini reads the PDF natively (tables, charts, layout).
+    """
+    client = _get_gemini_client()
+    aio = client.aio
+    try:
+        config = _gemini_config(max_output_tokens=max_tokens, temperature=temperature)
+        if pdf_base64 and len(pdf_base64) > 100 and _genai_types is not None:
+            try:
+                pdf_bytes = base64.b64decode(pdf_base64, validate=True)
+            except Exception:
+                pdf_bytes = None
+            if pdf_bytes:
+                parts = [
+                    _genai_types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    (system_instruction + "\n\n" + prompt if system_instruction else prompt),
+                ]
+                response = await aio.models.generate_content(
+                    model=model,
+                    contents=parts,
+                    config=config,
+                )
+            else:
+                contents = (system_instruction + "\n\n" + prompt if system_instruction else prompt)
+                response = await aio.models.generate_content(model=model, contents=contents, config=config)
+        else:
+            contents = (system_instruction + "\n\n" + prompt if system_instruction else prompt)
+            response = await aio.models.generate_content(model=model, contents=contents, config=config)
+        if response.text:
+            return response.text.strip()
+        return ""
+    finally:
+        await aio.aclose()
+
+
 # ---------------------------------------------------------------------------
 #  Supabase — backend-side database access for Agentic RAG
 # ---------------------------------------------------------------------------
@@ -6278,26 +6323,10 @@ class EntityExtractionResponse(BaseModel):
     kpis: List[ExtractedKPI] = []
 
 
-@app.post("/extract-entities", response_model=EntityExtractionResponse)
-async def extract_entities(request: EntityExtractionRequest):
-    """
-    Extract entities, relationships, and KPIs from a document using Claude.
-    
-    When `pdf_base64` is provided, Claude reads the PDF visually for much better
-    extraction of companies, people, metrics from pitch decks.
-    """
-    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
-        return EntityExtractionResponse()
-
-    has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
-    text = (request.document_text or "").strip()[:8000]
-    
-    if not text and not has_pdf:
-        return EntityExtractionResponse()
-
-    # Build extraction instructions — add email-specific guidance when document_type is 'email'
+def _build_entity_extraction_instructions(document_type: str = "") -> str:
+    """Shared extraction prompt for entities, relationships, KPIs (used by both Gemini and Claude)."""
     email_hints = ""
-    if request.document_type == "email":
+    if document_type == "email":
         email_hints = (
             "\nEMAIL-SPECIFIC INSTRUCTIONS:\n"
             "- Extract the sender and all recipients as 'person' entities.\n"
@@ -6307,8 +6336,7 @@ async def extract_entities(request: EntityExtractionRequest):
             "- Create 'works_at' relationships between people and their domain-inferred companies.\n"
             "- Create 'invested_in' or 'partner_of' relationships if investment or partnership context is present.\n\n"
         )
-
-    extraction_instructions = (
+    return (
         "Extract ALL of the following from this VC/investment document:\n\n"
         "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
         '   Format: [{{"name": "...", "type": "company|person|fund|round|sector|location", '
@@ -6328,10 +6356,62 @@ async def extract_entities(request: EntityExtractionRequest):
         'Return JSON with keys: "entities", "relationships", "kpis". Return ONLY valid JSON.'
     )
 
+
+@app.post("/extract-entities", response_model=EntityExtractionResponse)
+async def extract_entities(request: EntityExtractionRequest):
+    """
+    Extract entities, relationships, and KPIs from a document (knowledge graph + company_kpis).
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
+    When pdf_base64 is provided, the LLM reads the PDF natively for better extraction.
+    """
+    has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
+    text = (request.document_text or "").strip()[:8000]
+    if not text and not has_pdf:
+        return EntityExtractionResponse()
+
+    extraction_instructions = _build_entity_extraction_instructions(request.document_type or "")
+    use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+
+    if use_gemini:
+        try:
+            if has_pdf:
+                prompt = (
+                    f"Document title: {request.document_title}\n"
+                    f"Document type: {request.document_type or 'pitch_deck'}\n\n"
+                    f"{extraction_instructions}"
+                )
+                raw = await call_gemini_with_document(
+                    prompt, pdf_base64=request.pdf_base64, model=GEMINI_MODEL, max_tokens=4000, temperature=0.0
+                )
+            else:
+                prompt = (
+                    f"Document title: {request.document_title}\n"
+                    f"Document type: {request.document_type or 'unknown'}\n\n"
+                    f"Text:\n{text}\n\n{extraction_instructions}"
+                )
+                raw = await call_gemini(prompt, model=GEMINI_MODEL, max_tokens=4000, temperature=0.0)
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                json_match = re.search(r'\{[\s\S]*\}', raw)
+                data = json.loads(json_match.group()) if json_match else {}
+            entities = [ExtractedEntity(**e) for e in data.get("entities", []) if e.get("name")]
+            relationships = [
+                ExtractedRelationship(**r) for r in data.get("relationships", [])
+                if r.get("source_name") and r.get("target_name")
+            ]
+            kpis = [
+                ExtractedKPI(**k) for k in data.get("kpis", [])
+                if k.get("company_name") and k.get("metric_name")
+            ]
+            return EntityExtractionResponse(entities=entities, relationships=relationships, kpis=kpis)
+        except Exception:
+            return EntityExtractionResponse()
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return EntityExtractionResponse()
+
     try:
         client = _get_anthropic_async_client()
-        
-        # Build content blocks — PDF visual or text-only
         if has_pdf:
             content_blocks = [
                 {
@@ -6427,33 +6507,92 @@ class CompanyPropertyExtractionResponse(BaseModel):
     document_type_detected: str = ""
 
 
+def _normalize_company_properties_response(data: dict, doc_type: str) -> CompanyPropertyExtractionResponse:
+    """Parse and normalize properties/confidence from LLM JSON (shared by Gemini and Claude)."""
+    properties = data.get("properties", data)
+    confidence = data.get("confidence", {})
+    clean_props: Dict[str, Any] = {}
+    string_fields = [
+        "company_name", "bio", "funding_stage", "amount_seeking", "valuation", "arr", "mrr",
+        "burn_rate", "runway_months", "problem", "solution", "tam", "sam", "som",
+        "market_growth_rate", "competitive_edge", "business_model", "revenue_model",
+        "pricing", "gtm_strategy", "traction", "customers_count", "growth_rate",
+        "gmv", "cac", "ltv", "ltv_cac_ratio", "payback_period", "gross_margin",
+        "net_margin", "churn_rate", "use_of_funds", "founded_year", "headquarters",
+        "team_size", "website", "email", "phone", "linkedin_url", "twitter_url",
+        "industry", "awards_recognition",
+    ]
+    list_fields = ["geo_markets", "key_partnerships"]
+    json_fields = ["founders", "competitors"]
+    for field in string_fields:
+        val = properties.get(field, "")
+        if val is None:
+            val = ""
+        if isinstance(val, (int, float)):
+            val = str(val)
+        if isinstance(val, str) and val.strip():
+            clean_props[field] = val.strip()
+    for field in list_fields:
+        val = properties.get(field, [])
+        if isinstance(val, list) and val:
+            clean_props[field] = [str(v).strip() for v in val if v]
+    for field in json_fields:
+        val = properties.get(field, [])
+        if isinstance(val, list) and val:
+            clean_props[field] = val
+        elif isinstance(val, str) and val.strip():
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    clean_props[field] = parsed
+            except json.JSONDecodeError:
+                pass
+    clean_confidence = {}
+    for field, score in confidence.items():
+        if field in clean_props:
+            try:
+                clean_confidence[field] = float(score)
+            except (ValueError, TypeError):
+                clean_confidence[field] = 0.5
+    return CompanyPropertyExtractionResponse(
+        properties=clean_props,
+        confidence=clean_confidence,
+        document_type_detected=doc_type,
+    )
+
+
 @app.post("/extract-company-properties", response_model=CompanyPropertyExtractionResponse)
 async def extract_company_properties(request: CompanyPropertyExtractionRequest):
     """
     Extract structured company card properties from document text or PDF.
-    
-    When `pdf_base64` is provided, Claude reads the PDF visually (native document block)
-    for dramatically better extraction of pitch decks with tables, charts, and layouts.
-    Falls back to text-based extraction when only `raw_content` is provided.
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
+    When pdf_base64 is provided, the LLM reads the PDF natively for better extraction.
     """
-    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
-        return CompanyPropertyExtractionResponse()
-
     has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
-    text = (request.raw_content or "").strip()
-    
+    text = (request.raw_content or "").strip()[:MAX_MODEL_INPUT_CHARS]
+
     if not text and not has_pdf:
         return CompanyPropertyExtractionResponse()
 
-    # Truncate text to fit context window (only used as fallback or supplement)
-    text = text[:MAX_MODEL_INPUT_CHARS]
-
-    # Step 1: Detect document type — skip LLM call if we have a PDF (it's almost certainly a pitch deck)
+    use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
     doc_type = (request.document_type or "").strip()
+
+    # Step 1: Detect document type
     if not doc_type:
         if has_pdf:
-            doc_type = "pitch_deck"  # PDFs uploaded to VC platform are almost always pitch decks
-        elif text:
+            doc_type = "pitch_deck"
+        elif text and use_gemini:
+            try:
+                doc_type_prompt = (
+                    f"Document title: {request.document_title}\nFirst 500 chars:\n{text[:500]}\n\n"
+                    "Classify this document as ONE of: pitch_deck, investment_memo, data_room, email, report, other\n"
+                    "Return ONLY the classification word, nothing else."
+                )
+                out = await call_gemini(doc_type_prompt, model=GEMINI_MODEL, max_tokens=20, temperature=0.0)
+                doc_type = (out or "").strip().lower().replace('"', '').replace("'", "").strip() or "unknown"
+            except Exception:
+                doc_type = "unknown"
+        elif text and (ANTHROPIC_API_KEY and _anthropic_sdk_available):
             doc_type_prompt = (
                 f"Document title: {request.document_title}\n"
                 f"First 500 chars:\n{text[:500]}\n\n"
@@ -6473,6 +6612,8 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
                 doc_type = doc_type.replace('"', '').replace("'", "").strip()
             except Exception:
                 doc_type = "unknown"
+        else:
+            doc_type = doc_type or "unknown"
 
     # Step 2: Build extraction prompt based on document type
     field_guidance = ""
@@ -6584,6 +6725,37 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         "Return ONLY valid JSON. No markdown, no explanation."
     )
 
+    if use_gemini:
+        try:
+            prompt = (
+                f"Document title: {request.document_title}\n"
+                f"Document type: {doc_type}\n"
+                f"{field_guidance}\n{existing_context}\n\n"
+                f"{json_schema_instructions}"
+            )
+            if has_pdf:
+                raw = await call_gemini_with_document(
+                    prompt, pdf_base64=request.pdf_base64, model=GEMINI_MODEL, max_tokens=8192, temperature=0.0
+                )
+            else:
+                raw = await call_gemini(
+                    prompt + f"\n\nDocument text:\n---\n{text}\n---",
+                    model=GEMINI_MODEL, max_tokens=8192, temperature=0.0,
+                )
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                json_match = re.search(r'\{[\s\S]*\}', raw)
+                data = json.loads(json_match.group()) if json_match else {}
+            if data:
+                return _normalize_company_properties_response(data, doc_type)
+        except Exception:
+            pass
+        return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
+
+    if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+        return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
+
     try:
         client = _get_anthropic_async_client()
         
@@ -6637,72 +6809,13 @@ async def extract_company_properties(request: CompanyPropertyExtractionRequest):
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
-            # Try to extract JSON block
             json_match = re.search(r'\{[\s\S]*\}', raw)
             if json_match:
                 data = json.loads(json_match.group())
             else:
                 return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
 
-        properties = data.get("properties", data)
-        confidence = data.get("confidence", {})
-
-        # Normalize: remove None values, convert to strings where expected
-        clean_props: Dict[str, Any] = {}
-        string_fields = [
-            "company_name",
-            "bio", "funding_stage", "amount_seeking", "valuation", "arr", "mrr",
-            "burn_rate", "runway_months", "problem", "solution", "tam", "sam", "som",
-            "market_growth_rate", "competitive_edge", "business_model", "revenue_model",
-            "pricing", "gtm_strategy", "traction", "customers_count", "growth_rate",
-            "gmv", "cac", "ltv", "ltv_cac_ratio", "payback_period", "gross_margin",
-            "net_margin", "churn_rate", "use_of_funds", "founded_year", "headquarters",
-            "team_size", "website", "email", "phone", "linkedin_url", "twitter_url",
-            "industry", "awards_recognition",
-        ]
-        list_fields = ["geo_markets", "key_partnerships"]
-        json_fields = ["founders", "competitors"]
-
-        for field in string_fields:
-            val = properties.get(field, "")
-            if val is None:
-                val = ""
-            if isinstance(val, (int, float)):
-                val = str(val)
-            if isinstance(val, str) and val.strip():
-                clean_props[field] = val.strip()
-
-        for field in list_fields:
-            val = properties.get(field, [])
-            if isinstance(val, list) and val:
-                clean_props[field] = [str(v).strip() for v in val if v]
-
-        for field in json_fields:
-            val = properties.get(field, [])
-            if isinstance(val, list) and val:
-                clean_props[field] = val
-            elif isinstance(val, str) and val.strip():
-                try:
-                    parsed = json.loads(val)
-                    if isinstance(parsed, list):
-                        clean_props[field] = parsed
-                except json.JSONDecodeError:
-                    pass
-
-        # Clean confidence: only keep entries for fields we actually extracted
-        clean_confidence = {}
-        for field, score in confidence.items():
-            if field in clean_props:
-                try:
-                    clean_confidence[field] = float(score)
-                except (ValueError, TypeError):
-                    clean_confidence[field] = 0.5
-
-        return CompanyPropertyExtractionResponse(
-            properties=clean_props,
-            confidence=clean_confidence,
-            document_type_detected=doc_type,
-        )
+        return _normalize_company_properties_response(data, doc_type)
 
     except Exception as e:
         return CompanyPropertyExtractionResponse(document_type_detected=doc_type)
@@ -6725,17 +6838,54 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
     import asyncio
 
     async def _do_extraction() -> dict:
-        """Run the actual extraction and return a dict."""
-        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
-            return {"properties": {}, "confidence": {}, "document_type_detected": ""}
-
+        """Run the actual extraction and return a dict. Uses Gemini when configured, else Claude."""
         has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
         text = (request.raw_content or "").strip()[:MAX_MODEL_INPUT_CHARS]
-
         if not text and not has_pdf:
             return {"properties": {}, "confidence": {}, "document_type_detected": ""}
 
         doc_type = (request.document_type or "").strip() or ("pitch_deck" if has_pdf else "unknown")
+        use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+
+        if use_gemini:
+            try:
+                field_guidance = (
+                    "This is a pitch deck. Extract EVERYTHING available." if doc_type == "pitch_deck"
+                    else "Extract ALL company properties from this document — every data point matters."
+                )
+                existing_context = ""
+                if request.existing_properties:
+                    non_empty = {k: v for k, v in request.existing_properties.items()
+                                 if v and not k.startswith("_") and k not in ("auto_created", "source", "first_seen_document", "last_seen_document", "document_count")}
+                    if non_empty:
+                        existing_context = f"\n\nExisting card data:\n{json.dumps(non_empty, indent=2, default=str)}\n"
+                json_instructions = (
+                    "Extract ALL company properties into JSON. Extract every data point you can find. "
+                    'Return JSON with "properties" and "confidence" keys. Leave fields empty if not in document. Return ONLY valid JSON.'
+                )
+                prompt = (
+                    f"Document title: {request.document_title}\nType: {doc_type}\n{field_guidance}\n{existing_context}\n{json_instructions}"
+                )
+                if has_pdf:
+                    raw = await call_gemini_with_document(
+                        prompt, pdf_base64=request.pdf_base64, model=GEMINI_MODEL, max_tokens=8192, temperature=0.0
+                    )
+                else:
+                    raw = await call_gemini(prompt + f"\n\nText:\n---\n{text}\n---", model=GEMINI_MODEL, max_tokens=8192, temperature=0.0)
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    json_match = re.search(r'\{[\s\S]*\}', raw)
+                    data = json.loads(json_match.group()) if json_match else {}
+                resp = _normalize_company_properties_response(data, doc_type) if data else None
+                if resp:
+                    return {"properties": resp.properties, "confidence": resp.confidence, "document_type_detected": resp.document_type_detected}
+            except Exception:
+                pass
+            return {"properties": {}, "confidence": {}, "document_type_detected": doc_type}
+
+        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+            return {"properties": {}, "confidence": {}, "document_type_detected": ""}
 
         field_guidance = ""
         if doc_type == "pitch_deck":
@@ -6883,42 +7033,55 @@ async def extract_company_properties_stream(request: CompanyPropertyExtractionRe
 @app.post("/extract-entities/stream")
 async def extract_entities_stream(request: EntityExtractionRequest):
     """
-    Streaming version of /extract-entities.
-    Sends keepalive pings every 5s while Claude processes the document.
+    Streaming version of /extract-entities. Sends keepalive pings every 5s while the LLM processes.
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
     """
     import asyncio
 
     async def _do_extraction() -> dict:
-        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
-            return {"entities": [], "relationships": [], "kpis": []}
-
         has_pdf = bool(request.pdf_base64 and len(request.pdf_base64) > 100)
         text = (request.document_text or "").strip()[:8000]
-
         if not text and not has_pdf:
             return {"entities": [], "relationships": [], "kpis": []}
 
-        extraction_instructions = (
-            "Extract ALL of the following from this VC/investment document:\n\n"
-            "1. ENTITIES — people, companies, funds, funding rounds, sectors, locations:\n"
-            '   Format: [{"name": "...", "type": "company|person|fund|round|sector|location", '
-            '"properties": {"industry": "...", "role": "...", etc.}, "confidence": 0.0-1.0}]\n\n'
-            "2. RELATIONSHIPS between entities:\n"
-            '   Format: [{"source_name": "...", "target_name": "...", '
-            '"relation_type": "founded|works_at|invested_in|raised|led_round|partner_of|'
-            'competitor_of|acquired|operates_in|located_in|board_member|advisor|portfolio_company", '
-            '"properties": {}, "confidence": 0.0-1.0}]\n\n'
-            "3. KPIs — any numbers, metrics, financial data:\n"
-            '   Format: [{"company_name": "...", "metric_name": "revenue|arr|mrr|valuation|'
-            'burn_rate|headcount|users|growth_rate|raise_amount|etc.", '
-            '"value": 123.0, "unit": "USD|%|count", "period": "2024-Q3", '
-            '"category": "financial|growth|fundraising|operational|market|tokenomics", '
-            '"confidence": 0.0-1.0}]\n\n'
-            'Return JSON with keys: "entities", "relationships", "kpis". Return ONLY valid JSON.'
-        )
+        extraction_instructions = _build_entity_extraction_instructions(request.document_type or "")
+        use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+
+        if use_gemini:
+            try:
+                if has_pdf:
+                    prompt = (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {request.document_type or 'pitch_deck'}\n\n"
+                        f"{extraction_instructions}"
+                    )
+                    raw = await call_gemini_with_document(
+                        prompt, pdf_base64=request.pdf_base64, model=GEMINI_MODEL, max_tokens=4000, temperature=0.0
+                    )
+                else:
+                    prompt = (
+                        f"Document title: {request.document_title}\n"
+                        f"Document type: {request.document_type or 'unknown'}\n\n"
+                        f"Text:\n{text}\n\n{extraction_instructions}"
+                    )
+                    raw = await call_gemini(prompt, model=GEMINI_MODEL, max_tokens=4000, temperature=0.0)
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    json_match = re.search(r'\{[\s\S]*\}', raw)
+                    data = json.loads(json_match.group()) if json_match else {}
+                return {
+                    "entities": [e for e in data.get("entities", []) if e.get("name")],
+                    "relationships": [r for r in data.get("relationships", []) if r.get("source_name") and r.get("target_name")],
+                    "kpis": [k for k in data.get("kpis", []) if k.get("company_name") and k.get("metric_name")],
+                }
+            except Exception:
+                return {"entities": [], "relationships": [], "kpis": []}
+
+        if not ANTHROPIC_API_KEY or not _anthropic_sdk_available:
+            return {"entities": [], "relationships": [], "kpis": []}
 
         client = _get_anthropic_async_client()
-
         if has_pdf:
             content_blocks = [
                 {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": request.pdf_base64}},
@@ -6998,12 +7161,8 @@ class TemporalInsightResponse(BaseModel):
 async def extract_temporal_insights(request: TemporalInsightRequest):
     """
     Extract non-obvious temporal insights from a document that VCs would miss.
-    Looks for: contradictions, trend shifts, hidden risks, founder commitments,
-    red flags, and non-obvious patterns.
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
     """
-    if not ANTHROPIC_API_KEY:
-        return TemporalInsightResponse(insights=[], company_name=request.company_name)
-
     prompt = f"""You are a senior VC analyst with 20 years of experience. Your job is to extract
 NON-OBVIOUS insights from this document that a junior analyst would miss.
 
@@ -7048,6 +7207,22 @@ Return a JSON object with "insights" array. Each insight has:
 - confidence (0-1)
 
 Return JSON only. Find at least 3-5 insights. Be specific, not generic."""
+
+    use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+    if use_gemini:
+        try:
+            raw = await call_gemini(prompt, model=GEMINI_MODEL, max_tokens=2000, temperature=0.0)
+            json_match = re.search(r'\{[\s\S]*\}', raw)
+            if json_match:
+                data = json.loads(json_match.group())
+                insights = [TemporalInsight(**i) for i in data.get("insights", [])]
+                return TemporalInsightResponse(insights=insights, company_name=request.company_name)
+        except Exception:
+            pass
+        return TemporalInsightResponse(insights=[], company_name=request.company_name)
+
+    if not ANTHROPIC_API_KEY:
+        return TemporalInsightResponse(insights=[], company_name=request.company_name)
 
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -7099,14 +7274,9 @@ async def contextualize_chunk(request: ContextualChunkRequest):
     """
     Contextual Retrieval: Generate a ~100-word contextual header for a chunk
     that explains what the chunk is about within the larger document.
-    This dramatically improves embedding hit rates (per Anthropic's Contextual Retrieval paper).
-
-    Call this endpoint for each chunk *before* embedding it.
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
+    Call this endpoint for each chunk *before* embedding it; store contextual_header in document_embeddings.
     """
-    if not ANTHROPIC_API_KEY:
-        # No Claude — return the chunk as-is
-        return ContextualChunkResponse(enriched_chunk=request.chunk_text, contextual_header="")
-
     prompt = (
         f"Document title: {request.document_title}\n"
         f"Document summary: {request.document_summary[:500]}\n"
@@ -7119,8 +7289,16 @@ async def contextualize_chunk(request: ContextualChunkRequest):
         "Return ONLY the contextual header text, nothing else."
     )
 
-    try:
-        if _anthropic_sdk_available:
+    use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+    header = ""
+
+    if use_gemini:
+        try:
+            header = (await call_gemini(prompt, model=GEMINI_MODEL, max_tokens=200, temperature=0.0)).strip()
+        except Exception:
+            pass
+    elif ANTHROPIC_API_KEY and _anthropic_sdk_available:
+        try:
             client = _get_anthropic_async_client()
             message = await _call_claude_with_fallback(
                 client,
@@ -7130,10 +7308,8 @@ async def contextualize_chunk(request: ContextualChunkRequest):
                 messages=[{"role": "user", "content": prompt}],
             )
             header = "".join(b.text for b in message.content if hasattr(b, "text")).strip()
-        else:
-            header = ""
-    except Exception as e:
-        header = ""
+        except Exception:
+            pass
 
     enriched = f"{header}\n\n{request.chunk_text}" if header else request.chunk_text
     return ContextualChunkResponse(enriched_chunk=enriched, contextual_header=header)
@@ -8541,6 +8717,9 @@ async def _retrieve_document_context_for_gemini(event_id: str, question: str, fo
             doc = doc_map.get(str(chunk.get("document_id", "")), {})
             title = doc.get("title") or doc.get("file_name") or "Document"
             text = (chunk.get("parent_text") or chunk.get("chunk_text") or "").strip()
+            header = (chunk.get("contextual_header") or "").strip()
+            if header:
+                text = header + "\n\n" + text
             if text:
                 lines.append(f"[{i}] **{title}**\n{text[:800]}")
 
@@ -8950,7 +9129,11 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     )
 
                     sys_prompt = (
-                        AGENT_SYSTEM_PROMPT
+                        "You are Venture OS. In this mode you do NOT have access to tools. "
+                        "All document context has already been retrieved and is in the sections below. "
+                        "Answer ONLY from the Document context, Decision history, and Company connections provided. "
+                        "Never output tool_call, <tool_call>, or say you will search or look something up — if the information is not in the provided context, say so clearly.\n\n"
+                        + AGENT_SYSTEM_PROMPT
                         + "\n\n## Decision History & Company Connections\n"
                         + "### Decision history:\n" + decisions_block + "\n\n"
                         + "### Company Connections Graph:\n" + connections_block
@@ -8982,8 +9165,7 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                                 yield f"data: {json.dumps({'text': text[i:i+80]})}\n\n"
                         else:
                             fallback = (
-                                "I couldn't generate a response for that. Your documents are searched for every question — if nothing was found about William BAO, "
-                                "make sure relevant docs are uploaded and indexed for this workspace, then try again."
+                                "I couldn't generate a response for that. Make sure relevant docs are uploaded and indexed for this workspace, then try again."
                             )
                             yield f"data: {json.dumps({'text': fallback})}\n\n"
                     except Exception as e:
