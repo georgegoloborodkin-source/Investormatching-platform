@@ -1,5 +1,9 @@
 -- Return contextual_header from match_document_chunks and match_document_chunks_scoped
 -- so retrieval can include it in document context (column exists from add_structured_kpis).
+-- Must DROP first because return type (OUT parameters) is changing.
+
+DROP FUNCTION IF EXISTS match_document_chunks(VECTOR(1536), INT, UUID);
+DROP FUNCTION IF EXISTS match_document_chunks_scoped(VECTOR(1536), INT, UUID, UUID[]);
 
 CREATE OR REPLACE FUNCTION match_document_chunks(
   query_embedding VECTOR(1536),

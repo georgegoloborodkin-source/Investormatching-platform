@@ -7589,21 +7589,9 @@ class SuggestConnectionsResponse(BaseModel):
 @app.post("/suggest-connections", response_model=SuggestConnectionsResponse)
 async def suggest_connections(request: SuggestConnectionsRequest, auth: AuthContext = Depends(get_auth_context)):
     """
-    Given document sources and the existing connections graph, use Claude to
-    suggest new company connections the user hasn't logged yet.
+    Suggest new company connections from document sources and existing graph.
+    Uses Gemini when GEMINI_API_KEY is set (and not CONVERTER_PROVIDER=claude), otherwise Claude.
     """
-    # Check Anthropic availability with detailed logging
-    if not _anthropic_sdk_available:
-        return SuggestConnectionsResponse(
-            suggestions=[],
-            context_summary="Connection suggestions require Anthropic SDK. Please install: pip install anthropic"
-        )
-    if not ANTHROPIC_API_KEY:
-        return SuggestConnectionsResponse(
-            suggestions=[],
-            context_summary="Connection suggestions require Anthropic API key. Please set ANTHROPIC_API_KEY in your environment variables."
-        )
-
     # Build context about existing connections
     existing_lines: List[str] = []
     for conn in request.existing_connections:
@@ -7651,7 +7639,42 @@ For each suggested connection, return a JSON array of objects with:
 Return ONLY the JSON array, no markdown or explanation.
 If you cannot suggest any meaningful connections, return an empty array: []"""
 
-    # Use tool_choice for structured output
+    use_gemini = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+    if use_gemini:
+        try:
+            raw = await call_gemini(prompt, model=GEMINI_MODEL, max_tokens=2048, temperature=0.2)
+            # Parse JSON array from response (may be wrapped in markdown)
+            json_match = re.search(r'\[[\s\S]*\]', raw)
+            arr = json.loads(json_match.group()) if json_match else []
+            suggestions = []
+            for s in (arr if isinstance(arr, list) else [])[: request.max_suggestions]:
+                if isinstance(s, dict) and s.get("source_company") and s.get("target_company"):
+                    suggestions.append(SuggestedConnection(
+                        source_company=str(s.get("source_company", "")).strip(),
+                        target_company=str(s.get("target_company", "")).strip(),
+                        connection_type=str(s.get("connection_type", "Knowledge")).strip() or "Knowledge",
+                        reasoning=str(s.get("reasoning", "")).strip(),
+                        confidence=float(s.get("confidence", 0.5)),
+                    ))
+            return SuggestConnectionsResponse(
+                suggestions=suggestions,
+                context_summary="Suggested from documents and existing graph (Gemini).",
+            )
+        except Exception:
+            return SuggestConnectionsResponse(suggestions=[], context_summary="Connection suggestions could not be generated.")
+
+    if not _anthropic_sdk_available:
+        return SuggestConnectionsResponse(
+            suggestions=[],
+            context_summary="Connection suggestions require Anthropic SDK or set GEMINI_API_KEY."
+        )
+    if not ANTHROPIC_API_KEY:
+        return SuggestConnectionsResponse(
+            suggestions=[],
+            context_summary="Set GEMINI_API_KEY or ANTHROPIC_API_KEY for connection suggestions."
+        )
+
+    # Use tool_choice for structured output (Claude)
     tool_def = {
         "name": "suggest_connections",
         "description": "Return an array of suggested company connections.",
@@ -9122,6 +9145,24 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
                     connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
 
+                    # Portfolio companies (from kg_entities) so the agent can suggest "connect X with Y" when user asks
+                    portfolio_lines = []
+                    try:
+                        _sb = get_supabase()
+                        port_resp = _sb.table("kg_entities").select("name, properties").eq("event_id", event_id).eq("entity_type", "company").order("created_at").limit(100).execute()
+                        for row in (port_resp.data or []):
+                            name = (row.get("name") or "").strip()
+                            if name:
+                                props = row.get("properties") or {}
+                                industry = (props.get("industry") or props.get("sector") or "").strip()
+                                if industry:
+                                    portfolio_lines.append(f"- **{name}** (industry: {industry})")
+                                else:
+                                    portfolio_lines.append(f"- **{name}**")
+                    except Exception:
+                        pass
+                    portfolio_block = "\n".join(portfolio_lines) if portfolio_lines else "No portfolio companies in knowledge graph yet."
+
                     # Retrieve relevant document chunks (raw text) so Gemini can answer from uploads
                     doc_context = await _retrieve_document_context_for_gemini(
                         event_id, question,
@@ -9131,12 +9172,14 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                     sys_prompt = (
                         "You are Venture OS. In this mode you do NOT have access to tools. "
                         "All document context has already been retrieved and is in the sections below. "
-                        "Answer ONLY from the Document context, Decision history, and Company connections provided. "
+                        "Answer ONLY from the Document context, Decision history, Company connections, and Portfolio companies provided. "
+                        "When the user asks who to connect a company with, suggest specific companies from the Portfolio companies list and use **bold** for company names so they can be logged. "
                         "Never output tool_call, <tool_call>, or say you will search or look something up — if the information is not in the provided context, say so clearly.\n\n"
                         + AGENT_SYSTEM_PROMPT
                         + "\n\n## Decision History & Company Connections\n"
                         + "### Decision history:\n" + decisions_block + "\n\n"
                         + "### Company Connections Graph:\n" + connections_block
+                        + "\n\n### Portfolio companies (use these to suggest connections when asked)\n" + portfolio_block
                     )
                     if doc_context:
                         sys_prompt += (
