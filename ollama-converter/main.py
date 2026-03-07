@@ -163,7 +163,7 @@ MAX_PARALLEL_PAGES = int(os.environ.get("MAX_PARALLEL_PAGES", "10"))
 # ---------------------------------------------------------------------------
 
 def _get_anthropic_async_client() -> "anthropic.AsyncAnthropic":
-    """Return a cached Anthropic async client (SDK-based)."""
+    """Return a cached Anthropic async client (SDK-based). Skips when Gemini is primary to avoid Anthropic billing errors."""
     if not _anthropic_sdk_available:
         raise HTTPException(
             status_code=503,
@@ -172,7 +172,12 @@ def _get_anthropic_async_client() -> "anthropic.AsyncAnthropic":
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY not set.",
+            detail="ANTHROPIC_API_KEY not set. For main Q&A use GEMINI_API_KEY (already set); set CONVERTER_PROVIDER=gemini or leave unset to use Gemini.",
+        )
+    if not USE_ANTHROPIC:
+        raise HTTPException(
+            status_code=503,
+            detail="Anthropic is disabled when Gemini is primary (GEMINI_API_KEY set). Remove ANTHROPIC_API_KEY or set CONVERTER_PROVIDER=claude to use Claude.",
         )
     return anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -431,6 +436,9 @@ ANTHROPIC_MODEL_FALLBACKS = [
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip() or None
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 GEMINI_EMAIL_MODEL = os.getenv("GEMINI_EMAIL_MODEL", "gemini-2.5-flash-lite")
+
+# When True, Claude is used; when False, do not call Anthropic (avoids 400 billing errors when Gemini is primary).
+USE_ANTHROPIC = bool(ANTHROPIC_API_KEY) and (CONVERTER_PROVIDER == "claude" or not GEMINI_API_KEY)
 
 def _get_gemini_client():
     """Return Gemini async client. Requires GEMINI_API_KEY and google-genai installed."""
@@ -2463,11 +2471,12 @@ async def call_anthropic_answer(
     When web_search_enabled=True, adds Anthropic's native web search tool so Claude can search the internet.
     When CONVERTER_PROVIDER=gemini and GEMINI_API_KEY is set, uses Gemini 2.5 Pro instead (no tool loop).
     """
-    use_gemini_for_ask = bool(GEMINI_API_KEY) and CONVERTER_PROVIDER != "claude"
+    # Use Gemini when configured, or when no Anthropic key (avoid 503 when Gemini-only)
+    use_gemini_for_ask = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
     if not ANTHROPIC_API_KEY and not use_gemini_for_ask:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY not set. Set it in the server environment to use Claude, or set GEMINI_API_KEY and CONVERTER_PROVIDER=gemini for Gemini."
+            detail="ANTHROPIC_API_KEY not set. Set GEMINI_API_KEY to use Gemini, or set ANTHROPIC_API_KEY for Claude."
         )
 
     if use_gemini_for_ask:
@@ -4319,10 +4328,25 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     """
     Stream Claude's response token by token for ChatGPT-like experience with tool-augmented RAG.
     Uses Anthropic SDK streaming when available, httpx SSE fallback otherwise.
-    When web_search_enabled=True, adds Anthropic's native web search tool.
+    When GEMINI_API_KEY is set and not CONVERTER_PROVIDER=claude, uses Gemini (non-streaming) to avoid Anthropic.
     """
-    if not ANTHROPIC_API_KEY:
-        yield json.dumps({"error": "ANTHROPIC_API_KEY not set"})
+    use_gemini_for_ask = bool(GEMINI_API_KEY) and (CONVERTER_PROVIDER != "claude" or not ANTHROPIC_API_KEY)
+    if use_gemini_for_ask:
+        try:
+            system_msg = (
+                "You are Orbit AI, a VC intelligence system. You answer questions based on "
+                "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
+                "Be helpful, concise, and answer ONLY the actual question asked."
+            )
+            text = await call_gemini(prompt, system_instruction=system_msg, model=GEMINI_MODEL, max_tokens=10000, temperature=0.5)
+            if text:
+                yield json.dumps({"text": text})
+        except Exception as e:
+            yield json.dumps({"error": str(e)})
+        return
+
+    if not USE_ANTHROPIC:
+        yield json.dumps({"error": "Anthropic disabled (Gemini primary). Set CONVERTER_PROVIDER=claude to use streaming with Claude."})
         return
 
     is_comp = is_comprehensive_question(question)
