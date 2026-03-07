@@ -3,6 +3,8 @@
  * Talks to the backend converter API (Claude or other provider).
  */
 
+import { supabase } from "@/integrations/supabase/client";
+
 const ENV_CONVERTER_API_URL = import.meta.env.VITE_CONVERTER_API_URL as string | undefined;
 
 function buildCandidateBaseUrls(): string[] {
@@ -1116,7 +1118,9 @@ export interface RAGEvalEntry {
   user_feedback?: "helpful" | "not_helpful" | null;
 }
 
-export async function logRAGEval(entry: RAGEvalEntry): Promise<void> {
+/** event_id is required so logs appear in Supabase rag_eval_logs and RLS can allow insert. */
+export async function logRAGEval(entry: RAGEvalEntry & { event_id: string }): Promise<void> {
+  const { event_id, ...rest } = entry;
   try {
     const baseUrl = await resolveConverterApiBaseUrl();
     await fetchWithTimeout(
@@ -1124,12 +1128,28 @@ export async function logRAGEval(entry: RAGEvalEntry): Promise<void> {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
+        body: JSON.stringify(rest),
       },
       5000
     );
   } catch {
     // Non-critical — don't block the user
+  }
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await (supabase as any).from("rag_eval_logs").insert({
+      event_id,
+      question: entry.question,
+      retrieval_strategy: entry.retrieval_strategy,
+      chunks_retrieved: entry.chunks_retrieved,
+      chunks_cited: entry.chunks_cited,
+      model_used: entry.model_used,
+      latency_ms: entry.latency_ms,
+      user_feedback: entry.user_feedback ?? null,
+      created_by: user?.id ?? null,
+    });
+  } catch {
+    // Non-critical — don't block the user; logs may still appear in converter buffer
   }
 }
 

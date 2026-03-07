@@ -13313,7 +13313,7 @@ export default function CIS() {
           setIsClaudeLoading(false);
         }
       }, 240000);
-      
+      const ragEvalStart = Date.now();
       try {
         const docsForClaude = answerDocs;
         const claudeTokens = question
@@ -13444,6 +13444,23 @@ export default function CIS() {
           // Append decision block and semantic note after streaming completes
           streamer.appendChunk(decisionBlock + semanticNote);
           streamer.finalize();
+          // RAG eval: persist to Supabase rag_eval_logs so you can see logs in dashboard
+          if (eventId) {
+            const retrievalStrategy = [
+              routingPlan.use_vector && "vector",
+              routingPlan.use_graph && "graph",
+              routingPlan.use_kpis && "structured",
+            ].filter(Boolean).join("+") || "vector";
+            logRAGEval({
+              event_id: eventId,
+              question: question.slice(0, 2000),
+              retrieval_strategy: retrievalStrategy,
+              chunks_retrieved: sources.length,
+              chunks_cited: 0,
+              model_used: "claude-sonnet",
+              latency_ms: Date.now() - ragEvalStart,
+            }).catch(() => { /* non-blocking */ });
+          }
         } else if (!streamCompleted) {
           // Stream completed but no data received - ensure timeout is cleared
           streamCompleted = true;
@@ -14935,7 +14952,7 @@ export default function CIS() {
                         </div>
                         <div className="text-xl font-bold text-slate-900">Start a conversation</div>
                         <div className="text-sm text-slate-400 font-mono leading-relaxed">
-                          Ask questions about your documents, companies, and portfolio. The AI will search your knowledge base to provide intelligent answers.
+                          Ask questions about your documents, companies, and portfolio. Venture OS will search your knowledge base to provide intelligent answers.
                         </div>
                         <div className="flex flex-wrap gap-2 justify-center pt-2">
                           {["Summarize recent deal flow", "Compare company financials", "What risks have been flagged?"].map((suggestion) => (

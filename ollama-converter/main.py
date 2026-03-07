@@ -2198,16 +2198,16 @@ def build_answer_prompt(
     is_raw_text = is_raw_text_request(question)
     
     if is_meta:
-        # Meta questions: answer with general knowledge about Orbit AI capabilities
+        # Meta questions: answer with general knowledge about Venture OS capabilities
         connections_section = ""
         if connection_lines:
             connections_section = f"\n\nYou also have access to a Company Connections Graph with {len(connection_lines)} recorded connections:\n{connections_block}\n\nYou can tell users about these connections when relevant."
-        return f"""You are Orbit AI, a VC intelligence system built for investment teams. Answer this question about your capabilities and features.
+        return f"""You are Venture OS, a VC intelligence system built for investment teams. Answer this question about your capabilities and features.
 
 Question:
 {question}
 
-Answer based on what Orbit AI can do:
+Answer based on what Venture OS can do:
 - Answer questions about uploaded documents (pitch decks, memos, meeting notes)
 - Extract structured information from unstructured documents
 - Track investment decisions and outcomes
@@ -2257,7 +2257,7 @@ Be helpful and specific. Explain what you can do and how you help investment tea
         # Build the prompt with conversation history at the top
         history_section = conversation_context if conversation_context else "\n\n=== PREVIOUS CONVERSATION HISTORY ===\n(No previous conversation history available)\n=== END OF CONVERSATION HISTORY ===\n"
         
-        return f"""You are Orbit AI, a VC intelligence system. You answer questions based on the provided sources and conversation history.
+        return f"""You are Venture OS, a VC intelligence system. You answer questions based on the provided sources and conversation history.
 
 {history_section}
 {company_highlight}
@@ -2481,7 +2481,7 @@ async def call_anthropic_answer(
 
     if use_gemini_for_ask:
         system_msg = (
-            "You are Orbit AI, a VC intelligence system. You answer questions based on "
+            "You are Venture OS, a VC intelligence system. You answer questions based on "
             "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
             "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
             "Be helpful, concise, and answer ONLY the actual question asked. Never pad responses with unrelated information."
@@ -2503,7 +2503,7 @@ async def call_anthropic_answer(
         tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
     system_msg = (
-        "You are Orbit AI, a VC intelligence system. You answer questions based on "
+        "You are Venture OS, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
         "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
         "If the retrieved sources contain information about multiple unrelated topics, IGNORE the irrelevant ones entirely. "
@@ -4334,7 +4334,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
     if use_gemini_for_ask:
         try:
             system_msg = (
-                "You are Orbit AI, a VC intelligence system. You answer questions based on "
+                "You are Venture OS, a VC intelligence system. You answer questions based on "
                 "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
                 "Be helpful, concise, and answer ONLY the actual question asked."
             )
@@ -4363,7 +4363,7 @@ async def stream_anthropic_answer(prompt: str, question: str = "", sources: List
         tools.append(ANTHROPIC_WEB_SEARCH_TOOL)
 
     system_msg = (
-        "You are Orbit AI, a VC intelligence system. You answer questions based on "
+        "You are Venture OS, a VC intelligence system. You answer questions based on "
         "provided sources and the Company Connections Graph. Cite sources with [1], [2], etc. "
         "STRICT FOCUS RULE: ONLY include information that DIRECTLY answers the user's question. "
         "If the retrieved sources contain information about multiple unrelated topics, IGNORE the irrelevant ones entirely. "
@@ -5253,7 +5253,7 @@ def build_multiagent_answer_prompt(
             + "\n=== END HISTORY ===\n"
         )
 
-    return f"""You are Orbit AI, a VC intelligence synthesis agent. You received pre-retrieved context from multiple retrieval agents. Your job is to produce a single, coherent, well-cited answer.
+    return f"""You are Venture OS, a VC intelligence synthesis agent. You received pre-retrieved context from multiple retrieval agents. Your job is to produce a single, coherent, well-cited answer.
 
 CITATION RULES:
 - Cite document sources with [1], [2], etc.
@@ -7453,7 +7453,7 @@ async def suggest_connections(request: SuggestConnectionsRequest, auth: AuthCont
     if request.question:
         question_context = f"\nThe user asked: \"{request.question}\""
 
-    prompt = f"""You are Orbit AI, a VC intelligence system. Analyze the following document sources and existing company connections graph.
+    prompt = f"""You are Venture OS, a VC intelligence system. Analyze the following document sources and existing company connections graph.
 Suggest up to {request.max_suggestions} NEW company connections that are NOT already in the graph.
 
 {question_context}
@@ -8466,6 +8466,84 @@ async def _agent_search_portfolio(tool_input: dict, event_id: str) -> str:
     return "\n\n".join(lines)
 
 
+async def _retrieve_document_context_for_gemini(event_id: str, question: str, folder_ids: Optional[List[str]] = None) -> str:
+    """
+    Retrieve relevant document chunks (raw text) for the question via vector search.
+    Used by the Gemini agent path so it can answer from uploaded documents.
+    Returns a formatted string of chunk text, or empty string on failure/no results.
+    """
+    try:
+        sb = get_supabase()
+        if EMBEDDINGS_PROVIDER == "voyage":
+            embedding = await generate_embedding_voyage(question, "query")
+        elif EMBEDDINGS_PROVIDER == "openai":
+            embedding = await generate_embedding_openai(question)
+        else:
+            embedding = await generate_embedding_ollama(question)
+    except Exception:
+        return ""
+
+    embedding = normalize_embedding(embedding)
+    if not embedding:
+        return ""
+
+    match_count = 20
+    filter_folder_ids = None
+    if folder_ids and len(folder_ids) > 0:
+        try:
+            filter_folder_ids = [str(u) for u in folder_ids if u]
+        except Exception:
+            filter_folder_ids = None
+
+    try:
+        if filter_folder_ids:
+            result = sb.rpc(
+                "match_document_chunks_scoped",
+                {
+                    "query_embedding": embedding,
+                    "match_count": match_count,
+                    "filter_event_id": event_id,
+                    "filter_folder_ids": filter_folder_ids,
+                },
+            ).execute()
+        else:
+            result = sb.rpc(
+                "match_document_chunks",
+                {
+                    "query_embedding": embedding,
+                    "match_count": match_count,
+                    "filter_event_id": event_id,
+                },
+            ).execute()
+    except Exception:
+        return ""
+
+    chunks = result.data or []
+    if not chunks:
+        return ""
+
+    doc_ids = list({c.get("document_id") for c in chunks if c.get("document_id")})
+    doc_map = {}
+    if doc_ids:
+        try:
+            docs_result = sb.table("documents").select("id, title, file_name").in_("id", doc_ids).execute()
+            doc_map = {str(d["id"]): d for d in (docs_result.data or [])}
+        except Exception:
+            pass
+
+    lines = []
+    for i, chunk in enumerate(chunks[:15], 1):
+        doc = doc_map.get(str(chunk.get("document_id", "")), {})
+        title = doc.get("title") or doc.get("file_name") or "Document"
+        text = (chunk.get("parent_text") or chunk.get("chunk_text") or "").strip()
+        if text:
+            lines.append(f"[{i}] **{title}**\n{text[:800]}")
+
+    if not lines:
+        return ""
+    return "\n\n".join(lines)
+
+
 async def _agent_search_documents(tool_input: dict, event_id: str, doc_collector: list | None = None) -> str:
     sb = get_supabase()
     query_text = (tool_input.get("query") or "").strip()
@@ -8682,7 +8760,7 @@ async def _execute_agent_tool(tool_name: str, tool_input: dict, event_id: str, d
         return f"Tool error ({tool_name}): {str(e)[:300]}"
 
 
-AGENT_SYSTEM_PROMPT = """You are Orbit AI, a VC portfolio intelligence assistant for a venture capital firm.
+AGENT_SYSTEM_PROMPT = """You are Venture OS, a VC portfolio intelligence assistant for a venture capital firm.
 
 You have access to tools that let you search the firm's portfolio database, documents, and knowledge graph.
 ALWAYS use your tools to find information before answering. Never guess or say "I don't have access" without searching first.
@@ -8820,21 +8898,52 @@ async def ask_agent_stream(request: AgentAskRequest, auth: AuthContext = Depends
                             pass
                     decisions_block = "\n".join(decision_lines) if decision_lines else "No decision history available."
                     connections_block = "\n".join(connection_lines) if connection_lines else "No company connections in graph yet."
+
+                    # Retrieve relevant document chunks (raw text) so Gemini can answer from uploads
+                    doc_context = await _retrieve_document_context_for_gemini(
+                        event_id, question,
+                        folder_ids=request.folder_ids if request.folder_ids else None,
+                    )
+
                     sys_prompt = (
                         AGENT_SYSTEM_PROMPT
                         + "\n\n## Decision History & Company Connections\n"
                         + "### Decision history:\n" + decisions_block + "\n\n"
                         + "### Company Connections Graph:\n" + connections_block
                     )
+                    if doc_context:
+                        sys_prompt += (
+                            "\n\n## Document context (from your uploaded documents)\n"
+                            "Use the excerpts below to answer questions about people, companies, and facts. "
+                            "Cite which document (by title) when you use it.\n\n" + doc_context
+                        )
+                        sys_prompt += (
+                            "\n\nAnswer the user's question using the document context above, plus decisions and connections when relevant. "
+                            "Always respond with at least one sentence; never return empty."
+                        )
+                    else:
+                        sys_prompt += (
+                            "\n\nYou do NOT have retrieved document content for this question (no embeddings or no matches). "
+                            "Use only the decision history and company connections above. "
+                            "If the user asks about a person/company and they are not in that data, say clearly that you don't have information about them in the provided context. "
+                            "Always respond with at least one sentence; never return empty."
+                        )
                     if request.reflexion_memory_context and request.reflexion_memory_context.strip():
                         sys_prompt += "\n\n## Reflexion Memory\n" + request.reflexion_memory_context.strip()
                     try:
                         text = await call_gemini(question, system_instruction=sys_prompt, model=GEMINI_MODEL, max_tokens=8000, temperature=0.1)
-                        if text:
+                        if text and text.strip():
                             for i in range(0, len(text), 80):
                                 yield f"data: {json.dumps({'text': text[i:i+80]})}\n\n"
+                        else:
+                            fallback = (
+                                "I don't have document context in this mode — only your decision history and company connections. "
+                                "To answer questions about specific people or companies from your uploads, document search is required (use Claude agent or ensure documents are indexed)."
+                            )
+                            yield f"data: {json.dumps({'text': fallback})}\n\n"
                     except Exception as e:
-                        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                        err_msg = str(e) or "Gemini request failed"
+                        yield f"data: {json.dumps({'error': err_msg})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 

@@ -12,11 +12,14 @@
 DO $$
 DECLARE
   tbl TEXT;
+  -- Order: child tables first (dependents), then parents. Safe for "new company" full wipe.
   tables TEXT[] := ARRAY[
     'api_usage_logs', 'rag_eval_logs', 'chat_messages', 'chat_threads',
-    'document_embeddings', 'document_folder_links', 'documents',
+    'document_embeddings', 'document_folder_links', 'email_attachments', 'email_threads',
+    'temporal_facts', 'temporal_insights', 'notebooklm_artifacts', 'notebooklm_notebooks',
+    'studio_artifacts', 'reflexion_memory', 'demo_requests',
     'company_connections', 'company_kpis', 'kg_edges', 'kg_entities',
-    'email_attachments', 'email_threads', 'tasks', 'decisions',
+    'tasks', 'decisions', 'documents',
     'sources', 'source_folders', 'sync_configurations', 'invitations',
     'removed_team_members', 'fund_codes', 'matches', 'mentors', 'corporates',
     'investors', 'startups', 'time_slots', 'events', 'user_profiles', 'organizations'
